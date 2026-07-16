@@ -1,0 +1,22 @@
+#!/bin/sh
+set -e
+
+staged_files=$(git diff --cached --name-only)
+
+yarn lint-staged
+
+if echo "$staged_files" | grep -q "^apps/web/"; then
+  yarn workspace web check-types
+fi
+
+if echo "$staged_files" | grep -q "^apps/devtools/"; then
+  yarn workspace @foresight/devtools check-types
+fi
+
+if echo "$staged_files" | grep -q "^packages/contracts/"; then
+  yarn workspace @foresight/contracts check-types
+fi
+
+if echo "$staged_files" | grep -q "^apps/subgraph/foresight/"; then
+  yarn workspace foresight-subgraph check-types
+fi

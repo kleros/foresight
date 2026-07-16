@@ -1,0 +1,17 @@
+{
+  "extends": "solhint:recommended",
+  "plugins": ["prettier"],
+  "rules": {
+    "prettier/prettier": "error",
+    "compiler-version": ["error", "^0.8.28"],
+    "constructor-syntax": "error",
+    "func-visibility": ["warn", { "ignoreConstructors": true }],
+    "immutable-vars-naming": "warn",
+    "named-parameters-mapping": "warn",
+    "no-console": "off",
+    "no-empty-blocks": "warn",
+    "no-unused-vars": "warn",
+    "reason-string": ["warn", { "maxLength": 64 }],
+    "var-name-mixedcase": "warn"
+  }
+}

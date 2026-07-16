@@ -1,0 +1,35 @@
+# Editor + lint-staged - do not list apps/ or packages/ here.
+
+# dependencies
+node_modules/
+.pnp.*
+.yarn/
+
+# build (repo-wide)
+**/.next/
+**/out/
+**/dist/
+**/.turbo/
+**/coverage/
+**/playwright-report/
+**/test-results/
+
+# generated / tool output
+**/generated/
+**/build/
+**/artifacts/
+**/cache/
+**/typechain-types/
+
+# synced / local deploy output (package .prettierignore alone does not affect editor save)
+apps/subgraph/foresight/abis/
+packages/contracts/deployments/localhost/
+packages/contracts/deployments/hardhat/
+**/deployments/*/solcInputs/
+
+# locks
+yarn.lock
+*.tsbuildinfo
+
+# local
+.cursor/

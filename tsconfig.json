@@ -1,0 +1,10 @@
+// Just a reference file to make it easier for IDE's to load relevant tsconfig when in workspaces
+{
+  "files": [],
+  "references": [
+    { "path": "./apps/web" },
+    { "path": "./apps/devtools" },
+    { "path": "./packages/contracts" },
+    { "path": "./apps/subgraph/foresight" }
+  ]
+}

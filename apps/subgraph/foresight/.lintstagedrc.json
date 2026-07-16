@@ -1,0 +1,3 @@
+{
+  "*.{js,mjs,cjs,ts,mts,json,md}": "prettier --write --no-error-on-unmatched-pattern"
+}

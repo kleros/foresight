@@ -1,0 +1,5 @@
+{
+  "extends": "@foresight/typescript-config/subgraph.json",
+  "include": ["src"],
+  "exclude": ["node_modules"]
+}

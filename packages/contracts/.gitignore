@@ -1,0 +1,9 @@
+# Hardhat
+cache/
+artifacts/
+typechain-types/
+
+# Local deploy artifacts
+deployments/localhost/
+deployments/hardhat/
+deployments/*/solcInputs/

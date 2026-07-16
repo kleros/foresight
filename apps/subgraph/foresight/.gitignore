@@ -1,0 +1,11 @@
+# matchstick
+.bin
+*.wasm
+.latest.json
+
+# graph codegen
+generated/
+build/
+
+# update.sh backups
+subgraph.yaml.bak.*

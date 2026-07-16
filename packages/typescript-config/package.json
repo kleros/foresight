@@ -1,0 +1,15 @@
+{
+  "name": "@foresight/typescript-config",
+  "version": "0.0.0",
+  "private": true,
+  "files": [
+    "base.json",
+    "nextjs.json",
+    "vite-react.json",
+    "node-library.json",
+    "subgraph.json"
+  ],
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}

@@ -1,0 +1,31 @@
+# This is for root prettier format cmd, which runs on root files only and excludes the workspaces.
+# Workspaces have their own ignore files and format cmds. 
+# This is separate from .prettierignore, because we want the editor to be still be able to format-on-save
+
+apps/
+packages/
+
+# dependencies
+node_modules/
+.pnp.*
+.yarn/
+
+# build (repo-wide)
+dist/
+.next/
+out/
+.turbo/
+coverage/
+playwright-report/
+test-results/
+
+# generated / tool output
+**/generated/
+**/build/
+
+# locks
+yarn.lock
+*.tsbuildinfo
+
+# local
+.cursor/

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "outputs": ["artifacts/**", "typechain-types/**"],
+      "env": ["GNOSIS_RPC_URL", "TENDERLY_RPC_URL", "SEER_MARKET_FACTORY_ADDRESS"]
+    },
+    "lint": {
+      "env": ["GNOSIS_RPC_URL", "TENDERLY_RPC_URL", "SEER_MARKET_FACTORY_ADDRESS"]
+    },
+    "test": {
+      "env": ["GNOSIS_RPC_URL", "TENDERLY_RPC_URL", "SEER_MARKET_FACTORY_ADDRESS"]
+    },
+    "check-types": {
+      "env": ["GNOSIS_RPC_URL", "TENDERLY_RPC_URL", "SEER_MARKET_FACTORY_ADDRESS"]
+    }
+  }
+}

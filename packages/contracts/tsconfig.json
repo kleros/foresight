@@ -1,0 +1,19 @@
+{
+  "extends": "@foresight/typescript-config/node-library.json",
+  "compilerOptions": {
+    "module": "node16",
+    "moduleResolution": "node16",
+    "typeRoots": ["node_modules/@types", "../../node_modules/@types"],
+    "types": ["node", "mocha"]
+  },
+  "include": [
+    "hardhat.config.ts",
+    "solidity.config.json",
+    "config/**/*.ts",
+    "deploy/**/*.ts",
+    "deployments/**/*.ts",
+    "scripts/**/*.ts",
+    "test/**/*.ts",
+    "typechain-types"
+  ]
+}

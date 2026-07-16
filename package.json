@@ -1,0 +1,48 @@
+{
+  "name": "foresight",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "apps/subgraph/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "./scripts/dev-stack.sh",
+    "dev:apps": "yarn turbo run dev --filter=web --filter=@foresight/devtools",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "format": "prettier --write . --ignore-path .prettierignore.root && turbo run format",
+    "format:check": "sh -c 'prettier --check . --ignore-path .prettierignore.root; r1=$?; turbo run format:check --continue=always; r2=$?; exit $((r1 | r2))'",
+    "test": "turbo run test",
+    "check-types": "turbo run check-types",
+    "changelog": "conventional-changelog --infile CHANGELOG.md --same-file --release-count 0 && prettier --write CHANGELOG.md",
+    "prepare": "husky",
+    "graph-node:up": "yarn workspace @foresight/graph-node up",
+    "graph-node:up:detached": "yarn workspace @foresight/graph-node up:detached",
+    "graph-node:down": "yarn workspace @foresight/graph-node down",
+    "local-node:contracts": "yarn workspace @foresight/contracts start",
+    "local-node:deploy": "yarn workspace @foresight/contracts deploy:local",
+    "deploy:subgraph": "yarn workspace foresight-subgraph deploy:local",
+    "test:e2e": "yarn workspace web test:e2e"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
+    "@foresight/prettier-config": "workspace:*",
+    "conventional-changelog-cli": "^5.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.2",
+    "prettier": "^3.7.4",
+    "turbo": "^2.7.1",
+    "typescript": "^5.8.3"
+  },
+  "prettier": "@foresight/prettier-config",
+  "packageManager": "yarn@4.9.2",
+  "engines": {
+    "node": ">=20"
+  },
+  "resolutions": {
+    "undici": "6.21.2"
+  }
+}

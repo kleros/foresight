@@ -1,0 +1,31 @@
+# dependencies
+node_modules/
+.pnp.*
+.yarn/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# build (repo-wide)
+dist/
+.next/
+out/
+*.tsbuildinfo
+
+# test / e2e
+**/test-results/
+**/playwright-report/
+coverage/
+
+# misc
+.DS_Store
+*.log
+.turbo
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+.cursor/

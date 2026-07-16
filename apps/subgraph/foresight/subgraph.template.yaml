@@ -1,0 +1,33 @@
+specVersion: 1.2.0
+features:
+  - fullTextSearch
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: SessionFactory
+    network: _PLACEHOLDER_
+    source:
+      address: "_PLACEHOLDER_"
+      abi: SessionFactory
+      startBlock: _PLACEHOLDER_
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Session
+        - ChildMarket
+      abis:
+        - name: SessionFactory
+          file: ./abis/_PLACEHOLDER_/SessionFactory.json
+        - name: SeerMarket
+          file: ./abis/SeerMarket.json
+      eventHandlers:
+        - event: ParentMarketDeployed(indexed uint256,indexed address,indexed address,uint256)
+          handler: handleParentMarketDeployed
+          receipt: true
+        - event: ChildMarketDeployed(indexed uint256,indexed uint256,indexed address,address)
+          handler: handleChildMarketDeployed
+          receipt: true
+      file: ./src/SessionFactory.ts
