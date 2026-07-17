@@ -21,5 +21,9 @@
   "prettier.requireConfig": true,
   "prettier.useEditorConfig": false,
   "prettier.prettierPath": "./node_modules/prettier",
-  "prettier.resolveGlobalModules": false
+  "prettier.resolveGlobalModules": false,
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "explicit",
+    "source.fixAll.eslint": "explicit"
+  }
 }

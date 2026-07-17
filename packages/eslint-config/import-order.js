@@ -1,7 +1,7 @@
 import { importX } from "eslint-plugin-import-x";
 
 /**
- * Simple import groups for React apps (`@/` = internal).
+ * Import groups for React apps (`@/` = internal).
  * Used by next-js and react-internal (Vite) configs.
  *
  * @type {import("eslint").Linter.Config}
@@ -16,13 +16,22 @@ export const importOrderConfig = {
       {
         groups: ["builtin", "external", "internal", ["parent", "sibling", "index"]],
         pathGroups: [
-          { pattern: "react", group: "external", position: "before" },
-          { pattern: "react-dom", group: "external", position: "before" },
-          { pattern: "next", group: "external", position: "before" },
-          { pattern: "next/**", group: "external", position: "before" },
-          { pattern: "@/**", group: "internal" },
+          {
+            pattern: "{react,react-dom,react-dom/**,next,next/**}",
+            group: "external",
+            position: "before",
+          },
+          { pattern: "@/features{,/**}", group: "internal", position: "before" },
+          { pattern: "@/components{,/**}", group: "internal", position: "before" },
+          { pattern: "@/assets{,/**}", group: "internal", position: "before" },
+          { pattern: "@/utils{,/**}", group: "internal", position: "before" },
+          { pattern: "@/lib{,/**}", group: "internal", position: "before" },
+          { pattern: "@/config{,/**}", group: "internal", position: "before" },
+          { pattern: "@/styles{,/**}", group: "internal", position: "before" },
+          { pattern: "@/**", group: "internal", position: "before" },
         ],
         pathGroupsExcludedImportTypes: ["builtin"],
+        distinctGroup: true,
         "newlines-between": "always",
         alphabetize: { order: "asc", caseInsensitive: true },
       },

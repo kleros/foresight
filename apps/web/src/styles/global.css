@@ -1,0 +1,216 @@
+@import "tailwindcss";
+@import "../../../../node_modules/@kleros/ui-components-library/dist/assets/theme.css";
+@source "../../../../node_modules/@kleros/ui-components-library";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-red-2: var(--red-2);
+  --color-green-2: var(--green-2);
+  --color-footer-background: #4872ff;
+  --color-whiteLowOpacityStrong: #ffffff26;
+
+  @keyframes slideInLeft {
+    0% {
+      transform: translateX(100%);
+    }
+    100% {
+      transform: translateX(0);
+    }
+  }
+
+  --animate-slide-in-left: slideInLeft 0.5s ease-out;
+
+  @keyframes slideOutLeft {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-100%);
+    }
+  }
+
+  --animate-slide-out-left: slideOutLeft 0.5s ease-out;
+
+  @keyframes slideInRight {
+    0% {
+      transform: translateX(100%);
+    }
+    100% {
+      transform: translateX(0);
+    }
+  }
+
+  --animate-slide-in-right: slideInRight 0.5s ease-out;
+
+  @keyframes spinner {
+    0% {
+      transform: rotate(0deg);
+    }
+    50% {
+      transform: rotate(180deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+
+  --animate-spinner: spinner 2s ease-in-out infinite normal;
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+  :root {
+    --background: #ffffff;
+    --foreground: #171717;
+    --red-2: #f75c7b;
+    --green-2: #3fec65;
+    --klerosUIComponentsPrimaryBlue: #4872ff;
+  }
+
+  :root.dark {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+    --red-2: #ffd2db;
+    --green-2: #d2ffdc;
+    --klerosUIComponentsPrimaryBlue: #4872ff;
+  }
+
+  body {
+    margin: 0;
+    color: var(--foreground);
+    background: var(--background);
+    font-family:
+      Inter,
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      sans-serif;
+
+    /* ================================
+   Custom scrollbar styles
+   ================================ */
+
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #fff;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--color-klerosUIComponentsSecondaryBlue);
+      border-radius: 999px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--color-klerosUIComponentsSecondaryBlue);
+    }
+
+    /* Firefox */
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--color-klerosUIComponentsSecondaryBlue) #fff;
+    }
+  }
+}
+
+@utility text-balance {
+  text-wrap: balance;
+}
+
+@layer utilities {
+  .border-gradient-purple-blue {
+    position: relative;
+    border-radius: 12px;
+    z-index: 1;
+  }
+
+  .border-gradient-purple-blue::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(to right, #a865ff, #6cc5ff);
+    opacity: 50%;
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    z-index: -1;
+  }
+
+  .loader {
+    width: 85px;
+    height: 50px;
+    --g1: conic-gradient(from 90deg at left 3px top 3px, #8b52f6 90deg, #fff 0);
+    --g2: conic-gradient(from -90deg at bottom 3px right 3px, #8b52f6 90deg, #fff 0);
+    background: var(--g1), var(--g1), var(--g1), var(--g2), var(--g2), var(--g2);
+    background-position: left, center, right;
+    background-repeat: no-repeat;
+    animation: l9 1.5s infinite;
+  }
+  @keyframes l9 {
+    0% {
+      background-size:
+        25px 50%,
+        25px 50%,
+        25px 50%;
+    }
+    25% {
+      background-size:
+        25px 100%,
+        25px 50%,
+        25px 50%;
+    }
+    50% {
+      background-size:
+        25px 50%,
+        25px 100%,
+        25px 50%;
+    }
+    75% {
+      background-size:
+        25px 50%,
+        25px 50%,
+        25px 100%;
+    }
+    100% {
+      background-size:
+        25px 50%,
+        25px 50%,
+        25px 50%;
+    }
+  }
+
+  .hover-short-transition {
+    transition: 0.1s;
+  }
+}
