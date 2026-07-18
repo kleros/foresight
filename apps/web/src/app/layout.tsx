@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { Open_Sans } from "next/font/google";
+
 import clsx from "clsx";
 
 import Footer from "@/components/layout/Footer";
 import Header from "@/components/layout/Header";
 import { AppProviders } from "@/components/providers/AppProviders";
+
 import { siteConfig } from "@/config/site";
 
 import "@/styles/global.css";
