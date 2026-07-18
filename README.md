@@ -41,3 +41,7 @@ yarn test:e2e
 yarn format          # root files, then turbo per workspace
 yarn format:check    # same, check only
 ```
+
+## License
+
+[MIT](./LICENSE) © Kleros
