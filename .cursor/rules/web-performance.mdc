@@ -1,0 +1,41 @@
+---
+description: Performance rules for frontend work — bundle discipline, loading strategy, query hygiene
+globs: apps/web/**/*
+alwaysApply: false
+---
+
+# Web performance
+
+Every change should leave the app as fast as it was, or explain why it can't.
+
+## Heavy dependencies
+
+Charting libraries, wallet connectors, editors, animation engines — anything large — must not land in the initial bundle because one screen needs it.
+
+1. **Load it dynamically** — import on the route or interaction that needs it, not at the app root.
+2. **Gate it on intent** — mount modals and panels when opened. Prefetch on hover or focus when a click is likely.
+3. **If neither is possible, say so** — tell the developer what the addition costs and what it affects, rather than adding it silently.
+
+## Loading strategy
+
+- Render structure and content first; stream live or per-user data in behind skeletons.
+- Skeletons match final layout dimensions — a loading state that shifts on arrival is still a bad one.
+- Don't block first paint on data only some users will look at.
+
+## Queries
+
+- Gate user-specific fetches on having a user.
+- Set staleness by how fast the data actually changes.
+- Batch reads to the same source in one tick instead of firing serially.
+- One source per field — don't refetch an indexed value from the origin too.
+
+## Assets
+
+- Images via the framework's image component with explicit dimensions or `fill` + `sizes`.
+- Fonts via the framework's font loader, not ad-hoc `@font-face`.
+
+## Before merging
+
+Is anything new heavy and dynamically loaded? Do skeletons match dimensions? Are user-specific queries gated? Do dynamic pages set metadata? Did you check build output for touched routes?
+
+If a change is measurably slower with no way around it, flag the tradeoff explicitly.

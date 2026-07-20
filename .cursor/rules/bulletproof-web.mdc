@@ -1,0 +1,41 @@
+---
+description: Bulletproof React conventions for frontend apps
+globs: apps/web/**/*,apps/devtools/**/*
+alwaysApply: false
+---
+
+# Bulletproof React conventions
+
+Frontend apps follow [Bulletproof React](https://github.com/alan2207/bulletproof-react). Place new files by these rules.
+
+## Layout
+
+```text
+src/
+├── app/          Routes and layouts — thin
+├── components/   Shared UI used across features
+├── config/       Env and constants (non-JSX)
+├── features/     Feature modules — most code lives here
+│   └── <feature>/
+│       ├── api/          Data access for this feature
+│       ├── components/
+│       ├── hooks/
+│       ├── stores/
+│       ├── types/
+│       ├── utils/        Pure functions — unit-test these
+│       └── index.ts      Public API
+├── hooks/        Shared hooks only
+├── lib/          Preconfigured clients (HTTP, query, web3)
+├── types/
+└── utils/
+```
+
+## Rules
+
+- **Thin routes** — route files compose features; no data fetching or business logic inline.
+- **Feature public API** — import across features only through `features/<x>/index.ts`, never reach into internals.
+- **Logic out of components** — domain and math logic in `features/*/utils` or `lib/` so it tests without rendering; hooks wrap IO.
+- **Shared means shared** — code used by one feature belongs to that feature, not `components/`.
+- **No parallel layer schemes** — don't add `screens/`, `widgets/`, `entities/`, or a Pages-Router `pages/`.
+
+Check placement before logic. Features that import each other's internals get hard to move or delete later.
