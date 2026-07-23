@@ -10,7 +10,7 @@ import HamburgerIcon from "@/assets/menu-icons/hamburger.svg";
 import Logo from "./Logo";
 import Menu from "./Menu";
 
-const MobileNavbar: React.FC = () => {
+const MobileNavbar: React.FC<{ walletSlot?: React.ReactNode }> = ({ walletSlot }) => {
   const [isMenuOpen, toggleIsMenuOpen] = useToggle(false);
 
   return (
@@ -31,7 +31,7 @@ const MobileNavbar: React.FC = () => {
         isDismissable
       >
         <hr className="border-klerosUIComponentsStroke w-full" />
-        <Menu />
+        <Menu walletSlot={walletSlot} />
       </Modal>
     </>
   );

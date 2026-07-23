@@ -3,10 +3,9 @@ import { Open_Sans } from "next/font/google";
 
 import clsx from "clsx";
 
-import Footer from "@/components/layout/Footer";
-import Header from "@/components/layout/Header";
 import { AppProviders } from "@/components/providers/AppProviders";
 
+import { env } from "@/config/env";
 import { siteConfig } from "@/config/site";
 
 import "@/styles/global.css";
@@ -14,6 +13,7 @@ import "@/styles/global.css";
 export const metadata: Metadata = {
   title: siteConfig.name,
   description: siteConfig.description,
+  metadataBase: env.SITE_URL ? new URL(env.SITE_URL) : null,
 };
 
 const openSans = Open_Sans({
@@ -33,11 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           "flex min-h-screen flex-col",
         )}
       >
-        <AppProviders>
-          <Header />
-          <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-10">{children}</main>
-          <Footer />
-        </AppProviders>
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );

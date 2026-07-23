@@ -31,13 +31,13 @@ src/
 
 ## Rules
 
-| Rule | Detail |
-| ---- | ------ |
-| Thin routes | Route files compose features and do little else — no data fetching or business logic inline |
-| Feature public API | Import across features only through `features/<x>/index.ts`, never reach into internals |
-| Logic out of components | Domain and math logic goes in `features/*/utils` or `lib/` so it tests without rendering; hooks wrap IO |
-| Shared means shared | Something used by one feature belongs to that feature, not `components/` |
-| No parallel layer schemes | Don't add `screens/`, `widgets/`, `entities/`, or a Pages-Router `pages/` alongside this structure |
+| Rule                      | Detail                                                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Thin routes               | Route files compose features and do little else — no data fetching or business logic inline             |
+| Feature public API        | Import across features only through `features/<x>/index.ts`, never reach into internals                 |
+| Logic out of components   | Domain and math logic goes in `features/*/utils` or `lib/` so it tests without rendering; hooks wrap IO |
+| Shared means shared       | Something used by one feature belongs to that feature, not `components/`                                |
+| No parallel layer schemes | Don't add `screens/`, `widgets/`, `entities/`, or a Pages-Router `pages/` alongside this structure      |
 
 ## When reviewing
 

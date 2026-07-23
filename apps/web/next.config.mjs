@@ -26,6 +26,22 @@ const nextConfig = {
     // Modify the file loader rule to ignore *.svg, since we have it handled now.
     fileLoaderRule.exclude = /\.svg$/i;
 
+    // Wallet SDKs we deliberately don't ship.
+    const unusedWalletSdks = [
+      "@base-org/account",
+      "@coinbase/wallet-sdk",
+      "@metamask/connect-evm",
+      "@walletconnect/ethereum-provider",
+      "accounts",
+      "porto",
+      "porto/internal",
+    ];
+
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      ...Object.fromEntries(unusedWalletSdks.map((pkg) => [pkg, false])),
+    };
+
     return config;
   },
 };

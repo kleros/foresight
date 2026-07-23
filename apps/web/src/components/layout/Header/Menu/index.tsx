@@ -13,7 +13,7 @@ import HelpIcon from "@/assets/menu-icons/help.svg";
 
 const Help = dynamic(() => import("./Help"), { ssr: false });
 
-const Menu: React.FC = () => {
+const Menu: React.FC<{ walletSlot?: React.ReactNode }> = ({ walletSlot }) => {
   const [isHelpOpen, toggleIsHelpOpen] = useToggle(false);
 
   return (
@@ -41,6 +41,8 @@ const Menu: React.FC = () => {
             "not-dark:not-md:[&_.button-svg]:fill-black/75 not-dark:not-md:hover:[&_.button-svg]:fill-black",
           )}
         />
+
+        {walletSlot ? <div className="mt-4 md:mt-0 md:ml-2">{walletSlot}</div> : null}
       </div>
 
       {isHelpOpen ? <Help isOpen toggleIsHelpOpen={toggleIsHelpOpen} /> : null}
