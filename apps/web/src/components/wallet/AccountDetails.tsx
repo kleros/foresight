@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 
-import { Button, Copiable, Modal } from "@kleros/ui-components-library";
+import { Copiable, Modal } from "@kleros/ui-components-library";
 import clsx from "clsx";
-import { useAccount, useDisconnect } from "wagmi";
+import { useAccount } from "wagmi";
 
 import { AddressOrName, ChainDisplay, IdenticonOrAvatar } from "./AccountDisplay";
+import { DisconnectWalletButton } from "./ConnectWallet";
 
 interface IAccountDetails {
   isOpen?: boolean;
@@ -14,8 +15,6 @@ interface IAccountDetails {
 }
 
 const AccountDetails: React.FC<IAccountDetails> = ({ isOpen, toggleIsOpen }) => {
-  const { disconnect } = useDisconnect();
-
   return (
     <Modal
       isDismissable
@@ -31,7 +30,7 @@ const AccountDetails: React.FC<IAccountDetails> = ({ isOpen, toggleIsOpen }) => 
       <IdenticonOrAvatar size={56} />
       <CopiableAddressDisplay />
       <ChainDisplay />
-      <Button variant="secondary" small text="Disconnect" onPress={() => disconnect()} />
+      <DisconnectWalletButton />
     </Modal>
   );
 };

@@ -8,6 +8,7 @@ import { AppProviders } from "@/components/providers/AppProviders";
 import { env } from "@/config/env";
 import { siteConfig } from "@/config/site";
 
+import "react-toastify/dist/ReactToastify.css";
 import "@/styles/global.css";
 
 export const metadata: Metadata = {

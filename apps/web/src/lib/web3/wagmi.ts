@@ -30,7 +30,7 @@ export const wagmiAdapter = new WagmiAdapter({
   transports,
   storage: createStorage({ storage: cookieStorage }),
   ssr: true,
-  batch: true,
+  batch: { multicall: true },
 });
 
 export const wagmiConfig = wagmiAdapter.wagmiConfig;

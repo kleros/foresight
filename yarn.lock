@@ -2868,6 +2868,7 @@ __metadata:
     "@next/eslint-plugin-next": "npm:^15.3.4"
     eslint: "npm:^9.28.0"
     eslint-config-prettier: "npm:^10.1.2"
+    eslint-import-resolver-typescript: "npm:^4.4.5"
     eslint-plugin-import-x: "npm:^4.17.1"
     eslint-plugin-react: "npm:^7.37.5"
     eslint-plugin-react-hooks: "npm:^5.2.0"
@@ -2943,6 +2944,15 @@ __metadata:
   dependencies:
     assemblyscript: "npm:0.27.31"
   checksum: 10c0/7edd69067354bfc29eabf5a235255eca50e7658bf277f1b34072ee530cd9bed20b7f1babfac37bd661db3c891de7e611c6fb657259d240bc4663998b2db3cb7b
+  languageName: node
+  linkType: hard
+
+"@graphql-typed-document-node/core@npm:^3.2.0":
+  version: 3.2.0
+  resolution: "@graphql-typed-document-node/core@npm:3.2.0"
+  peerDependencies:
+    graphql: ^0.8.0 || ^0.9.0 || ^0.10.0 || ^0.11.0 || ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0 || ^16.0.0 || ^17.0.0
+  checksum: 10c0/94e9d75c1f178bbae8d874f5a9361708a3350c8def7eaeb6920f2c820e82403b7d4f55b3735856d68e145e86c85cbfe2adc444fdc25519cd51f108697e99346c
   languageName: node
   linkType: hard
 
@@ -3394,6 +3404,23 @@ __metadata:
   version: 7.0.1
   resolution: "@kleros/ethereum-libraries@npm:7.0.1"
   checksum: 10c0/90f1da909ea1843be658256461568bad52fd82ca9edcd0c6416bd67358983f265d85bb36005c36d2a6d46afe36354b363a46fc5bf4614140e26dfe31e2d35669
+  languageName: node
+  linkType: hard
+
+"@kleros/kleros-app@npm:^3.0.1":
+  version: 3.0.1
+  resolution: "@kleros/kleros-app@npm:3.0.1"
+  dependencies:
+    jose: "npm:^5.9.6"
+  peerDependencies:
+    "@tanstack/react-query": ^5.69.0
+    graphql: ^16.9.0
+    graphql-request: ^7.1.2
+    react: ^18.3.1
+    react-dom: ^18.3.1
+    viem: ^2.24.1
+    wagmi: ^2.14.15
+  checksum: 10c0/0b3f3f1ca5b0f495e45c33265025ce9bfbca285b72eea5d98e73c6ab9db12b460de0667213db53db8e3bf296988af0a1276ec919da0458c40f79052c5a013035
   languageName: node
   linkType: hard
 
@@ -10140,7 +10167,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eslint-import-context@npm:^0.1.9":
+"eslint-import-context@npm:^0.1.8, eslint-import-context@npm:^0.1.9":
   version: 0.1.9
   resolution: "eslint-import-context@npm:0.1.9"
   dependencies:
@@ -10152,6 +10179,30 @@ __metadata:
     unrs-resolver:
       optional: true
   checksum: 10c0/07851103443b70af681c5988e2702e681ff9b956e055e11d4bd9b2322847fa0d9e8da50c18fc7cb1165106b043f34fbd0384d7011c239465c4645c52132e56f3
+  languageName: node
+  linkType: hard
+
+"eslint-import-resolver-typescript@npm:^4.4.5":
+  version: 4.4.5
+  resolution: "eslint-import-resolver-typescript@npm:4.4.5"
+  dependencies:
+    debug: "npm:^4.4.1"
+    eslint-import-context: "npm:^0.1.8"
+    get-tsconfig: "npm:^4.10.1"
+    is-bun-module: "npm:^2.0.0"
+    stable-hash-x: "npm:^0.2.0"
+    tinyglobby: "npm:^0.2.14"
+    unrs-resolver: "npm:^1.7.11"
+  peerDependencies:
+    eslint: "*"
+    eslint-plugin-import: "*"
+    eslint-plugin-import-x: "*"
+  peerDependenciesMeta:
+    eslint-plugin-import:
+      optional: true
+    eslint-plugin-import-x:
+      optional: true
+  checksum: 10c0/15fa1c47dfc508deaef638d8f9b65eedfd4722c23c1b4e51391082daf4f23a75fc5e42ebcbc5ebcae8a3977f9aa204dd2574528ab0c27b678e582122f3c8cc02
   languageName: node
   linkType: hard
 
@@ -11434,6 +11485,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"graphql-request@npm:^7.4.0":
+  version: 7.4.0
+  resolution: "graphql-request@npm:7.4.0"
+  dependencies:
+    "@graphql-typed-document-node/core": "npm:^3.2.0"
+  peerDependencies:
+    graphql: 14 - 16
+  checksum: 10c0/066531d70b9c4656251e51c950ce9bee3df05291e12e2b983608d75ac3a70d700efd6488d273b043235dc125658973db38b21eba59e808863831a5a19a6a7b41
+  languageName: node
+  linkType: hard
+
 "graphql@npm:16.11.0":
   version: 16.11.0
   resolution: "graphql@npm:16.11.0"
@@ -11441,7 +11503,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"graphql@npm:^16.6.0":
+"graphql@npm:^16.6.0, graphql@npm:^16.9.0":
   version: 16.14.2
   resolution: "graphql@npm:16.14.2"
   checksum: 10c0/a95a96961eaff55cc9fe9d31fae6f33499ac988b972d07ea5085024cb1333f515b902f376e7393a5489aa82200a8aff3eb96580e4d1b69d702ed19b6eb1ce97a
@@ -12142,6 +12204,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"is-bun-module@npm:^2.0.0":
+  version: 2.0.0
+  resolution: "is-bun-module@npm:2.0.0"
+  dependencies:
+    semver: "npm:^7.7.1"
+  checksum: 10c0/7d27a0679cfa5be1f5052650391f9b11040cd70c48d45112e312c56bc6b6ca9c9aea70dcce6cc40b1e8947bfff8567a5c5715d3b066fb478522dab46ea379240
+  languageName: node
+  linkType: hard
+
 "is-callable@npm:^1.2.7":
   version: 1.2.7
   resolution: "is-callable@npm:1.2.7"
@@ -12717,6 +12788,13 @@ __metadata:
   bin:
     jiti: lib/jiti-cli.mjs
   checksum: 10c0/1b1e2310a490dce1aeea3da5f5dfe18273516c20ce48be2e98eb8ea452d5f3dcc8fd0cfd6d28b4052a24c5dbab6e3089b2d7e79f0bce7915b10d750929563c42
+  languageName: node
+  linkType: hard
+
+"jose@npm:^5.9.6":
+  version: 5.10.0
+  resolution: "jose@npm:5.10.0"
+  checksum: 10c0/e20d9fc58d7e402f2e5f04e824b8897d5579aae60e64cb88ebdea1395311c24537bf4892f7de413fab1acf11e922797fb1b42269bc8fc65089a3749265ccb7b0
   languageName: node
   linkType: hard
 
@@ -15860,6 +15938,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"react-toastify@npm:^11.1.0":
+  version: 11.1.0
+  resolution: "react-toastify@npm:11.1.0"
+  dependencies:
+    clsx: "npm:^2.1.1"
+  peerDependencies:
+    react: ^18 || ^19
+    react-dom: ^18 || ^19
+  checksum: 10c0/b621b8272bb9287ec19914b773d91c2f7741eedba253f2986150716d30c82ff069ba9780a7ab4cbb511175b3aeb6e35f003aef3f04742d77df79fb8f4c1c3c98
+  languageName: node
+  linkType: hard
+
 "react-universal-interface@npm:^0.6.2":
   version: 0.6.2
   resolution: "react-universal-interface@npm:0.6.2"
@@ -17597,7 +17687,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tinyglobby@npm:^0.2.12, tinyglobby@npm:^0.2.13, tinyglobby@npm:^0.2.15, tinyglobby@npm:^0.2.17, tinyglobby@npm:^0.2.6":
+"tinyglobby@npm:^0.2.12, tinyglobby@npm:^0.2.13, tinyglobby@npm:^0.2.14, tinyglobby@npm:^0.2.15, tinyglobby@npm:^0.2.17, tinyglobby@npm:^0.2.6":
   version: 0.2.17
   resolution: "tinyglobby@npm:0.2.17"
   dependencies:
@@ -18255,7 +18345,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"unrs-resolver@npm:^1.9.2":
+"unrs-resolver@npm:^1.7.11, unrs-resolver@npm:^1.9.2":
   version: 1.12.2
   resolution: "unrs-resolver@npm:1.12.2"
   dependencies:
@@ -18790,6 +18880,7 @@ __metadata:
     "@foresight/eslint-config": "workspace:*"
     "@foresight/prettier-config": "workspace:*"
     "@foresight/typescript-config": "workspace:*"
+    "@kleros/kleros-app": "npm:^3.0.1"
     "@kleros/ui-components-library": "npm:^3.8.0"
     "@playwright/test": "npm:^1.53.1"
     "@reown/appkit": "npm:^1.8.22"
@@ -18803,6 +18894,8 @@ __metadata:
     "@wagmi/core": "npm:^3.6.3"
     clsx: "npm:^2.1.1"
     eslint: "npm:^9.28.0"
+    graphql: "npm:^16.9.0"
+    graphql-request: "npm:^7.4.0"
     next: "npm:14.2.35"
     next-themes: "npm:^0.4.6"
     postcss: "npm:^8.5.19"
@@ -18810,6 +18903,7 @@ __metadata:
     react: "npm:^18.3.1"
     react-dom: "npm:^18.3.1"
     react-jdenticon: "npm:^1.4.0"
+    react-toastify: "npm:^11.1.0"
     react-use: "npm:^17.6.0"
     tailwind-merge: "npm:^3.6.0"
     tailwindcss: "npm:^4.3.3"

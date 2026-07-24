@@ -4,7 +4,7 @@ import React from "react";
 
 import { Button } from "@kleros/ui-components-library";
 import { useAppKit, useAppKitState } from "@reown/appkit/react";
-import { useAccount, useSwitchChain } from "wagmi";
+import { useAccount, useDisconnect, useSwitchChain } from "wagmi";
 
 import { DEFAULT_CHAIN, DEFAULT_CHAIN_ID } from "@/config/chains";
 
@@ -23,6 +23,12 @@ export const SwitchChainButton: React.FC<{ className?: string }> = ({ className 
       onPress={() => switchChain({ chainId: DEFAULT_CHAIN_ID })}
     />
   );
+};
+
+export const DisconnectWalletButton: React.FC<{ className?: string }> = ({ className }) => {
+  const { disconnect } = useDisconnect();
+
+  return <Button variant="secondary" small text="Disconnect" className={className} onPress={() => disconnect()} />;
 };
 
 const ConnectButton: React.FC<{ text?: string; className?: string }> = ({ text, className }) => {

@@ -31,7 +31,7 @@ const MobileNavbar: React.FC<{ walletSlot?: React.ReactNode }> = ({ walletSlot }
         isDismissable
       >
         <hr className="border-klerosUIComponentsStroke w-full" />
-        <Menu walletSlot={walletSlot} />
+        <Menu walletSlot={walletSlot} onNavigate={() => toggleIsMenuOpen(false)} />
       </Modal>
     </>
   );
