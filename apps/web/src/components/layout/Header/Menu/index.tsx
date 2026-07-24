@@ -13,6 +13,8 @@ import LightButton from "@/components/ui/LightButton";
 import HelpIcon from "@/assets/menu-icons/help.svg";
 import SettingsIcon from "@/assets/menu-icons/settings.svg";
 
+import { paths } from "@/config/paths";
+
 const Help = dynamic(() => import("./Help"), { ssr: false });
 
 interface IMenu {
@@ -34,7 +36,7 @@ const Menu: React.FC<IMenu> = ({ walletSlot, onNavigate }) => {
   const router = useRouter();
 
   const openSettings = () => {
-    router.push("/settings");
+    router.push(paths.settings.getHref());
     onNavigate?.();
   };
 

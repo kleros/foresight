@@ -4,10 +4,12 @@ import React from "react";
 import BuiltByKlerosLogo from "@/assets/logo/built-by-kleros.svg";
 import ForesightLogo from "@/assets/logo/foresight-logo-navbar.svg";
 
+import { paths } from "@/config/paths";
+
 const Logo: React.FC = () => {
   return (
     <div className="flex items-center md:ml-2">
-      <Link href="/" className="flex items-center">
+      <Link href={paths.home.getHref()} className="flex items-center">
         <ForesightLogo />
       </Link>
       <BuiltByKlerosLogo />
