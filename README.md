@@ -6,7 +6,7 @@ Permissionless futarchy on Gnosis.
 
 | Path                      | Package                 | Purpose                                                                           |
 | ------------------------- | ----------------------- | --------------------------------------------------------------------------------- |
-| `apps/web`                | `web`                   | Participant UI                                                                    |
+| `apps/web`                | `web`                   | Participant UI — see [apps/web/README.md](apps/web/README.md)                     |
 | `apps/devtools`           | `@foresight/devtools`   | Local dev tools                                                                   |
 | `apps/subgraph/foresight` | `foresight-subgraph`    | Foresight indexer                                                                 |
 | `apps/graph-node`         | `@foresight/graph-node` | Docker graph-node stack                                                           |
@@ -18,8 +18,12 @@ Requires Node 20+ and Yarn 4 (`corepack enable`).
 
 ```bash
 yarn install
+cp apps/web/.env.example apps/web/.env.local   # then fill it in
 yarn dev                 # web at http://localhost:3000
 ```
+
+The web app validates its environment at startup and refuses to boot without it - see
+[apps/web/README.md](apps/web/README.md) for what each variable is.
 
 Optional local indexer (separate terminals):
 
