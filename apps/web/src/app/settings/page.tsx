@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 
-import { SettingsScreen } from "@/features/settings";
+import { Settings } from "./_components/Settings";
 
 export const metadata: Metadata = {
   title: "Settings | Foresight",
 };
 
-export default function SettingsPage() {
-  return <SettingsScreen />;
+export default function SettingsPage({ searchParams }: { searchParams: { tab?: string } }) {
+  return <Settings defaultTab={searchParams.tab} />;
 }

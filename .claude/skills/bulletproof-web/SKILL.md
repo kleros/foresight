@@ -7,11 +7,32 @@ description: Bulletproof React conventions for frontend apps in this repo. Use w
 
 Frontend apps in this repo follow [Bulletproof React](https://github.com/alan2207/bulletproof-react). When you add or move a file, place it by these rules.
 
+## Where does this go? (start here)
+
+Ask in order — the first "yes" wins:
+
+1. **Is it the page itself?** Its title, layout, tabs, CTA, empty state — meaningless on another URL. → `app/<route>/_components/`. Helpers used only by that screen live there too.
+2. **Do two sibling routes under one segment need it?** → the parent segment's `_components/`, e.g. `app/settings/_components/`.
+3. **Is it about one domain thing** — sessions, notifications — using that domain's data, types or vocabulary? → `features/<x>/`, in `api/`, `components/`, `hooks/`, `types/` or `utils/` by kind.
+4. **Is it generic, or a wrapper over `lib`** (wallet, auth, a button)? → `components/`, `hooks/`, `utils/`. Subfolders group by kind of UI or technical concern, never by product domain.
+5. **A second feature needs it?** Promote it down into a shared layer. Never import feature → feature.
+
+The test for 1 vs 3: _move this UI to another page, or into a modal — does it still make sense unchanged?_ Yes → feature block. No → route component. Size doesn't decide it; a whole email-preferences panel is a feature block, a three-line tab shell is route chrome.
+
+Two habits that keep this honest:
+
+- **Import the file, not a barrel.** `@/features/x/components/Thing`, never `@/features/x`. Measured in this repo: importing one component through a two-export barrel cost **+51 kB** First Load, because Next treats every re-exported `"use client"` module as part of the route's client graph.
+- **Promote on the second consumer, not the first.** For small things, duplication beats an early abstraction.
+
 ## Layout
 
 ```text
 src/
 ├── app/          Routes and layouts — thin
+│   └── <route>/
+│       ├── page.tsx      Reads route params/searchParams, renders the composition
+│       ├── layout.tsx    Shell and route-scoped providers
+│       └── _components/  Route-only composition — underscore keeps it out of routing
 ├── assets/       Static files: images, icons, fonts
 ├── components/   Shared UI used across features (ui/ for primitives)
 ├── config/       Env, constants, route paths (non-JSX)
@@ -47,6 +68,26 @@ Imports flow one way: **shared → features → app**. `import-x/no-restricted-p
 
 Features are **domain modules**, not routes. `features/markets`, not `features/create`. One route may compose several features, and one feature may serve several routes.
 
+### Where a screen lives
+
+The route composes the features — that is the app layer's job. In the App Router that composition is split across the server/client boundary, which is what `_components/` exists for. It is not about how many features a route touches: upstream's `profile/_components/profile.tsx` pulls from a single feature, and the Vite reference app has no `_components` at all.
+
+| Layer                      | Responsibility                                                                                                    |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `app/<route>/page.tsx`     | Server: `metadata`, route params and `searchParams`, prefetch/dehydrate, auth gates. Renders one route component. |
+| `app/<route>/_components/` | `"use client"` — the route's screen: its chrome and arrangement, stitching feature blocks together                |
+| `features/<x>/components/` | The blocks themselves, and their domain logic — reusable across routes                                            |
+
+Read `searchParams` in `page.tsx` and pass values down as props rather than reaching for `useSearchParams` below. The client hook only resolves after hydration, so a prerendered page paints its empty-param state first — an uncontrolled widget seeded from it will keep the wrong value.
+
+`_components/` is app layer, so it may import features; features may never import it. The underscore keeps Next from treating the folder as a route.
+
+**The test — move this UI to another page, or into a modal. Does it still make sense unchanged?**
+
+Yes → feature block. No, because it _is_ the page (title, layout, tabs, CTA, empty state) → route `_components/`. Size is not the criterion: a whole email-preferences panel is a feature block, while a three-line tab shell is route chrome. When unsure which feature something belongs to, check what it imports — code that touches none of a feature's data or vocabulary belongs to no feature.
+
+Don't call anything a "Screen". It isn't part of this vocabulary and it makes route arrangements look like feature exports. Name blocks for what they do (`SessionList`, `CreateSessionForm`), and name a route component after its route.
+
 ## Data and state
 
 | Concern         | Where it goes                                                                                                |
@@ -79,14 +120,13 @@ Type every response and infer downstream, so a schema change surfaces as type er
 
 ## This repo's deliberate deviations
 
-| Upstream                       | Here                                                                                                                                                                                                                                                                                         |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| kebab-case files and folders   | PascalCase for component files (`ConnectWallet.tsx`), matching the Kleros codebases this mirrors                                                                                                                                                                                             |
-| No barrel files                | A thin `features/<x>/index.ts` is the route-facing API — route entry points only, never a re-export dump. Upstream's warning is about Vite dev-mode and large barrels; a one-or-two-export barrel is an alias. Aggregate barrels (`components/index.ts` re-exporting everything) stay banned |
-| App-wide providers at the root | Web3/Atlas providers are mounted per route in that route's `layout.tsx`, keeping them off other pages                                                                                                                                                                                        |
+| Upstream                       | Here                                                                                                  |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| kebab-case files and folders   | PascalCase for component files (`ConnectWallet.tsx`), matching the Kleros codebases this mirrors      |
+| App-wide providers at the root | Web3/Atlas providers are mounted per route in that route's `layout.tsx`, keeping them off other pages |
 
 ## When reviewing
 
 Check placement before logic. A file in the wrong layer is a problem that compounds — features that import each other get hard to move or delete later, whether or not the import went through a public API.
 
-If a feature's `index.ts` exports a dozen things, that's a signal it's really two features.
+Flag any new `index.ts` that only re-exports: it costs bundle size for no benefit, and it hides which module a route actually depends on.
