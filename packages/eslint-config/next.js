@@ -10,6 +10,9 @@ import { importOrderConfig } from "./import-order.js";
  * ESLint flat config for Next.js apps.
  * eslint-config-prettier must be last, disables ESLint rules that conflict with Prettier.
  *
+ * Architecture boundaries are not bundled here - they need the app root, which only the
+ * app's own config knows. Add `architectureConfig(import.meta.dirname)` there.
+ *
  * @type {import("eslint").Linter.Config[]}
  */
 export const nextJsConfig = [

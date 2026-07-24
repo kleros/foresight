@@ -33,7 +33,7 @@ src/
 
 ## Layering
 
-Imports flow one way: **shared → features → app**. `import-x/no-restricted-paths` in `@foresight/eslint-config/next-js` enforces it, discovering feature folders from disk.
+Imports flow one way: **shared → features → app**. `import-x/no-restricted-paths` enforces it, discovering feature folders from disk. Each app opts in from its own flat config — `architectureConfig(import.meta.dirname)` in `eslint.config.mjs`, after `...nextJsConfig`. The app root is a required argument because every zone resolves against it: given the wrong root the rule matches nothing and reports clean while enforcing nothing.
 
 | Rule                      | Detail                                                                                                                     |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
