@@ -12791,7 +12791,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"jose@npm:^5.9.6":
+"jose@npm:^5.10.0, jose@npm:^5.9.6":
   version: 5.10.0
   resolution: "jose@npm:5.10.0"
   checksum: 10c0/e20d9fc58d7e402f2e5f04e824b8897d5579aae60e64cb88ebdea1395311c24537bf4892f7de413fab1acf11e922797fb1b42269bc8fc65089a3749265ccb7b0
@@ -18896,6 +18896,7 @@ __metadata:
     eslint: "npm:^9.28.0"
     graphql: "npm:^16.9.0"
     graphql-request: "npm:^7.4.0"
+    jose: "npm:^5.10.0"
     next: "npm:14.2.35"
     next-themes: "npm:^0.4.6"
     postcss: "npm:^8.5.19"

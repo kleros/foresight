@@ -12,4 +12,12 @@ export default [
       },
     },
   },
+  {
+    // Playwright fixtures take a `use` callback, which the React plugin reads as
+    // React's `use` hook and rejects for being called outside a component.
+    files: ["e2e/**/*.ts"],
+    rules: {
+      "react-hooks/rules-of-hooks": "off",
+    },
+  },
 ];

@@ -1,8 +1,5 @@
 import { gnosis, mainnet, type AppKitNetwork } from "@reown/appkit/networks";
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
-import { mock, type MockParameters } from "@wagmi/core";
-import { isAddress, type Address, type Hex } from "viem";
-import { privateKeyToAddress } from "viem/accounts";
 import { cookieStorage, createStorage } from "wagmi";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
@@ -34,19 +31,3 @@ export const wagmiAdapter = new WagmiAdapter({
 });
 
 export const wagmiConfig = wagmiAdapter.wagmiConfig;
-
-/**
- * A wagmi adapter backed by a mock connector, used to drive the app as an
- * arbitrary account, Playwright fixtures and hand debugging alike. Registered
- * at runtime via `window._setupMockAccount`, see `Web3Providers`.
- */
-export const createMockAdapter = (addressOrPrivateKey: Address | Hex, features?: MockParameters["features"]) => {
-  const address = isAddress(addressOrPrivateKey) ? addressOrPrivateKey : privateKeyToAddress(addressOrPrivateKey);
-
-  return new WagmiAdapter({
-    connectors: [mock({ accounts: [address], features })],
-    networks,
-    projectId: env.REOWN_PROJECT_ID,
-    transports,
-  });
-};
