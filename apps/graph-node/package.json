@@ -3,8 +3,8 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "up": "docker compose up",
-    "up:detached": "docker compose up -d",
-    "down": "docker compose down"
+    "start": "docker compose up",
+    "start:detached": "docker compose up -d",
+    "stop": "docker compose down"
   }
 }

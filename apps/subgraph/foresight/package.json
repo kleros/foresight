@@ -14,7 +14,7 @@
     "format:check": "prettier --check .",
     "deploy:local": "yarn update:localhost && yarn codegen && yarn build && (yarn create-local || true) && yarn deploy-local",
     "create-local": "graph create --node http://localhost:8020/ foresight",
-    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 foresight",
+    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 -l v$npm_package_version foresight",
     "check-types": "graph codegen"
   },
   "devDependencies": {

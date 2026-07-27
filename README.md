@@ -25,11 +25,18 @@ yarn dev                 # web at http://localhost:3000
 The web app validates its environment at startup and refuses to boot without it - see
 [apps/web/README.md](apps/web/README.md) for what each variable is.
 
-Optional local indexer (separate terminals):
+The whole local stack, hardhat node, graph-node, subgraph and web, in one tmux session:
+
+```bash
+yarn local-stack         # start (wipes local deployments + graph data)
+yarn stop-local-stack    # stop stack
+```
+
+Or the same pieces by hand, in separate terminals:
 
 ```bash
 yarn local-node:contracts    # terminal 1: compile + hardhat node
-yarn graph-node:up           # terminal 2: graph-node + ipfs + postgres
+yarn graph-node:start        # terminal 2: graph-node + ipfs + postgres
 yarn deploy:subgraph         # terminal 3: deploy indexer to local graph-node
 ```
 
