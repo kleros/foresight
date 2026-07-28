@@ -17,6 +17,7 @@ const EnvSchema = v.object({
   ATLAS_URI: v.pipe(v.string("missing - Kleros Atlas endpoint"), v.url("must be a valid URL")),
   GNOSIS_RPC: v.optional(v.pipe(v.string(), v.url("must be a valid URL"))),
   SITE_URL: v.optional(v.pipe(v.string(), v.url("must be a valid URL"))),
+  SUBGRAPH_URL: v.pipe(v.string("missing - subgraph endpoint"), v.url("must be a valid URL")),
 });
 
 const ENV_VAR_NAMES: Record<keyof v.InferOutput<typeof EnvSchema>, string> = {
@@ -24,6 +25,7 @@ const ENV_VAR_NAMES: Record<keyof v.InferOutput<typeof EnvSchema>, string> = {
   ATLAS_URI: "NEXT_PUBLIC_ATLAS_URI",
   GNOSIS_RPC: "NEXT_PUBLIC_GNOSIS_RPC",
   SITE_URL: "NEXT_PUBLIC_SITE_URL",
+  SUBGRAPH_URL: "NEXT_PUBLIC_SUBGRAPH_URL",
 };
 
 /** An unset variable and one set to `""` should fail the same way. */
@@ -34,6 +36,7 @@ const parsed = v.safeParse(EnvSchema, {
   ATLAS_URI: clean(process.env.NEXT_PUBLIC_ATLAS_URI),
   GNOSIS_RPC: clean(process.env.NEXT_PUBLIC_GNOSIS_RPC),
   SITE_URL: clean(process.env.NEXT_PUBLIC_SITE_URL),
+  SUBGRAPH_URL: clean(process.env.NEXT_PUBLIC_SUBGRAPH_URL),
 });
 
 if (!parsed.success) {

@@ -6,5 +6,5 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", ".next/types/validator.ts"]
+  "exclude": ["node_modules", ".next/types/validator.ts", "src/lib/graphql/generated"]
 }
