@@ -9,6 +9,7 @@ import {
   childAt,
   phasedOpenArgs,
   MarketKind,
+  METADATA_URI,
 } from "./fixtures/sessionFactory";
 
 describe("SessionFactory", function () {
@@ -19,7 +20,7 @@ describe("SessionFactory", function () {
 
       await expect(sessionFactory.connect(deployer).deploySession(params))
         .to.emit(sessionFactory, "ParentMarketDeployed")
-        .withArgs(0n, deployer.address, (parent: string) => parent !== hre.ethers.ZeroAddress, 2n)
+        .withArgs(0n, deployer.address, (parent: string) => parent !== hre.ethers.ZeroAddress, 2n, METADATA_URI)
         .to.emit(sessionFactory, "ChildMarketDeployed");
 
       const session = await sessionFactory.getSession(0n);
@@ -29,6 +30,7 @@ describe("SessionFactory", function () {
       expect(session.expectedChildCount).to.equal(2n);
       expect(session.completedAt).to.be.gt(0n);
       expect(session.openedAt).to.equal(session.completedAt);
+      expect(session.metadataUri).to.equal(METADATA_URI);
       expect(await sessionFactory.sessionCount()).to.equal(1n);
       expect(await seerMarketFactory.marketCount()).to.equal(3n);
     });
@@ -177,6 +179,64 @@ describe("SessionFactory", function () {
       await expect(
         sessionFactory.connect(deployer).deploySessionChildBatch(99n, [childAt(params, 0)]),
       ).to.be.revertedWithCustomError(sessionFactory, "NotSessionDeployer");
+    });
+  });
+
+  describe("metadata", function () {
+    it("reverts an atomic deploy with no metadata uri", async function () {
+      const { deployer, sessionFactory } = await loadFixture(deploySessionFactoryFixture);
+      const params = buildTwoOutcomeSession({ metadataUri: "" });
+
+      await expect(sessionFactory.connect(deployer).deploySession(params)).to.be.revertedWithCustomError(
+        sessionFactory,
+        "MissingMetadata",
+      );
+    });
+
+    it("reverts a phased open with no metadata uri", async function () {
+      const { deployer, sessionFactory } = await loadFixture(deploySessionFactoryFixture);
+      const params = buildTwoOutcomeSession({ metadataUri: "" });
+
+      await expect(
+        sessionFactory.connect(deployer).openPhasedSession(...phasedOpenArgs(params)),
+      ).to.be.revertedWithCustomError(sessionFactory, "MissingMetadata");
+    });
+
+    it("rejects metadata before creating any market", async function () {
+      const { deployer, seerMarketFactory, sessionFactory } = await loadFixture(deploySessionFactoryFixture);
+      const params = buildTwoOutcomeSession({ metadataUri: "" });
+
+      await expect(sessionFactory.connect(deployer).deploySession(params)).to.be.reverted;
+
+      // the whole tx reverts, so this only fails if the check were to move after market creation
+      expect(await seerMarketFactory.marketCount()).to.equal(0n);
+      expect(await sessionFactory.sessionCount()).to.equal(0n);
+    });
+
+    it("keeps the phased metadata uri through child batches", async function () {
+      const { deployer, sessionFactory } = await loadFixture(deploySessionFactoryFixture);
+      const params = buildTwoOutcomeSession();
+
+      await expect(sessionFactory.connect(deployer).openPhasedSession(...phasedOpenArgs(params)))
+        .to.emit(sessionFactory, "ParentMarketDeployed")
+        .withArgs(0n, deployer.address, (parent: string) => parent !== hre.ethers.ZeroAddress, 2n, METADATA_URI);
+
+      await sessionFactory.connect(deployer).deploySessionChildBatch(0n, params.children);
+
+      const session = await sessionFactory.getSession(0n);
+      expect(session.completedAt).to.be.gt(0n);
+      expect(session.metadataUri).to.equal(METADATA_URI);
+    });
+
+    it("keeps each session's metadata uri distinct", async function () {
+      const { deployer, sessionFactory } = await loadFixture(deploySessionFactoryFixture);
+      const other = "ipfs://bafybeigd7cvhmnq4another0session0metadata00000000000000000";
+
+      await sessionFactory.connect(deployer).deploySession(buildTwoOutcomeSession());
+      await sessionFactory.connect(deployer).deploySession(buildTwoOutcomeSession({ metadataUri: other }));
+
+      expect((await sessionFactory.getSession(0n)).metadataUri).to.equal(METADATA_URI);
+      expect((await sessionFactory.getSession(1n)).metadataUri).to.equal(other);
     });
   });
 

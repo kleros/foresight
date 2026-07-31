@@ -18,6 +18,7 @@ contract SessionFactory {
     uint64 openedAt; // Timestamp of session creation.
     uint64 completedAt; // For phased deploys, `completedAt` is 0 until all children exist.
     uint256 expectedChildCount; // Number of children for the session, used to determine the required number of child markets in phased deploy.
+    string metadataUri; // IPFS URI of the display metadata document.
   }
 
   /// @notice Parent categorical market configuration passed to Seer.
@@ -51,6 +52,7 @@ contract SessionFactory {
     ParentCategoricalConfig parent;
     ChildScalarConfig[] children;
     bool multiCategoricalParent; // Defines whether the parent market should be a Categorical or Multi-Categorical market.
+    string metadataUri; // IPFS URI of the display metadata document.
   }
 
   // ************************************* //
@@ -75,11 +77,13 @@ contract SessionFactory {
   /// @param deployer Address of the deployer of this session.
   /// @param parentMarket Address of the parent market of the session.
   /// @param outcomeCount Number of outcomes of the parent categorical or multi-categorical market. Does not count for INVALID outcome.
+  /// @param metadataUri IPFS URI of the display metadata document.
   event ParentMarketDeployed(
     uint256 indexed sessionId,
     address indexed deployer,
     address indexed parentMarket,
-    uint256 outcomeCount
+    uint256 outcomeCount,
+    string metadataUri
   );
 
   /// @notice Emitted when a scalar child market is created for a session.
@@ -124,6 +128,7 @@ contract SessionFactory {
   function deploySession(
     DeploySessionParams calldata params
   ) external returns (uint256 sessionId, address parentAddress, address[] memory childMarkets) {
+    if (bytes(params.metadataUri).length == 0) revert MissingMetadata();
     _validateChildren(params.parent.outcomes.length, params.children);
     uint256 parentOutcomeCount = params.parent.outcomes.length;
 
@@ -131,7 +136,7 @@ contract SessionFactory {
 
     parentAddress = _seerCreateParent(params.parent, params.multiCategoricalParent);
 
-    emit ParentMarketDeployed(sessionId, msg.sender, parentAddress, parentOutcomeCount);
+    emit ParentMarketDeployed(sessionId, msg.sender, parentAddress, parentOutcomeCount, params.metadataUri);
 
     childMarkets = new address[](parentOutcomeCount);
     for (uint256 parentOutcomeIndex = 0; parentOutcomeIndex < parentOutcomeCount; parentOutcomeIndex++) {
@@ -150,26 +155,31 @@ contract SessionFactory {
       childMarkets: childMarkets,
       openedAt: timestamp,
       completedAt: timestamp,
-      expectedChildCount: parentOutcomeCount
+      expectedChildCount: parentOutcomeCount,
+      metadataUri: params.metadataUri
     });
   }
 
   /// @notice Phased step 1: deploy parent only. Child configs are supplied per batch in step 2.
   /// @param parent Parent market configuration.
   /// @param multiCategoricalParent When true, uses Seer's multi-categorical market.
+  /// @param metadataUri IPFS URI of the display metadata document.
   /// @return sessionId Unique session id for the session.
   /// @return parentAddress Seer parent market address.
   function openPhasedSession(
     ParentCategoricalConfig calldata parent,
-    bool multiCategoricalParent
+    bool multiCategoricalParent,
+    string calldata metadataUri
   ) external returns (uint256 sessionId, address parentAddress) {
+    if (bytes(metadataUri).length == 0) revert MissingMetadata();
+
     sessionId = sessionCount++;
 
     parentAddress = _seerCreateParent(parent, multiCategoricalParent);
 
     uint256 outcomeCount = parent.outcomes.length;
 
-    emit ParentMarketDeployed(sessionId, msg.sender, parentAddress, outcomeCount);
+    emit ParentMarketDeployed(sessionId, msg.sender, parentAddress, outcomeCount, metadataUri);
 
     sessions[sessionId] = Session({
       deployer: msg.sender,
@@ -177,7 +187,8 @@ contract SessionFactory {
       childMarkets: new address[](0),
       openedAt: uint64(block.timestamp),
       completedAt: 0,
-      expectedChildCount: outcomeCount
+      expectedChildCount: outcomeCount,
+      metadataUri: metadataUri
     });
   }
 
@@ -323,4 +334,7 @@ contract SessionFactory {
 
   /// @notice Thrown when a phased child batch would exceed the expected child count.
   error ChildBatchExceedsExpected();
+
+  /// @notice Thrown when a session is opened without a display metadata URI.
+  error MissingMetadata();
 }

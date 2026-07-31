@@ -12,8 +12,10 @@ export enum MarketKind {
   Scalar,
 }
 
-export function phasedOpenArgs(params: DeploySessionParams): [ParentCategoricalConfig, boolean] {
-  return [params.parent, params.multiCategoricalParent];
+export const METADATA_URI = "ipfs://bafybeigd7cvhmnq4session0metadata000000000000000000000000000";
+
+export function phasedOpenArgs(params: DeploySessionParams): [ParentCategoricalConfig, boolean, string] {
+  return [params.parent, params.multiCategoricalParent, params.metadataUri];
 }
 
 export function childAt(params: DeploySessionParams, index: number): ChildScalarConfig {
@@ -24,27 +26,21 @@ export function childAt(params: DeploySessionParams, index: number): ChildScalar
   return child;
 }
 
-export function buildTwoOutcomeSession(overrides?: {
+type SessionOverrides = {
   multiCategoricalParent?: boolean;
   childQuestionPrefix?: string;
-}): DeploySessionParams {
+  metadataUri?: string;
+};
+
+export function buildTwoOutcomeSession(overrides?: SessionOverrides): DeploySessionParams {
   return buildOutcomeSession(2, overrides);
 }
 
-export function buildThreeOutcomeSession(overrides?: {
-  multiCategoricalParent?: boolean;
-  childQuestionPrefix?: string;
-}): DeploySessionParams {
+export function buildThreeOutcomeSession(overrides?: SessionOverrides): DeploySessionParams {
   return buildOutcomeSession(3, overrides);
 }
 
-function buildOutcomeSession(
-  outcomeCount: number,
-  overrides?: {
-    multiCategoricalParent?: boolean;
-    childQuestionPrefix?: string;
-  },
-): DeploySessionParams {
+function buildOutcomeSession(outcomeCount: number, overrides?: SessionOverrides): DeploySessionParams {
   const multiCategoricalParent = overrides?.multiCategoricalParent ?? false;
   const childQuestionPrefix = overrides?.childQuestionPrefix ?? "What percentile score will Scooby assign to";
 
@@ -54,6 +50,7 @@ function buildOutcomeSession(
 
   return {
     multiCategoricalParent,
+    metadataUri: overrides?.metadataUri ?? METADATA_URI,
     parent: {
       marketName: "Which movies will Scooby watch as part of the “Distilled Scooby's Judgement experiment”?",
       outcomes,
