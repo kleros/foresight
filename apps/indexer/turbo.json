@@ -1,0 +1,17 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "codegen": {
+      "inputs": ["config.yaml", "schema.graphql"],
+      "outputs": [".envio/types.d.ts"],
+      "passThroughEnv": ["ENVIO_*"]
+    },
+    "check-types": {
+      "dependsOn": ["codegen"]
+    },
+    "test": {
+      "dependsOn": ["codegen"]
+    }
+  }
+}

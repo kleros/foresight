@@ -1,0 +1,61 @@
+type Session {
+  "sessionId"
+  id: ID!
+  sessionId: BigInt!
+  deployer: String! @index
+  parentMarket: String! @index
+  outcomeCount: BigInt!
+  deployedChildCount: BigInt!
+  openedAt: BigInt!
+  completedAt: BigInt!
+
+  "read from the Seer parent market"
+  marketName: String!
+  outcomes: [String!]!
+
+  "emitted by SessionFactory, fixed at deploy"
+  metadataUri: String! @index
+
+  "false when the document is unreachable or malformed, which is when every field below is null"
+  metadataResolved: Boolean!
+
+  "resolved from metadataUri"
+  title: String
+  description: String
+  heroImage: String
+  icon: String
+  itemName: String
+  itemNamePlural: String
+
+  blocks: [Json!]!
+
+  "market name, outcomes, title, description and child display names, for search "
+  keyword: String!
+
+  children: [ChildMarket!]! @derivedFrom(field: "session")
+  transactionHash: String!
+}
+
+type ChildMarket {
+  "child market address"
+  id: ID!
+  session: Session! @index
+  parentOutcomeIndex: BigInt!
+  parentOutcome: String!
+  deployedAt: BigInt!
+
+  "read from the Seer child market"
+  marketName: String!
+  lowerBound: BigInt!
+  upperBound: BigInt!
+
+  "resolved from the session's metadata document, keyed by parentOutcomeIndex"
+  displayName: String
+  color: String
+
+  "everything a child says beyond its name and colour"
+  blocks: [Json!]!
+
+  keyword: String!
+  transactionHash: String!
+}

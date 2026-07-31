@@ -1,0 +1,38 @@
+{
+  "name": "foresight-indexer",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "update": "bash ./scripts/update.sh",
+    "update:local": "bash ./scripts/update.sh localhost",
+    "codegen": "envio codegen",
+    "dev": "envio dev",
+    "start": "envio start",
+    "stop": "envio stop",
+    "test": "vitest run --test-timeout=10000",
+    "lint": "eslint . --max-warnings 0",
+    "check-types": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "prettier": "@foresight/prettier-config",
+  "devDependencies": {
+    "@foresight/contracts": "workspace:*",
+    "@foresight/eslint-config": "workspace:*",
+    "@foresight/prettier-config": "workspace:*",
+    "eslint": "^9.28.0",
+    "prettier": "^3.7.4",
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.0"
+  },
+  "dependencies": {
+    "envio": "^3.2.1",
+    "viem": "^2.55.10"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "volta": {
+    "extends": "../../package.json"
+  }
+}

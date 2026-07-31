@@ -5,6 +5,6 @@
     { "path": "./apps/web" },
     { "path": "./apps/devtools" },
     { "path": "./packages/contracts" },
-    { "path": "./apps/subgraph/foresight" }
+    { "path": "./apps/indexer" }
   ]
 }

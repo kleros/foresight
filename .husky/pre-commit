@@ -17,6 +17,6 @@ if echo "$staged_files" | grep -q "^packages/contracts/"; then
   yarn workspace @foresight/contracts check-types
 fi
 
-if echo "$staged_files" | grep -q "^apps/subgraph/foresight/"; then
-  yarn workspace foresight-subgraph check-types
+if echo "$staged_files" | grep -q "^apps/indexer/"; then
+  yarn workspace foresight-indexer check-types
 fi

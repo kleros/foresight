@@ -6,10 +6,12 @@
     "base.json",
     "nextjs.json",
     "vite-react.json",
-    "node-library.json",
-    "subgraph.json"
+    "node-library.json"
   ],
   "devDependencies": {
     "typescript": "^5.8.3"
+  },
+  "volta": {
+    "extends": "../../package.json"
   }
 }

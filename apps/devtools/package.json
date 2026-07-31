@@ -26,5 +26,8 @@
     "typescript": "^5.8.3",
     "vite": "^6.3.5"
   },
-  "prettier": "@foresight/prettier-config"
+  "prettier": "@foresight/prettier-config",
+  "volta": {
+    "extends": "../../package.json"
+  }
 }

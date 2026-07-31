@@ -9,5 +9,8 @@
   "devDependencies": {
     "prettier": "^3.7.4"
   },
-  "prettier": "./index.js"
+  "prettier": "./index.js",
+  "volta": {
+    "extends": "../../package.json"
+  }
 }

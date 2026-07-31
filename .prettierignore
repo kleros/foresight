@@ -16,13 +16,13 @@ node_modules/
 
 # generated / tool output
 **/generated/
+**/.envio/
 **/build/
 **/artifacts/
 **/cache/
 **/typechain-types/
 
 # synced / local deploy output (package .prettierignore alone does not affect editor save)
-apps/subgraph/foresight/abis/
 packages/contracts/deployments/localhost/
 packages/contracts/deployments/hardhat/
 **/deployments/*/solcInputs/

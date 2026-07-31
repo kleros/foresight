@@ -23,8 +23,6 @@ export const config = [
       "**/cache/**",
       "packages/contracts/out/**",
       "packages/contracts/lib/**",
-      "apps/subgraph/**/build/**",
-      "apps/subgraph/**/generated/**",
     ],
   },
   js.configs.recommended,
@@ -35,6 +33,21 @@ export const config = [
     },
     rules: {
       "turbo/no-undeclared-env-vars": "error",
+    },
+  },
+  {
+    rules: {
+      // a `_` prefix and a rest-destructuring sibling are both deliberate omissions,
+      // not dead code - `const { icon, ...rest }` is how a key gets dropped
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+          ignoreRestSiblings: true,
+        },
+      ],
     },
   },
 ];

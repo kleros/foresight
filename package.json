@@ -5,29 +5,37 @@
   "license": "MIT",
   "workspaces": [
     "apps/*",
-    "apps/subgraph/*",
     "packages/*"
   ],
   "scripts": {
-    "dev": "yarn turbo run dev --filter=web",
-    "dev:apps": "yarn turbo run dev --filter=web --filter=@foresight/devtools",
-    "local-stack": "./scripts/local-stack.sh start",
-    "stop-local-stack": "./scripts/local-stack.sh stop",
     "build": "turbo run build",
     "lint": "turbo run lint",
+    "check-types": "turbo run check-types",
+    "test": "turbo run test",
     "format": "prettier --write . --ignore-path .prettierignore.root && turbo run format",
     "format:check": "sh -c 'prettier --check . --ignore-path .prettierignore.root; r1=$?; turbo run format:check --continue=always; r2=$?; exit $((r1 | r2))'",
-    "test": "turbo run test",
-    "check-types": "turbo run check-types",
-    "changelog": "conventional-changelog --infile CHANGELOG.md --same-file --release-count 0 && prettier --write CHANGELOG.md",
-    "prepare": "husky",
-    "graph-node:start": "yarn workspace @foresight/graph-node start",
-    "graph-node:start:detached": "yarn workspace @foresight/graph-node start:detached",
-    "graph-node:stop": "yarn workspace @foresight/graph-node stop",
+    "//": "",
+    "//": "============================== shared ================================",
+    "local-stack": "./scripts/local-stack.sh start",
+    "stop-local-stack": "./scripts/local-stack.sh stop",
+    "dev:apps": "yarn turbo run dev --filter=web --filter=@foresight/devtools",
+    "//": "============================== app_web ===============================",
+    "dev": "yarn turbo run dev --filter=web",
+    "test:e2e": "yarn workspace web test:e2e",
+    "//": "",
+    "//": "============================== indexer ===============================",
+    "indexer:dev": "yarn workspace foresight-indexer dev",
+    "indexer:stop": "yarn workspace foresight-indexer stop",
+    "indexer:update": "yarn workspace foresight-indexer update",
+    "indexer:update:local": "yarn workspace foresight-indexer update:local",
+    "//": "",
+    "//": "============================== contracts ==============================",
     "local-node:contracts": "yarn workspace @foresight/contracts start",
     "local-node:deploy": "yarn workspace @foresight/contracts deploy:local",
-    "deploy:subgraph": "yarn workspace foresight-subgraph deploy:local",
-    "test:e2e": "yarn workspace web test:e2e"
+    "//": "",
+    "//": "=======================================================================",
+    "changelog": "conventional-changelog --infile CHANGELOG.md --same-file --release-count 0 && prettier --write CHANGELOG.md",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.8.1",
@@ -43,9 +51,12 @@
   "prettier": "@foresight/prettier-config",
   "packageManager": "yarn@4.9.2",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "resolutions": {
     "undici": "6.21.2"
+  },
+  "volta": {
+    "node": "22.23.2"
   }
 }

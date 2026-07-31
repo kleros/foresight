@@ -10,7 +10,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check-types": "tsc --noEmit",
-    "codegen": "NEXT_PUBLIC_SUBGRAPH_URL=${NEXT_PUBLIC_SUBGRAPH_URL:-http://localhost:8000/subgraphs/name/foresight} graphql-codegen",
+    "codegen": "graphql-codegen",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -57,5 +57,8 @@
     "prettier": "^3.7.4",
     "typescript": "^5.8.3"
   },
-  "prettier": "@foresight/prettier-config"
+  "prettier": "@foresight/prettier-config",
+  "volta": {
+    "extends": "../../package.json"
+  }
 }

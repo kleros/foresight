@@ -70,5 +70,8 @@
   "peerDependencies": {
     "viem": "^2.23.2"
   },
-  "prettier": "./.prettierrc.cjs"
+  "prettier": "./.prettierrc.cjs",
+  "volta": {
+    "extends": "../../package.json"
+  }
 }

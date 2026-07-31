@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=./node_modules/envio/evm.schema.json
+name: foresight-indexer
+
+field_selection:
+  transaction_fields:
+    - hash
+
+contracts:
+  - name: SessionFactory
+    events:
+      - event: ParentMarketDeployed(uint256 indexed sessionId, address indexed deployer, address indexed parentMarket, uint256 outcomeCount, string metadataUri)
+      - event: ChildMarketDeployed(uint256 indexed sessionId, uint256 indexed parentOutcomeIndex, address indexed childMarket, address parentMarket)
+
+chains:
+  - id: 31337
+    start_block: _PLACEHOLDER_
+    rpc: ${ENVIO_RPC_URL:-http://localhost:8545}
+    contracts:
+      - name: SessionFactory
+        address:
+          - "_PLACEHOLDER_"

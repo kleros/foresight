@@ -4,7 +4,7 @@ const subgraphUrl = process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 
 // env manager is not helpful here, so validating ourselves
 if (!subgraphUrl) {
-  throw new Error("NEXT_PUBLIC_SUBGRAPH_URL is not set`");
+  throw new Error("NEXT_PUBLIC_SUBGRAPH_URL is not set");
 }
 
 const config: CodegenConfig = {
@@ -17,11 +17,10 @@ const config: CodegenConfig = {
       preset: "client",
       config: {
         scalars: {
-          BigDecimal: "string",
-          BigInt: "string",
-          Int8: "string",
-          Bytes: "`0x${string}`",
-          Timestamp: "string",
+          numeric: "string",
+          bigint: "string",
+          timestamptz: "string",
+          jsonb: "unknown",
         },
       },
     },
