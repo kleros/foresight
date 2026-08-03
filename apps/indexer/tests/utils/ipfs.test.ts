@@ -1,10 +1,12 @@
+import { EXAMPLE_METADATA, EXAMPLE_METADATA_CID as CID } from "@foresight/session-metadata";
 import type { EffectContext } from "envio";
 import { afterEach, describe, it, vi } from "vitest";
 
 import { ipfsPath } from "../../src/utils";
 import { tryFetchIpfsFile } from "../../src/utils/ipfs";
 import { parseSessionMetadata } from "../../src/utils/ipfs/fetchSessionMetadata";
-import { FIRST_CHILD, METADATA_CID as CID, SESSION_METADATA } from "../fixtures/sessionMetadata";
+
+const FIRST_CHILD = EXAMPLE_METADATA.children[0]!;
 
 describe("ipfsPath", () => {
   it("strips every accepted prefix, and leaves a bare CID alone", (t) => {
@@ -73,25 +75,22 @@ describe("tryFetchIpfsFile", () => {
 });
 
 describe("parseSessionMetadata", () => {
-  const valid = (overrides: Record<string, unknown> = {}) => ({ ...SESSION_METADATA, ...overrides });
+  const valid = (overrides: Record<string, unknown> = {}) => ({ ...EXAMPLE_METADATA, ...overrides });
 
   it("reads a complete document, and drops the keys it does not know", (t) => {
-    t.expect(parseSessionMetadata(SESSION_METADATA)).toEqual({
-      schemaVersion: 1,
-      session: SESSION_METADATA.session,
-      children: SESSION_METADATA.children,
-    });
+    // doubles as the round-trip drift guard for the shared example: parses clean, nothing dropped
+    t.expect(parseSessionMetadata({ ...EXAMPLE_METADATA, chainId: 100 })).toEqual(EXAMPLE_METADATA);
   });
 
   it("treats icon as the one optional display field, per its documented fallback", (t) => {
-    const { icon, ...withoutIcon } = SESSION_METADATA.session;
+    const { icon, ...withoutIcon } = EXAMPLE_METADATA.session;
 
     t.expect(parseSessionMetadata(valid({ session: withoutIcon })).session.icon).toBeUndefined();
   });
 
   it("rejects a document missing any other display field, since the card cannot render it", (t) => {
     for (const field of ["title", "description", "heroImage", "itemName", "itemNamePlural", "blocks"]) {
-      const { [field]: _dropped, ...session } = SESSION_METADATA.session as Record<string, unknown>;
+      const { [field]: _dropped, ...session } = EXAMPLE_METADATA.session as Record<string, unknown>;
 
       t.expect(() => parseSessionMetadata(valid({ session })), `missing ${field}`).toThrow();
     }
@@ -105,11 +104,11 @@ describe("parseSessionMetadata", () => {
 
   it("rejects a schemaVersion this reader was not written for", (t) => {
     t.expect(() => parseSessionMetadata(valid({ schemaVersion: 2 }))).toThrow();
-    t.expect(() => parseSessionMetadata({ session: SESSION_METADATA.session, children: [] })).toThrow();
+    t.expect(() => parseSessionMetadata({ session: EXAMPLE_METADATA.session, children: [] })).toThrow();
   });
 
   it("takes markdown blocks, and only markdown for now", (t) => {
-    const withBlocks = (...blocks: unknown[]) => valid({ session: { ...SESSION_METADATA.session, blocks } });
+    const withBlocks = (...blocks: unknown[]) => valid({ session: { ...EXAMPLE_METADATA.session, blocks } });
 
     t.expect(parseSessionMetadata(withBlocks({ type: "markdown", body: "ok" })).session.blocks).toHaveLength(1);
     t.expect(() => parseSessionMetadata(withBlocks({ type: "link", label: "a", url: "u" }))).toThrow();

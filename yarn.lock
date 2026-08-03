@@ -3067,6 +3067,7 @@ __metadata:
   dependencies:
     "@foresight/eslint-config": "workspace:*"
     "@foresight/prettier-config": "workspace:*"
+    "@foresight/session-metadata": "workspace:*"
     "@foresight/typescript-config": "workspace:*"
     "@nomicfoundation/hardhat-chai-matchers": "npm:^2.0.8"
     "@nomicfoundation/hardhat-ethers": "npm:^3.0.8"
@@ -3142,6 +3143,19 @@ __metadata:
   resolution: "@foresight/prettier-config@workspace:packages/prettier-config"
   dependencies:
     prettier: "npm:^3.7.4"
+  languageName: unknown
+  linkType: soft
+
+"@foresight/session-metadata@workspace:*, @foresight/session-metadata@workspace:packages/session-metadata":
+  version: 0.0.0-use.local
+  resolution: "@foresight/session-metadata@workspace:packages/session-metadata"
+  dependencies:
+    "@foresight/eslint-config": "workspace:*"
+    "@foresight/prettier-config": "workspace:*"
+    "@foresight/typescript-config": "workspace:*"
+    eslint: "npm:^9.28.0"
+    prettier: "npm:^3.7.4"
+    typescript: "npm:^5.8.3"
   languageName: unknown
   linkType: soft
 
@@ -12012,6 +12026,7 @@ __metadata:
     "@foresight/contracts": "workspace:*"
     "@foresight/eslint-config": "workspace:*"
     "@foresight/prettier-config": "workspace:*"
+    "@foresight/session-metadata": "workspace:*"
     envio: "npm:^3.2.1"
     eslint: "npm:^9.28.0"
     prettier: "npm:^3.7.4"

@@ -20,6 +20,7 @@
     "@foresight/contracts": "workspace:*",
     "@foresight/eslint-config": "workspace:*",
     "@foresight/prettier-config": "workspace:*",
+    "@foresight/session-metadata": "workspace:*",
     "eslint": "^9.28.0",
     "prettier": "^3.7.4",
     "typescript": "^5.8.3",

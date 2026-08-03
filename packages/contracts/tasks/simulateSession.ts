@@ -17,7 +17,12 @@ task("simulate-session", "Deploys a sample session through the deployed SessionF
   .addOptionalParam("outcomes", "Number of parent outcomes (2-4)", 2, types.int)
   .addFlag("phased", "Deploy via openPhasedSession + one child batch tx per child instead of the atomic path")
   .addFlag("multi", "Use a multi-categorical parent market")
-  .addOptionalParam("metadataUri", "Metadata URI stored on the session", undefined, types.string)
+  .addOptionalParam(
+    "metadataUri",
+    "Metadata URI stored on the session; defaults to the shared example document.",
+    undefined,
+    types.string,
+  )
   .setAction(async (args: SimulateSessionArgs, hre: HardhatRuntimeEnvironment) => {
     if (args.outcomes < 2 || args.outcomes > OUTCOME_LABELS.length) {
       throw new Error(`--outcomes must be between 2 and ${OUTCOME_LABELS.length}`);

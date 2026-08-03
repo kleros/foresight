@@ -1,3 +1,4 @@
+import type { SessionMetadataDocument } from "@foresight/session-metadata";
 import { S, createEffect } from "envio";
 
 import { tryFetchIpfsFile } from ".";
@@ -27,17 +28,19 @@ const sessionOutput = S.schema({
   blocks,
 });
 
-// TODO: standardize the session-metadata in its own package, so we don't drift across the monorepo
 const documentOutput = S.schema({
   schemaVersion: 1 as const,
   session: sessionOutput,
   children: S.array(childOutput),
 });
 
-export type SessionMetadata = S.Output<typeof documentOutput>;
-export type ChildMetadata = S.Output<typeof childOutput>;
+const parseDocument = (document: unknown) => S.parseOrThrow(document, documentOutput);
 
-export const parseSessionMetadata = (document: unknown): SessionMetadata => S.parseOrThrow(document, documentOutput);
+/**
+ * Compile-time drift guard: it fails if the schema's output stops satisfying
+ * the shared document type.
+ */
+export const parseSessionMetadata: (document: unknown) => SessionMetadataDocument = parseDocument;
 
 export const fetchSessionMetadata = createEffect(
   {
@@ -51,7 +54,7 @@ export const fetchSessionMetadata = createEffect(
     try {
       const document = await tryFetchIpfsFile(input.path, context);
 
-      return parseSessionMetadata(document);
+      return parseDocument(document);
     } catch (error) {
       context.log.error(`Session metadata could not be resolved for ${input.path}: ${String(error)}`);
 

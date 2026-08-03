@@ -39,6 +39,7 @@
   "devDependencies": {
     "@foresight/eslint-config": "workspace:*",
     "@foresight/prettier-config": "workspace:*",
+    "@foresight/session-metadata": "workspace:*",
     "@foresight/typescript-config": "workspace:*",
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.8",
     "@nomicfoundation/hardhat-ethers": "^3.0.8",

@@ -4,8 +4,11 @@ import { type AddressInfo } from "node:net";
 import { decodeFunctionData, encodeFunctionResult, type Address, type Hex } from "viem";
 import { afterAll, beforeAll, describe, it } from "vitest";
 
+import { EXAMPLE_METADATA, EXAMPLE_METADATA_CID, EXAMPLE_METADATA_URI } from "@foresight/session-metadata";
+
 import { abi as seerMarketAbi } from "../../abis/SeerMarket";
-import { FIRST_CHILD, METADATA_CID, METADATA_URI, SECOND_CHILD, SESSION_METADATA } from "../fixtures/sessionMetadata";
+
+const [FIRST_CHILD, SECOND_CHILD] = [EXAMPLE_METADATA.children[0]!, EXAMPLE_METADATA.children[1]!];
 
 const MARKET_NAME = "Which director for Dune: Part Three?";
 const OUTCOMES = ["Villeneuve", "Gerwig"];
@@ -65,13 +68,13 @@ beforeAll(async () => {
   server = createServer((request, response) => {
     if (request.method === "GET") {
       const cid = request.url?.replace("/ipfs/", "");
-      if (cid !== METADATA_CID) {
+      if (cid !== EXAMPLE_METADATA_CID) {
         response.writeHead(404).end();
 
         return;
       }
 
-      response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(SESSION_METADATA));
+      response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(EXAMPLE_METADATA));
 
       return;
     }
@@ -104,7 +107,7 @@ afterAll(async () => {
   await new Promise((resolve) => server.close(resolve));
 });
 
-const parentDeployed = (block: number, metadataUri = METADATA_URI, sessionId = 0n) => ({
+const parentDeployed = (block: number, metadataUri = EXAMPLE_METADATA_URI, sessionId = 0n) => ({
   contract: "SessionFactory" as const,
   event: "ParentMarketDeployed" as const,
   block: { number: block, timestamp: block },
@@ -153,18 +156,18 @@ describe("SessionFactory indexing", () => {
     t.expect(session.completedAt).toBe(BigInt(BLOCK));
     t.expect(session.marketName).toBe(MARKET_NAME);
     t.expect(session.outcomes).toEqual(OUTCOMES);
-    t.expect(session.metadataUri).toBe(METADATA_URI);
+    t.expect(session.metadataUri).toBe(EXAMPLE_METADATA_URI);
     t.expect(session.metadataResolved).toBe(true);
-    t.expect(session.title).toBe(SESSION_METADATA.session.title);
-    t.expect(session.itemNamePlural).toBe(SESSION_METADATA.session.itemNamePlural);
-    t.expect(session.blocks).toEqual(SESSION_METADATA.session.blocks);
+    t.expect(session.title).toBe(EXAMPLE_METADATA.session.title);
+    t.expect(session.itemNamePlural).toBe(EXAMPLE_METADATA.session.itemNamePlural);
+    t.expect(session.blocks).toEqual(EXAMPLE_METADATA.session.blocks);
     // keyword is matched with `_ilike`, so what has to hold is that every term someone
     // might search for is findable in it - not the order they were concatenated in
     for (const term of [
       MARKET_NAME,
       ...OUTCOMES,
-      SESSION_METADATA.session.title,
-      SESSION_METADATA.session.description,
+      EXAMPLE_METADATA.session.title,
+      EXAMPLE_METADATA.session.description,
       FIRST_CHILD.displayName,
       SECOND_CHILD.displayName,
     ]) {

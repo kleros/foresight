@@ -1,3 +1,4 @@
+import { EXAMPLE_METADATA_URI } from "@foresight/session-metadata";
 import { parseEther } from "ethers";
 
 import { type SessionFactory } from "../../typechain-types";
@@ -12,7 +13,9 @@ export enum MarketKind {
   Scalar,
 }
 
-export const METADATA_URI = "ipfs://bafybeigd7cvhmnq4session0metadata000000000000000000000000000";
+// the shared example document: resolvable on the local mock gateway, so sessions
+// deployed with fixture defaults render with real metadata end to end
+export const METADATA_URI = EXAMPLE_METADATA_URI;
 
 export function phasedOpenArgs(params: DeploySessionParams): [ParentCategoricalConfig, boolean, string] {
   return [params.parent, params.multiCategoricalParent, params.metadataUri];
