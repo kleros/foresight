@@ -86,6 +86,29 @@ describe("SessionFactory", function () {
       expect(first.parentMarket).to.not.equal(second.parentMarket);
     });
 
+    it("deploys market stubs exposing the views the indexer reads", async function () {
+      const { deployer, sessionFactory } = await loadFixture(deploySessionFactoryFixture);
+      const params = buildTwoOutcomeSession();
+
+      await sessionFactory.connect(deployer).deploySession(params);
+      const session = await sessionFactory.getSession(0n);
+
+      const parent = await hre.ethers.getContractAt("MockSeerMarket", session.parentMarket);
+      expect(await parent.marketName()).to.equal(params.parent.marketName);
+      expect(await parent.outcomes(0n)).to.equal(params.parent.outcomes[0]);
+      expect(await parent.outcomes(1n)).to.equal(params.parent.outcomes[1]);
+      expect(await parent.numOutcomes()).to.equal(2n);
+      expect(await parent.parentMarket()).to.equal(hre.ethers.ZeroAddress);
+
+      const expectedChild = childAt(params, 1);
+      const child = await hre.ethers.getContractAt("MockSeerMarket", session.childMarkets[1]!);
+      expect(await child.marketName()).to.equal(expectedChild.marketName);
+      expect(await child.lowerBound()).to.equal(expectedChild.lowerBound);
+      expect(await child.upperBound()).to.equal(expectedChild.upperBound);
+      expect(await child.parentMarket()).to.equal(session.parentMarket);
+      expect(await child.parentOutcome()).to.equal(1n);
+    });
+
     it("forwards scalar params to Seer on atomic deploy", async function () {
       const { deployer, seerMarketFactory, sessionFactory } = await loadFixture(deploySessionFactoryFixture);
       const params = buildTwoOutcomeSession();

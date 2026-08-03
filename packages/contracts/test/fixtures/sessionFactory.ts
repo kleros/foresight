@@ -26,10 +26,15 @@ export function childAt(params: DeploySessionParams, index: number): ChildScalar
   return child;
 }
 
+export const OUTCOME_LABELS = ["Movie A", "Movie B", "Movie C", "Movie D"];
+
 type SessionOverrides = {
   multiCategoricalParent?: boolean;
   childQuestionPrefix?: string;
   metadataUri?: string;
+  openingTime?: number;
+  /** Appended to market names, so repeated deploys (e.g. simulate-session runs) stay distinguishable. */
+  sessionLabel?: string;
 };
 
 export function buildTwoOutcomeSession(overrides?: SessionOverrides): DeploySessionParams {
@@ -40,35 +45,36 @@ export function buildThreeOutcomeSession(overrides?: SessionOverrides): DeploySe
   return buildOutcomeSession(3, overrides);
 }
 
-function buildOutcomeSession(outcomeCount: number, overrides?: SessionOverrides): DeploySessionParams {
+export function buildOutcomeSession(outcomeCount: number, overrides?: SessionOverrides): DeploySessionParams {
   const multiCategoricalParent = overrides?.multiCategoricalParent ?? false;
   const childQuestionPrefix = overrides?.childQuestionPrefix ?? "What percentile score will Scooby assign to";
+  const openingTime = overrides?.openingTime ?? 1_700_000_000;
+  const label = overrides?.sessionLabel ? ` (${overrides.sessionLabel})` : "";
 
-  const movieLabels = ["Movie A", "Movie B", "Movie C", "Movie D"];
-  const outcomes = movieLabels.slice(0, outcomeCount);
-  const tokenNames = outcomes.map((label) => label.replace(/\s+/g, "_").toUpperCase());
+  const outcomes = OUTCOME_LABELS.slice(0, outcomeCount);
+  const tokenNames = outcomes.map((outcomeLabel) => outcomeLabel.replace(/\s+/g, "_").toUpperCase());
 
   return {
     multiCategoricalParent,
     metadataUri: overrides?.metadataUri ?? METADATA_URI,
     parent: {
-      marketName: "Which movies will Scooby watch as part of the “Distilled Scooby's Judgement experiment”?",
+      marketName: `Which movies will Scooby watch as part of the “Distilled Scooby's Judgement experiment”?${label}`,
       outcomes,
       tokenNames,
       category: "movies",
       lang: "en",
       minBond: parseEther("1"),
-      openingTime: 1_700_000_000,
+      openingTime,
     },
     children: outcomes.map((movieLabel, index) => ({
       parentOutcomeIndex: BigInt(index),
-      marketName: `${childQuestionPrefix} ${movieLabel}?[%]`,
+      marketName: `${childQuestionPrefix} ${movieLabel}?${label}[%]`,
       outcomes: ["DOWN", "UP"],
       tokenNames: [`${movieLabel}_DOWN`, `${movieLabel}_UP`],
       lowerBound: 0n,
       upperBound: 100n,
       minBond: parseEther("1"),
-      openingTime: 1_700_000_100 + index * 100,
+      openingTime: openingTime + 100 + index * 100,
       category: "movies",
       lang: "en",
     })),

@@ -2,9 +2,10 @@
 pragma solidity ^0.8.28;
 
 import {ISeerMarketFactory} from "../interfaces/ISeerMarketFactory.sol";
+import {MockSeerMarket} from "./MockSeerMarket.sol";
 
 /// @title MockSeerMarketFactory
-/// @notice Mock for Seer `MarketFactory`; returns deterministic pseudo-addresses per call.
+/// @notice Mock for Seer `MarketFactory`; deploys a `MockSeerMarket` stub per call.
 /// @dev Not for production deployment.
 contract MockSeerMarketFactory is ISeerMarketFactory {
   /// @notice Market kinds surfaced by the mock for test assertions.
@@ -41,7 +42,7 @@ contract MockSeerMarketFactory is ISeerMarketFactory {
     lastMarketKind = MarketKind.MultiCategorical;
     lastParentMarketKind = MarketKind.MultiCategorical;
     lastParams = params;
-    market = _nextMarket("multi");
+    market = _deployMarket(params);
   }
 
   /// @inheritdoc ISeerMarketFactory
@@ -49,24 +50,30 @@ contract MockSeerMarketFactory is ISeerMarketFactory {
     lastMarketKind = MarketKind.Categorical;
     lastParentMarketKind = MarketKind.Categorical;
     lastParams = params;
-    market = _nextMarket("cat");
+    market = _deployMarket(params);
   }
 
   /// @inheritdoc ISeerMarketFactory
   function createScalarMarket(CreateMarketParams calldata params) external returns (address market) {
     lastMarketKind = MarketKind.Scalar;
     lastParams = params;
-    market = _nextMarket("scalar");
+    market = _deployMarket(params);
   }
 
-  /// @notice Allocates the next deterministic pseudo market address.
-  /// @param kind Market kind label mixed into the address hash.
-  /// @return market Pseudo market address for tests.
-  /// @dev O(1).
-  function _nextMarket(string memory kind) private returns (address market) {
+  /// @notice Deploys the market stub for this creation call.
+  /// @param params Market creation params forwarded by the caller.
+  /// @return market Address of the deployed `MockSeerMarket`.
+  function _deployMarket(CreateMarketParams calldata params) private returns (address market) {
     marketCount++;
     market = address(
-      uint160(uint256(keccak256(abi.encodePacked(kind, marketCount, msg.sender, block.timestamp, block.prevrandao))))
+      new MockSeerMarket(
+        params.marketName,
+        params.outcomes,
+        params.lowerBound,
+        params.upperBound,
+        params.parentMarket,
+        params.parentOutcome
+      )
     );
   }
 }

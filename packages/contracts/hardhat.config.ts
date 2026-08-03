@@ -9,6 +9,7 @@ import "@typechain/hardhat";
 import "hardhat-deploy";
 import "hardhat-deploy-ethers";
 
+import "./tasks/simulateSession";
 import solidityConfig from "./solidity.config.json";
 
 dotenv.config({ path: path.join(__dirname, ".env.local") });
