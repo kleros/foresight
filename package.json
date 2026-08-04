@@ -30,6 +30,7 @@
     "----": "------------------------------------------------------------------------------------------",
     "local-node:contracts": "yarn workspace @foresight/contracts start",
     "local-node:deploy": "yarn workspace @foresight/contracts deploy:local",
+    "simulate:session": "yarn workspace @foresight/contracts simulate:session",
     "-----": "-----------------------------------------------------------------------------------------",
     "changelog": "conventional-changelog --infile CHANGELOG.md --same-file --release-count 0 && prettier --write CHANGELOG.md",
     "prepare": "husky"

@@ -3,8 +3,7 @@
 One local process that plays the two off-chain services the stack needs:
 
 - **Kleros Atlas** : SIWE auth (`GetNonce`/`Login` with real signature recovery), user/email
-  operations, role restrictions, and the `POST /ipfs/file` upload endpoint (returns a real
-  CIDv1 as plain text, deterministic per content).
+  operations, role restrictions, and the `POST /ipfs/file` upload endpoint.
 - **IPFS gateway** : `GET /ipfs/<cid>` serves back exactly what was uploaded, so files pushed
   by the web app round-trip to the indexer.
 
