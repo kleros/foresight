@@ -1,0 +1,39 @@
+{
+  "name": "@foresight/mock-atlas",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local stand-in for Kleros Atlas (auth + IPFS upload) and an IPFS gateway for the indexer.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "dev": "tsx watch src/server.ts",
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check-types": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@foresight/eslint-config": "workspace:*",
+    "@foresight/prettier-config": "workspace:*",
+    "@foresight/typescript-config": "workspace:*",
+    "@kleros/kleros-app": "^3.0.1",
+    "@types/node": "^22.15.30",
+    "eslint": "^9.28.0",
+    "prettier": "^3.7.4",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@foresight/session-metadata": "workspace:*",
+    "jose": "^5.10.0",
+    "multiformats": "^13.3.1",
+    "tsx": "^4.19.2",
+    "viem": "^2.55.4"
+  },
+  "prettier": "@foresight/prettier-config",
+  "volta": {
+    "extends": "../../package.json"
+  }
+}

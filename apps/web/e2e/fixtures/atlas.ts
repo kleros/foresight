@@ -4,7 +4,15 @@ import { recoverMessageAddress, type Hex } from "viem";
 import { MOCK_IPFS_HASH, MOCK_NONCE, MOCK_ROLES } from "../utils/atlas-mocks";
 import { createTestJwt } from "../utils/jwt";
 
-// mocking atlas apis
+/**
+ * BACKUP fixture.
+ *
+ * The primary Atlas mock is the @foresight/mock-atlas server (packages/mock-atlas),
+ * which playwright starts via webServer and the app reaches through
+ * NEXT_PUBLIC_ATLAS_URI. Reach for this fixture only when a test needs
+ * route-level control (e.g. forcing Atlas failures); constants should stay in
+ * sync with packages/mock-atlas/src/index.ts.
+ */
 export const test = base.extend<{
   mockAtlas: () => Promise<void>;
 }>({
@@ -63,12 +71,7 @@ export const test = base.extend<{
           });
         }
 
-        // Default fallback
-        return route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({ data: {} }),
-        });
+        return route.fallback();
       });
 
       /* ---------------- IPFS upload ---------------- */
