@@ -36,7 +36,7 @@ export type Boolean_Comparison_Exp = {
 export type ChildMarket = {
   __typename?: 'ChildMarket';
   /** everything a child says beyond its name and colour */
-  blocks: Array<Scalars['jsonb']['output']>;
+  blocks: Scalars['jsonb']['output'];
   color?: Maybe<Scalars['String']['output']>;
   deployedAt: Scalars['numeric']['output'];
   /** resolved from the session's metadata document, keyed by parentOutcomeIndex */
@@ -54,6 +54,12 @@ export type ChildMarket = {
   session_id: Scalars['String']['output'];
   transactionHash: Scalars['String']['output'];
   upperBound: Scalars['numeric']['output'];
+};
+
+
+/** columns and relationships of "ChildMarket" */
+export type ChildMarketBlocksArgs = {
+  path?: InputMaybe<Scalars['String']['input']>;
 };
 
 /** order by aggregate values of table "ChildMarket" */
@@ -84,7 +90,7 @@ export type ChildMarket_Bool_Exp = {
   _and?: InputMaybe<Array<ChildMarket_Bool_Exp>>;
   _not?: InputMaybe<ChildMarket_Bool_Exp>;
   _or?: InputMaybe<Array<ChildMarket_Bool_Exp>>;
-  blocks?: InputMaybe<Jsonb_Array_Comparison_Exp>;
+  blocks?: InputMaybe<Jsonb_Comparison_Exp>;
   color?: InputMaybe<String_Comparison_Exp>;
   deployedAt?: InputMaybe<Numeric_Comparison_Exp>;
   displayName?: InputMaybe<String_Comparison_Exp>;
@@ -102,8 +108,6 @@ export type ChildMarket_Bool_Exp = {
 
 /** order by max() on columns of table "ChildMarket" */
 export type ChildMarket_Max_Order_By = {
-  /** everything a child says beyond its name and colour */
-  blocks?: InputMaybe<Order_By>;
   color?: InputMaybe<Order_By>;
   deployedAt?: InputMaybe<Order_By>;
   /** resolved from the session's metadata document, keyed by parentOutcomeIndex */
@@ -123,8 +127,6 @@ export type ChildMarket_Max_Order_By = {
 
 /** order by min() on columns of table "ChildMarket" */
 export type ChildMarket_Min_Order_By = {
-  /** everything a child says beyond its name and colour */
-  blocks?: InputMaybe<Order_By>;
   color?: InputMaybe<Order_By>;
   deployedAt?: InputMaybe<Order_By>;
   /** resolved from the session's metadata document, keyed by parentOutcomeIndex */
@@ -225,7 +227,7 @@ export type ChildMarket_Stream_Cursor_Input = {
 /** Initial value of the column from where the streaming should start */
 export type ChildMarket_Stream_Cursor_Value_Input = {
   /** everything a child says beyond its name and colour */
-  blocks?: InputMaybe<Array<Scalars['jsonb']['input']>>;
+  blocks?: InputMaybe<Scalars['jsonb']['input']>;
   color?: InputMaybe<Scalars['String']['input']>;
   deployedAt?: InputMaybe<Scalars['numeric']['input']>;
   /** resolved from the session's metadata document, keyed by parentOutcomeIndex */
@@ -304,7 +306,7 @@ export type Int_Comparison_Exp = {
 /** columns and relationships of "Session" */
 export type Session = {
   __typename?: 'Session';
-  blocks: Array<Scalars['jsonb']['output']>;
+  blocks: Scalars['jsonb']['output'];
   /** An array relationship */
   children: Array<ChildMarket>;
   completedAt: Scalars['numeric']['output'];
@@ -321,7 +323,7 @@ export type Session = {
   keyword: Scalars['String']['output'];
   /** read from the Seer parent market */
   marketName: Scalars['String']['output'];
-  /** resolved from metadataUri. Null when the document is unreachable or malformed. */
+  /** false when the document is unreachable or malformed, which is when every field below is null */
   metadataResolved: Scalars['Boolean']['output'];
   /** emitted by SessionFactory, fixed at deploy */
   metadataUri: Scalars['String']['output'];
@@ -330,8 +332,15 @@ export type Session = {
   outcomes: Array<Scalars['String']['output']>;
   parentMarket: Scalars['String']['output'];
   sessionId: Scalars['numeric']['output'];
+  /** resolved from metadataUri */
   title?: Maybe<Scalars['String']['output']>;
   transactionHash: Scalars['String']['output'];
+};
+
+
+/** columns and relationships of "Session" */
+export type SessionBlocksArgs = {
+  path?: InputMaybe<Scalars['String']['input']>;
 };
 
 
@@ -349,7 +358,7 @@ export type Session_Bool_Exp = {
   _and?: InputMaybe<Array<Session_Bool_Exp>>;
   _not?: InputMaybe<Session_Bool_Exp>;
   _or?: InputMaybe<Array<Session_Bool_Exp>>;
-  blocks?: InputMaybe<Jsonb_Array_Comparison_Exp>;
+  blocks?: InputMaybe<Jsonb_Comparison_Exp>;
   children?: InputMaybe<ChildMarket_Bool_Exp>;
   completedAt?: InputMaybe<Numeric_Comparison_Exp>;
   deployedChildCount?: InputMaybe<Numeric_Comparison_Exp>;
@@ -455,7 +464,7 @@ export type Session_Stream_Cursor_Input = {
 
 /** Initial value of the column from where the streaming should start */
 export type Session_Stream_Cursor_Value_Input = {
-  blocks?: InputMaybe<Array<Scalars['jsonb']['input']>>;
+  blocks?: InputMaybe<Scalars['jsonb']['input']>;
   completedAt?: InputMaybe<Scalars['numeric']['input']>;
   deployedChildCount?: InputMaybe<Scalars['numeric']['input']>;
   deployer?: InputMaybe<Scalars['String']['input']>;
@@ -470,7 +479,7 @@ export type Session_Stream_Cursor_Value_Input = {
   keyword?: InputMaybe<Scalars['String']['input']>;
   /** read from the Seer parent market */
   marketName?: InputMaybe<Scalars['String']['input']>;
-  /** resolved from metadataUri. Null when the document is unreachable or malformed. */
+  /** false when the document is unreachable or malformed, which is when every field below is null */
   metadataResolved?: InputMaybe<Scalars['Boolean']['input']>;
   /** emitted by SessionFactory, fixed at deploy */
   metadataUri?: InputMaybe<Scalars['String']['input']>;
@@ -479,6 +488,7 @@ export type Session_Stream_Cursor_Value_Input = {
   outcomes?: InputMaybe<Array<Scalars['String']['input']>>;
   parentMarket?: InputMaybe<Scalars['String']['input']>;
   sessionId?: InputMaybe<Scalars['numeric']['input']>;
+  /** resolved from metadataUri */
   title?: InputMaybe<Scalars['String']['input']>;
   transactionHash?: InputMaybe<Scalars['String']['input']>;
 };
@@ -743,23 +753,6 @@ export enum Cursor_Ordering {
   /** descending ordering of the cursor */
   Desc = 'DESC'
 }
-
-/** Boolean expression to compare columns of type "jsonb". All fields are combined with logical 'AND'. */
-export type Jsonb_Array_Comparison_Exp = {
-  /** is the array contained in the given array value */
-  _contained_in?: InputMaybe<Array<Scalars['jsonb']['input']>>;
-  /** does the array contain the given value */
-  _contains?: InputMaybe<Array<Scalars['jsonb']['input']>>;
-  _eq?: InputMaybe<Array<Scalars['jsonb']['input']>>;
-  _gt?: InputMaybe<Array<Scalars['jsonb']['input']>>;
-  _gte?: InputMaybe<Array<Scalars['jsonb']['input']>>;
-  _in?: InputMaybe<Array<Array<Scalars['jsonb']['input']>>>;
-  _is_null?: InputMaybe<Scalars['Boolean']['input']>;
-  _lt?: InputMaybe<Array<Scalars['jsonb']['input']>>;
-  _lte?: InputMaybe<Array<Scalars['jsonb']['input']>>;
-  _neq?: InputMaybe<Array<Scalars['jsonb']['input']>>;
-  _nin?: InputMaybe<Array<Array<Scalars['jsonb']['input']>>>;
-};
 
 export type Jsonb_Cast_Exp = {
   String?: InputMaybe<String_Comparison_Exp>;

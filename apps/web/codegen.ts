@@ -1,4 +1,7 @@
 import type { CodegenConfig } from "@graphql-codegen/cli";
+import { loadEnvConfig } from "@next/env";
+
+loadEnvConfig(process.cwd());
 
 const subgraphUrl = process.env.NEXT_PUBLIC_SUBGRAPH_URL;
 

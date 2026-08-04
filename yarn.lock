@@ -20872,6 +20872,7 @@ __metadata:
     "@graphql-tools/utils": "npm:^10.7.2"
     "@kleros/kleros-app": "npm:^3.0.1"
     "@kleros/ui-components-library": "npm:^3.8.0"
+    "@next/env": "npm:14.2.35"
     "@playwright/test": "npm:^1.53.1"
     "@reown/appkit": "npm:^1.8.22"
     "@reown/appkit-adapter-wagmi": "npm:^1.8.22"
