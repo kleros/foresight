@@ -27,7 +27,7 @@ type Session {
   itemName: String
   itemNamePlural: String
 
-  blocks: [Json!]!
+  blocks: Json!
 
   "market name, outcomes, title, description and child display names, for search "
   keyword: String!
@@ -54,7 +54,7 @@ type ChildMarket {
   color: String
 
   "everything a child says beyond its name and colour"
-  blocks: [Json!]!
+  blocks: Json!
 
   keyword: String!
   transactionHash: String!
