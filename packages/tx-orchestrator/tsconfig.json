@@ -1,0 +1,4 @@
+{
+  "extends": "@foresight/typescript-config/node-library.json",
+  "include": ["src", "eslint.config.mjs", "vitest.config.ts"]
+}

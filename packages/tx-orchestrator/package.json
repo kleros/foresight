@@ -1,0 +1,38 @@
+{
+  "name": "@foresight/tx-orchestrator",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "Generic, domain-agnostic multi-transaction flow runner: step queue, snapshot lock, pause/resume/trash, persistence and reconciliation.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@foresight/eslint-config": "workspace:*",
+    "@foresight/prettier-config": "workspace:*",
+    "@foresight/typescript-config": "workspace:*",
+    "@types/node": "^22.15.30",
+    "eslint": "^9.28.0",
+    "ethers": "^6.13.5",
+    "prettier": "^3.7.4",
+    "typescript": "^5.8.3",
+    "viem": "^2.55.4",
+    "vitest": "^4.1.0"
+  },
+  "peerDependencies": {
+    "viem": "^2.55.4"
+  },
+  "prettier": "@foresight/prettier-config",
+  "volta": {
+    "extends": "../../package.json"
+  }
+}
