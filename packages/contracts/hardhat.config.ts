@@ -15,6 +15,10 @@ import solidityConfig from "./solidity.config.json";
 dotenv.config({ path: path.join(__dirname, ".env.local") });
 dotenv.config({ path: path.join(__dirname, ".env") });
 
+const deployerAccounts = process.env.DEPLOYER_PRIVATE_KEY ? [process.env.DEPLOYER_PRIVATE_KEY] : [];
+
+const GNOSIS_PUBLIC_RPC = "https://rpc.gnosischain.com";
+
 const config: HardhatUserConfig = {
   solidity: {
     compilers: solidityConfig.compilers,
@@ -42,12 +46,20 @@ const config: HardhatUserConfig = {
       saveDeployments: true,
     },
     gnosis: {
-      url: process.env.GNOSIS_RPC_URL ?? "",
+      url: process.env.GNOSIS_RPC_URL || GNOSIS_PUBLIC_RPC,
       chainId: 100,
+      accounts: deployerAccounts,
       saveDeployments: true,
+      verify: {
+        etherscan: {
+          apiUrl: "https://api.blockscout.com/100/api",
+          apiKey: process.env.BLOCKSCOUT_API_KEY ?? "",
+        },
+      },
     },
     tenderly: {
       url: process.env.TENDERLY_RPC_URL ?? "",
+      accounts: deployerAccounts,
       saveDeployments: true,
     },
   },

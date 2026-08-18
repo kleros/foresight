@@ -27,6 +27,8 @@
     "deploy:local": "hardhat deploy --network localhost --tags SessionFactory && yarn codegen:localhost",
     "simulate:session": "hardhat simulate-session --network localhost",
     "deploy:gnosis": "hardhat deploy --network gnosis --tags SessionFactory && yarn codegen:gnosis",
+    "verify:gnosis": "hardhat --network gnosis etherscan-verify",
+    "verify:gnosis:sourcify": "hardhat --network gnosis sourcify",
     "lint": "sh -c 'hardhat check; r1=$?; eslint . --max-warnings 0; r2=$?; exit $((r1 | r2))'",
     "format:sol": "prettier --write \"contracts/**/*.sol\"",
     "format:ts": "prettier --write \"**/*.{ts,mts,mjs,cjs,json,md}\"",

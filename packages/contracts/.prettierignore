@@ -3,6 +3,5 @@ artifacts/
 cache/
 typechain-types/
 coverage/
-deployments/localhost/
-deployments/hardhat/
-deployments/*/solcInputs/
+# hardhat-deploy output, generated per network.
+deployments/*/

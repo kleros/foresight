@@ -29,8 +29,23 @@ Nothing is required for local work. Optional overrides, loaded by `hardhat.confi
 | Variable                      | Use                                                                                           |
 | ----------------------------- | --------------------------------------------------------------------------------------------- |
 | `SEER_MARKET_FACTORY_ADDRESS` | Override the Seer MarketFactory (default: `@seer-pm/contracts` deployment; mock on localhost) |
-| `GNOSIS_RPC_URL`              | Gnosis RPC for `deploy:gnosis`                                                                |
+| `GNOSIS_RPC_URL`              | Gnosis RPC override; defaults to the public `rpc.gnosischain.com`                             |
+| `DEPLOYER_PRIVATE_KEY`        | Signer for `gnosis` and `tenderly`                                                            |
+| `BLOCKSCOUT_API_KEY`          | Blockscout multichain API key, for `verify:gnosis`                                            |
 | `TENDERLY_RPC_URL`            | Tenderly fork RPC                                                                             |
+
+## Deploying to Gnosis
+
+Seer's MarketFactory on chain 100 resolves from `@seer-pm/contracts`.
+
+```bash
+yarn deploy:gnosis            # deploy + `codegen:gnosis`, writing deployments/gnosis.viem.ts
+yarn verify:gnosis:sourcify   # no API key
+yarn verify:gnosis            # Blockscout; needs BLOCKSCOUT_API_KEY
+```
+
+**`ETHERSCAN_API_KEY` in the environment overrides the configured key**, because
+hardhat-deploy checks that variable before any config.
 
 ## Imports
 

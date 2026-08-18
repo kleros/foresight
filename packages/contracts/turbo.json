@@ -4,16 +4,40 @@
   "tasks": {
     "build": {
       "outputs": ["artifacts/**", "typechain-types/**"],
-      "env": ["GNOSIS_RPC_URL", "TENDERLY_RPC_URL", "SEER_MARKET_FACTORY_ADDRESS"]
+      "env": [
+        "GNOSIS_RPC_URL",
+        "TENDERLY_RPC_URL",
+        "SEER_MARKET_FACTORY_ADDRESS",
+        "DEPLOYER_PRIVATE_KEY",
+        "BLOCKSCOUT_API_KEY"
+      ]
     },
     "lint": {
-      "env": ["GNOSIS_RPC_URL", "TENDERLY_RPC_URL", "SEER_MARKET_FACTORY_ADDRESS"]
+      "env": [
+        "GNOSIS_RPC_URL",
+        "TENDERLY_RPC_URL",
+        "SEER_MARKET_FACTORY_ADDRESS",
+        "DEPLOYER_PRIVATE_KEY",
+        "BLOCKSCOUT_API_KEY"
+      ]
     },
     "test": {
-      "env": ["GNOSIS_RPC_URL", "TENDERLY_RPC_URL", "SEER_MARKET_FACTORY_ADDRESS"]
+      "env": [
+        "GNOSIS_RPC_URL",
+        "TENDERLY_RPC_URL",
+        "SEER_MARKET_FACTORY_ADDRESS",
+        "DEPLOYER_PRIVATE_KEY",
+        "BLOCKSCOUT_API_KEY"
+      ]
     },
     "check-types": {
-      "env": ["GNOSIS_RPC_URL", "TENDERLY_RPC_URL", "SEER_MARKET_FACTORY_ADDRESS"]
+      "env": [
+        "GNOSIS_RPC_URL",
+        "TENDERLY_RPC_URL",
+        "SEER_MARKET_FACTORY_ADDRESS",
+        "DEPLOYER_PRIVATE_KEY",
+        "BLOCKSCOUT_API_KEY"
+      ]
     }
   }
 }
