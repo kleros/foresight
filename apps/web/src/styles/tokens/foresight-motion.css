@@ -1,0 +1,159 @@
+/* Three durations, never a fourth.*/
+:root {
+  --fs-dur-echo: 100ms; /* hover, press: a state echo */
+  --fs-dur-enter: 250ms; /* enter, exit, expand */
+  --fs-dur-structural: 400ms; /* structural moves: reorder, spawn, collapse */
+  --fs-ease-enter: cubic-bezier(0, 0, 0.2, 1);
+  --fs-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --fs-ease-structural: cubic-bezier(0.2, 0, 0, 1);
+  /* Loading tiers. Under 300ms: render nothing. */
+  --fs-skeleton-min: 300ms;
+  --fs-narrative-min: 2000ms;
+}
+.fs-echo {
+  transition:
+    background-color var(--fs-dur-echo) var(--fs-ease-enter),
+    border-color var(--fs-dur-echo) var(--fs-ease-enter),
+    color var(--fs-dur-echo) var(--fs-ease-enter),
+    box-shadow var(--fs-dur-echo) var(--fs-ease-enter);
+}
+.fs-enter {
+  animation: fsFadeUp var(--fs-dur-enter) var(--fs-ease-enter) both;
+}
+.fs-exit {
+  animation: fsFadeOut var(--fs-dur-enter) var(--fs-ease-exit) both;
+}
+.fs-structural {
+  transition:
+    transform var(--fs-dur-structural) var(--fs-ease-structural),
+    height var(--fs-dur-structural) var(--fs-ease-structural),
+    opacity var(--fs-dur-structural) var(--fs-ease-structural);
+}
+@keyframes fsFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fsFadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+/* Motion that teaches structure: a dependent block grows out of its origin. */
+@keyframes fsSpawn {
+  from {
+    opacity: 0;
+    transform: scaleY(0.2) translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fs-spawn {
+  transform-origin: top center;
+  animation: fsSpawn var(--fs-dur-structural) var(--fs-ease-structural) both;
+}
+/* A panel arriving as its context changes: the preview swapping views. */
+@keyframes fsRise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fs-rise {
+  animation: fsRise var(--fs-dur-enter) var(--fs-ease-enter) both;
+}
+/* A colour swatch is small, so it grows on hover rather than lifting. */
+.fs-swatch {
+  transition:
+    transform var(--fs-dur-echo) var(--fs-ease-enter),
+    border-color var(--fs-dur-echo) var(--fs-ease-enter);
+}
+.fs-swatch:hover {
+  transform: scale(1.22);
+}
+.fs-swatch-well {
+  transition: transform var(--fs-dur-echo) var(--fs-ease-enter);
+}
+.fs-swatch-well:hover {
+  transform: translateY(-1px);
+}
+/* Press: border luminance + a 1px inner glow. No scale: at 3px radius a scale
+   transform reads as a wobble. */
+.fs-pressable {
+  transition:
+    border-color var(--fs-dur-echo) var(--fs-ease-enter),
+    box-shadow var(--fs-dur-echo) var(--fs-ease-enter);
+}
+.fs-pressable:active {
+  border-color: var(--fs-accent);
+  box-shadow: inset 0 0 0 1px var(--fs-accent);
+}
+/* Icon state tweens: two defined endpoints, never a bespoke timeline. */
+@keyframes fsDraw {
+  from {
+    stroke-dashoffset: var(--fs-draw-len, 24);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes fsSpinDash {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.fs-icon-draw path,
+.fs-icon-draw polyline {
+  stroke-dasharray: var(--fs-draw-len, 24);
+  animation: fsDraw var(--fs-dur-enter) var(--fs-ease-enter) both;
+}
+.fs-icon-pending {
+  animation: fsSpinDash 1s linear infinite;
+  transform-origin: 50% 50%;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --fs-dur-echo: 1ms;
+    --fs-dur-enter: 1ms;
+    --fs-dur-structural: 1ms;
+  }
+  .fs-enter,
+  .fs-exit,
+  .fs-spawn,
+  .fs-rise,
+  .fs-icon-draw path,
+  .fs-icon-draw polyline {
+    animation: fsFadeUp 150ms linear both;
+  }
+  .fs-spawn {
+    transform: none;
+  }
+  .fs-swatch:hover,
+  .fs-swatch-well:hover {
+    transform: none;
+  }
+  .fs-icon-pending {
+    animation: none;
+    opacity: 0.6;
+  }
+  .fs-skeleton {
+    animation: none;
+  }
+  * {
+    scroll-behavior: auto !important;
+  }
+}

@@ -15,7 +15,7 @@ const MobileNavbar: React.FC<{ walletSlot?: React.ReactNode }> = ({ walletSlot }
 
   return (
     <>
-      <div className="relative flex h-16 w-full items-center justify-between md:hidden!">
+      <div className="fs-page relative flex h-16 items-center justify-between md:hidden!">
         <Logo />
         <LightButton text="" icon={<HamburgerIcon />} onPress={toggleIsMenuOpen} />
       </div>

@@ -2,7 +2,7 @@ import type { SessionMetadataDocument } from "./types";
 
 /**
  * Example document, themed to match the sample sessions deployed by the contracts
- * `simulate-session` task (Movie A–D). Four children cover every outcome count the
+ * `simulate-session` task (Movie A-D). Four children cover every outcome count the
  * task supports, so each deployed child market finds its display entry.
  *
  * mock-atlas seeds this document on its IPFS gateway at boot, see

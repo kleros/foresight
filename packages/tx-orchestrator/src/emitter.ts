@@ -16,29 +16,40 @@ function safely(call: () => unknown, what: string): void {
   }
 }
 
+/** The events of one type, so a handler is given what it subscribed to. */
+export type EventOfType<TEvent extends { type: string }, TType extends TEvent["type"] | "*"> = TType extends "*"
+  ? TEvent
+  : Extract<TEvent, { type: TType }>;
+
 export interface Emitter<TEvent extends { type: string }> {
   emit(event: TEvent): void;
-  on(type: TEvent["type"] | "*", handler: (event: TEvent) => void): Unsubscribe;
+  on<TType extends TEvent["type"] | "*">(
+    type: TType,
+    handler: (event: EventOfType<TEvent, TType>) => void,
+  ): Unsubscribe;
 }
 
 export function createEmitter<TEvent extends { type: string }>(): Emitter<TEvent> {
-  const handlers = new Map<string, Set<(event: TEvent) => void>>();
+  const handlers = new Map<string, Set<(event: never) => void>>();
 
   return {
     emit(event) {
+      // The map is keyed by event type, so a handler only ever sees its own.
+      const deliver = (handler: (event: never) => void) => handler(event as never);
+
       for (const handler of [...(handlers.get(event.type) ?? [])]) {
-        safely(() => handler(event), `a "${event.type}" handler`);
+        safely(() => deliver(handler), `a "${event.type}" handler`);
       }
       for (const handler of [...(handlers.get("*") ?? [])]) {
-        safely(() => handler(event), `a "*" handler for "${event.type}"`);
+        safely(() => deliver(handler), `a "*" handler for "${event.type}"`);
       }
     },
 
     on(type, handler) {
       const set = handlers.get(type) ?? new Set();
-      set.add(handler);
+      set.add(handler as (event: never) => void);
       handlers.set(type, set);
-      return () => void set.delete(handler);
+      return () => void set.delete(handler as (event: never) => void);
     },
   };
 }

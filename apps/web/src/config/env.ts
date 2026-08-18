@@ -11,7 +11,7 @@ import * as v from "valibot";
  */
 const EnvSchema = v.object({
   REOWN_PROJECT_ID: v.pipe(
-    v.string("missing — create a project at https://dashboard.reown.com"),
+    v.string("missing: create a project at https://dashboard.reown.com"),
     v.minLength(1, "must not be empty"),
   ),
   ATLAS_URI: v.pipe(v.string("missing - Kleros Atlas endpoint"), v.url("must be a valid URL")),

@@ -18,7 +18,7 @@ type BatchedQuery = {
   variables: Record<string, unknown>;
 };
 
-const SUBGRAPH_ERROR = "Subgraph query failed.";
+const SUBGRAPH_ERROR = "Could not load session data. Try again in a moment.";
 
 const executor: AsyncExecutor = async ({ document, variables }) => {
   try {
@@ -70,3 +70,5 @@ export const fetchGraphql = async <TResult, TVariables extends Record<string, un
     document: document as BatchedQuery["document"],
     variables: variables ?? {},
   }) as Promise<TResult>;
+
+export type GraphqlFetch = typeof fetchGraphql;

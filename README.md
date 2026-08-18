@@ -4,14 +4,14 @@ Permissionless futarchy on Gnosis.
 
 ## Layout
 
-| Path                        | Package                       | Purpose                                                                                 |
-| --------------------------- | ----------------------------- | --------------------------------------------------------------------------------------- |
-| `apps/web`                  | `web`                         | Participant UI — see [apps/web/README.md](apps/web/README.md)                           |
-| `apps/devtools`             | `@foresight/devtools`         | Local dev tools                                                                         |
-| `apps/indexer`              | `foresight-indexer`           | Envio indexer — see [apps/indexer/README.md](apps/indexer/README.md)                    |
-| `packages/contracts`        | `@foresight/contracts`        | SessionFactory — see [packages/contracts/README.md](packages/contracts/README.md)       |
-| `packages/session-metadata` | `@foresight/session-metadata` | Session display-metadata schema — see [its README](packages/session-metadata/README.md) |
-| `packages/mock-atlas`       | `@foresight/mock-atlas`       | Local Atlas + IPFS gateway (dev/test) — see [its README](packages/mock-atlas/README.md) |
+| Path                        | Package                       | Purpose                                                                            |
+| --------------------------- | ----------------------------- | ---------------------------------------------------------------------------------- |
+| `apps/web`                  | `web`                         | Participant UI. [apps/web/README.md](apps/web/README.md)                           |
+| `apps/devtools`             | `@foresight/devtools`         | Local dev tools                                                                    |
+| `apps/indexer`              | `foresight-indexer`           | Envio indexer. [apps/indexer/README.md](apps/indexer/README.md)                    |
+| `packages/contracts`        | `@foresight/contracts`        | SessionFactory. [packages/contracts/README.md](packages/contracts/README.md)       |
+| `packages/session-metadata` | `@foresight/session-metadata` | Session display-metadata schema. [its README](packages/session-metadata/README.md) |
+| `packages/mock-atlas`       | `@foresight/mock-atlas`       | Local Atlas + IPFS gateway (dev/test). [its README](packages/mock-atlas/README.md) |
 
 ## Quick start
 
@@ -26,10 +26,10 @@ yarn dev                 # web at http://localhost:3000
 The web app validates its environment at startup and refuses to boot without it - see
 [apps/web/README.md](apps/web/README.md) for what each variable is.
 
-The indexer has its own env file: `cp apps/indexer/.env.example apps/indexer/.env` — see
+The indexer has its own env file: `cp apps/indexer/.env.example apps/indexer/.env`, see
 [apps/indexer/README.md](apps/indexer/README.md) for what each variable does.
 
-The whole local stack — hardhat node, mock-atlas, indexer and web — in one tmux session:
+The whole local stack in one tmux session: hardhat node, mock-atlas, indexer and web.
 
 ```bash
 yarn local-stack         # start (wipes local deployments + indexed data)
@@ -45,13 +45,13 @@ yarn indexer:dev             # terminal 3: envio indexer + hasura on :8080
 ```
 
 When running by hand, point the indexer at the mock gateway (`ENVIO_IPFS_GATEWAY`) and web at
-the mock Atlas (`NEXT_PUBLIC_ATLAS_URI`) — both are in the `.env.example`s. `yarn local-stack`
+the mock Atlas (`NEXT_PUBLIC_ATLAS_URI`). Both are in the `.env.example`s. `yarn local-stack`
 wires all of this for you.
 
 After **contract changes** while the node is still running: `yarn local-node:deploy` (redeploy + wagmi codegen).
 
 To populate the stack with data, `yarn simulate:session` deploys a sample session (mock Seer
-markets + example metadata) that the indexer picks up — flags in
+markets + example metadata) that the indexer picks up. Flags in
 [packages/contracts/README.md](packages/contracts/README.md).
 
 See [packages/contracts/README.md](packages/contracts/README.md) for deploy and artifact exports.

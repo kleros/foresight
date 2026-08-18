@@ -1,3 +1,24 @@
+const UTC_INSTANT = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "UTC",
+  dateStyle: "medium",
+  timeStyle: "short",
+  hourCycle: "h23",
+});
+
+/**
+ * @param isoDay `YYYY-MM-DD`
+ * @param time `HH:mm`, empty for midnight.
+ */
+export function utcInstant(isoDay: string, time: string): Date | null {
+  if (!isoDay) return null;
+  const instant = new Date(`${isoDay}T${time || "00:00"}:00Z`);
+  return Number.isNaN(instant.getTime()) ? null : instant;
+}
+
+export function formatUtcInstant(instant: Date | null): string {
+  return instant ? `${UTC_INSTANT.format(instant)} UTC` : "not set";
+}
+
 /**
  * Human-readable time remaining until an ISO 8601 instant.
  *

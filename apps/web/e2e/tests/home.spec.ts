@@ -12,5 +12,5 @@ test("homepage offers no wallet UI", async ({ page }) => {
 
 test("create route shows the connect button in the navbar", async ({ page }) => {
   await page.goto("/create");
-  await expect(page.getByRole("button", { name: "Connect" })).toBeVisible();
+  await expect(page.getByRole("banner").getByRole("button", { name: "Connect" })).toBeVisible();
 });

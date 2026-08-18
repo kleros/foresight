@@ -17,6 +17,7 @@ out/
 # test / e2e
 **/test-results/
 **/playwright-report/
+**/.playwright-mcp/
 coverage/
 
 # misc

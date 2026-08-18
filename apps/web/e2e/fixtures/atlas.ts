@@ -10,8 +10,8 @@ import { createTestJwt } from "../utils/jwt";
  * The primary Atlas mock is the @foresight/mock-atlas server (packages/mock-atlas),
  * which playwright starts via webServer and the app reaches through
  * NEXT_PUBLIC_ATLAS_URI. Reach for this fixture only when a test needs
- * route-level control (e.g. forcing Atlas failures); constants should stay in
- * sync with packages/mock-atlas/src/index.ts.
+ * route-level control (e.g. forcing Atlas failures); its role list is the
+ * server's own, imported rather than restated.
  */
 export const test = base.extend<{
   mockAtlas: () => Promise<void>;

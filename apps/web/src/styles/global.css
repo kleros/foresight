@@ -2,7 +2,71 @@
 @import "../../../../node_modules/@kleros/ui-components-library/dist/assets/theme.css";
 @source "../../../../node_modules/@kleros/ui-components-library";
 
+/* Foresight's extension layer over the Kleros foundation. */
+@import "./tokens/typography.css";
+@import "./tokens/foresight-semantic.css";
+@import "./tokens/foresight-motion.css";
+@import "./tokens/foresight-gradients.css";
+@import "./tokens/foresight-components.css";
+
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* Foresight semantic tokens as Tailwind colours: bg-fs-surface, text-fs-text-secondary… */
+@theme inline {
+  --color-fs-surface: var(--fs-surface);
+  --color-fs-surface-raised: var(--fs-surface-raised);
+  --color-fs-surface-sunken: var(--fs-surface-sunken);
+  --color-fs-surface-tint: var(--fs-surface-tint);
+  --color-fs-border: var(--fs-border);
+  --color-fs-border-strong: var(--fs-border-strong);
+  --color-fs-border-accent: var(--fs-border-accent);
+  --color-fs-text-primary: var(--fs-text-primary);
+  --color-fs-text-secondary: var(--fs-text-secondary);
+  --color-fs-text-inverse: var(--fs-text-inverse);
+  --color-fs-text-accent: var(--fs-text-accent);
+  --color-fs-accent: var(--fs-accent);
+  --color-fs-accent-protocol: var(--fs-accent-protocol);
+  --color-fs-status-registered: var(--fs-status-registered);
+  --color-fs-status-registered-bg: var(--fs-status-registered-bg);
+  --color-fs-status-pending: var(--fs-status-pending);
+  --color-fs-status-pending-bg: var(--fs-status-pending-bg);
+  --color-fs-status-disputed: var(--fs-status-disputed);
+  --color-fs-status-disputed-bg: var(--fs-status-disputed-bg);
+  --color-fs-status-unlisted: var(--fs-status-unlisted);
+  --radius-fs: var(--fs-radius);
+}
+
+/* Semantic type roles as single utilities */
+@utility type-h1 {
+  font: var(--type-h1);
+}
+@utility type-h2 {
+  font: var(--type-h2);
+}
+@utility type-body {
+  font: var(--type-body);
+}
+@utility type-label {
+  font: var(--type-label);
+}
+@utility type-caption {
+  font: var(--type-caption);
+}
+
+/** The one content gutter: the header, the page and the footer all sit on it. */
+@utility fs-page {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 1520px;
+  padding-inline: 40px;
+
+  @media (max-width: 1240px) {
+    padding-inline: 24px;
+  }
+  @media (max-width: 640px) {
+    padding-inline: 16px;
+  }
+}
 
 @theme {
   --color-background: var(--background);

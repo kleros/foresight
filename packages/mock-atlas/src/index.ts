@@ -41,4 +41,11 @@ export const MOCK_ROLES: Role[] = [
       allowedMimeTypes: ["video/x-msvideo", "application/pdf", "image/png", "application/json"],
     },
   },
+  {
+    name: "Test",
+    restriction: {
+      maxSize: 20971520,
+      allowedMimeTypes: ["image/png", "image/jpeg", "image/svg+xml", "application/json"],
+    },
+  },
 ];

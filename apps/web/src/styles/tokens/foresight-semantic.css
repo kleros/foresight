@@ -1,0 +1,63 @@
+/* Foresight semantic layer.
+   Kleros names variables by colour (MediumPurple, LightBlue); a role name cannot
+   be read off those. Everything in the Foresight layer consumes ONLY the names
+   below, so dark mode can differ structurally (glow where light has shadow) and
+   not merely chromatically. Never reach past this file to a kleros* variable. */
+:root {
+  /* Surfaces */
+  --fs-surface: var(--klerosUIComponentsWhiteBackground);
+  --fs-surface-raised: var(--klerosUIComponentsWhiteBackground);
+  --fs-surface-sunken: var(--klerosUIComponentsLightBackground);
+  --fs-surface-tint: var(--klerosUIComponentsMediumBlue);
+  --fs-surface-tint-purple: var(--klerosUIComponentsTintPurple);
+  /* How a raised surface separates from the page: shadow in light… */
+  --fs-raise: 0px 2px 3px var(--klerosUIComponentsDefaultShadow);
+  --fs-raise-glow: none;
+  --fs-raise-glow-opacity: 0;
+  /* Borders */
+  --fs-border: var(--klerosUIComponentsStroke);
+  --fs-border-strong: color-mix(in oklch, var(--klerosUIComponentsStroke), var(--klerosUIComponentsPrimaryText) 25%);
+  --fs-border-accent: var(--klerosUIComponentsPrimaryBlue);
+  /* Text */
+  --fs-text-primary: var(--klerosUIComponentsPrimaryText);
+  --fs-text-secondary: var(--klerosUIComponentsSecondaryText);
+  --fs-text-inverse: var(--klerosUIComponentsWhiteBackground);
+  --fs-text-accent: var(--klerosUIComponentsPrimaryBlue);
+  --fs-text-protocol: var(--klerosUIComponentsSecondaryPurple);
+  /* Accent: purple carries protocol identity, blue carries action */
+  --fs-accent: var(--klerosUIComponentsPrimaryBlue);
+  --fs-accent-hover: var(--klerosUIComponentsSecondaryBlue);
+  --fs-accent-protocol: var(--klerosUIComponentsSecondaryPurple);
+  --fs-accent-protocol-hover: var(--klerosUIComponentsPrimaryPurple);
+  /* Status: the registry and session vocabulary */
+  --fs-status-registered: var(--klerosUIComponentsSuccess);
+  --fs-status-registered-bg: var(--klerosUIComponentsSuccessLight);
+  --fs-status-pending: var(--klerosUIComponentsWarning);
+  --fs-status-pending-bg: var(--klerosUIComponentsWarningLight);
+  --fs-status-challenged: var(--klerosUIComponentsTint);
+  --fs-status-challenged-bg: var(--klerosUIComponentsTintMedium);
+  --fs-status-disputed: var(--klerosUIComponentsError);
+  --fs-status-disputed-bg: var(--klerosUIComponentsErrorLight);
+  --fs-status-removed: var(--klerosUIComponentsError);
+  --fs-status-removed-bg: var(--klerosUIComponentsErrorLight);
+  --fs-status-unlisted: var(--klerosUIComponentsSecondaryText);
+  --fs-status-unlisted-bg: var(--klerosUIComponentsLightGrey);
+  --fs-status-absent: var(--klerosUIComponentsSecondaryText);
+  --fs-status-absent-bg: var(--klerosUIComponentsLightGrey);
+  /* Geometry inherited from Kleros, restated so this layer has one vocabulary */
+  --fs-radius: var(--klerosUIComponentsBaseRadius);
+  --fs-border-width: 1px;
+  --fs-gradient-border-width: 1px;
+  --fs-gradient-border-width-strong: 2px;
+}
+:root.dark,
+.dark {
+  --fs-surface: var(--klerosUIComponentsWhiteBackground);
+  --fs-surface-raised: var(--klerosUIComponentsWhiteBackground);
+  --fs-surface-sunken: var(--klerosUIComponentsLightBackground);
+  /* …and a soft radial purple glow behind the card in dark. A shadow on #1b003f
+     is invisible; a glow in light mode is grime. */
+  --fs-raise: none;
+  --fs-raise-glow: radial-gradient(60% 70% at 50% 0%, var(--klerosUIComponentsSecondaryPurple) 0%, transparent 70%);
+  --fs-raise-glow-opacity: 0.15;
+}

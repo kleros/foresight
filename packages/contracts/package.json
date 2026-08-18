@@ -72,6 +72,9 @@
   "peerDependencies": {
     "viem": "^2.23.2"
   },
+  "installConfig": {
+    "hoistingLimits": "workspaces"
+  },
   "prettier": "./.prettierrc.cjs",
   "volta": {
     "extends": "../../package.json"

@@ -17,6 +17,10 @@ export const paths = {
   create: {
     getHref: () => "/create",
   },
+  /** A session is read through its decision market, which is what addresses it. */
+  market: {
+    getHref: (parentMarket: string) => `/market/${parentMarket}`,
+  },
   settings: {
     getHref: (tab?: SettingsTab) => (tab ? `/settings?tab=${tab}` : "/settings"),
     /** Landing pages for the links Atlas puts in its emails. */

@@ -7,7 +7,7 @@ export function Shell({ children, walletSlot }: { children: ReactNode; walletSlo
   return (
     <>
       <Header walletSlot={walletSlot} />
-      <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-10">{children}</main>
+      <main className="fs-page flex-1 py-10">{children}</main>
       <Footer />
     </>
   );

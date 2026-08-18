@@ -14,11 +14,12 @@ test("connecting swaps the navbar button for the account", async ({ page, wallet
   // web3 connection not available on homepage.
   await page.goto("/create");
 
-  await expect(page.getByRole("button", { name: "Connect" })).toBeVisible();
+  const navbar = page.getByRole("banner");
+  await expect(navbar.getByRole("button", { name: "Connect" })).toBeVisible();
 
   await wallet.connect("alice");
 
-  await expect(page.getByRole("button", { name: "Connect" })).toHaveCount(0);
+  await expect(navbar.getByRole("button", { name: "Connect" })).toHaveCount(0);
   await expect(page.getByText(shortenAddress(MOCK_ACCOUNTS.alice))).toBeVisible();
 });
 

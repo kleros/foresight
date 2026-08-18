@@ -1,5 +1,5 @@
 import { createFlowDriver } from "./driver";
-import { createEmitter, createNotifier } from "./emitter";
+import { createEmitter, createNotifier, type EventOfType } from "./emitter";
 import { classifyTxError, FlowStateError } from "./errors";
 import { createReceiptWatcher } from "./receiptWatcher";
 import { reconcileInFlight } from "./reconcile";
@@ -93,7 +93,11 @@ export interface TxOrchestrator<TSnapshot, TCtx> {
    */
   listPersisted(): PersistedFlowRun<TSnapshot, TCtx>[];
 
-  on(type: OrchestratorEventType | "*", handler: (event: OrchestratorEvent<TSnapshot, TCtx>) => void): Unsubscribe;
+  /** The handler is given the event it subscribed to; `"*"` gets all of them. */
+  on<TType extends OrchestratorEventType | "*">(
+    type: TType,
+    handler: (event: EventOfType<OrchestratorEvent<TSnapshot, TCtx>, TType>) => void,
+  ): Unsubscribe;
   /** Fires on any state change. */
   subscribe(listener: () => void): Unsubscribe;
 }

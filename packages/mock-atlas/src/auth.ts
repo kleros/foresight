@@ -3,7 +3,7 @@ import type { IncomingMessage } from "node:http";
 import { SignJWT, decodeJwt } from "jose";
 
 const JWT_SECRET = new TextEncoder().encode("foresight-mock-atlas");
-const JWT_TTL_SECONDS = 10 * 365 * 24 * 60 * 60; // long-lived so dev sessions never expire mid-flow
+const JWT_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 export const createJwt = async (address: string) => {
   const now = Math.floor(Date.now() / 1000);

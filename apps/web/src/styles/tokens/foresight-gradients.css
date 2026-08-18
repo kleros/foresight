@@ -1,0 +1,132 @@
+/* One gradient axis: secondary purple -> primary blue. Every gradient in the
+   product is a slice, rotation or opacity of this axis. Two axes would read as
+   two brands. Gradients carry data or mark the single most important action;
+   they never fill a surface. */
+:root {
+  --fs-grad-from: #9013fe;
+  --fs-grad-to: #009aff;
+  --fs-grad-axis: linear-gradient(90deg, var(--fs-grad-from) 0%, var(--fs-grad-to) 100%);
+  --fs-grad-axis-v: linear-gradient(180deg, var(--fs-grad-from) 0%, var(--fs-grad-to) 100%);
+  --fs-grad-wash: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--fs-grad-from) 12%, transparent) 0%,
+    color-mix(in oklch, var(--fs-grad-to) 12%, transparent) 100%
+  );
+  --fs-grad-wash-strong: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--fs-grad-from) 15%, transparent) 0%,
+    color-mix(in oklch, var(--fs-grad-to) 15%, transparent) 100%
+  );
+  --fs-grad-wash-faint: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--fs-grad-from) 8%, transparent) 0%,
+    color-mix(in oklch, var(--fs-grad-to) 8%, transparent) 100%
+  );
+}
+:root.dark,
+.dark {
+  --fs-grad-from: #b45fff;
+  --fs-grad-to: #6cc5ff;
+}
+/* Gradient BORDER, not gradient fill: masked so the 3px radius survives. */
+.fs-grad-border {
+  position: relative;
+  border-radius: var(--fs-radius);
+  z-index: 0;
+}
+.fs-grad-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: var(--fs-gradient-border-width);
+  background: var(--fs-grad-axis);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: -1;
+}
+.fs-grad-border-strong::before {
+  padding: var(--fs-gradient-border-width-strong);
+}
+.fs-grad-border-quiet::before {
+  opacity: 0.5;
+}
+/* Scarcity is the hierarchy: at most ONE of these per screen. */
+.fs-grad-fill {
+  background: var(--fs-grad-axis);
+  color: var(--fs-text-inverse);
+  border: none;
+}
+.fs-grad-text {
+  background: var(--fs-grad-axis);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+/* Gradients that carry a value */
+.fs-grad-track {
+  background: var(--fs-grad-axis);
+  border-radius: var(--fs-radius);
+}
+.fs-grad-wash {
+  background: var(--fs-grad-wash);
+}
+/* Dark-mode raised surface: authored, not derived */
+.fs-raised {
+  background: var(--fs-surface-raised);
+  border: 1px solid var(--fs-border);
+  border-radius: var(--fs-radius);
+  box-shadow: var(--fs-raise);
+  position: relative;
+}
+.fs-raised::after {
+  content: "";
+  position: absolute;
+  inset: -24px -24px auto -24px;
+  height: 80px;
+  background: var(--fs-raise-glow);
+  opacity: var(--fs-raise-glow-opacity);
+  pointer-events: none;
+  z-index: -1;
+  border-radius: inherit;
+}
+/* Tier-2 loading: a skeleton shaped like its content, shimmering along the axis */
+.fs-skeleton {
+  background: var(--fs-surface-tint);
+  border-radius: var(--fs-radius);
+  position: relative;
+  overflow: hidden;
+}
+.fs-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in oklch, var(--fs-grad-from) 18%, transparent) 40%,
+    color-mix(in oklch, var(--fs-grad-to) 18%, transparent) 60%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  animation: fsShimmer 1.2s var(--fs-ease-enter) infinite;
+}
+@keyframes fsShimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+/* Marketing surfaces only, never behind a form */
+.fs-mesh {
+  background:
+    radial-gradient(40% 60% at 15% 20%, color-mix(in oklch, var(--fs-grad-from) 28%, transparent) 0%, transparent 70%),
+    radial-gradient(45% 55% at 85% 30%, color-mix(in oklch, var(--fs-grad-to) 26%, transparent) 0%, transparent 70%),
+    var(--fs-surface-sunken);
+}

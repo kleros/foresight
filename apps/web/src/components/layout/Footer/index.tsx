@@ -30,7 +30,7 @@ const socialmedia = {
 const SecuredByKleros: React.FC = () => (
   <Link className="hover:underline" href={siteConfig.links.kleros} target="_blank" rel="noreferrer">
     <SecuredByKlerosLogo
-      className={clsx("hover-short-transition ml-2 min-h-6", "[&_path]:fill-white/75 hover:[&_path]:fill-white")}
+      className={clsx("hover-short-transition min-h-6 md:ml-2", "[&_path]:fill-white/75 hover:[&_path]:fill-white")}
     />
   </Link>
 );
@@ -46,15 +46,13 @@ const SocialMedia = () => (
 );
 
 const Footer: React.FC = () => (
-  <div
-    className={clsx(
-      "bg-footer-background",
-      "min-h-16 w-full",
-      "flex shrink-0 flex-col items-center justify-between gap-4 px-6 py-5 md:flex-row md:py-0",
-    )}
-  >
-    <SecuredByKleros />
-    <SocialMedia />
+  <div className={clsx("bg-footer-background", "min-h-16 w-full shrink-0")}>
+    <div
+      className={clsx("fs-page", "flex min-h-16 flex-col items-center justify-between gap-4 py-5 md:flex-row md:py-0")}
+    >
+      <SecuredByKleros />
+      <SocialMedia />
+    </div>
   </div>
 );
 

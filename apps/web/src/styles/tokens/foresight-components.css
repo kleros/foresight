@@ -1,0 +1,182 @@
+/* Rail, form, preview. */
+.fs-wizard-grid {
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr) 404px;
+  gap: 48px;
+  align-items: start;
+}
+@media (max-width: 1240px) {
+  .fs-wizard-grid {
+    grid-template-columns: 200px minmax(0, 1fr) 340px;
+    gap: 32px;
+  }
+}
+@media (max-width: 1040px) {
+  .fs-wizard-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+}
+
+/**
+ * A page-level card. Deliberately not `.fs-raised`: at this size the lift
+ * comes from a wider, softer shadow (10px of blur rather than the token's
+ * 3px) with no dark-mode glow.
+ */
+.fs-card {
+  background: var(--fs-surface);
+  border: 1px solid var(--fs-border);
+  border-radius: var(--fs-radius);
+  box-shadow: 0 2px 10px color-mix(in oklch, var(--fs-text-primary) 8%, transparent);
+}
+
+.fs-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px 24px;
+}
+
+/* Lower bound, upper bound, range track. */
+.fs-three {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: end;
+}
+
+.fs-three > * {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+/* The track is a picture of the range, so it takes a row of its own rather
+   than a sliver of one. */
+.fs-three > :last-child {
+  flex: 1 1 260px;
+}
+
+/**
+ * The sticky rail and preview column. Both hand over to the horizontal rail
+ * at the same 1040px the grid collapses at, which is why these are media
+ * queries rather than Tailwind's `lg:`, whose 1024px would leave a 16px band
+ * with no rail at all.
+ */
+.fs-rail {
+  position: sticky;
+  top: 96px;
+  height: calc(100vh - 140px);
+}
+.fs-railh {
+  display: none;
+  position: sticky;
+  /* Below the 64px header, not under it. */
+  top: 64px;
+  z-index: 9;
+  background: var(--fs-surface);
+  border-bottom: 1px solid var(--fs-border);
+  padding: 10px 16px;
+}
+.fs-side {
+  position: sticky;
+  top: 96px;
+  max-height: calc(100vh - 128px);
+  overflow: auto;
+}
+@media (max-width: 1040px) {
+  .fs-rail {
+    display: none;
+  }
+  .fs-railh {
+    display: block;
+  }
+  .fs-side {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+.fs-icon {
+  width: 24px;
+  height: 24px;
+  display: inline-block;
+  vertical-align: middle;
+  flex: none;
+  color: inherit;
+}
+.fs-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: butt;
+  stroke-linejoin: miter;
+}
+.fs-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--fs-radius);
+  font: var(--type-caption);
+  border: 1px solid;
+}
+.fs-status__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  flex: none;
+}
+.fs-probability {
+  height: 8px;
+  width: 100%;
+  background: var(--fs-surface-tint);
+  border-radius: var(--fs-radius);
+  overflow: hidden;
+  position: relative;
+}
+.fs-probability__fill {
+  height: 100%;
+  background: var(--fs-grad-axis);
+  border-radius: var(--fs-radius);
+  transition: width var(--fs-dur-structural) var(--fs-ease-structural);
+}
+.fs-range {
+  position: relative;
+  height: 36px;
+}
+.fs-range__track {
+  position: absolute;
+  top: 14px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: var(--fs-grad-axis);
+  border-radius: var(--fs-radius);
+}
+.fs-range__bounds {
+  display: flex;
+  justify-content: space-between;
+  font: var(--type-caption);
+  color: var(--fs-text-secondary);
+  padding-top: 26px;
+}
+.fs-tree__connector {
+  width: 2px;
+  background: var(--fs-grad-axis-v);
+  flex: none;
+}
+.fs-narrative {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+/* The timeline sets a bullet's second slot beside the title. `.fs-stage-line`
+   marks the ones that belong on their own line under it. */
+.fs-narrative :has(> .fs-stage-line) {
+  flex-basis: 100%;
+  max-height: none;
+}

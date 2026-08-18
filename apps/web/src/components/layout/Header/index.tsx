@@ -5,10 +5,10 @@ import MobileNavbar from "./MobileNavbar";
 
 const Header: React.FC<{ walletSlot?: React.ReactNode }> = ({ walletSlot }) => {
   return (
-    <div className={clsx("bg-klerosUIComponentsWhiteBackground", "wrap sticky top-0 z-30 flex w-full px-6")}>
+    <header className={clsx("bg-klerosUIComponentsWhiteBackground", "sticky top-0 z-30 flex w-full")}>
       <DesktopNavbar walletSlot={walletSlot} />
       <MobileNavbar walletSlot={walletSlot} />
-    </div>
+    </header>
   );
 };
 

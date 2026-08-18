@@ -27,10 +27,10 @@ Run from the repo root (`yarn dev` starts this app), or from `apps/web`:
 
 ```bash
 yarn dev            # http://localhost:3000
-yarn build          # production build — also runs lint and type checks
+yarn build          # production build, also runs lint and type checks
 yarn lint           # eslint, zero warnings tolerated
 yarn check-types    # tsc --noEmit
-yarn codegen        # types for the indexer queries — needs a running indexer
+yarn codegen        # types for the indexer queries, needs a running indexer
 yarn test:e2e       # playwright
 ```
 
@@ -58,9 +58,8 @@ no single request can answer.
 
 ## Code structure
 
-Layout and placement rules — where a file goes, how routes compose features, why there are
-no barrel files — live in one place:
-[`.claude/skills/bulletproof-web/SKILL.md`](../../.claude/skills/bulletproof-web/SKILL.md).
+Where a file goes, how routes compose features, why there are no barrel files: all of it
+lives in [`.claude/skills/bulletproof-web/SKILL.md`](../../.claude/skills/bulletproof-web/SKILL.md).
 Start at the "Where does this go?" section.
 
 Two things it is worth knowing before reading code here:

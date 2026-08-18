@@ -19,10 +19,11 @@ Ask in order — the first "yes" wins:
 
 The test for 1 vs 3: _move this UI to another page, or into a modal — does it still make sense unchanged?_ Yes → feature block. No → route component. Size doesn't decide it; a whole email-preferences panel is a feature block, a three-line tab shell is route chrome.
 
-Two habits that keep this honest:
+Three habits that keep this honest:
 
 - **Import the file, not a barrel.** `@/features/x/components/Thing`, never `@/features/x`. Measured in this repo: importing one component through a two-export barrel cost **+51 kB** First Load, because Next treats every re-exported `"use client"` module as part of the route's client graph.
 - **Promote on the second consumer, not the first.** For small things, duplication beats an early abstraction.
+- **Link through `config/paths.ts`.** `paths.market.getHref(address)`, never ``href={`/market/${address}`}``. A route written into a component is a route that moves without it. New route, new entry there. `no-restricted-syntax` in the app's `eslint.config.mjs` rejects an `href` whose value starts with `/`, in a literal or a template; external URLs and variables are untouched, and programmatic navigation (`router.push`, `redirect`) is on you.
 
 ## Layout
 
