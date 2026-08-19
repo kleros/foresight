@@ -1,6 +1,6 @@
 ## Foresight indexer
 
-Indexer for Foresight - permissionless futarchy
+Indexer for Foresight: permissionless futarchy
 
 > This is a yarn workspace: run everything through yarn, not the `pnpm` in Envio's own
 > docs, and never add a lockfile here.
