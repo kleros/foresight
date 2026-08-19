@@ -27,12 +27,17 @@ function atlas(opts: { answer?: string | null; refuse?: Error; serve?: () => Res
   const filesUploaded: File[] = [];
   const urlsFetched: string[] = [];
 
+  // Both roles share one recorder: which role a file went under is the caller's concern,
+  // and every assertion here is about what reached Atlas at all.
+  const record = async (file: File) => {
+    filesUploaded.push(file);
+    if (refuse) throw refuse;
+    return answer;
+  };
+
   const client = createMetadataUploader({
-    upload: async (file: File) => {
-      filesUploaded.push(file);
-      if (refuse) throw refuse;
-      return answer;
-    },
+    uploadImage: record,
+    uploadDocument: record,
     gateway: GATEWAY,
     fetchImpl: async (input) => {
       urlsFetched.push(String(input));

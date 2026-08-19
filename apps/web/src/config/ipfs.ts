@@ -1,3 +1,5 @@
 import { env } from "./env";
 
-export const IPFS_GATEWAY = `${env.ATLAS_URI}/ipfs`;
+/** Uploading url is set in AtlasProvider */
+
+export const IPFS_GATEWAY = env.IPFS_GATEWAY;

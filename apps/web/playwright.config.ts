@@ -37,7 +37,11 @@ export default defineConfig({
       command: "yarn dev",
       url: "http://localhost:3000",
       reuseExistingServer: !process.env.CI,
-      env: { NEXT_PUBLIC_ATLAS_URI: MOCK_ATLAS_URL, NEXT_PUBLIC_SUBGRAPH_URL: INDEXER_URL },
+      env: {
+        NEXT_PUBLIC_ATLAS_URI: MOCK_ATLAS_URL,
+        NEXT_PUBLIC_IPFS_GATEWAY: `${MOCK_ATLAS_URL}/ipfs`,
+        NEXT_PUBLIC_SUBGRAPH_URL: INDEXER_URL,
+      },
     },
   ],
 });

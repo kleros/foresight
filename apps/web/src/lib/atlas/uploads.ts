@@ -1,13 +1,16 @@
 import { IpfsProduct, Roles, type useAtlasProvider } from "@kleros/kleros-app";
 
-export const IPFS_PRODUCT = IpfsProduct.Test;
-export const UPLOAD_ROLE = Roles.Test;
+// TODO: change these once atlas have support for Foresight
+export const IPFS_PRODUCT = IpfsProduct.Curate;
+
+export const IMAGE_UPLOAD_ROLE = Roles.CurateItemImage;
+export const DOCUMENT_UPLOAD_ROLE = Roles.CurateItemFile;
 
 type RoleRestrictions = ReturnType<typeof useAtlasProvider>["roleRestrictions"];
 
 export type UploadRestriction = NonNullable<RoleRestrictions>[number]["restriction"];
 
-export function uploadRestriction(restrictions: RoleRestrictions, role: Roles = UPLOAD_ROLE) {
+export function uploadRestriction(restrictions: RoleRestrictions, role: Roles = IMAGE_UPLOAD_ROLE) {
   return restrictions?.find((entry) => Roles[entry.name as keyof typeof Roles] === role)?.restriction;
 }
 

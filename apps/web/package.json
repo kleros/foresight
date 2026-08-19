@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:gnosis": "node --env-file=.env.gnosis \"$(yarn bin next)\" dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --max-warnings 0",

@@ -9,18 +9,20 @@ import type { MetadataUploader } from "./types";
  */
 
 export function createMetadataUploader(opts: {
-  /** `AtlasProvider.uploadFile` with its role already bound. */
-  upload(file: File): Promise<string | null>;
+  /** `AtlasProvider.uploadFile` with the image role already bound. */
+  uploadImage(file: File): Promise<string | null>;
+  /** The same, bound to the role that accepts `application/json`. */
+  uploadDocument(file: File): Promise<string | null>;
   /** Gateway where the uploaded file is served on. */
   gateway: string;
   fetchImpl?: typeof fetch;
 }): MetadataUploader {
   const doFetch = opts.fetchImpl ?? globalThis.fetch.bind(globalThis);
 
-  const put = async (file: File): Promise<string> => {
+  const put = async (file: File, upload: (file: File) => Promise<string | null>): Promise<string> => {
     // kleros-app rethrows the service's own `message` verbatim, and this reaches
     // the deploy screen. What the service calls itself is not the creator's to read.
-    const path = await opts.upload(file).catch((err) => {
+    const path = await upload(file).catch((err) => {
       console.error(err);
       throw new Error(`${file.name} could not be uploaded. Try again in a moment.`);
     });
@@ -35,9 +37,10 @@ export function createMetadataUploader(opts: {
   };
 
   return {
-    uploadFile: put,
+    uploadFile: (file) => put(file, opts.uploadImage),
 
-    uploadJson: (name, value) => put(new File([JSON.stringify(value)], name, { type: "application/json" })),
+    uploadJson: (name, value) =>
+      put(new File([JSON.stringify(value)], name, { type: "application/json" }), opts.uploadDocument),
 
     async readJson(uriOrCid) {
       const url = gatewayUrl(opts.gateway, uriOrCid);

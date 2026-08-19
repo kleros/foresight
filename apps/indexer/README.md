@@ -19,15 +19,18 @@ Needs a chain to index. For local work start the contracts node first
 ### Environment
 
 Copy `.env.example` to `.env`.
+The gnosis-only values live in `.env.gnosis` instead, see [Running against Gnosis](#running-against-gnosis).
 
 **Every variable must be prefixed `ENVIO_`**
 
 Read by our own code:
 
-| Variable             | Required | Notes                                                                                                                               |
-| -------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `ENVIO_RPC_URL`      | yes      | Local chain's `rpc` **and** the contract reads in [`src/utils/client.ts`](src/utils/client.ts). Defaults to `http://localhost:8545` |
-| `ENVIO_IPFS_GATEWAY` | yes      | Our gateway for metadata, tried first; cloudflare then ipfs.io are the fallback                                                     |
+| Variable                        | Required | Notes                                                                                                                               |
+| ------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `ENVIO_LOCALHOST_RPC_URL`       | yes      | Local chain's `rpc` **and** the contract reads in [`src/utils/client.ts`](src/utils/client.ts). Defaults to `http://localhost:8545` |
+| `ENVIO_GNOSIS_RPC_URL`          | yes      | **`.env.gnosis`** - preferred endpoint for chain 100 contract reads. Events come from HyperSync, not from here                      |
+| `ENVIO_GNOSIS_FALLBACK_RPC_URL` | no       | **`.env.gnosis`** - tried after the above. Either may be empty; public endpoints are the last resort                                |
+| `ENVIO_IPFS_GATEWAY`            | yes      | Our gateway for metadata, tried first; cloudflare then ipfs.io are the fallback                                                     |
 
 Envio's own, the ones worth knowing:
 
@@ -43,7 +46,7 @@ When adding a per-chain RPC, follow the naming : `ENVIO_[network]_RPC_URL` and w
 
 > **Turbo runs in strict env mode**, so a task only sees variables declared in its
 > `turbo.json`. Only `codegen` declares them, as `passThroughEnv: ["ENVIO_*"]` - it hands
-> `config.yaml` to the envio CLI, which substitutes `${ENVIO_RPC_URL}` itself.
+> the generated config to the envio CLI, which substitutes `${ENVIO_LOCALHOST_RPC_URL}` itself.
 > `passThroughEnv` and not `env`, because `env` means "this changes my output" and would
 > make the cache key vary with an RPC url that changes nothing it generates.
 >
@@ -51,22 +54,41 @@ When adding a per-chain RPC, follow the naming : `ENVIO_[network]_RPC_URL` and w
 > out of `yarn test`. None of this affects `envio` commands run directly, which read
 > `.env` themselves.
 
-### `config.yaml` is generated, edit the template
+### The configs are generated, edit the template
 
-[`config.template.yaml`](config.template.yaml) is the source of truth. `yarn update`
-regenerates `config.yaml` from it, replacing each `_PLACEHOLDER_` from that network's
-deployment artifacts:
+[`config.template.yaml`](config.template.yaml) is the source of truth. `yarn update` writes
+one `config.<network>.yaml` per network named, replacing each `_PLACEHOLDER_` from that
+network's deployment artifacts. Both generated files are committed:
 
 ```bash
-yarn update:local   # just the local chain; yarn local-stack does this for you
-yarn update         # every chain in the template that has an artifact, it is recommended to run targeted update
-yarn update gnosis  # Targeted update for that chain
+yarn update:local   # config.localhost.yaml; yarn local-stack does this for you
+yarn update:gnosis  # config.gnosis.yaml
+yarn update localhost gnosis
 ```
+
+A network is required, and each config carries only its own chain - envio syncs every chain
+the file declares, and entity ids are not chain-namespaced, so one config, one chain.
+
+### Running against Gnosis
+
+```bash
+cp .env.gnosis.example .env.gnosis   # gitignored
+yarn dev:gnosis                      # envio dev --config config.gnosis.yaml
+```
+
+> **This leaves `.envio/types.d.ts` generated for chain 100**, and `envio dev` reruns codegen
+> on every start. The generated types name the configured chain as a literal, so
+> `yarn check-types` then fails on the handler tests, which are written against 31337. Run
+> `yarn codegen:local` to put the local types back. Running `yarn codegen:gnosis` on its own
+> does the same thing for the same reason.
+
+Envio Cloud does not read `.env.gnosis` - set those variables in its dashboard, and point
+the indexer at `apps/indexer/config.gnosis.yaml` as its config file path.
 
 ### After changing the template or `schema.graphql`
 
 ```bash
-yarn update       # only if the template changed
+yarn update:local   # or update:gnosis; only if the template changed
 yarn codegen
 yarn check-types
 yarn lint

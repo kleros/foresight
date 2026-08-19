@@ -14,7 +14,7 @@ import { sendTransaction } from "@wagmi/core";
 import { useAccount } from "wagmi";
 
 import { createMetadataUploader } from "@/lib/atlas/ipfs";
-import { UPLOAD_ROLE } from "@/lib/atlas/uploads";
+import { DOCUMENT_UPLOAD_ROLE, IMAGE_UPLOAD_ROLE } from "@/lib/atlas/uploads";
 import { fetchGraphql } from "@/lib/graphql/batcher";
 import { publicClient } from "@/lib/web3/public-client";
 import { wagmiConfig } from "@/lib/web3/wagmi";
@@ -60,7 +60,8 @@ export function useSessionDeploy(outcomeCount: number): {
           sendTransaction: (tx) => sendTransaction(wagmiConfig, { to: tx.to, data: tx.data, value: tx.value }),
         }),
         uploader: createMetadataUploader({
-          upload: (file) => atlasRef.current.uploadFile(file, UPLOAD_ROLE),
+          uploadImage: (file) => atlasRef.current.uploadFile(file, IMAGE_UPLOAD_ROLE),
+          uploadDocument: (file) => atlasRef.current.uploadFile(file, DOCUMENT_UPLOAD_ROLE),
           gateway: IPFS_GATEWAY,
         }),
         outcomeCount,

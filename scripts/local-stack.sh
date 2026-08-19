@@ -123,7 +123,7 @@ cmd_start() {
   log "generating wagmi bindings"
   yarn workspace @foresight/contracts codegen:localhost
 
-  # config.yaml is generated, so the indexer follows whatever address this chain just
+  # config.localhost.yaml is generated, so the indexer follows whatever address this chain
   # deployed rather than a constant that silently rots. Naming the network rather than
   # updating every chain means a missing local artifact fails here instead of quietly
   # leaving a placeholder in the config.

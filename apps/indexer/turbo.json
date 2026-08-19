@@ -3,7 +3,7 @@
   "extends": ["//"],
   "tasks": {
     "codegen": {
-      "inputs": ["config.yaml", "schema.graphql"],
+      "inputs": ["config.localhost.yaml", "config.gnosis.yaml", "schema.graphql"],
       "outputs": [".envio/types.d.ts"],
       "passThroughEnv": ["ENVIO_*"]
     },

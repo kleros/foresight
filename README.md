@@ -56,6 +56,32 @@ markets + example metadata) that the indexer picks up. Flags in
 
 See [packages/contracts/README.md](packages/contracts/README.md) for deploy and artifact exports.
 
+## Environments
+
+The chain is never inferred, it comes from a file or a flag.
+
+|                | local                                         | gnosis                                              |
+| -------------- | --------------------------------------------- | --------------------------------------------------- |
+| chain          | hardhat, `31337`, `yarn local-node:contracts` | Gnosis, `100`, live                                 |
+| Seer factory   | `MockSeerMarketFactory`, deployed locally     | real one, from `@seer-pm/contracts`                 |
+| Atlas + IPFS   | `yarn mock-atlas` on `:4747`                  | staging/production Atlas                            |
+| contracts      | `yarn local-node:deploy`                      | `yarn workspace @foresight/contracts deploy:gnosis` |
+| indexer config | `config.localhost.yaml`                       | `config.gnosis.yaml`                                |
+| indexer        | `yarn indexer:dev`                            | `yarn indexer:dev:gnosis`                           |
+| web            | `yarn dev`                                    | `yarn dev:gnosis`                                   |
+
+`yarn local-stack` is local-only: Gnosis needs no node and no mock Atlas, just the indexer
+and web. Each tool keeps its own base env file, plus one override per non-local network:
+
+| Package              | base         | gnosis override |
+| -------------------- | ------------ | --------------- |
+| `apps/web`           | `.env.local` | `.env.gnosis`   |
+| `apps/indexer`       | `.env`       | `.env.gnosis`   |
+| `packages/contracts` | `.env`       | -               |
+
+Every `.env*` is gitignored except `*.example`. The deployed indexer takes its variables from
+the Envio Cloud dashboard, and the deployed web app from its host.
+
 ## Tests
 
 ```bash

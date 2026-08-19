@@ -13,13 +13,20 @@ Copy `.env.example` to `.env.local` and fill it in. Every variable is validated 
 module load by [`src/config/env.ts`](src/config/env.ts), so a missing or malformed value
 fails the build with the offending names rather than at runtime.
 
-| Variable                       | Required | Notes                                                                  |
-| ------------------------------ | -------- | ---------------------------------------------------------------------- |
-| `NEXT_PUBLIC_REOWN_PROJECT_ID` | yes      | Create a project at [dashboard.reown.com](https://dashboard.reown.com) |
-| `NEXT_PUBLIC_ATLAS_URI`        | yes      | Atlas **origin** only - kleros-app appends `/graphql`.                 |
-| `NEXT_PUBLIC_GNOSIS_RPC`       | no       | Preferred Gnosis RPC. Falls back to public endpoints                   |
-| `NEXT_PUBLIC_SITE_URL`         | no       | Absolute URL used for metadata and the wallet modal                    |
-| `NEXT_PUBLIC_SUBGRAPH_URL`     | yes      | Indexer GraphQL endpoint. Locally `http://localhost:8080/v1/graphql`   |
+| Variable                         | Required | Notes                                                                  |
+| -------------------------------- | -------- | ---------------------------------------------------------------------- |
+| `NEXT_PUBLIC_REOWN_PROJECT_ID`   | yes      | Create a project at [dashboard.reown.com](https://dashboard.reown.com) |
+| `NEXT_PUBLIC_ATLAS_URI`          | yes      | Atlas **origin** only - kleros-app appends `/graphql`.                 |
+| `NEXT_PUBLIC_IPFS_GATEWAY`       | yes      | Where uploads are read back from; Atlas is upload-only                 |
+| `NEXT_PUBLIC_GNOSIS_RPC`         | no       | Preferred Gnosis RPC. Falls back to public endpoints                   |
+| `NEXT_PUBLIC_SITE_URL`           | no       | Absolute URL used for metadata and the wallet modal                    |
+| `NEXT_PUBLIC_SUBGRAPH_URL`       | yes      | Indexer GraphQL endpoint. Locally `http://localhost:8080/v1/graphql`   |
+| `NEXT_PUBLIC_ENABLE_LOCAL_CHAIN` | no       | Unset follows `NODE_ENV`; `"false"` offers gnosis only                 |
+
+```bash
+cp .env.gnosis.example .env.gnosis
+yarn dev:gnosis
+```
 
 ## Commands
 
@@ -27,6 +34,7 @@ Run from the repo root (`yarn dev` starts this app), or from `apps/web`:
 
 ```bash
 yarn dev            # http://localhost:3000
+yarn dev:gnosis     # same, against gnosis; needs .env.gnosis
 yarn build          # production build, also runs lint and type checks
 yarn lint           # eslint, zero warnings tolerated
 yarn check-types    # tsc --noEmit

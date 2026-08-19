@@ -5,8 +5,8 @@ node_modules/
 
 # env
 .env
-.env.local
-.env.*.local
+.env.*
+!.env*.example
 
 # build (repo-wide)
 dist/

@@ -1,6 +1,11 @@
 import { gnosis, hardhat } from "viem/chains";
 
-export const isLocalChainEnabled = process.env.NODE_ENV !== "production";
+// Read directly, not through `env`: this module must import without the full NEXT_PUBLIC set.
+const localChainOverride = process.env.NEXT_PUBLIC_ENABLE_LOCAL_CHAIN || undefined;
+
+/** Unset follows NODE_ENV; set to `"false"` to point a dev build at gnosis only. */
+export const isLocalChainEnabled =
+  localChainOverride === undefined ? process.env.NODE_ENV !== "production" : localChainOverride === "true";
 
 export const DEFAULT_CHAIN = isLocalChainEnabled ? hardhat : gnosis;
 

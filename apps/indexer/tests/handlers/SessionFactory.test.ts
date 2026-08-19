@@ -22,7 +22,7 @@ const CHILD_MARKET_1 = "0x0000000000000000000000000000000000000c01" as const;
 const DEPLOYER = "0x0000000000000000000000000000000000000de9" as const;
 
 /**
- * Blocks sit far above any local deploy. config.yaml's `start_block` is generated from
+ * Blocks sit far above any local deploy. config.localhost.yaml's `start_block` is generated from
  * whichever block the hardhat deploy landed on, and an event below it is filtered out
  * before any handler runs - the test indexer also refuses a `startBlock` under the
  * config's, so headroom is the way to stay independent of it.
@@ -97,7 +97,7 @@ beforeAll(async () => {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 
   const { port } = server.address() as AddressInfo;
-  process.env.ENVIO_RPC_URL = `http://127.0.0.1:${port}`;
+  process.env.ENVIO_LOCALHOST_RPC_URL = `http://127.0.0.1:${port}`;
   // tried first, so every document these tests use resolves here and the public
   // fallbacks are never reached
   process.env.ENVIO_IPFS_GATEWAY = `http://127.0.0.1:${port}/ipfs`;

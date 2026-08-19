@@ -22,10 +22,9 @@ node_modules/
 **/cache/
 **/typechain-types/
 
-# synced / local deploy output (package .prettierignore alone does not affect editor save)
-packages/contracts/deployments/localhost/
-packages/contracts/deployments/hardhat/
-**/deployments/*/solcInputs/
+# hardhat-deploy output, generated per network (package .prettierignore alone does not
+# affect editor save). The *.viem.ts beside these are wagmi codegen and stay formatted.
+**/deployments/*/
 
 # locks
 yarn.lock

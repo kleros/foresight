@@ -48,4 +48,18 @@ export const MOCK_ROLES: Role[] = [
       allowedMimeTypes: ["image/png", "image/jpeg", "image/svg+xml", "application/json"],
     },
   },
+  {
+    name: "CurateItemImage",
+    restriction: {
+      maxSize: 20971520,
+      allowedMimeTypes: ["image/png", "image/jpeg", "image/svg+xml"],
+    },
+  },
+  {
+    name: "CurateItemFile",
+    restriction: {
+      maxSize: 20971520,
+      allowedMimeTypes: ["application/json"],
+    },
+  },
 ];

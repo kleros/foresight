@@ -16,6 +16,7 @@ const EnvSchema = v.object({
   ),
   ATLAS_URI: v.pipe(v.string("missing - Kleros Atlas endpoint"), v.url("must be a valid URL")),
   GNOSIS_RPC: v.optional(v.pipe(v.string(), v.url("must be a valid URL"))),
+  IPFS_GATEWAY: v.pipe(v.string("missing - where ipfs files are read from"), v.url("must be a valid URL")),
   SITE_URL: v.optional(v.pipe(v.string(), v.url("must be a valid URL"))),
   SUBGRAPH_URL: v.pipe(v.string("missing - subgraph endpoint"), v.url("must be a valid URL")),
 });
@@ -24,6 +25,7 @@ const ENV_VAR_NAMES: Record<keyof v.InferOutput<typeof EnvSchema>, string> = {
   REOWN_PROJECT_ID: "NEXT_PUBLIC_REOWN_PROJECT_ID",
   ATLAS_URI: "NEXT_PUBLIC_ATLAS_URI",
   GNOSIS_RPC: "NEXT_PUBLIC_GNOSIS_RPC",
+  IPFS_GATEWAY: "NEXT_PUBLIC_IPFS_GATEWAY",
   SITE_URL: "NEXT_PUBLIC_SITE_URL",
   SUBGRAPH_URL: "NEXT_PUBLIC_SUBGRAPH_URL",
 };
@@ -35,6 +37,7 @@ const parsed = v.safeParse(EnvSchema, {
   REOWN_PROJECT_ID: clean(process.env.NEXT_PUBLIC_REOWN_PROJECT_ID),
   ATLAS_URI: clean(process.env.NEXT_PUBLIC_ATLAS_URI),
   GNOSIS_RPC: clean(process.env.NEXT_PUBLIC_GNOSIS_RPC),
+  IPFS_GATEWAY: clean(process.env.NEXT_PUBLIC_IPFS_GATEWAY),
   SITE_URL: clean(process.env.NEXT_PUBLIC_SITE_URL),
   SUBGRAPH_URL: clean(process.env.NEXT_PUBLIC_SUBGRAPH_URL),
 });

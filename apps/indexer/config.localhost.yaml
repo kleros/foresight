@@ -12,7 +12,7 @@ contracts:
 chains:
   - id: 31337
     start_block: 2
-    rpc: ${ENVIO_RPC_URL:-http://localhost:8545}
+    rpc: ${ENVIO_LOCALHOST_RPC_URL:-http://localhost:8545}
     contracts:
       - name: SessionFactory
         address:
