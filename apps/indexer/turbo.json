@@ -8,10 +8,10 @@
       "passThroughEnv": ["ENVIO_*"]
     },
     "check-types": {
-      "dependsOn": ["codegen"]
+      "dependsOn": ["codegen", "@foresight/session-metadata#check-types"]
     },
     "test": {
-      "dependsOn": ["codegen"]
+      "dependsOn": ["codegen", "@foresight/session-metadata#check-types"]
     }
   }
 }

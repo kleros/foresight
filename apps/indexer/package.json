@@ -14,17 +14,13 @@
     "start": "envio start --config config.localhost.yaml",
     "stop": "envio stop",
     "test": "ENVIO_CONFIG=config.localhost.yaml vitest run --test-timeout=10000",
-    "lint": "eslint . --max-warnings 0",
+    "lint": "bash ./scripts/check-standalone.sh && eslint . --max-warnings 0",
     "check-types": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
   "prettier": "@foresight/prettier-config",
   "devDependencies": {
-    "@foresight/contracts": "workspace:*",
-    "@foresight/eslint-config": "workspace:*",
-    "@foresight/prettier-config": "workspace:*",
-    "@foresight/session-metadata": "workspace:*",
     "eslint": "^9.28.0",
     "prettier": "^3.7.4",
     "typescript": "^5.8.3",

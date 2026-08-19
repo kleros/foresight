@@ -82,8 +82,21 @@ yarn dev:gnosis                      # envio dev --config config.gnosis.yaml
 > `yarn codegen:local` to put the local types back. Running `yarn codegen:gnosis` on its own
 > does the same thing for the same reason.
 
-Envio Cloud does not read `.env.gnosis` - set those variables in its dashboard, and point
-the indexer at `apps/indexer/config.gnosis.yaml` as its config file path.
+### Deploying to Envio Cloud
+
+Set the root directory to `apps/indexer` and the config file to `config.gnosis.yaml`. The
+`.env.gnosis` values go in the dashboard - Envio Cloud does not read the file.
+
+Envio Cloud copies this directory alone and installs it with pnpm, so the indexer has to
+stay self-contained: no `workspace:*` entry in `package.json`, and nothing under `src/`
+may import a value from a workspace package. Types are the exception, since envio loads
+handlers through `tsx`, which erases them. `yarn lint` fails on either.
+
+What is shared still resolves through the root `node_modules`, where yarn links every
+workspace: the eslint and prettier configs, the metadata types, and the deployment
+artifacts `scripts/update.sh` reads. None of that is in the manifest for turbo to read, so
+`turbo.json` names `@foresight/session-metadata#check-types` directly - that edge is what
+invalidates the indexer's cached typecheck when the metadata types change.
 
 ### After changing the template or `schema.graphql`
 
