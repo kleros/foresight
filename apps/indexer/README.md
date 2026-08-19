@@ -90,7 +90,10 @@ Set the root directory to `apps/indexer` and the config file to `config.gnosis.y
 Envio Cloud copies this directory alone and installs it with pnpm, so the indexer has to
 stay self-contained: no `workspace:*` entry in `package.json`, and nothing under `src/`
 may import a value from a workspace package. Types are the exception, since envio loads
-handlers through `tsx`, which erases them. `yarn lint` fails on either.
+handlers through `tsx`, which erases them.
+
+It also runs `start` with a `--config` of its own, so that script names no config file -
+`yarn start:local` is the one that does. `yarn lint` fails on any of the three.
 
 What is shared still resolves through the root `node_modules`, where yarn links every
 workspace: the eslint and prettier configs, the metadata types, and the deployment
