@@ -72,7 +72,8 @@ contract MockSeerMarketFactory is ISeerMarketFactory {
         params.lowerBound,
         params.upperBound,
         params.parentMarket,
-        params.parentOutcome
+        params.parentOutcome,
+        params.openingTime
       )
     );
   }

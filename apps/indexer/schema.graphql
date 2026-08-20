@@ -1,3 +1,9 @@
+"How many sessions the factory has deployed. One row, id `global`."
+type SessionCounter {
+  id: ID!
+  count: BigInt!
+}
+
 type Session {
   "sessionId"
   id: ID!
@@ -12,6 +18,9 @@ type Session {
   "read from the Seer parent market"
   marketName: String!
   outcomes: [String!]!
+
+  "when trading stops"
+  openingTime: BigInt
 
   "emitted by SessionFactory, fixed at deploy"
   metadataUri: String! @index

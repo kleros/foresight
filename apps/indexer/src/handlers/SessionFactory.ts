@@ -2,17 +2,21 @@ import { indexer } from "envio";
 
 import { ipfsPath } from "../utils";
 import { fetchChildMarket } from "../utils/contracts/fetchChildMarket";
+import { fetchOpeningTime } from "../utils/contracts/fetchOpeningTime";
 import { fetchParentMarket } from "../utils/contracts/fetchParentMarket";
 import { fetchSessionMetadata } from "../utils/ipfs/fetchSessionMetadata";
 
 const keywordOf = (parts: (string | null | undefined)[]): string => parts.filter(Boolean).join(" ");
 
+const SESSION_COUNTER_ID = "global";
+
 indexer.onEvent({ contract: "SessionFactory", event: "ParentMarketDeployed" }, async ({ event, context }) => {
   const outcomeCount = Number(event.params.outcomeCount);
 
-  const [market, metadata] = await Promise.all([
+  const [market, metadata, openingTime] = await Promise.all([
     context.effect(fetchParentMarket, { chainId: event.chainId, address: event.params.parentMarket, outcomeCount }),
     context.effect(fetchSessionMetadata, { path: ipfsPath(event.params.metadataUri) }),
+    context.effect(fetchOpeningTime, { chainId: event.chainId, address: event.params.parentMarket }),
   ]);
 
   context.Session.set({
@@ -26,6 +30,7 @@ indexer.onEvent({ contract: "SessionFactory", event: "ParentMarketDeployed" }, a
     completedAt: 0n,
     marketName: market.marketName,
     outcomes: market.outcomes,
+    openingTime: openingTime === null ? undefined : BigInt(openingTime),
     metadataUri: event.params.metadataUri,
     metadataResolved: metadata !== null,
     title: metadata?.session.title,
@@ -43,6 +48,13 @@ indexer.onEvent({ contract: "SessionFactory", event: "ParentMarketDeployed" }, a
       ...(metadata?.children.map((child) => child.displayName) ?? []),
     ]),
     transactionHash: event.transaction.hash,
+  });
+
+  // Set, never incremented: handlers run twice, so this has to land on the
+  // same number both times. Ids start at zero, so the newest counts them all.
+  context.SessionCounter.set({
+    id: SESSION_COUNTER_ID,
+    count: event.params.sessionId + 1n,
   });
 });
 

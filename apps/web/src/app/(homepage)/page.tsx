@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 
-import { HomeScreen } from "@/features/home/HomeScreen";
+import { Hero } from "./_components/Hero";
+import { Outro } from "./_components/Outro";
+import { SessionBrowser } from "./_components/SessionBrowser";
 
 export const metadata: Metadata = {
   title: "Sessions | Foresight",
@@ -8,5 +10,11 @@ export const metadata: Metadata = {
 };
 
 export default function HomePage() {
-  return <HomeScreen />;
+  return (
+    <>
+      <Hero />
+      <SessionBrowser />
+      <Outro />
+    </>
+  );
 }

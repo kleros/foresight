@@ -160,6 +160,7 @@
     margin: 0;
     color: var(--foreground);
     background: var(--background);
+    overflow-x: clip;
     font-family:
       Inter,
       ui-sans-serif,

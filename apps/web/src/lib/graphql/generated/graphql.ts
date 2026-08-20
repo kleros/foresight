@@ -329,6 +329,8 @@ export type Session = {
   /** emitted by SessionFactory, fixed at deploy */
   metadataUri: Scalars['String']['output'];
   openedAt: Scalars['numeric']['output'];
+  /** when trading stops */
+  openingTime?: Maybe<Scalars['numeric']['output']>;
   outcomeCount: Scalars['numeric']['output'];
   outcomes: Array<Scalars['String']['output']>;
   parentMarket: Scalars['String']['output'];
@@ -354,6 +356,50 @@ export type SessionChildrenArgs = {
   where?: InputMaybe<ChildMarket_Bool_Exp>;
 };
 
+/** How many sessions the factory has deployed. One row, id `global`. */
+export type SessionCounter = {
+  __typename?: 'SessionCounter';
+  count: Scalars['numeric']['output'];
+  id: Scalars['String']['output'];
+};
+
+/** Boolean expression to filter rows from the table "SessionCounter". All fields are combined with a logical 'AND'. */
+export type SessionCounter_Bool_Exp = {
+  _and?: InputMaybe<Array<SessionCounter_Bool_Exp>>;
+  _not?: InputMaybe<SessionCounter_Bool_Exp>;
+  _or?: InputMaybe<Array<SessionCounter_Bool_Exp>>;
+  count?: InputMaybe<Numeric_Comparison_Exp>;
+  id?: InputMaybe<String_Comparison_Exp>;
+};
+
+/** Ordering options when selecting data from "SessionCounter". */
+export type SessionCounter_Order_By = {
+  count?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+};
+
+/** select columns of table "SessionCounter" */
+export enum SessionCounter_Select_Column {
+  /** column name */
+  Count = 'count',
+  /** column name */
+  Id = 'id'
+}
+
+/** Streaming cursor of the table "SessionCounter" */
+export type SessionCounter_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: SessionCounter_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type SessionCounter_Stream_Cursor_Value_Input = {
+  count?: InputMaybe<Scalars['numeric']['input']>;
+  id?: InputMaybe<Scalars['String']['input']>;
+};
+
 /** Boolean expression to filter rows from the table "Session". All fields are combined with a logical 'AND'. */
 export type Session_Bool_Exp = {
   _and?: InputMaybe<Array<Session_Bool_Exp>>;
@@ -375,6 +421,7 @@ export type Session_Bool_Exp = {
   metadataResolved?: InputMaybe<Boolean_Comparison_Exp>;
   metadataUri?: InputMaybe<String_Comparison_Exp>;
   openedAt?: InputMaybe<Numeric_Comparison_Exp>;
+  openingTime?: InputMaybe<Numeric_Comparison_Exp>;
   outcomeCount?: InputMaybe<Numeric_Comparison_Exp>;
   outcomes?: InputMaybe<String_Array_Comparison_Exp>;
   parentMarket?: InputMaybe<String_Comparison_Exp>;
@@ -401,6 +448,7 @@ export type Session_Order_By = {
   metadataResolved?: InputMaybe<Order_By>;
   metadataUri?: InputMaybe<Order_By>;
   openedAt?: InputMaybe<Order_By>;
+  openingTime?: InputMaybe<Order_By>;
   outcomeCount?: InputMaybe<Order_By>;
   outcomes?: InputMaybe<Order_By>;
   parentMarket?: InputMaybe<Order_By>;
@@ -441,6 +489,8 @@ export enum Session_Select_Column {
   MetadataUri = 'metadataUri',
   /** column name */
   OpenedAt = 'openedAt',
+  /** column name */
+  OpeningTime = 'openingTime',
   /** column name */
   OutcomeCount = 'outcomeCount',
   /** column name */
@@ -485,6 +535,8 @@ export type Session_Stream_Cursor_Value_Input = {
   /** emitted by SessionFactory, fixed at deploy */
   metadataUri?: InputMaybe<Scalars['String']['input']>;
   openedAt?: InputMaybe<Scalars['numeric']['input']>;
+  /** when trading stops */
+  openingTime?: InputMaybe<Scalars['numeric']['input']>;
   outcomeCount?: InputMaybe<Scalars['numeric']['input']>;
   outcomes?: InputMaybe<Array<Scalars['String']['input']>>;
   parentMarket?: InputMaybe<Scalars['String']['input']>;
@@ -820,6 +872,10 @@ export type Query_Root = {
   ChildMarket_by_pk?: Maybe<ChildMarket>;
   /** fetch data from the table: "Session" */
   Session: Array<Session>;
+  /** fetch data from the table: "SessionCounter" */
+  SessionCounter: Array<SessionCounter>;
+  /** fetch data from the table: "SessionCounter" using primary key columns */
+  SessionCounter_by_pk?: Maybe<SessionCounter>;
   /** fetch data from the table: "Session" using primary key columns */
   Session_by_pk?: Maybe<Session>;
   /** fetch data from the table: "_meta" */
@@ -853,6 +909,20 @@ export type Query_RootSessionArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   order_by?: InputMaybe<Array<Session_Order_By>>;
   where?: InputMaybe<Session_Bool_Exp>;
+};
+
+
+export type Query_RootSessionCounterArgs = {
+  distinct_on?: InputMaybe<Array<SessionCounter_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<SessionCounter_Order_By>>;
+  where?: InputMaybe<SessionCounter_Bool_Exp>;
+};
+
+
+export type Query_RootSessionCounter_By_PkArgs = {
+  id: Scalars['String']['input'];
 };
 
 
@@ -1030,6 +1100,12 @@ export type Subscription_Root = {
   ChildMarket_stream: Array<ChildMarket>;
   /** fetch data from the table: "Session" */
   Session: Array<Session>;
+  /** fetch data from the table: "SessionCounter" */
+  SessionCounter: Array<SessionCounter>;
+  /** fetch data from the table: "SessionCounter" using primary key columns */
+  SessionCounter_by_pk?: Maybe<SessionCounter>;
+  /** fetch data from the table in a streaming manner: "SessionCounter" */
+  SessionCounter_stream: Array<SessionCounter>;
   /** fetch data from the table: "Session" using primary key columns */
   Session_by_pk?: Maybe<Session>;
   /** fetch data from the table in a streaming manner: "Session" */
@@ -1078,6 +1154,27 @@ export type Subscription_RootSessionArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   order_by?: InputMaybe<Array<Session_Order_By>>;
   where?: InputMaybe<Session_Bool_Exp>;
+};
+
+
+export type Subscription_RootSessionCounterArgs = {
+  distinct_on?: InputMaybe<Array<SessionCounter_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<SessionCounter_Order_By>>;
+  where?: InputMaybe<SessionCounter_Bool_Exp>;
+};
+
+
+export type Subscription_RootSessionCounter_By_PkArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+export type Subscription_RootSessionCounter_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<SessionCounter_Stream_Cursor_Input>>;
+  where?: InputMaybe<SessionCounter_Bool_Exp>;
 };
 
 
@@ -1174,6 +1271,16 @@ export type SessionByMetadataQueryVariables = Exact<{
 
 export type SessionByMetadataQuery = { __typename?: 'query_root', Session: Array<{ __typename?: 'Session', sessionId: string, parentMarket: string, transactionHash: string, children: Array<{ __typename?: 'ChildMarket', id: string, parentOutcomeIndex: string, transactionHash: string }> }>, chain_metadata: Array<{ __typename?: 'chain_metadata', latest_processed_block?: number | null, block_height?: number | null }> };
 
+export type SessionsQueryVariables = Exact<{
+  limit: Scalars['Int']['input'];
+  offset: Scalars['Int']['input'];
+  where: Session_Bool_Exp;
+}>;
+
+
+export type SessionsQuery = { __typename?: 'query_root', SessionCounter: Array<{ __typename?: 'SessionCounter', count: string }>, Session: Array<{ __typename?: 'Session', id: string, parentMarket: string, deployer: string, marketName: string, title?: string | null, description?: string | null, icon?: string | null, heroImage?: string | null, itemNamePlural?: string | null, outcomeCount: string, keyword: string, openingTime?: string | null }> };
+
 
 export const SessionIndexedDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionIndexed"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Session"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"IntValue","value":"1"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"children"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]}}]} as unknown as DocumentNode<SessionIndexedQuery, SessionIndexedQueryVariables>;
 export const SessionByMetadataDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionByMetadata"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"deployer"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"metadataUri"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"since"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"numeric"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Session"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"deployer"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"deployer"}}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"metadataUri"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"metadataUri"}}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"openedAt"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_gte"},"value":{"kind":"Variable","name":{"kind":"Name","value":"since"}}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"openedAt"},"value":{"kind":"EnumValue","value":"desc"}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"IntValue","value":"1"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"sessionId"}},{"kind":"Field","name":{"kind":"Name","value":"parentMarket"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}},{"kind":"Field","name":{"kind":"Name","value":"children"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"parentOutcomeIndex"},"value":{"kind":"EnumValue","value":"asc"}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentOutcomeIndex"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"chain_metadata"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"latest_processed_block"}},{"kind":"Field","name":{"kind":"Name","value":"block_height"}}]}}]}}]} as unknown as DocumentNode<SessionByMetadataQuery, SessionByMetadataQueryVariables>;
+export const SessionsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Sessions"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"limit"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"offset"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"where"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Session_bool_exp"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"SessionCounter"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"count"}}]}},{"kind":"Field","name":{"kind":"Name","value":"Session"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"Variable","name":{"kind":"Name","value":"where"}}},{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"openedAt"},"value":{"kind":"EnumValue","value":"desc"}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"Variable","name":{"kind":"Name","value":"limit"}}},{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"Variable","name":{"kind":"Name","value":"offset"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentMarket"}},{"kind":"Field","name":{"kind":"Name","value":"deployer"}},{"kind":"Field","name":{"kind":"Name","value":"marketName"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"icon"}},{"kind":"Field","name":{"kind":"Name","value":"heroImage"}},{"kind":"Field","name":{"kind":"Name","value":"itemNamePlural"}},{"kind":"Field","name":{"kind":"Name","value":"outcomeCount"}},{"kind":"Field","name":{"kind":"Name","value":"keyword"}},{"kind":"Field","name":{"kind":"Name","value":"openingTime"}}]}}]}}]} as unknown as DocumentNode<SessionsQuery, SessionsQueryVariables>;

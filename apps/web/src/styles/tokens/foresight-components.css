@@ -102,7 +102,6 @@
   display: inline-block;
   vertical-align: middle;
   flex: none;
-  color: inherit;
 }
 .fs-icon svg {
   display: block;
@@ -179,4 +178,256 @@
 .fs-narrative :has(> .fs-stage-line) {
   flex-basis: 100%;
   max-height: none;
+}
+
+/* ── Homepage ─────────────────────────────────────────────────────────────── */
+
+/* Escapes the 40px block padding the shell puts on `main`. */
+.fs-hero {
+  position: relative;
+  margin-top: -40px;
+}
+
+/* Bled past the page gutter: cut off at it, the radials end mid-fade and read
+   as an edge. */
+.fs-eye-field {
+  position: absolute;
+  inset: 0 calc(50% - 50vw);
+  pointer-events: none;
+  overflow: hidden;
+  background:
+    radial-gradient(46% 60% at 12% 20%, color-mix(in oklch, var(--fs-accent) 6%, transparent) 0%, transparent 70%),
+    radial-gradient(
+      42% 56% at 88% 10%,
+      color-mix(in oklch, var(--fs-accent-protocol) 5%, transparent) 0%,
+      transparent 70%
+    );
+}
+.dark .fs-eye-field {
+  background:
+    radial-gradient(46% 60% at 12% 20%, color-mix(in oklch, var(--fs-grad-from) 22%, transparent) 0%, transparent 70%),
+    radial-gradient(42% 56% at 88% 10%, color-mix(in oklch, var(--fs-grad-to) 18%, transparent) 0%, transparent 70%);
+}
+
+.fs-eye-drift {
+  position: absolute;
+  inset: -20% -10%;
+  pointer-events: none;
+  opacity: 0.14;
+  mask-image: radial-gradient(70% 70% at 50% 40%, #000 0%, transparent 78%);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 80'%3E%3Cpath fill='none' stroke='%23009aff' stroke-width='1.6' d='M4 40S24 10 80 10s76 30 76 30-20 30-76 30S4 40 4 40Z'/%3E%3Ccircle fill='none' stroke='%23009aff' stroke-width='1.6' cx='80' cy='40' r='16'/%3E%3C/svg%3E");
+  background-size: 190px 95px;
+  animation: fsEyeDrift 34s linear infinite;
+}
+.dark .fs-eye-drift {
+  opacity: 0.2;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 80'%3E%3Cpath fill='none' stroke='%23b45fff' stroke-width='1.6' d='M4 40S24 10 80 10s76 30 76 30-20 30-76 30S4 40 4 40Z'/%3E%3Ccircle fill='none' stroke='%236cc5ff' stroke-width='1.6' cx='80' cy='40' r='16'/%3E%3C/svg%3E");
+}
+@keyframes fsEyeDrift {
+  to {
+    background-position: 380px 190px;
+  }
+}
+
+/* The one gradient-filled action on the page. */
+.fs-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 45px;
+  padding: 0 22px;
+  border-radius: 300px;
+  color: #fff;
+  background: var(--fs-grad-axis);
+  box-shadow: 0 6px 20px color-mix(in oklch, var(--fs-accent) 24%, transparent);
+  transition:
+    box-shadow var(--fs-dur-enter) var(--fs-ease-enter),
+    gap var(--fs-dur-echo) var(--fs-ease-enter);
+}
+.fs-cta:hover {
+  color: #fff;
+  gap: 15px;
+  box-shadow: 0 8px 26px color-mix(in oklch, var(--fs-accent) 34%, transparent);
+}
+
+.fs-session-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+@media (max-width: 1000px) {
+  .fs-session-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 720px) {
+  .fs-session-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* A filter switch keeps the previous cards on screen while the next set loads,
+   so they are dimmed: without it the switch reads as having done nothing. */
+.fs-session-grid--stale {
+  opacity: 0.5;
+  transition: opacity var(--fs-dur-enter) var(--fs-ease-enter);
+}
+
+/* Geometry from the futarchy-ui experiment card. The ring is
+   `.border-gradient-purple-blue`; the banner insets 1px to clear it. */
+.fs-session-card {
+  display: block;
+  width: 100%;
+}
+.fs-session-card__inner {
+  position: relative;
+  overflow: hidden;
+  min-height: 438px;
+  background: var(--fs-surface);
+  transition: filter var(--fs-dur-enter) var(--fs-ease-enter);
+}
+/* A skeleton borrows the card's geometry, so it has to stop short of its
+   hover: with no pointer target the banner never collapses. */
+.fs-session-card--static {
+  pointer-events: none;
+}
+.fs-session-card:hover .fs-session-card__inner {
+  filter: drop-shadow(0 8px 12px color-mix(in oklch, var(--fs-accent) 16%, transparent));
+}
+.fs-session-card__banner {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  right: 1px;
+  height: 180px;
+  overflow: hidden;
+  border-radius: 11px 11px 0 0;
+  background-color: var(--fs-surface-sunken);
+  background-size: cover;
+  background-position: center;
+  transition: height var(--fs-dur-structural) var(--fs-ease-enter);
+}
+.fs-session-card:hover .fs-session-card__banner {
+  height: 80px;
+}
+/* The banner washes out rather than sliding away, so the title stays legible. */
+.fs-session-card__banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--fs-surface);
+  opacity: 0;
+  transition: opacity var(--fs-dur-enter) var(--fs-ease-enter);
+}
+.fs-session-card:hover .fs-session-card__banner::after {
+  opacity: 0.7;
+}
+.fs-session-card__body {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: 180px;
+  display: flex;
+  flex-direction: column;
+  transition: top var(--fs-dur-structural) var(--fs-ease-enter);
+}
+.fs-session-card:hover .fs-session-card__body {
+  top: 80px;
+}
+/* Always laid out, so nothing clips it into view a line at a time. At rest it
+   sits past the body's overflow edge; the collapsing banner opens the room. */
+.fs-session-card__reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition:
+    opacity var(--fs-dur-enter) var(--fs-ease-enter),
+    transform var(--fs-dur-enter) var(--fs-ease-enter);
+}
+/* Held until the body has slid up far enough to clear the reveal, so the fade
+   never starts against the overflow edge. */
+.fs-session-card:hover .fs-session-card__reveal {
+  opacity: 1;
+  transform: none;
+  transition-delay: 100ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fs-eye-drift {
+    animation: none;
+  }
+}
+
+/* Translucent over the page rather than a solid band; the blur is what keeps
+   the nav legible against whatever scrolls beneath it. */
+.fs-header {
+  background: color-mix(in oklch, var(--fs-surface) 72%, transparent);
+  border-bottom: 1px solid color-mix(in oklch, var(--fs-border) 55%, transparent);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+}
+
+.fs-filterbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 61px;
+  padding: 8px 14px;
+  border-radius: 300px;
+  overflow: hidden;
+  background: var(--fs-surface);
+  border: 1px solid var(--fs-border);
+  box-shadow: 0 6px 18px color-mix(in oklch, var(--fs-accent) 12%, transparent);
+}
+.fs-filterbar__search {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.fs-filterbar__states {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+/* Tag wraps its label in a `<p class="text-base">`, so the size has to be set
+   on that element. Targeted structurally because the library sets no class
+   hooks. */
+.fs-filterbar__states button p {
+  font-size: 14px;
+}
+/* Searchbar ships a fixed-width column and a 3px input radius: the width has to
+   give to fill the bar, and the radius has to match the bar around it. Targeted
+   structurally because the library sets no class hooks. */
+.fs-filterbar__search > div {
+  width: 100%;
+}
+.fs-filterbar__search input {
+  border-radius: 300px;
+  padding-left: 44px;
+}
+.fs-filterbar__search svg {
+  left: 18px;
+}
+
+/* Grid stagger: `.fs-rise` carries the animation, these carry only its offset. */
+.fs-session-grid > :nth-child(2) {
+  animation-delay: 60ms;
+}
+.fs-session-grid > :nth-child(3) {
+  animation-delay: 120ms;
+}
+.fs-session-grid > :nth-child(4) {
+  animation-delay: 180ms;
+}
+.fs-session-grid > :nth-child(5) {
+  animation-delay: 240ms;
+}
+.fs-session-grid > :nth-child(n + 6) {
+  animation-delay: 300ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fs-session-grid > * {
+    animation-delay: 0ms;
+  }
 }
