@@ -15,11 +15,9 @@ import { SectionHeader } from "./SectionHeader";
 import { useDraftStore } from "../stores/draftStore";
 import type { DraftAssessment } from "../types/draft";
 import { LONG_RUN_NOTE } from "../utils/assessDraft";
+import { CATEGORIES, LANGUAGES } from "../utils/marketOptions";
 import { scaleToWei } from "../utils/scaleToWei";
 import { slugToken } from "../utils/slugToken";
-
-const CATEGORIES = ["market", "misc", "technology", "business", "politics", "science", "sports"];
-const LANGUAGES = ["en_US", "en_GB", "fr_FR", "es_ES", "pt_BR"];
 
 const hasBrackets = (s: string) => /[[\]]/.test(s);
 

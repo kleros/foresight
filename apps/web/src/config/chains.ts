@@ -1,4 +1,4 @@
-import { gnosis, hardhat } from "viem/chains";
+import { gnosis, hardhat, mainnet } from "viem/chains";
 
 // Read directly, not through `env`: this module must import without the full NEXT_PUBLIC set.
 const localChainOverride = process.env.NEXT_PUBLIC_ENABLE_LOCAL_CHAIN || undefined;
@@ -12,5 +12,8 @@ export const DEFAULT_CHAIN = isLocalChainEnabled ? hardhat : gnosis;
 export const DEFAULT_CHAIN_ID = DEFAULT_CHAIN.id;
 
 export const SUPPORTED_CHAINS = isLocalChainEnabled ? ([hardhat, gnosis] as const) : ([gnosis] as const);
+
+/** ENS resolves on mainnet only; the app never transacts there. */
+export const ENS_CHAIN_ID = mainnet.id;
 
 export const LOCAL_RPC_URL = "http://127.0.0.1:8545";

@@ -16,8 +16,7 @@ export default [
     // A flow adapter is a pure function of snapshot and context: the
     // orchestrator rebuilds every step from scratch on each attempt, including
     // after a reload, so anything that reaches for a hook, a router or a live
-    // wallet client breaks resume in a way tests do not catch. This used to be
-    // enforced by the folder being its own package, with its own dependencies.
+    // wallet client breaks resume in a way tests do not catch.
     files: ["src/features/*/flow/**/*.ts"],
     rules: {
       "no-restricted-imports": [

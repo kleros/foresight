@@ -12,6 +12,8 @@ import { useAccount, useEnsAvatar, useEnsName } from "wagmi";
 
 import { shortenAddress } from "@/utils/address";
 
+import { ENS_CHAIN_ID } from "@/config/chains";
+
 import AccountDetails from "./AccountDetails";
 
 interface IIdenticonOrAvatar {
@@ -23,8 +25,8 @@ export const IdenticonOrAvatar: React.FC<IIdenticonOrAvatar> = ({ size = 16, add
   const { address: defaultAddress } = useAccount();
   const address = propAddress ?? defaultAddress;
 
-  const { data: name } = useEnsName({ address, chainId: 1 });
-  const { data: avatar } = useEnsAvatar({ name: normalize(name ?? ""), chainId: 1 });
+  const { data: name } = useEnsName({ address, chainId: ENS_CHAIN_ID });
+  const { data: avatar } = useEnsAvatar({ name: normalize(name ?? ""), chainId: ENS_CHAIN_ID });
 
   return avatar ? (
     <Image
@@ -51,7 +53,7 @@ export const AddressOrName: React.FC<IAddressOrName> = ({ address: propAddress, 
   const { address: defaultAddress } = useAccount();
   const address = propAddress ?? defaultAddress;
 
-  const { data } = useEnsName({ address, chainId: 1 });
+  const { data } = useEnsName({ address, chainId: ENS_CHAIN_ID });
 
   return (
     <span className={className}>{data ?? (address && isAddress(address) ? shortenAddress(address) : address)}</span>

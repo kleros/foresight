@@ -64,7 +64,7 @@ Imports flow one way: **shared → features → app**. `import-x/no-restricted-p
 | Promote, don't cross-link | When a second feature needs something, move it into a shared layer and both import it downward. Never sideways             |
 | Shared knows nothing      | `components/`, `hooks/`, `lib/`, `utils/`, `config/` must not import from `features/` or `app/` — they stay reusable alone |
 | Shared means shared       | Something used by one feature belongs to that feature, not `components/`. Promote on the second consumer, not the first    |
-| Logic out of components   | Domain and math logic goes in `features/*/utils` or `lib/` so it tests without rendering; hooks wrap IO                    |
+| Logic out of components   | Domain and math logic goes in `features/*/utils` or `lib/` so it tests without rendering; hooks wrap IO. Full rule: `ui-logic-seam` |
 | No parallel layer schemes | Don't add `screens/`, `widgets/`, `entities/`, or a Pages-Router `pages/` alongside this structure                         |
 
 Features are **domain modules**, not routes. `features/markets`, not `features/create`. One route may compose several features, and one feature may serve several routes.
