@@ -1,3 +1,5 @@
+import { gnosis } from "viem/chains";
+
 export const siteConfig = {
   name: "Foresight",
   description: "Permissionless futarchy on Gnosis",
@@ -12,3 +14,6 @@ export const siteConfig = {
     faq: "https://kleros.notion.site/Kleros-Foresight-Beginner-User-Guide-30d9a9db4f088064a588f7d5acc2751f#30d9a9db4f088138a266e870c56159e0",
   },
 } as const;
+
+export const seerMarketUrl = (parentMarket: string, chainId: number) =>
+  chainId === gnosis.id ? `https://app.seer.pm/markets/${chainId}/${parentMarket}` : undefined;

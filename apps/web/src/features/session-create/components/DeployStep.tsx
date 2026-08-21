@@ -7,6 +7,7 @@ import { formatUtcInstant, utcInstant } from "@/utils/date";
 import { tryGatewayUrl } from "@/utils/ipfs";
 
 import { DEFAULT_CHAIN } from "@/config/chains";
+import { seerMarketUrl } from "@/config/site";
 
 import { RecoveredRunBanner } from "./RecoveredRunBanner";
 import { SectionHeader } from "./SectionHeader";
@@ -99,6 +100,7 @@ export function DeployStep({
   const imageCount = (draft.heroImageName ? 1 : 0) + (draft.iconName ? 1 : 0);
 
   const stages = stagesFor(progress, imageCount, draft.outcomes.length);
+  const seerUrl = progress.parentMarket ? seerMarketUrl(progress.parentMarket, DEFAULT_CHAIN.id) : undefined;
   const deployedChildren = progress.children.filter((c) => c.state === "success").length;
   const createdCount = (progress.parent.state === "success" ? 1 : 0) + deployedChildren;
 
@@ -359,6 +361,16 @@ export function DeployStep({
               </div>
               <div className="flex flex-wrap items-center gap-4">
                 <Button text="Seed liquidity" isDisabled />
+                {seerUrl ? (
+                  <a
+                    href={seerUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="type-label text-fs-accent underline underline-offset-2"
+                  >
+                    View on Seer
+                  </a>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => driver.reset()}
