@@ -29,21 +29,17 @@
   --fs-accent-hover: var(--klerosUIComponentsSecondaryBlue);
   --fs-accent-protocol: var(--klerosUIComponentsSecondaryPurple);
   --fs-accent-protocol-hover: var(--klerosUIComponentsPrimaryPurple);
-  /* Status: the registry and session vocabulary */
-  --fs-status-registered: var(--klerosUIComponentsSuccess);
-  --fs-status-registered-bg: var(--klerosUIComponentsSuccessLight);
-  --fs-status-pending: var(--klerosUIComponentsWarning);
-  --fs-status-pending-bg: var(--klerosUIComponentsWarningLight);
-  --fs-status-challenged: var(--klerosUIComponentsTint);
-  --fs-status-challenged-bg: var(--klerosUIComponentsTintMedium);
-  --fs-status-disputed: var(--klerosUIComponentsError);
-  --fs-status-disputed-bg: var(--klerosUIComponentsErrorLight);
-  --fs-status-removed: var(--klerosUIComponentsError);
-  --fs-status-removed-bg: var(--klerosUIComponentsErrorLight);
-  --fs-status-unlisted: var(--klerosUIComponentsSecondaryText);
-  --fs-status-unlisted-bg: var(--klerosUIComponentsLightGrey);
-  --fs-status-absent: var(--klerosUIComponentsSecondaryText);
-  --fs-status-absent-bg: var(--klerosUIComponentsLightGrey);
+  /* Tone: what the reader is being told, paired with its own background */
+  --fs-tone-success: var(--klerosUIComponentsSuccess);
+  --fs-tone-success-bg: var(--klerosUIComponentsSuccessLight);
+  --fs-tone-warning: var(--klerosUIComponentsWarning);
+  --fs-tone-warning-bg: var(--klerosUIComponentsWarningLight);
+  --fs-tone-error: var(--klerosUIComponentsError);
+  --fs-tone-error-bg: var(--klerosUIComponentsErrorLight);
+  --fs-tone-info: var(--klerosUIComponentsTint);
+  --fs-tone-info-bg: var(--klerosUIComponentsTintMedium);
+  --fs-tone-neutral: var(--klerosUIComponentsSecondaryText);
+  --fs-tone-neutral-bg: var(--klerosUIComponentsLightGrey);
   /* Geometry inherited from Kleros, restated so this layer has one vocabulary */
   --fs-radius: var(--klerosUIComponentsBaseRadius);
   --fs-border-width: 1px;

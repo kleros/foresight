@@ -321,7 +321,7 @@ export function ChildMarketsStep({
                               minValue={draft.decisionDate ? parseDate(draft.decisionDate) : today(getLocalTimeZone())}
                             />
                             {longRunning(i) ? (
-                              <div className="type-caption text-fs-status-pending pt-2 text-pretty">
+                              <div className="type-caption text-fs-tone-warning pt-2 text-pretty">
                                 This branch {LONG_RUN_NOTE}.
                               </div>
                             ) : null}

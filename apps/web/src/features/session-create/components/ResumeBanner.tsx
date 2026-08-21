@@ -25,9 +25,9 @@ function MarketList({ rows, created }: { rows: Row[]; created: boolean }) {
             )}
           >
             <ForesightIcon
-              name={created ? "outcome" : "unlisted"}
+              name={created ? "outcome" : "empty"}
               size={14}
-              className={created ? "text-fs-status-registered" : "text-fs-status-unlisted"}
+              className={created ? "text-fs-tone-success" : "text-fs-tone-neutral"}
             />
             <span className="min-w-0 flex-1 truncate">{row.name}</span>
             {created ? <TxHashLink hash={row.hash} /> : null}

@@ -23,9 +23,9 @@ function stepIndexOf(entries: RailEntry[], index: number): number {
 }
 
 const DOT: Record<RailState, string> = {
-  ok: "bg-fs-status-registered opacity-55",
-  warn: "bg-fs-status-pending",
-  error: "bg-fs-status-disputed",
+  ok: "bg-fs-tone-success opacity-55",
+  warn: "bg-fs-tone-warning",
+  error: "bg-fs-tone-error",
 };
 
 export function StepRail({
@@ -97,7 +97,7 @@ export function StepRail({
                 setArming(false);
                 onReset();
               }}
-              className="type-caption text-fs-status-disputed cursor-pointer border-none bg-transparent p-0"
+              className="type-caption text-fs-tone-error cursor-pointer border-none bg-transparent p-0"
             >
               Clear everything
             </button>

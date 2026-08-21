@@ -45,7 +45,7 @@ export function DevWallet() {
       aria-label="Development wallet"
     >
       <div className="type-caption text-fs-text-secondary flex items-center gap-2">
-        <span className="bg-fs-status-registered h-1.5 w-1.5 rounded-full" aria-hidden />
+        <span className="bg-fs-tone-success h-1.5 w-1.5 rounded-full" aria-hidden />
         dev wallet · {DEFAULT_CHAIN.name}
       </div>
 
@@ -55,7 +55,7 @@ export function DevWallet() {
             {connected?.[0] ?? `${address.slice(0, 6)}…${address.slice(-4)}`}
           </span>
           {chainId !== DEFAULT_CHAIN.id ? (
-            <span className="type-caption text-fs-status-pending">on chain {chainId}</span>
+            <span className="type-caption text-fs-tone-warning">on chain {chainId}</span>
           ) : null}
           <button type="button" onClick={() => disconnect()} className="type-label text-fs-accent cursor-pointer">
             disconnect
@@ -77,7 +77,7 @@ export function DevWallet() {
         </div>
       )}
 
-      {error ? <div className="type-caption text-fs-status-disputed max-w-60">{error}</div> : null}
+      {error ? <div className="type-caption text-fs-tone-error max-w-60">{error}</div> : null}
     </aside>
   );
 }

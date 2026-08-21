@@ -22,9 +22,9 @@ const MARKET_STATE: Record<
   MarketDeployState,
   { icon: ForesightIconName; color: string; word: string; motion?: ForesightIconState }
 > = {
-  success: { icon: "outcome", color: "var(--fs-status-registered)", word: "created", motion: "drawing" },
+  success: { icon: "outcome", color: "var(--fs-tone-success)", word: "created", motion: "drawing" },
   running: { icon: "pending", color: "var(--fs-text-primary)", word: "confirming", motion: "pending" },
-  error: { icon: "removed", color: "var(--fs-status-disputed)", word: "failed" },
+  error: { icon: "cross", color: "var(--fs-tone-error)", word: "failed" },
   pending: { icon: "info", color: "var(--fs-text-secondary)", word: "pending" },
 };
 
@@ -236,7 +236,7 @@ export function DeployStep({
           <div className="flex flex-wrap items-center gap-4">
             <Button text="Deploy" isDisabled={hasMissing || !!blocker} onPress={() => driver.start()} />
             {hasMissing ? (
-              <span className="type-label text-fs-status-pending">
+              <span className="type-label text-fs-tone-warning">
                 {assessment.issues.length} unresolved above. The rail marks which.
               </span>
             ) : null}
@@ -246,8 +246,8 @@ export function DeployStep({
         {/* The recovered-run banner below says all this and offers the actions,
             so this only speaks when there is no run being offered back. */}
         {unfinished(progress) && !progress.resume ? (
-          <div className="rounded-fs bg-fs-status-disputed-bg border-fs-status-disputed flex gap-3.5 border px-4.5 py-4">
-            <ForesightIcon name="challenged" size={20} className="text-fs-status-disputed" />
+          <div className="rounded-fs bg-fs-tone-error-bg border-fs-tone-error flex gap-3.5 border px-4.5 py-4">
+            <ForesightIcon name="alert" size={20} className="text-fs-tone-error" />
             <div className="min-w-0 flex-1">
               <div className="text-fs-text-primary text-sm font-semibold">
                 Session opened, {draft.outcomes.length - deployedChildren} of {draft.outcomes.length} branch markets
@@ -267,8 +267,8 @@ export function DeployStep({
         {progress.resume ? <RecoveredRunBanner resume={progress.resume} driver={driver} /> : null}
 
         {progress.failure ? (
-          <div className="rounded-fs bg-fs-status-disputed-bg border-fs-status-disputed flex gap-3.5 border px-4.5 py-4">
-            <ForesightIcon name="removed" size={20} className="text-fs-status-disputed" />
+          <div className="rounded-fs bg-fs-tone-error-bg border-fs-tone-error flex gap-3.5 border px-4.5 py-4">
+            <ForesightIcon name="cross" size={20} className="text-fs-tone-error" />
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-baseline gap-2.5">
                 <span className="text-fs-text-primary text-sm font-semibold">
@@ -353,7 +353,7 @@ export function DeployStep({
 
         {progress.stage === "complete" ? (
           <div className="fs-spawn flex flex-col gap-4">
-            <div className="rounded-fs bg-fs-status-pending-bg border-fs-status-pending flex flex-col gap-3.5 border px-5 py-4.5">
+            <div className="rounded-fs bg-fs-tone-warning-bg border-fs-tone-warning flex flex-col gap-3.5 border px-5 py-4.5">
               <div>
                 <div className="text-fs-text-primary text-base font-semibold">Deployed</div>
                 <div className="type-label text-fs-text-primary">Trading until {decisionHuman}</div>

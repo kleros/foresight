@@ -2,8 +2,11 @@ import type { CSSProperties } from "react";
 
 import clsx from "clsx";
 
-import Challenged from "@/assets/svg/foresight/challenged.svg";
+import Alert from "@/assets/svg/foresight/alert.svg";
+import Check from "@/assets/svg/foresight/check.svg";
 import Chevron from "@/assets/svg/foresight/chevron.svg";
+import Cross from "@/assets/svg/foresight/cross.svg";
+import Empty from "@/assets/svg/foresight/empty.svg";
 import Indexing from "@/assets/svg/foresight/indexing.svg";
 import InfoCircle from "@/assets/svg/foresight/info-circle.svg";
 import InfoSquare from "@/assets/svg/foresight/info-square.svg";
@@ -12,10 +15,7 @@ import Outcome from "@/assets/svg/foresight/outcome.svg";
 import ParentMarket from "@/assets/svg/foresight/parent-market.svg";
 import Pending from "@/assets/svg/foresight/pending.svg";
 import PhasedDeploy from "@/assets/svg/foresight/phased-deploy.svg";
-import Registered from "@/assets/svg/foresight/registered.svg";
-import Removed from "@/assets/svg/foresight/removed.svg";
 import SessionTree from "@/assets/svg/foresight/session-tree.svg";
-import Unlisted from "@/assets/svg/foresight/unlisted.svg";
 
 /**
  * The artwork lives in `assets/svg/foresight/`, on a 24px grid drawn in
@@ -32,12 +32,12 @@ const ICONS = {
   "opening-time": OpeningTime,
   "phased-deploy": PhasedDeploy,
   indexing: Indexing,
-  // States
-  registered: Registered,
+  // Feedback
+  check: Check,
   pending: Pending,
-  challenged: Challenged,
-  unlisted: Unlisted,
-  removed: Removed,
+  alert: Alert,
+  empty: Empty,
+  cross: Cross,
   // Utility
   chevron: Chevron,
   info: InfoSquare,

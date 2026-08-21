@@ -36,9 +36,9 @@ export function RecoveredRunBanner({ resume, driver }: { resume: DeployResume; d
   return (
     <div
       data-screen-label="Continue an unfinished deploy"
-      className="rounded-fs bg-fs-status-pending-bg border-fs-status-pending flex gap-3.5 border px-5 py-4"
+      className="rounded-fs bg-fs-tone-warning-bg border-fs-tone-warning flex gap-3.5 border px-5 py-4"
     >
-      <ForesightIcon name={blind ? "challenged" : "phased-deploy"} size={20} className="text-fs-status-pending" />
+      <ForesightIcon name={blind ? "alert" : "phased-deploy"} size={20} className="text-fs-tone-warning" />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-2.5">
           <span className="text-fs-text-primary text-sm font-semibold">Unfinished deploy found</span>
@@ -47,7 +47,7 @@ export function RecoveredRunBanner({ resume, driver }: { resume: DeployResume; d
         <div className="type-label text-fs-text-primary text-pretty wrap-break-words">{line}</div>
 
         {blind ? (
-          <div className="type-label text-fs-status-disputed pt-2 text-pretty">
+          <div className="type-label text-fs-tone-error pt-2 text-pretty">
             Check the wallet you deployed with first: if you already signed this, continuing pays for it twice.
           </div>
         ) : null}

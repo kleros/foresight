@@ -44,15 +44,11 @@ export function ReviewStep({
       <div
         className={clsx(
           "rounded-fs text-fs-text-primary border px-4.5 py-3.5",
-          ready
-            ? "border-fs-status-registered bg-fs-status-registered-bg"
-            : "border-fs-status-pending bg-fs-status-pending-bg",
+          ready ? "border-fs-tone-success bg-fs-tone-success-bg" : "border-fs-tone-warning bg-fs-tone-warning-bg",
         )}
       >
         <div className="flex items-center gap-2.5">
-          <span
-            className={clsx("h-2 w-2 flex-none rounded-xs", ready ? "bg-fs-status-registered" : "bg-fs-status-pending")}
-          />
+          <span className={clsx("h-2 w-2 flex-none rounded-xs", ready ? "bg-fs-tone-success" : "bg-fs-tone-warning")} />
           <span className="text-sm font-semibold">
             {ready
               ? "Every step resolves. This session is ready to deploy."
@@ -78,9 +74,9 @@ export function ReviewStep({
       </div>
 
       {assessment.warnings.length > 0 ? (
-        <div className="rounded-fs bg-fs-status-pending-bg border-fs-status-pending text-fs-text-primary mt-3 border px-4.5 py-3.5">
+        <div className="rounded-fs bg-fs-tone-warning-bg border-fs-tone-warning text-fs-text-primary mt-3 border px-4.5 py-3.5">
           <div className="flex items-center gap-2.5">
-            <ForesightIcon name="info" size={16} className="text-fs-status-pending" />
+            <ForesightIcon name="info" size={16} className="text-fs-tone-warning" />
             <span className="text-sm font-semibold">Worth a second look. These do not block the deploy.</span>
           </div>
           <ul className="type-label mt-2 list-disc pl-5">

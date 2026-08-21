@@ -75,8 +75,8 @@ export function AdvancedToggle({
           className={clsx(
             "type-caption",
             summaryTone === "muted" && "text-fs-text-secondary",
-            summaryTone === "warning" && "text-fs-status-pending",
-            summaryTone === "error" && "text-fs-status-disputed",
+            summaryTone === "warning" && "text-fs-tone-warning",
+            summaryTone === "error" && "text-fs-tone-error",
           )}
         >
           {summary}

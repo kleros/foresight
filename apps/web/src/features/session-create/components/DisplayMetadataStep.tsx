@@ -81,7 +81,7 @@ export function DisplayMetadataStep({
       />
 
       <div className="fs-grad-border bg-fs-surface relative z-3 mb-7 flex flex-wrap items-center gap-3 px-4 py-3">
-        <ForesightIcon name="registered" size={18} className="text-fs-accent-protocol" />
+        <ForesightIcon name="check" size={18} className="text-fs-accent-protocol" />
         <span className="text-fs-text-primary text-sm font-semibold">Permanent once deployed</span>
         <InfoTip
           place="bottom"
@@ -129,7 +129,7 @@ export function DisplayMetadataStep({
                         "h-6 w-21 bg-transparent px-1.5 font-mono text-xs outline-none",
                         /^#[0-9a-f]{6}$/i.test(o.color)
                           ? "border border-transparent"
-                          : "border-fs-status-disputed rounded-xs border",
+                          : "border-fs-tone-error rounded-xs border",
                       )}
                       value={o.color}
                       onChange={(e) => {
@@ -149,8 +149,8 @@ export function DisplayMetadataStep({
                       className={hintTooltipClass}
                       text="This colour falls below the contrast floor in one of the two themes. Branch colours key the whole session, so they have to stay legible in light and dark."
                     >
-                      <span tabIndex={0} className="text-fs-status-pending inline-flex cursor-help">
-                        <ForesightIcon name="challenged" size={16} />
+                      <span tabIndex={0} className="text-fs-tone-warning inline-flex cursor-help">
+                        <ForesightIcon name="alert" size={16} />
                       </span>
                     </Tooltip>
                   ) : null}

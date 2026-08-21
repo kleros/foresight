@@ -103,7 +103,7 @@ export function ParentMarketStep({ assessment, active }: { assessment: DraftAsse
                   }}
                   className={clsx(
                     "fs-echo rounded-fs bg-fs-surface-sunken grid grid-cols-[20px_24px_minmax(0,1fr)_32px] items-center gap-3 border px-2.5 py-1.5",
-                    dup || !o.label.trim() ? "border-fs-status-disputed" : "border-fs-border",
+                    dup || !o.label.trim() ? "border-fs-tone-error" : "border-fs-border",
                     dragId === o.id && "opacity-60",
                   )}
                 >
@@ -151,7 +151,7 @@ export function ParentMarketStep({ assessment, active }: { assessment: DraftAsse
             })}
           </div>
           {dupLabels.size > 0 ? (
-            <div className="type-caption text-fs-status-disputed pt-2">
+            <div className="type-caption text-fs-tone-error pt-2">
               Outcomes must be distinct: one name appears twice.
             </div>
           ) : null}
@@ -181,7 +181,7 @@ export function ParentMarketStep({ assessment, active }: { assessment: DraftAsse
             />
           </div>
           {longRunning ? (
-            <div className="type-caption text-fs-status-pending pt-2 text-pretty">
+            <div className="type-caption text-fs-tone-warning pt-2 text-pretty">
               This session {LONG_RUN_NOTE}. Traders&apos; money is tied up until it closes.
             </div>
           ) : null}
@@ -264,7 +264,7 @@ export function ParentMarketStep({ assessment, active }: { assessment: DraftAsse
                     ))}
                 </div>
                 {dupTokens.size > 0 ? (
-                  <div className="type-caption text-fs-status-disputed pt-2">Token names must be distinct.</div>
+                  <div className="type-caption text-fs-tone-error pt-2">Token names must be distinct.</div>
                 ) : null}
               </div>
             </div>

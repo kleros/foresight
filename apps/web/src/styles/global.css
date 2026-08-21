@@ -26,13 +26,13 @@
   --color-fs-text-accent: var(--fs-text-accent);
   --color-fs-accent: var(--fs-accent);
   --color-fs-accent-protocol: var(--fs-accent-protocol);
-  --color-fs-status-registered: var(--fs-status-registered);
-  --color-fs-status-registered-bg: var(--fs-status-registered-bg);
-  --color-fs-status-pending: var(--fs-status-pending);
-  --color-fs-status-pending-bg: var(--fs-status-pending-bg);
-  --color-fs-status-disputed: var(--fs-status-disputed);
-  --color-fs-status-disputed-bg: var(--fs-status-disputed-bg);
-  --color-fs-status-unlisted: var(--fs-status-unlisted);
+  --color-fs-tone-success: var(--fs-tone-success);
+  --color-fs-tone-success-bg: var(--fs-tone-success-bg);
+  --color-fs-tone-warning: var(--fs-tone-warning);
+  --color-fs-tone-warning-bg: var(--fs-tone-warning-bg);
+  --color-fs-tone-error: var(--fs-tone-error);
+  --color-fs-tone-error-bg: var(--fs-tone-error-bg);
+  --color-fs-tone-neutral: var(--fs-tone-neutral);
   --radius-fs: var(--fs-radius);
 }
 
