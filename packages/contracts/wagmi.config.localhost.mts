@@ -1,6 +1,6 @@
 import { defineConfig } from "@wagmi/cli";
 
-import { readArtifacts, requireArtifacts } from "./scripts/wagmiHelpers.ts";
+import { readAbiOnlyArtifacts, readArtifacts, requireArtifacts } from "./scripts/wagmiHelpers.ts";
 
 export default defineConfig(async () => {
   const contracts = await readArtifacts("localhost");
@@ -11,7 +11,7 @@ export default defineConfig(async () => {
   });
 
   return {
+    contracts: [...contracts, ...(await readAbiOnlyArtifacts())],
     out: "deployments/localhost.viem.ts",
-    contracts,
   };
 });

@@ -207,3 +207,133 @@ export const sessionFactoryAddress = {
  * [__View Contract on Gnosis Gnosisscan__](https://gnosisscan.io/address/0xa5CC8a7372a771d24B1Bd55a160E20D94Cba0140)
  */
 export const sessionFactoryConfig = { address: sessionFactoryAddress, abi: sessionFactoryAbi } as const;
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// TradeExecutor
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+export const tradeExecutorAbi = [
+  {
+    type: "constructor",
+    inputs: [{ name: "_owner", internalType: "address", type: "address" }],
+    stateMutability: "nonpayable",
+  },
+  { type: "error", inputs: [], name: "CallFailed" },
+  { type: "error", inputs: [], name: "EmptyBatch" },
+  { type: "error", inputs: [], name: "NotOwner" },
+  { type: "error", inputs: [{ name: "target", internalType: "address", type: "address" }], name: "TargetHasNoCode" },
+  { type: "error", inputs: [], name: "ZeroOwner" },
+  {
+    type: "function",
+    inputs: [
+      {
+        name: "calls",
+        internalType: "struct TradeExecutor.Call[]",
+        type: "tuple[]",
+        components: [
+          { name: "to", internalType: "address", type: "address" },
+          { name: "data", internalType: "bytes", type: "bytes" },
+        ],
+      },
+    ],
+    name: "batchExecute",
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    inputs: [
+      {
+        name: "calls",
+        internalType: "struct TradeExecutor.ValueCall[]",
+        type: "tuple[]",
+        components: [
+          { name: "to", internalType: "address", type: "address" },
+          { name: "value", internalType: "uint256", type: "uint256" },
+          { name: "data", internalType: "bytes", type: "bytes" },
+        ],
+      },
+    ],
+    name: "batchValueExecute",
+    outputs: [],
+    stateMutability: "payable",
+  },
+  {
+    type: "function",
+    inputs: [],
+    name: "owner",
+    outputs: [{ name: "", internalType: "address", type: "address" }],
+    stateMutability: "view",
+  },
+  { type: "receive", stateMutability: "payable" },
+] as const;
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// TradeExecutorFactory
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * [__View Contract on Gnosis Gnosisscan__](https://gnosisscan.io/address/0x28e3afBdF711755c4400e3d7F74Df5d3cc9C369C)
+ */
+export const tradeExecutorFactoryAbi = [
+  { type: "error", inputs: [], name: "ExecutorAlreadyDeployed" },
+  {
+    type: "event",
+    anonymous: false,
+    inputs: [
+      { name: "owner", internalType: "address", type: "address", indexed: true },
+      { name: "executor", internalType: "address", type: "address", indexed: true },
+    ],
+    name: "ExecutorDeployed",
+  },
+  {
+    type: "function",
+    inputs: [],
+    name: "SALT_KEY",
+    outputs: [{ name: "", internalType: "string", type: "string" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    inputs: [],
+    name: "createExecutor",
+    outputs: [{ name: "executor", internalType: "address", type: "address" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    inputs: [{ name: "owner", internalType: "address", type: "address" }],
+    name: "executorOf",
+    outputs: [{ name: "executor", internalType: "address", type: "address" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    inputs: [{ name: "owner", internalType: "address", type: "address" }],
+    name: "predictExecutor",
+    outputs: [{ name: "executor", internalType: "address", type: "address" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    inputs: [{ name: "owner", internalType: "address", type: "address" }],
+    name: "saltFor",
+    outputs: [{ name: "salt", internalType: "bytes32", type: "bytes32" }],
+    stateMutability: "pure",
+  },
+] as const;
+
+/**
+ * [__View Contract on Gnosis Gnosisscan__](https://gnosisscan.io/address/0x28e3afBdF711755c4400e3d7F74Df5d3cc9C369C)
+ */
+export const tradeExecutorFactoryAddress = {
+  100: "0x28e3afBdF711755c4400e3d7F74Df5d3cc9C369C",
+} as const;
+
+/**
+ * [__View Contract on Gnosis Gnosisscan__](https://gnosisscan.io/address/0x28e3afBdF711755c4400e3d7F74Df5d3cc9C369C)
+ */
+export const tradeExecutorFactoryConfig = {
+  address: tradeExecutorFactoryAddress,
+  abi: tradeExecutorFactoryAbi,
+} as const;

@@ -12,7 +12,7 @@ type HardhatDeployment = {
 
 export type WagmiCodegenContract = {
   name: string;
-  address: Record<number, Address>;
+  address?: Record<number, Address>;
   abi: Abi;
 };
 
@@ -30,6 +30,9 @@ export const DEPLOYMENT_CHAINS = {
 export type DeploymentChainName = keyof typeof DEPLOYMENT_CHAINS;
 
 const MOCK_CONTRACT_PREFIX = "Mock";
+
+/** Deployed per owner by the factory, so there is an ABI to export but no singleton address. */
+const ABI_ONLY_CONTRACTS = ["TradeExecutor"] as const;
 
 export function getAbi(artifact: unknown) {
   return (artifact as { abi: Abi }).abi;
@@ -75,6 +78,15 @@ export async function readArtifacts(chainName: DeploymentChainName) {
   }
 
   return results;
+}
+
+export async function readAbiOnlyArtifacts() {
+  return Promise.all(
+    ABI_ONLY_CONTRACTS.map(async (name) => ({
+      name,
+      abi: getAbi(await readArtifactJson(`artifacts/contracts/${name}.sol/${name}.json`)),
+    })),
+  );
 }
 
 export function requireArtifacts(chainName: DeploymentChainName, contracts: WagmiCodegenContract[]) {

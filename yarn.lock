@@ -3368,6 +3368,7 @@ __metadata:
     "@nomicfoundation/hardhat-ethers": "npm:^3.0.8"
     "@nomicfoundation/hardhat-network-helpers": "npm:^1.0.12"
     "@nomiclabs/hardhat-solhint": "npm:hh2"
+    "@openzeppelin/contracts": "npm:^5.0.1"
     "@seer-pm/contracts": "npm:^1.0.0"
     "@typechain/ethers-v6": "npm:^0.5.1"
     "@typechain/hardhat": "npm:^9.1.0"
