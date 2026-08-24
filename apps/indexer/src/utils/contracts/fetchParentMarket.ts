@@ -1,6 +1,7 @@
 import { S, createEffect } from "envio";
 
 import { getClient } from "../client";
+import { UNAVAILABLE } from "../unavailable";
 import { getSeerMarketContract } from "./contracts";
 
 export const fetchParentMarket = createEffect(
@@ -19,14 +20,14 @@ export const fetchParentMarket = createEffect(
       client.readContract({ ...market, functionName: "marketName" }).catch((error: unknown) => {
         context.log.error(`marketName failed for ${input.address}: ${String(error)}`);
 
-        return "";
+        return UNAVAILABLE;
       }),
       Promise.all(
         Array.from({ length: input.outcomeCount }, (_, index) =>
           client
             .readContract({ ...market, functionName: "outcomes", args: [BigInt(index)] })
             // a missing outcome must not shorten the array
-            .catch(() => ""),
+            .catch(() => UNAVAILABLE),
         ),
       ),
     ]);

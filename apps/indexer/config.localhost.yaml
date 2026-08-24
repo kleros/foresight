@@ -9,6 +9,19 @@ contracts:
     events:
       - event: ParentMarketDeployed(uint256 indexed sessionId, address indexed deployer, address indexed parentMarket, uint256 outcomeCount, string metadataUri)
       - event: ChildMarketDeployed(uint256 indexed sessionId, uint256 indexed parentOutcomeIndex, address indexed childMarket, address parentMarket)
+  - name: TradeExecutorFactory
+    events:
+      - event: ExecutorDeployed(address indexed owner, address indexed executor)
+  - name: TradeExecutor
+    events:
+      - event: Transfer(address indexed from, address indexed to, uint256 value)
+  - name: AlgebraFactory
+    events:
+      - event: Pool(address indexed token0, address indexed token1, address pool)
+  - name: AlgebraPool
+    events:
+      - event: Initialize(uint160 price, int24 tick)
+      - event: Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 price, uint128 liquidity, int24 tick)
 chains:
   - id: 31337
     start_block: 2
@@ -17,3 +30,9 @@ chains:
       - name: SessionFactory
         address:
           - "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
+      - name: TradeExecutorFactory
+        address:
+          - "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
+      - name: AlgebraFactory
+        address:
+          - "0xA0864cCA6E114013AB0e27cbd5B6f4c8947da766"

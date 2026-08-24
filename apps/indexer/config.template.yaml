@@ -11,6 +11,25 @@ contracts:
     events:
       - event: ParentMarketDeployed(uint256 indexed sessionId, address indexed deployer, address indexed parentMarket, uint256 outcomeCount, string metadataUri)
       - event: ChildMarketDeployed(uint256 indexed sessionId, uint256 indexed parentOutcomeIndex, address indexed childMarket, address parentMarket)
+  - name: TradeExecutorFactory
+    events:
+      - event: ExecutorDeployed(address indexed owner, address indexed executor)
+  - name: TradeExecutor
+    events:
+      - event: Transfer(address indexed from, address indexed to, uint256 value)
+
+  ## Swapr v3 on Gnosis. Pool creations are rare, so all of them are followed and the handlers
+  ## keep only the pools whose tokens belong to a market we know.
+  - name: AlgebraFactory
+    events:
+      - event: Pool(address indexed token0, address indexed token1, address pool)
+
+  ## Registered from the factory's `Pool` event. `price` on both is the sqrt price the pool is
+  ## left at, so consecutive swaps chain into the before/after of a trade.
+  - name: AlgebraPool
+    events:
+      - event: Initialize(uint160 price, int24 tick)
+      - event: Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 price, uint128 liquidity, int24 tick)
 
 ## `yarn update <network>` writes config.<network>.yaml with only that chain.
 ## Only the local chain sets `rpc`: gnosis events come from HyperSync.
@@ -22,9 +41,21 @@ chains:
       - name: SessionFactory
         address:
           - "_PLACEHOLDER_"
+      - name: TradeExecutorFactory
+        address:
+          - "_PLACEHOLDER_"
+      - name: AlgebraFactory
+        address:
+          - "0xA0864cCA6E114013AB0e27cbd5B6f4c8947da766"
   - id: 100
     start_block: _PLACEHOLDER_
     contracts:
       - name: SessionFactory
         address:
           - "_PLACEHOLDER_"
+      - name: TradeExecutorFactory
+        address:
+          - "_PLACEHOLDER_"
+      - name: AlgebraFactory
+        address:
+          - "0xA0864cCA6E114013AB0e27cbd5B6f4c8947da766"

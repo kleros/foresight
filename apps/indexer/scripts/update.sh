@@ -112,6 +112,12 @@ for network in "${requested[@]}"; do
     artifact="$deployments/$name.json"
     contract="$(contract_at "$chainId" "$name")"
 
+    # an address already spelled out in the template is somebody else's deployment
+    if [[ "$(yq "$contract | .address[0]" "$TEMPLATE")" != "_PLACEHOLDER_" ]]; then
+      log "- $chainId ($network): $name external, address kept from the template"
+      continue
+    fi
+
     [[ -f "$artifact" ]] || die "$network has no $name deployment at $artifact"
 
     address="$(jq -r '.address' "$artifact")"

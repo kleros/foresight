@@ -65,6 +65,158 @@ type ChildMarket {
   "everything a child says beyond its name and colour"
   blocks: Json!
 
+  downToken: String! @index
+  upToken: String! @index
+  underlyingToken: String! @index
+
   keyword: String!
   transactionHash: String!
+
+  pools: [Pool!]! @derivedFrom(field: "childMarket")
+  predictions: [Prediction!]! @derivedFrom(field: "childMarket")
+}
+
+type Executor {
+  "executor address"
+  id: ID!
+  owner: String! @index
+  deployedAt: BigInt!
+  transactionHash: String!
+
+  predictions: [Prediction!]! @derivedFrom(field: "executor")
+  positions: [Position!]! @derivedFrom(field: "executor")
+}
+
+"A token movement in or out of an executor."
+type Transfer {
+  "transactionHash-logIndex-executor"
+  id: ID!
+  executor: Executor! @index
+  token: String! @index
+
+  "positive into the executor, negative out"
+  amount: BigInt!
+
+  "who the tokens came from or went to"
+  counterparty: String! @index
+
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  transactionHash: String! @index
+}
+
+"An executor's running balance of one token, summed off its transfers. Prediction rows copy their balances from here."
+type Position {
+  "executor-token"
+  id: ID!
+  executor: Executor! @index
+  token: String! @index
+  balance: BigInt!
+  updatedAt: BigInt!
+}
+
+"An outcome or underlying token of a child market."
+type Token {
+  "token address, lowercase"
+  id: ID!
+
+  childMarket: ChildMarket! @index
+
+  "0 is DOWN and 1 is UP; null for the underlying"
+  outcomeIndex: Int
+}
+
+"An executor's net trading in one child market within one transaction."
+type Prediction {
+  "transactionHash-executor-childMarket"
+  id: ID!
+  executor: Executor! @index
+  childMarket: ChildMarket! @index
+  transactionHash: String! @index
+  blockNumber: BigInt!
+  timestamp: BigInt!
+
+  "signed net movement over the whole transaction"
+  underlyingDelta: BigInt!
+  downDelta: BigInt!
+  upDelta: BigInt!
+
+  "the executor's balances once the transaction settled"
+  underlyingBalance: BigInt!
+  downBalance: BigInt!
+  upBalance: BigInt!
+
+  "totals over every swap on that side in the transaction"
+  downSwapUnderlying: BigInt!
+  downSwapTokens: BigInt!
+  upSwapUnderlying: BigInt!
+  upSwapTokens: BigInt!
+
+  "underlying paid per whole token averaged over the transaction"
+  downAvgPrice: BigInt
+  upAvgPrice: BigInt
+
+  "the pool price before this side's first swap and after its last"
+  downPriceBefore: BigInt
+  downPriceAfter: BigInt
+  upPriceBefore: BigInt
+  upPriceAfter: BigInt
+
+  "the forecast the executed prices imply, not the target the user stated; in the market's own units"
+  impliedPrediction: BigInt
+}
+
+"An Algebra pool trading one side of a child market."
+type Pool {
+  "pool address"
+  id: ID!
+  childMarket: ChildMarket! @index
+  outcomeToken: String! @index
+  underlyingToken: String! @index
+
+  "which side of the market this pool trades: 0 is DOWN, 1 is UP"
+  outcomeIndex: Int!
+
+  "whether the outcome token is token0"
+  outcomeIsToken0: Boolean!
+
+  "sqrt price the pool was last left at, X96"
+  price: BigInt!
+  tick: Int!
+
+  "the concentrated-liquidity L the last swap reported"
+  liquidity: BigInt!
+
+  "lifetime absolute amount swapped either way"
+  volumeOutcome: BigInt!
+  volumeUnderlying: BigInt!
+
+  updatedAt: BigInt!
+  swaps: [Swap!]! @derivedFrom(field: "pool")
+}
+
+"A swap through a followed pool"
+type Swap {
+  "transactionHash-logIndex"
+  id: ID!
+  pool: Pool! @index
+  childMarket: ChildMarket! @index
+
+  "set when the swap paid out to one of our executors"
+  executor: Executor @index
+
+  "signed from the pool's side, so the outcome amount is negative when the trader bought"
+  outcomeAmount: BigInt!
+  underlyingAmount: BigInt!
+
+  "what the previous swap left the pool at"
+  priceBefore: BigInt!
+  priceAfter: BigInt!
+  tickBefore: Int!
+  tickAfter: Int!
+
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  logIndex: Int!
+  transactionHash: String! @index
 }

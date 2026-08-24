@@ -5,6 +5,7 @@ import { fetchChildMarket } from "../utils/contracts/fetchChildMarket";
 import { fetchOpeningTime } from "../utils/contracts/fetchOpeningTime";
 import { fetchParentMarket } from "../utils/contracts/fetchParentMarket";
 import { fetchSessionMetadata } from "../utils/ipfs/fetchSessionMetadata";
+import { isAvailable, UNAVAILABLE } from "../utils/unavailable";
 
 const keywordOf = (parts: (string | null | undefined)[]): string => parts.filter(Boolean).join(" ");
 
@@ -50,8 +51,8 @@ indexer.onEvent({ contract: "SessionFactory", event: "ParentMarketDeployed" }, a
     transactionHash: event.transaction.hash,
   });
 
-  // Set, never incremented: handlers run twice, so this has to land on the
-  // same number both times. Ids start at zero, so the newest counts them all.
+  // An absolute set from the event, so any replay lands on the same number.
+  // Ids start at zero, so the newest counts them all.
   context.SessionCounter.set({
     id: SESSION_COUNTER_ID,
     count: event.params.sessionId + 1n,
@@ -79,15 +80,28 @@ indexer.onEvent({ contract: "SessionFactory", event: "ChildMarketDeployed" }, as
 
   const display = metadata?.children.find((child) => child.outcomeIndex === outcomeIndex) ?? null;
 
+  for (const [address, side] of [
+    [market.down, 0],
+    [market.up, 1],
+    [market.underlying, undefined],
+  ] as const) {
+    if (isAvailable(address)) {
+      context.Token.set({ id: address, childMarket_id: event.params.childMarket, outcomeIndex: side });
+    }
+  }
+
   context.ChildMarket.set({
     id: event.params.childMarket,
     session_id: sessionId,
     parentOutcomeIndex: event.params.parentOutcomeIndex,
-    parentOutcome: session.outcomes[outcomeIndex] ?? "",
+    parentOutcome: session.outcomes[outcomeIndex] ?? UNAVAILABLE,
     deployedAt: BigInt(event.block.timestamp),
     marketName: market.marketName,
     lowerBound: market.lowerBound,
     upperBound: market.upperBound,
+    downToken: market.down,
+    upToken: market.up,
+    underlyingToken: market.underlying,
     displayName: display?.displayName,
     color: display?.color,
     blocks: display?.blocks ?? [],

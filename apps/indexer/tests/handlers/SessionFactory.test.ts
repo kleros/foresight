@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, it } from "vitest";
 import { EXAMPLE_METADATA, EXAMPLE_METADATA_CID, EXAMPLE_METADATA_URI } from "@foresight/session-metadata";
 
 import { abi as seerMarketAbi } from "../../abis/SeerMarket";
+import { BLOCK } from "../support/harness";
 
 const [FIRST_CHILD, SECOND_CHILD] = [EXAMPLE_METADATA.children[0]!, EXAMPLE_METADATA.children[1]!];
 
@@ -16,25 +17,35 @@ const CHILD_MARKET_NAME = "Opening weekend [USD millions]";
 const LOWER_BOUND = 10_000_000n;
 const UPPER_BOUND = 500_000_000n;
 
+const CHILD_0_DOWN = "0x0000000000000000000000000000000000000d00" as const;
+const CHILD_0_UP = "0x0000000000000000000000000000000000000d01" as const;
+const CHILD_1_DOWN = "0x0000000000000000000000000000000000000d10" as const;
+const CHILD_1_UP = "0x0000000000000000000000000000000000000d11" as const;
+const CHILD_0_UNDERLYING = "0x0000000000000000000000000000000000000c0a" as const;
+const CHILD_1_UNDERLYING = "0x0000000000000000000000000000000000000c0b" as const;
+
 const PARENT_MARKET = "0x0000000000000000000000000000000000000a11" as const;
 const CHILD_MARKET_0 = "0x0000000000000000000000000000000000000c00" as const;
 const CHILD_MARKET_1 = "0x0000000000000000000000000000000000000c01" as const;
 const DEPLOYER = "0x0000000000000000000000000000000000000de9" as const;
 
-/**
- * Blocks sit far above any local deploy. config.localhost.yaml's `start_block` is generated from
- * whichever block the hardhat deploy landed on, and an event below it is filtered out
- * before any handler runs - the test indexer also refuses a `startBlock` under the
- * config's, so headroom is the way to stay independent of it.
- */
-const BLOCK = 1_000;
-
 const ESCAPING_METADATA_URI = "ipfs://../../admin/purge";
+
+/** `wrappedOutcome` and `parentWrappedOutcome` both answer (token, data). */
+const wrapped = (token: string) => [token, "0x"];
+
+const childReads = (down: string, up: string, underlying: string) => ({
+  marketName: CHILD_MARKET_NAME,
+  lowerBound: LOWER_BOUND,
+  upperBound: UPPER_BOUND,
+  wrappedOutcome: [wrapped(down), wrapped(up)],
+  parentWrappedOutcome: wrapped(underlying),
+});
 
 const marketReads: Record<string, Record<string, unknown>> = {
   [PARENT_MARKET]: { marketName: MARKET_NAME, outcomes: OUTCOMES },
-  [CHILD_MARKET_0]: { marketName: CHILD_MARKET_NAME, lowerBound: LOWER_BOUND, upperBound: UPPER_BOUND },
-  [CHILD_MARKET_1]: { marketName: CHILD_MARKET_NAME, lowerBound: LOWER_BOUND, upperBound: UPPER_BOUND },
+  [CHILD_MARKET_0]: childReads(CHILD_0_DOWN, CHILD_0_UP, CHILD_0_UNDERLYING),
+  [CHILD_MARKET_1]: childReads(CHILD_1_DOWN, CHILD_1_UP, CHILD_1_UNDERLYING),
 };
 
 const ethCall = (params: [{ to: string; data: Hex }]) => {
@@ -42,8 +53,10 @@ const ethCall = (params: [{ to: string; data: Hex }]) => {
   const { functionName, args } = decodeFunctionData({ abi: seerMarketAbi, data });
   const reads = marketReads[to.toLowerCase()] ?? {};
 
+  const indexed = (key: "outcomes" | "wrappedOutcome") => (reads[key] as unknown[] | undefined)?.[Number(args?.[0])];
+
   const result =
-    functionName === "outcomes" ? (reads.outcomes as string[] | undefined)?.[Number(args?.[0])] : reads[functionName];
+    functionName === "outcomes" || functionName === "wrappedOutcome" ? indexed(functionName) : reads[functionName];
 
   // an address we know nothing about behaves like a market that is not there
   if (result === undefined) throw new Error(`no value for ${functionName} on ${to}`);
@@ -182,6 +195,14 @@ describe("SessionFactory indexing", () => {
     t.expect(child.parentOutcomeIndex).toBe(0n);
     t.expect(child.parentOutcome).toBe("Villeneuve");
     t.expect(child.marketName).toBe(CHILD_MARKET_NAME);
+    const up = await indexer.Token.getOrThrow(CHILD_0_UP);
+    t.expect(up.outcomeIndex).toBe(1);
+    t.expect(up.childMarket_id).toBe(CHILD_MARKET_0);
+    t.expect((await indexer.Token.getOrThrow(CHILD_0_DOWN)).outcomeIndex).toBe(0);
+    const underlying = await indexer.Token.getOrThrow(CHILD_0_UNDERLYING);
+    t.expect(underlying.outcomeIndex).toBeUndefined();
+    t.expect(underlying.childMarket_id).toBe(CHILD_MARKET_0);
+
     t.expect(child.lowerBound).toBe(LOWER_BOUND);
     t.expect(child.upperBound).toBe(UPPER_BOUND);
     t.expect(child.displayName).toBe(FIRST_CHILD.displayName);
