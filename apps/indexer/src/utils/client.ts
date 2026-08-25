@@ -2,16 +2,18 @@ import { createPublicClient, fallback, http, type PublicClient } from "viem";
 
 const GNOSIS_PUBLIC_RPCS = ["https://rpc.gnosischain.com", "https://rpc.gnosis.gateway.fm"];
 
-const rpcUrls = (chainId: number): string[] => {
+export const rpcUrls = (chainId: number): string[] => {
   switch (chainId) {
     case 31337:
       return [process.env.ENVIO_LOCALHOST_RPC_URL || "http://localhost:8545"];
-    case 100:
-      return [
-        process.env.ENVIO_GNOSIS_RPC_URL,
-        process.env.ENVIO_GNOSIS_FALLBACK_RPC_URL,
-        ...GNOSIS_PUBLIC_RPCS,
-      ].filter((url): url is string => Boolean(url));
+    case 100: {
+      // Env replaces the defaults entirely: a configured deployment (or a local fork) must
+      // never quietly fall back to the public real-gnosis endpoints.
+      const fromEnv = [process.env.ENVIO_GNOSIS_RPC_URL, process.env.ENVIO_GNOSIS_FALLBACK_RPC_URL].filter(
+        (url): url is string => Boolean(url),
+      );
+      return fromEnv.length > 0 ? fromEnv : GNOSIS_PUBLIC_RPCS;
+    }
     default:
       throw new Error(`No RPC configured for chain ${chainId}, add one to src/utils/client.ts`);
   }

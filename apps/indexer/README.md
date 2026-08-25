@@ -28,8 +28,8 @@ Read by our own code:
 | Variable                        | Required | Notes                                                                                                                               |
 | ------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `ENVIO_LOCALHOST_RPC_URL`       | yes      | Local chain's `rpc` **and** the contract reads in [`src/utils/client.ts`](src/utils/client.ts). Defaults to `http://localhost:8545` |
-| `ENVIO_GNOSIS_RPC_URL`          | yes      | **`.env.gnosis`** - preferred endpoint for chain 100 contract reads. Events come from HyperSync, not from here                      |
-| `ENVIO_GNOSIS_FALLBACK_RPC_URL` | no       | **`.env.gnosis`** - tried after the above. Either may be empty; public endpoints are the last resort                                |
+| `ENVIO_GNOSIS_RPC_URL`          | yes      | **`.env.gnosis`** - endpoint for chain 100 contract reads (and the fork's event source in `config.gnosis-fork.yaml`)                |
+| `ENVIO_GNOSIS_FALLBACK_RPC_URL` | no       | **`.env.gnosis`** - tried after the above. Env urls replace the public endpoints entirely; those apply only when neither is set     |
 | `ENVIO_IPFS_GATEWAY`            | yes      | Our gateway for metadata, tried first; cloudflare then ipfs.io are the fallback                                                     |
 
 Envio's own, the ones worth knowing:
@@ -58,11 +58,12 @@ When adding a per-chain RPC, follow the naming : `ENVIO_[network]_RPC_URL` and w
 
 [`config.template.yaml`](config.template.yaml) is the source of truth. `yarn update` writes
 one `config.<network>.yaml` per network named, replacing each `_PLACEHOLDER_` from that
-network's deployment artifacts. Both generated files are committed:
+network's deployment artifacts. All generated files are committed:
 
 ```bash
-yarn update:local   # config.localhost.yaml; yarn local-stack does this for you
-yarn update:gnosis  # config.gnosis.yaml
+yarn update:local        # config.localhost.yaml; yarn local-stack does this for you
+yarn update:gnosis       # config.gnosis.yaml
+yarn update:gnosis-fork  # config.gnosis-fork.yaml (gnosis addresses, local rpc)
 yarn update localhost gnosis
 ```
 
@@ -81,6 +82,16 @@ yarn dev:gnosis                      # envio dev --config config.gnosis.yaml
 > `yarn check-types` then fails on the handler tests, which are written against 31337. Run
 > `yarn codegen:local` to put the local types back. Running `yarn codegen:gnosis` on its own
 > does the same thing for the same reason.
+
+### Running against a Gnosis fork
+
+```bash
+cp .env.gnosis-fork.example .env.gnosis-fork   # gitignored
+yarn dev:gnosis-fork                           # envio dev --config config.gnosis-fork.yaml
+```
+
+`yarn local-stack gnosis-fork` at the root runs this with the rest of the stack. The same
+chain-100 types caveat as `dev:gnosis` applies.
 
 ### Deploying to Envio Cloud
 

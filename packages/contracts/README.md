@@ -14,12 +14,29 @@ yarn simulate:session  # deploy a sample session through the running local facto
 `simulate:session` drives the whole create flow against the local node (mock Seer markets
 included), so the indexer has something to index. Flags:
 
-| Flag                   | Default                               | Effect                                             |
-| ---------------------- | ------------------------------------- | -------------------------------------------------- |
-| `--outcomes <2-4>`     | `2`                                   | Parent outcome count                               |
-| `--phased`             | atomic                                | `openPhasedSession` + one child batch tx per child |
-| `--multi`              | categorical                           | Multi-categorical parent market                    |
-| `--metadata-uri <uri>` | `@foresight/session-metadata` example | `metadataUri` emitted with the session             |
+| Flag                   | Default                               | Effect                                                     |
+| ---------------------- | ------------------------------------- | ---------------------------------------------------------- |
+| `--outcomes <2-4>`     | `2`                                   | Parent outcome count                                       |
+| `--phased`             | atomic                                | `openPhasedSession` + one child batch tx per child         |
+| `--multi`              | categorical                           | Multi-categorical parent market                            |
+| `--metadata-uri <uri>` | `@foresight/session-metadata` example | `metadataUri` emitted with the session                     |
+| `--liquidity`          | off                                   | run `simulate-liquidity` on the session (gnosis-fork only) |
+
+## Gnosis fork
+
+```bash
+yarn start:gnosis-fork                  # compile + hardhat node forking gnosis on :8545
+yarn simulate:session:gnosis-fork       # sample session through the real Seer MarketFactory
+yarn simulate:liquidity:gnosis-fork     # seed real Swapr Algebra pools for the latest session
+```
+
+The fork pins at the newest block in `deployments/gnosis/`, so it already carries the live
+SessionFactory and TradeExecutorFactory at the committed addresses.
+`simulate-liquidity` splits xDAI through the real `GnosisRouter` and mints one full-range
+Swapr position per child outcome token at 0.5 underlying; `--session <id>` and
+`--amount <xDAI>` override the defaults. The first writes on a cold fork cache fetch remote
+state for minutes; later runs reuse hardhat's cache. `GNOSIS_RPC_URL` picks the upstream RPC,
+`HARDHAT_FORK_BLOCK_NUMBER` overrides the pin.
 
 ## Environment
 

@@ -32,8 +32,9 @@ The indexer has its own env file: `cp apps/indexer/.env.example apps/indexer/.en
 The whole local stack in one tmux session: hardhat node, mock-atlas, indexer and web.
 
 ```bash
-yarn local-stack         # start (wipes local deployments + indexed data)
-yarn stop-local-stack    # stop stack
+yarn local-stack               # start (wipes local deployments + indexed data)
+yarn local-stack gnosis-fork   # same stack on a hardhat fork of gnosis (real Seer/Swapr)
+yarn stop-local-stack          # stop stack
 ```
 
 Or the same pieces by hand, in separate terminals:
@@ -60,24 +61,28 @@ See [packages/contracts/README.md](packages/contracts/README.md) for deploy and 
 
 The chain is never inferred, it comes from a file or a flag.
 
-|                | local                                         | gnosis                                              |
-| -------------- | --------------------------------------------- | --------------------------------------------------- |
-| chain          | hardhat, `31337`, `yarn local-node:contracts` | Gnosis, `100`, live                                 |
-| Seer factory   | `MockSeerMarketFactory`, deployed locally     | real one, from `@seer-pm/contracts`                 |
-| Atlas + IPFS   | `yarn mock-atlas` on `:4747`                  | staging/production Atlas                            |
-| contracts      | `yarn local-node:deploy`                      | `yarn workspace @foresight/contracts deploy:gnosis` |
-| indexer config | `config.localhost.yaml`                       | `config.gnosis.yaml`                                |
-| indexer        | `yarn indexer:dev`                            | `yarn indexer:dev:gnosis`                           |
-| web            | `yarn dev`                                    | `yarn dev:gnosis`                                   |
+|                | local                                         | gnosis-fork                                          | gnosis                                              |
+| -------------- | --------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------- |
+| chain          | hardhat, `31337`, `yarn local-node:contracts` | hardhat fork of Gnosis, `100`, pinned at the live deployment | Gnosis, `100`, live                          |
+| Seer factory   | `MockSeerMarketFactory`, deployed locally     | real one, on the fork                                | real one, from `@seer-pm/contracts`                 |
+| Atlas + IPFS   | `yarn mock-atlas` on `:4747`                  | `yarn mock-atlas` on `:4747`                         | staging/production Atlas                            |
+| contracts      | `yarn local-node:deploy`                      | none - the fork carries the live deployment          | `yarn workspace @foresight/contracts deploy:gnosis` |
+| indexer config | `config.localhost.yaml`                       | `config.gnosis-fork.yaml`                            | `config.gnosis.yaml`                                |
+| indexer        | `yarn indexer:dev`                            | `yarn indexer:dev:gnosis-fork`                       | `yarn indexer:dev:gnosis`                           |
+| web            | `yarn dev`                                    | `yarn dev:gnosis-fork`                               | `yarn dev:gnosis`                                   |
 
-`yarn local-stack` is local-only: Gnosis needs no node and no mock Atlas, just the indexer
-and web. Each tool keeps its own base env file, plus one override per non-local network:
+`yarn local-stack gnosis-fork` runs the same stack on the fork: real Seer contracts, real
+Swapr pools. `yarn simulate:session:gnosis-fork --liquidity` seeds a session with pools.
 
-| Package              | base         | gnosis override |
-| -------------------- | ------------ | --------------- |
-| `apps/web`           | `.env.local` | `.env.gnosis`   |
-| `apps/indexer`       | `.env`       | `.env.gnosis`   |
-| `packages/contracts` | `.env`       | -               |
+Gnosis itself needs no node and no mock Atlas, just the indexer and web.
+
+Each tool keeps its own base env file, plus one override per non-local network:
+
+| Package              | base         | gnosis override | gnosis-fork override |
+| -------------------- | ------------ | --------------- | -------------------- |
+| `apps/web`           | `.env.local` | `.env.gnosis`   | `.env.gnosis-fork`   |
+| `apps/indexer`       | `.env`       | `.env.gnosis`   | `.env.gnosis-fork`   |
+| `packages/contracts` | `.env`       | -               | -                    |
 
 Every `.env*` is gitignored except `*.example`. The deployed indexer takes its variables from
 the Envio Cloud dashboard, and the deployed web app from its host.

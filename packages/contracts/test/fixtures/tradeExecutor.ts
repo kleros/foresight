@@ -42,4 +42,3 @@ export async function deployTradeExecutorFixture() {
 
   return { owner, other, factory, executor, executorAddress, collateral, target };
 }
-

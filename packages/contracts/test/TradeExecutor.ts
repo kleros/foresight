@@ -53,7 +53,6 @@ describe("TradeExecutor", function () {
         executor.connect(other).batchValueExecute([{ to: other.address, value: VALUE_LEG, data: "0x" }]),
       ).to.be.revertedWithCustomError(executor, "NotOwner");
     });
-
   });
 
   describe("batchExecute", function () {
@@ -163,7 +162,6 @@ describe("TradeExecutor", function () {
       await expect(executor.batchValueExecute([])).to.be.revertedWithCustomError(executor, "EmptyBatch");
     });
   });
-
 
   describe("holding value", function () {
     it("accepts a plain native transfer", async function () {

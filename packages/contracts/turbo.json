@@ -9,7 +9,9 @@
         "TENDERLY_RPC_URL",
         "SEER_MARKET_FACTORY_ADDRESS",
         "DEPLOYER_PRIVATE_KEY",
-        "BLOCKSCOUT_API_KEY"
+        "BLOCKSCOUT_API_KEY",
+        "HARDHAT_FORK",
+        "HARDHAT_FORK_BLOCK_NUMBER"
       ]
     },
     "lint": {
@@ -18,7 +20,9 @@
         "TENDERLY_RPC_URL",
         "SEER_MARKET_FACTORY_ADDRESS",
         "DEPLOYER_PRIVATE_KEY",
-        "BLOCKSCOUT_API_KEY"
+        "BLOCKSCOUT_API_KEY",
+        "HARDHAT_FORK",
+        "HARDHAT_FORK_BLOCK_NUMBER"
       ]
     },
     "test": {
@@ -27,7 +31,9 @@
         "TENDERLY_RPC_URL",
         "SEER_MARKET_FACTORY_ADDRESS",
         "DEPLOYER_PRIVATE_KEY",
-        "BLOCKSCOUT_API_KEY"
+        "BLOCKSCOUT_API_KEY",
+        "HARDHAT_FORK",
+        "HARDHAT_FORK_BLOCK_NUMBER"
       ]
     },
     "check-types": {
@@ -36,7 +42,9 @@
         "TENDERLY_RPC_URL",
         "SEER_MARKET_FACTORY_ADDRESS",
         "DEPLOYER_PRIVATE_KEY",
-        "BLOCKSCOUT_API_KEY"
+        "BLOCKSCOUT_API_KEY",
+        "HARDHAT_FORK",
+        "HARDHAT_FORK_BLOCK_NUMBER"
       ]
     }
   }

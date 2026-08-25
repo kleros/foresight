@@ -10,6 +10,7 @@ interface SimulateSessionArgs {
   outcomes: number;
   phased: boolean;
   multi: boolean;
+  liquidity: boolean;
   metadataUri?: string;
 }
 
@@ -17,6 +18,7 @@ task("simulate-session", "Deploys a sample session through the deployed SessionF
   .addOptionalParam("outcomes", "Number of parent outcomes (2-4)", 2, types.int)
   .addFlag("phased", "Deploy via openPhasedSession + one child batch tx per child instead of the atomic path")
   .addFlag("multi", "Use a multi-categorical parent market")
+  .addFlag("liquidity", "Seed Swapr pools for the child markets afterwards (needs a gnosis fork)")
   .addOptionalParam(
     "metadataUri",
     "Metadata URI stored on the session; defaults to the shared example document.",
@@ -100,5 +102,9 @@ task("simulate-session", "Deploys a sample session through the deployed SessionF
         child.upperBound(),
       ]);
       console.log(`  child ${index}  ${childAddress}  "${name}" [${lowerBound}, ${upperBound}]`);
+    }
+
+    if (args.liquidity) {
+      await hre.run("simulate-liquidity", { session: Number(nextSessionId) });
     }
   });

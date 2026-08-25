@@ -13,7 +13,11 @@ import { env } from "./env";
 
 const GNOSIS_FALLBACK_RPCS = ["https://rpc.gnosischain.com", "https://rpc.gnosis.gateway.fm"];
 
-const GNOSIS_RPCS = env.GNOSIS_RPC ? [env.GNOSIS_RPC, ...GNOSIS_FALLBACK_RPCS] : GNOSIS_FALLBACK_RPCS;
+// Env replaces the defaults entirely: a configured deployment (or a local fork) must never
+// quietly fall back to the public real-gnosis endpoints.
+export const gnosisRpcUrls = (envRpc: string | undefined): string[] => (envRpc ? [envRpc] : GNOSIS_FALLBACK_RPCS);
+
+const GNOSIS_RPCS = gnosisRpcUrls(env.GNOSIS_RPC);
 
 const MAINNET_RPCS = ["https://ethereum-rpc.publicnode.com", "https://eth.llamarpc.com"];
 

@@ -24,10 +24,17 @@ if (defaultNetwork.id !== DEFAULT_CHAIN_ID) {
  */
 const adapterNetworks: [AppKitNetwork, ...AppKitNetwork[]] = [...networks, mainnet];
 
+// Signing through the mock connector goes to the network's default RPC, which AppKit
+// otherwise points at its own Blockchain API instead of the configured transport.
+export const customRpcUrls = env.GNOSIS_RPC
+  ? { [`eip155:${gnosis.id}` as const]: [{ url: env.GNOSIS_RPC }] }
+  : undefined;
+
 export const wagmiAdapter = new WagmiAdapter({
   networks: adapterNetworks,
   projectId: env.REOWN_PROJECT_ID,
   transports,
+  customRpcUrls,
   storage: createStorage({ storage: cookieStorage }),
   ssr: true,
   batch: { multicall: true },

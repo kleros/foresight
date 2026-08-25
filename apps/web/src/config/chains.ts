@@ -7,6 +7,11 @@ const localChainOverride = process.env.NEXT_PUBLIC_ENABLE_LOCAL_CHAIN || undefin
 export const isLocalChainEnabled =
   localChainOverride === undefined ? process.env.NODE_ENV !== "production" : localChainOverride === "true";
 
+const gnosisRpc = process.env.NEXT_PUBLIC_GNOSIS_RPC || "";
+
+/** Hardhat unlocks its accounts, so the dev wallet works wherever the chain is a local node. */
+export const isDevWalletEnabled = isLocalChainEnabled || /^https?:\/\/(127\.0\.0\.1|localhost)([:/]|$)/.test(gnosisRpc);
+
 export const DEFAULT_CHAIN = isLocalChainEnabled ? hardhat : gnosis;
 
 export const DEFAULT_CHAIN_ID = DEFAULT_CHAIN.id;

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Local stack: hardhat node + envio indexer + web, in one tmux session.
 #
-#   yarn local-stack        fresh stack (wipes local deployments + indexed data)
-#   yarn stop-local-stack   kill tmux session, envio's docker stack and hardhat
+#   yarn local-stack               fresh stack on localhost (wipes local deployments + indexed data)
+#   yarn local-stack gnosis-fork   stack on a hardhat fork of gnosis pinned at the live deployment
+#   yarn stop-local-stack          kill tmux session, envio's docker stack and hardhat
 #
-# start always starts from scratch: a new hardhat chain invalidates anything the
+# start always starts from scratch: a new chain invalidates anything the
 # indexer already indexed, so both are reset together.
 set -euo pipefail
 
@@ -12,6 +13,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SESSION="foresight"
 DEPLOYMENTS="$ROOT/packages/contracts/deployments/localhost"
 DEPLOY_MARKER="$DEPLOYMENTS/SessionFactory.json"
+GNOSIS_DEPLOYMENTS="$ROOT/packages/contracts/deployments/gnosis"
 RPC_URL="http://127.0.0.1:8545"
 HASURA_URL="http://127.0.0.1:8080"
 INDEXER_URL="http://127.0.0.1:${ENVIO_INDEXER_PORT:-9898}"
@@ -30,8 +32,11 @@ require_tools() {
   for tool in docker tmux curl jq yq lsof; do
     command -v "$tool" >/dev/null || die "$tool not installed"
   done
-  docker info >/dev/null 2>&1 || die "docker is not running"
+  # Docker Desktop's engine accepts connections well after the app looks running
+  docker_ready || wait_for "docker daemon" docker_ready
 }
+
+docker_ready() { docker info >/dev/null 2>&1; }
 
 rpc_listener_pids() { lsof -tiTCP:8545 -sTCP:LISTEN 2>/dev/null || true; }
 mock_atlas_listener_pids() { lsof -tiTCP:"$MOCK_ATLAS_PORT" -sTCP:LISTEN 2>/dev/null || true; }
@@ -54,6 +59,23 @@ rpc_ready() {
 }
 
 deploy_ready() { [[ -f "$DEPLOY_MARKER" ]]; }
+
+rpc_result() {
+  curl -sf -X POST "$RPC_URL" -H 'Content-Type: application/json' \
+    -d "{\"jsonrpc\":\"2.0\",\"method\":\"$1\",\"params\":[$2],\"id\":1}"
+}
+
+fork_is_gnosis() { rpc_result eth_chainId "" | grep -q '"result":"0x64"'; }
+
+# non-empty code at the committed SessionFactory address proves the fork carries the deployment
+fork_deploy_ready() {
+  local address response
+  address="$(jq -r '.address' "$GNOSIS_DEPLOYMENTS/SessionFactory.json")"
+  response="$(rpc_result eth_getCode "\"$address\",\"latest\"")" || return 1
+  grep -q '"result":"0x' <<<"$response" && ! grep -q '"result":"0x"' <<<"$response"
+}
+
+fork_ready() { fork_is_gnosis && fork_deploy_ready; }
 
 indexer_synced() {
   curl -sf "$INDEXER_URL/metrics" | grep -q '^envio_progress_ready{[^}]*} 1$'
@@ -89,22 +111,36 @@ cmd_stop() {
 }
 
 cmd_start() {
+  local network="${1:-localhost}"
+  case "$network" in
+  localhost | gnosis-fork) ;;
+  *) die "unknown network '$network', known: localhost gnosis-fork" ;;
+  esac
+
   require_tools
   cd "$ROOT"
 
   [[ -z "$(rpc_listener_pids)" ]] || die ":8545 is already in use, run 'yarn stop-local-stack' first"
   [[ -z "$(mock_atlas_listener_pids)" ]] || die ":$MOCK_ATLAS_PORT is already in use, run 'yarn stop-local-stack' first"
 
-  log "resetting indexed data and localhost deployments"
-  indexer_down
-  rm -rf "$DEPLOYMENTS"
+  local node_cmd="yarn local-node:contracts"
+  if [[ "$network" == "gnosis-fork" ]]; then
+    node_cmd="yarn local-node:contracts:gnosis-fork"
+    log "resetting indexed data"
+    indexer_down
+  else
+    log "resetting indexed data and localhost deployments"
+    indexer_down
+    rm -rf "$DEPLOYMENTS"
+  fi
 
   log "starting hardhat + indexer in tmux session '$SESSION'"
   tmux kill-session -t "$SESSION" 2>/dev/null || true
   # commands are passed as pane argv, never send-keys: send-keys types into the
   # pane's shell and silently loses characters if the shell is still starting up.
-  # hardhat node deploys SessionFactory itself on boot (--tags SessionFactory).
-  tmux new-session -d -s "$SESSION" -n stack -c "$ROOT" "yarn local-node:contracts"
+  # hardhat node deploys SessionFactory itself on boot (--tags SessionFactory);
+  # the gnosis fork carries the live deployment instead.
+  tmux new-session -d -s "$SESSION" -n stack -c "$ROOT" "$node_cmd"
   tmux set-option -t "$SESSION" remain-on-exit on # keep a crashed pane's output readable
   tmux set-option -t "$SESSION" pane-border-status top
   tmux set-option -t "$SESSION" pane-border-format ' #{pane_title} '
@@ -118,29 +154,41 @@ cmd_start() {
 
   wait_for "hardhat RPC" rpc_ready
   wait_for "mock-atlas ($MOCK_ATLAS_URL)" mock_atlas_ready
-  wait_for "localhost deployments" deploy_ready
 
-  log "generating wagmi bindings"
-  yarn workspace @foresight/contracts codegen:localhost
+  local indexer_cmd="yarn indexer:dev --restart"
+  local web_cmd="yarn dev"
+  if [[ "$network" == "gnosis-fork" ]]; then
+    indexer_cmd="yarn indexer:dev:gnosis-fork --restart"
+    web_cmd="yarn dev:gnosis-fork"
 
-  # config.localhost.yaml is generated, so the indexer follows whatever address this chain
-  # deployed rather than a constant that silently rots. Naming the network rather than
-  # updating every chain means a missing local artifact fails here instead of quietly
-  # leaving a placeholder in the config.
-  log "wiring indexer config to the local deployment"
-  yarn indexer:update:local
+    wait_for "gnosis fork (chain 100, live deployment)" fork_ready
+    log "wiring indexer config to the gnosis deployment"
+    yarn indexer:update:gnosis-fork
+  else
+    wait_for "localhost deployments" deploy_ready
+
+    log "generating wagmi bindings"
+    yarn workspace @foresight/contracts codegen:localhost
+
+    # config.localhost.yaml is generated, so the indexer follows whatever address this chain
+    # deployed rather than a constant that silently rots. Naming the network rather than
+    # updating every chain means a missing local artifact fails here instead of quietly
+    # leaving a placeholder in the config.
+    log "wiring indexer config to the local deployment"
+    yarn indexer:update:local
+  fi
 
   # the indexer only starts once the chain is up, since it reads the address and start
   # block from the deployment above. `--restart` clears what the previous chain left.
   local indexer_pane
-  indexer_pane="$(tmux split-window -t "$SESSION:0.0" -h -c "$ROOT" -P -F '#{pane_id}' "ENVIO_IPFS_GATEWAY=$MOCK_ATLAS_URL/ipfs yarn indexer:dev --restart")"
+  indexer_pane="$(tmux split-window -t "$SESSION:0.0" -h -c "$ROOT" -P -F '#{pane_id}' "ENVIO_IPFS_GATEWAY=$MOCK_ATLAS_URL/ipfs $indexer_cmd")"
   tmux select-pane -t "$indexer_pane" -T "INDEXER"
 
   wait_for "indexer (hasura → :8080)" indexer_ready
 
   log "starting web"
   local web_pane
-  web_pane="$(tmux split-window -t "$indexer_pane" -v -c "$ROOT" -P -F '#{pane_id}' "NEXT_PUBLIC_ATLAS_URI=$MOCK_ATLAS_URL yarn dev")"
+  web_pane="$(tmux split-window -t "$indexer_pane" -v -c "$ROOT" -P -F '#{pane_id}' "NEXT_PUBLIC_ATLAS_URI=$MOCK_ATLAS_URL $web_cmd")"
   tmux select-pane -t "$web_pane" -T "WEB"
 
   log "web http://localhost:3000  |  graphql $HASURA_URL/v1/graphql (console password 'testing')  |  mock-atlas $MOCK_ATLAS_URL"
@@ -155,7 +203,7 @@ cmd_start() {
 }
 
 case "${1:-start}" in
-start) cmd_start ;;
+start) cmd_start "${2:-localhost}" ;;
 stop) cmd_stop ;;
-*) die "usage: $(basename "$0") [start|stop]" ;;
+*) die "usage: $(basename "$0") [start [localhost|gnosis-fork]|stop]" ;;
 esac

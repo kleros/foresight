@@ -7,7 +7,7 @@ import { useAccount, useDisconnect } from "wagmi";
 import { isMockWalletEnabled, MOCK_ACCOUNTS, type MockAccountName } from "@/lib/web3/mock-account";
 import { connectMockAccount } from "@/lib/web3/mock-wallet";
 
-import { DEFAULT_CHAIN, isLocalChainEnabled } from "@/config/chains";
+import { DEFAULT_CHAIN, isDevWalletEnabled } from "@/config/chains";
 
 /**
  * Connect as one of Hardhat's unlocked accounts, without a browser wallet.
@@ -21,7 +21,7 @@ export function DevWallet() {
   const [busy, setBusy] = useState<MockAccountName | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  if (!isMockWalletEnabled || !isLocalChainEnabled) return null;
+  if (!isMockWalletEnabled || !isDevWalletEnabled) return null;
 
   const connected = Object.entries(MOCK_ACCOUNTS).find(
     ([, candidate]) => candidate.toLowerCase() === address?.toLowerCase(),

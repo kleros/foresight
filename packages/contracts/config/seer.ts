@@ -2,10 +2,17 @@ import { createRequire } from "node:module";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+import type { InterfaceAbi } from "ethers";
 import type { Address } from "viem";
 
 type DeploymentJson = {
   address: string;
+  abi: InterfaceAbi;
+};
+
+export type SeerDeployment = {
+  address: Address;
+  abi: InterfaceAbi;
 };
 
 let cachedByChain: Record<number, Address> | null = null;
@@ -66,6 +73,24 @@ function loadSeerMarketFactoryByChain() {
 
 export function getSeerMarketFactoryByChain(): Record<number, Address> {
   return { ...loadSeerMarketFactoryByChain() };
+}
+
+export function getSeerDeployment(chainId: number, contractName: string): SeerDeployment | null {
+  const deploymentsDir = resolveSeerDeploymentsDir();
+
+  for (const entry of readdirSync(deploymentsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || readChainId(join(deploymentsDir, entry.name)) !== chainId) {
+      continue;
+    }
+
+    const deploymentFile = join(deploymentsDir, entry.name, `${contractName}.json`);
+    if (existsSync(deploymentFile)) {
+      const deployment = JSON.parse(readFileSync(deploymentFile, "utf8")) as DeploymentJson;
+      return { address: deployment.address as Address, abi: deployment.abi };
+    }
+  }
+
+  return null;
 }
 
 export function getSeerMarketFactoryAddress(chainId: number) {
