@@ -44,6 +44,33 @@ export default [
     },
   },
   {
+    files: ["src/lib/trade-executor/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: [
+                "react",
+                "react-dom",
+                "next",
+                "next/*",
+                "wagmi",
+                "wagmi/*",
+                "@wagmi/*",
+                "@reown/*",
+                "@tanstack/*",
+              ],
+              message:
+                "lib/trade-executor stays framework-free: take the client or value you need as an argument instead.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // Every internal href goes through `src/config/paths.ts`.
     files: ["src/**/*.tsx"],
     rules: {

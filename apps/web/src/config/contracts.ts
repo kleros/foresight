@@ -14,3 +14,16 @@ const SESSION_FACTORY_ADDRESSES: Record<number, Address> = {
 export function sessionFactoryAddress(chainId: number = DEFAULT_CHAIN_ID): Address | null {
   return SESSION_FACTORY_ADDRESSES[chainId] ?? null;
 }
+
+export const tradeExecutorFactoryAbi = localhost.tradeExecutorFactoryAbi;
+
+export const tradeExecutorAbi = localhost.tradeExecutorAbi;
+
+const TRADE_EXECUTOR_FACTORY_ADDRESSES: Record<number, Address> = {
+  ...localhost.tradeExecutorFactoryAddress,
+  ...gnosis.tradeExecutorFactoryAddress,
+};
+
+export function tradeExecutorFactoryAddress(chainId: number = DEFAULT_CHAIN_ID) {
+  return TRADE_EXECUTOR_FACTORY_ADDRESSES[chainId] ?? null;
+}
