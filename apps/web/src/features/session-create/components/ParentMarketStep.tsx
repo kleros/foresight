@@ -59,6 +59,7 @@ export function ParentMarketStep({ assessment, active }: { assessment: DraftAsse
         kicker="Decision market"
         title="What is being decided?"
         lede="One market per outcome is created from this list, in this order."
+        hint="This step is the parent: the decision everyone trades on, like 'Which venue do we book?' with outcomes Lisbon and Prague. Each outcome then gets its own branch market in step 2, measuring what follows from choosing it."
         ok={assessment.steps.parent}
         active={active}
       />
@@ -210,14 +211,20 @@ export function ParentMarketStep({ assessment, active }: { assessment: DraftAsse
                   value={draft.language}
                   onChange={(id) => setDraftField("language", id)}
                 />
-                <TextField
-                  className="w-full"
-                  label="Min bond"
-                  value={draft.minBond}
-                  onChange={(v) => setDraftField("minBond", v)}
-                  variant={bondOk ? undefined : "error"}
-                  message={bondOk ? undefined : "Must be above zero."}
-                />
+                <div>
+                  <FieldLabel>
+                    <span className="type-label text-fs-text-secondary">Min bond</span>
+                    <InfoTip text="The stake an answer to this question must post on Reality.eth. A wrong answer loses it to whoever corrects it, so a higher bond deters spam but makes answering dearer." />
+                  </FieldLabel>
+                  <TextField
+                    className="w-full"
+                    aria-label="Min bond"
+                    value={draft.minBond}
+                    onChange={(v) => setDraftField("minBond", v)}
+                    variant={bondOk ? undefined : "error"}
+                    message={bondOk ? undefined : "Must be above zero."}
+                  />
+                </div>
               </div>
               <div className="flex items-start gap-3.5">
                 <Switch
