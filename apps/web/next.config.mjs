@@ -19,7 +19,18 @@ const nextConfig = {
         test: /\.svg$/i,
         issuer: fileLoaderRule.issuer,
         resourceQuery: { not: [...fileLoaderRule.resourceQuery.not, /url/] }, // exclude if *.svg?url
-        use: ["@svgr/webpack"],
+        use: [
+          {
+            loader: "@svgr/webpack",
+            options: {
+              // Without the viewBox, an icon rendered below its natural size clips
+              // instead of scaling.
+              svgoConfig: {
+                plugins: [{ name: "preset-default", params: { overrides: { removeViewBox: false } } }],
+              },
+            },
+          },
+        ],
       },
     );
 

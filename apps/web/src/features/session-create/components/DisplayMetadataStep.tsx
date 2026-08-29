@@ -8,6 +8,7 @@ import { ForesightIcon } from "@/components/ui/ForesightIcon";
 import { allowedOf, formatBytes, type UploadRestriction } from "@/lib/atlas/uploads";
 
 import { AdvancedToggle, FieldLabel, hintTooltipClass, InfoTip } from "./fields";
+import { MarkdownField } from "./MarkdownField";
 import { SectionHeader } from "./SectionHeader";
 import { useDraftStore } from "../stores/draftStore";
 import { getImageFile, setImageFile, type ImageSlot } from "../stores/imageStore";
@@ -240,18 +241,16 @@ export function DisplayMetadataStep({
 
               <div className="flex flex-col gap-2">
                 {draft.outcomes.map((o, i) => (
-                  <div key={o.id} className="flex flex-col gap-1.5">
-                    <span className="text-fs-text-primary text-sm font-semibold">{o.label || `Outcome ${i + 1}`}</span>
-                    <TextArea
-                      className="w-full"
-                      inputProps={{ className: MARKDOWN_INPUT }}
-                      resizeY
-                      value={o.detailsMarkdown}
-                      onChange={(v) => patchOutcome(o.id, { detailsMarkdown: v })}
-                      placeholder="Anything else about this branch, in Markdown"
-                      aria-label={`Details for ${o.label || `outcome ${i + 1}`}`}
-                    />
-                  </div>
+                  <MarkdownField
+                    key={o.id}
+                    header={
+                      <span className="text-fs-text-primary text-sm font-semibold">{o.label || `Outcome ${i + 1}`}</span>
+                    }
+                    value={o.detailsMarkdown}
+                    onChange={(v) => patchOutcome(o.id, { detailsMarkdown: v })}
+                    placeholder="Anything else about this branch, in Markdown"
+                    ariaLabel={`Details for ${o.label || `outcome ${i + 1}`}`}
+                  />
                 ))}
               </div>
             </div>
