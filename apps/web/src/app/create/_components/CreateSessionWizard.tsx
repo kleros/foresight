@@ -17,7 +17,7 @@ import { railState, StepRail, StepRailMobile, type RailEntry } from "@/features/
 import { useScrollSpy } from "@/features/session-create/hooks/useScrollSpy";
 import { useSessionDeploy } from "@/features/session-create/hooks/useSessionDeploy";
 import { useDraftStore } from "@/features/session-create/stores/draftStore";
-import { reconcileImageNames, setImageFile } from "@/features/session-create/stores/imageStore";
+import { imageIdOf, imageSlot, reconcileImageNames, setImageFile } from "@/features/session-create/stores/imageStore";
 import type { WizardStep } from "@/features/session-create/types/draft";
 import { assessDraft } from "@/features/session-create/utils/assessDraft";
 import { interrupted } from "@/features/session-create/utils/deployStages";
@@ -34,7 +34,7 @@ import { paths } from "@/config/paths";
 const SECTION_IDS = ["sec1", "sec2", "sec3", "sec4", "sec5"];
 
 export function CreateSessionWizard() {
-  const { draft, setDraftField, resetDraft } = useDraftStore();
+  const { draft, setDraftField, resetDraft, removeImage } = useDraftStore();
   const { address, chainId } = useAccount();
   const { isVerified, roleRestrictions } = useAtlasProvider();
   const uploadLimits = uploadRestriction(roleRestrictions);
@@ -142,6 +142,7 @@ export function CreateSessionWizard() {
   };
 
   const resetEverything = () => {
+    for (const image of draft.outcomes.flatMap((o) => o.images)) setImageFile(imageSlot(image.id), null);
     resetDraft();
     setImageFile("hero", null);
     setImageFile("icon", null);
@@ -154,8 +155,14 @@ export function CreateSessionWizard() {
   // Clearing the names asks for them again.
   useEffect(() => {
     if (!hydrated) return;
-    for (const slot of reconcileImageNames({ hero: draft.heroImageName, icon: draft.iconName })) {
-      setDraftField(slot === "hero" ? "heroImageName" : "iconName", null);
+    for (const slot of reconcileImageNames({
+      hero: draft.heroImageName,
+      icon: draft.iconName,
+      images: draft.outcomes.flatMap((o) => o.images),
+    })) {
+      if (slot === "hero") setDraftField("heroImageName", null);
+      else if (slot === "icon") setDraftField("iconName", null);
+      else removeImage(imageIdOf(slot));
     }
     // Runs once, on the render that first sees the rehydrated draft.
     // eslint-disable-next-line react-hooks/exhaustive-deps

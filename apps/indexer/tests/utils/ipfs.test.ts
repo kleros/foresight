@@ -107,12 +107,22 @@ describe("parseSessionMetadata", () => {
     t.expect(() => parseSessionMetadata({ session: EXAMPLE_METADATA.session, children: [] })).toThrow();
   });
 
-  it("takes markdown blocks, and only markdown for now", (t) => {
+  it("takes markdown and image blocks, and nothing else yet", (t) => {
     const withBlocks = (...blocks: unknown[]) => valid({ session: { ...EXAMPLE_METADATA.session, blocks } });
 
     t.expect(parseSessionMetadata(withBlocks({ type: "markdown", body: "ok" })).session.blocks).toHaveLength(1);
+    t.expect(
+      parseSessionMetadata(withBlocks({ type: "image", label: "The poster", url: "ipfs://QmPoster" })).session.blocks,
+    ).toEqual([{ type: "image", label: "The poster", url: "ipfs://QmPoster" }]);
     t.expect(() => parseSessionMetadata(withBlocks({ type: "link", label: "a", url: "u" }))).toThrow();
     // blocks are validated through the array, not just counted
     t.expect(() => parseSessionMetadata(withBlocks({ type: "markdown", label: "no body" }))).toThrow();
+  });
+
+  it("rejects an image block missing its label or url, which markdown may omit but an image may not", (t) => {
+    const withBlocks = (...blocks: unknown[]) => valid({ session: { ...EXAMPLE_METADATA.session, blocks } });
+
+    t.expect(() => parseSessionMetadata(withBlocks({ type: "image", url: "ipfs://QmPoster" }))).toThrow();
+    t.expect(() => parseSessionMetadata(withBlocks({ type: "image", label: "The poster" }))).toThrow();
   });
 });

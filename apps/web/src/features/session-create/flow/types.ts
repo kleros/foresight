@@ -49,12 +49,22 @@ export type SessionMetadataInput = {
   heroImage: string;
   icon?: string;
   sections?: string[];
-  children: Array<{
-    outcomeIndex: number;
-    displayName: string;
-    color: string;
-    sections?: string[];
-  }>;
+  children: ChildMetadataInput[];
+};
+
+/** One gallery image, already uploaded. */
+export type GalleryImage = {
+  label: string;
+  url: string;
+};
+
+export type ChildMetadataInput = {
+  outcomeIndex: number;
+  displayName: string;
+  color: string;
+  sections?: string[];
+  /** The branch gallery, in display order. */
+  gallery?: GalleryImage[];
 };
 
 /**

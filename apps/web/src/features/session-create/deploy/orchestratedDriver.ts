@@ -17,14 +17,13 @@ import { IndexerNotReadyError } from "./sessionLookup";
 import type { DeployFailure, DeployResume, MarketProgress, SessionDeployDriver, SessionDeployProgress } from "./types";
 import { batchCount, CHILD_BATCH_SIZE, deployMode } from "../flow/params";
 import { batchNumberOf, createSessionCreateHooks, planSessionDeploy, STEP_ID, witnessSession } from "../flow/plan";
-import { publishSessionMetadata, type ImageSource } from "../flow/publish";
-import type {
-  SessionDeployCtx,
-  SessionDeployInput,
-  SessionDeploySnapshot,
-  SessionLookup,
-  SessionMetadataInput,
-} from "../flow/types";
+import {
+  publishSessionMetadata,
+  type GalleryImageSource,
+  type ImageSource,
+  type UnpublishedMetadata,
+} from "../flow/publish";
+import type { SessionDeployCtx, SessionDeployInput, SessionDeploySnapshot, SessionLookup } from "../flow/types";
 
 function errorOf(run: OrchestratorRun<SessionDeploySnapshot, SessionDeployCtx> | null): FlowError | undefined {
   return run?.status === "paused" || run?.status === "failed" ? run.error : undefined;
@@ -32,8 +31,8 @@ function errorOf(run: OrchestratorRun<SessionDeploySnapshot, SessionDeployCtx> |
 
 export type DeploySources = {
   deploy: SessionDeployInput;
-  metadata: Omit<SessionMetadataInput, "heroImage" | "icon">;
-  images: { hero: ImageSource; icon?: ImageSource };
+  metadata: UnpublishedMetadata;
+  images: { hero: ImageSource; icon?: ImageSource; gallery?: GalleryImageSource[] };
 };
 
 export function createOrchestratedDeploy(args: {

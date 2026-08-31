@@ -16,7 +16,7 @@ export function outcomeDraft(overrides: Partial<OutcomeDraft> = {}): OutcomeDraf
     color: "#7e1bd4",
     colorTouched: false,
     detailsMarkdown: "",
-    imageName: null,
+    images: [],
     override: false,
     childQuestion: "",
     lower: "",

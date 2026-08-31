@@ -1,6 +1,7 @@
 import { utcInstant } from "@/utils/date";
 
-import type { SessionDeployInput, SessionMetadataInput } from "../flow/types";
+import type { UnpublishedMetadata } from "../flow/publish";
+import type { SessionDeployInput } from "../flow/types";
 import type { OutcomeDraft, SessionDraft } from "../types/draft";
 import { metricInstant } from "../utils/assessDraft";
 import { branchBoundSources, branchMarketName, branchToken, branchTokenPair } from "../utils/branchFields";
@@ -63,7 +64,7 @@ export function toDeployInput(draft: SessionDraft): SessionDeployInput {
   };
 }
 
-export function toMetadataInput(draft: SessionDraft): Omit<SessionMetadataInput, "heroImage" | "icon"> {
+export function toMetadataInput(draft: SessionDraft): UnpublishedMetadata {
   return {
     title: draft.title.trim(),
     description: draft.description.trim(),

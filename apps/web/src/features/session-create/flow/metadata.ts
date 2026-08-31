@@ -5,7 +5,7 @@ import {
   type SessionMetadataDocument,
 } from "@foresight/session-metadata";
 
-import type { SessionMetadataInput } from "./types";
+import type { GalleryImage, SessionMetadataInput } from "./types";
 
 const HEX_COLOUR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 
@@ -18,9 +18,10 @@ function requireColour(colour: string, outcomeIndex: number): string {
 
 export const MAX_BLOCK_CHARS = 25_000;
 export const MAX_BLOCKS = 20;
+export const MAX_IMAGE_BLOCKS = 4;
 
 /** Whitespace-only markdown is nothing, not an empty block. */
-function blocks(sections: string[] = [], what: string): DisplayBlock[] {
+function markdownBlocks(sections: string[] = [], what: string): DisplayBlock[] {
   const bodies = sections.map((body) => body.trim()).filter(Boolean);
 
   if (bodies.length > MAX_BLOCKS) {
@@ -35,6 +36,18 @@ function blocks(sections: string[] = [], what: string): DisplayBlock[] {
   }
 
   return bodies.map((body) => ({ type: "markdown", body }));
+}
+
+function imageBlocks(gallery: GalleryImage[] = [], what: string): DisplayBlock[] {
+  if (gallery.length > MAX_IMAGE_BLOCKS) {
+    throw new Error(`${what} has ${gallery.length} images. The limit is ${MAX_IMAGE_BLOCKS}.`);
+  }
+  return gallery.map((image, index) => {
+    const label = image.label.trim();
+    if (!label) throw new Error(`Image ${index + 1} of ${what} has no title.`);
+    if (!image.url) throw new Error(`Image ${index + 1} of ${what} has nowhere it was uploaded to.`);
+    return { type: "image", label, url: image.url };
+  });
 }
 
 export function buildSessionMetadata(input: SessionMetadataInput): SessionMetadataDocument {
@@ -56,13 +69,20 @@ export function buildSessionMetadata(input: SessionMetadataInput): SessionMetada
       ...(input.icon ? { icon: input.icon } : {}),
       itemName: input.itemName,
       itemNamePlural: input.itemNamePlural,
-      blocks: blocks(input.sections, "the session"),
+      blocks: markdownBlocks(input.sections, "the session"),
     },
-    children: children.map((child): ChildDisplay => ({
-      outcomeIndex: child.outcomeIndex,
-      displayName: child.displayName,
-      color: requireColour(child.color, child.outcomeIndex),
-      blocks: blocks(child.sections, `branch ${child.outcomeIndex + 1}`),
-    })),
+    children: children.map((child): ChildDisplay => {
+      const branch = `branch ${child.outcomeIndex + 1}`;
+      const childBlocks = [...markdownBlocks(child.sections, branch), ...imageBlocks(child.gallery, branch)];
+      if (childBlocks.length > MAX_BLOCKS) {
+        throw new Error(`${branch} has ${childBlocks.length} images. The limit is ${MAX_BLOCKS}.`);
+      }
+      return {
+        outcomeIndex: child.outcomeIndex,
+        displayName: child.displayName,
+        color: requireColour(child.color, child.outcomeIndex),
+        blocks: childBlocks,
+      };
+    }),
   };
 }

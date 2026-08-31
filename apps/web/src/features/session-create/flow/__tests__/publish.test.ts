@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { MetadataUploader } from "@/lib/atlas/types";
 
-import { publishSessionMetadata, READ_BACK_ATTEMPTS } from "../publish";
-import type { SessionMetadataInput } from "../types";
+import { publishSessionMetadata, READ_BACK_ATTEMPTS, type UnpublishedMetadata } from "../publish";
 import { fakeIpfs } from "./support/ipfs";
 
 /**
@@ -12,7 +11,7 @@ import { fakeIpfs } from "./support/ipfs";
  * A session whose metadata uri resolves to nothing cannot be repaired.
  */
 
-const metadata: Omit<SessionMetadataInput, "heroImage" | "icon"> = {
+const metadata: UnpublishedMetadata = {
   title: "Dune: Part Three, director",
   description: "Opening weekend gross per director.",
   itemName: "Director",
@@ -198,6 +197,46 @@ describe("publishSessionMetadata", () => {
     });
 
     expect(stages).toEqual(["images", "document", "verifying"]);
+  });
+
+  it("uploads a branch's gallery and writes each image into that branch's blocks", async () => {
+    const ipfs = fakeIpfs();
+    const poster = new File(["poster-bytes"], "poster.png", { type: "image/png" });
+
+    const { document } = await publishSessionMetadata({
+      uploader: ipfs.uploader,
+      images: { hero: hero(), gallery: [{ outcomeIndex: 1, label: "The poster", source: poster }] },
+      metadata,
+    });
+
+    expect(ipfs.filesUploaded).toEqual(["hero.jpg", "poster.png"]);
+    expect(document.children[0]?.blocks).toEqual([]);
+    expect(document.children[1]?.blocks).toEqual([
+      { type: "image", label: "The poster", url: expect.stringMatching(/^\/ipfs\//) as string },
+    ]);
+  });
+
+  it("keeps a gallery image already on IPFS instead of uploading it again", async () => {
+    const ipfs = fakeIpfs();
+
+    const { document } = await publishSessionMetadata({
+      uploader: ipfs.uploader,
+      images: { hero: "/ipfs/QmHero", gallery: [{ outcomeIndex: 0, label: "The poster", source: "/ipfs/QmPoster" }] },
+      metadata,
+    });
+
+    expect(ipfs.filesUploaded).toEqual([]);
+    expect(document.children[0]?.blocks).toContainEqual({ type: "image", label: "The poster", url: "/ipfs/QmPoster" });
+  });
+
+  it("refuses an image pointing at a branch the session does not have", async () => {
+    await expect(
+      publishSessionMetadata({
+        uploader: fakeIpfs().uploader,
+        images: { hero: hero(), gallery: [{ outcomeIndex: 7, label: "The poster", source: "/ipfs/QmPoster" }] },
+        metadata,
+      }),
+    ).rejects.toThrow(/branch the session does not have/i);
   });
 
   it("keeps an image already on IPFS instead of uploading it again", async () => {

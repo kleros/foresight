@@ -3,13 +3,19 @@ import { S, createEffect } from "envio";
 
 import { tryFetchIpfsFile } from ".";
 
-const displayBlock = S.schema({
+const markdownBlock = S.schema({
   type: "markdown" as const,
   label: S.optional(S.string),
   body: S.string,
 });
 
-const blocks = S.array(displayBlock);
+const imageBlock = S.schema({
+  type: "image" as const,
+  label: S.string,
+  url: S.string,
+});
+
+const blocks = S.array(S.union([markdownBlock, imageBlock]));
 
 const childOutput = S.schema({
   outcomeIndex: S.int32,

@@ -1,7 +1,7 @@
 import { SCHEMA_VERSION } from "@foresight/session-metadata";
 import { describe, expect, it } from "vitest";
 
-import { buildSessionMetadata, MAX_BLOCK_CHARS, MAX_BLOCKS } from "../metadata";
+import { buildSessionMetadata, MAX_BLOCK_CHARS, MAX_BLOCKS, MAX_IMAGE_BLOCKS } from "../metadata";
 import type { SessionMetadataInput } from "../types";
 
 /**
@@ -72,6 +72,28 @@ describe("buildSessionMetadata", () => {
       { type: "markdown", body: "The incumbent." },
       { type: "markdown", body: "Directed one and two." },
     ]);
+  });
+
+  it("appends a branch's gallery after its markdown blocks, titles trimmed", () => {
+    const { children } = buildSessionMetadata({
+      ...base,
+      children: [
+        {
+          outcomeIndex: 0,
+          displayName: "Villeneuve",
+          color: "#7e1bd4",
+          sections: ["The incumbent."],
+          gallery: [{ label: " The poster ", url: "/ipfs/QmPoster" }],
+        },
+        { outcomeIndex: 1, displayName: "Gerwig", color: "#009aff" },
+      ],
+    });
+
+    expect(children[0]?.blocks).toEqual([
+      { type: "markdown", body: "The incumbent." },
+      { type: "image", label: "The poster", url: "/ipfs/QmPoster" },
+    ]);
+    expect(children[1]?.blocks).toEqual([]);
   });
 
   it("labels no section", () => {
@@ -157,6 +179,35 @@ describe("buildSessionMetadata, bounds on what reaches a renderer", () => {
 
     expect(() => buildSessionMetadata({ ...base, sections })).toThrow(new RegExp(`limit is ${MAX_BLOCKS}`));
     expect(() => buildSessionMetadata({ ...base, sections: [...sections.slice(0, MAX_BLOCKS), "   "] })).not.toThrow();
+  });
+
+  const branchWith = (gallery: Array<{ label: string; url: string }>, sections?: string[]) => () =>
+    buildSessionMetadata({
+      ...base,
+      children: [{ outcomeIndex: 0, displayName: "V", color: "#7e1bd4", sections, gallery }],
+    });
+
+  it("refuses an untitled image, naming its branch", () => {
+    expect(branchWith([{ label: "   ", url: "/ipfs/QmPoster" }])).toThrow(/image 1 of branch 1 has no title/i);
+  });
+
+  it("refuses an image that was never uploaded", () => {
+    expect(branchWith([{ label: "The poster", url: "" }])).toThrow(/nowhere/i);
+  });
+
+  it("refuses more images than a branch's cap", () => {
+    const gallery = Array.from({ length: MAX_IMAGE_BLOCKS + 1 }, (_, i) => ({ label: `Still ${i}`, url: `/ipfs/Qm${i}` }));
+
+    expect(branchWith(gallery)).toThrow(new RegExp(`limit is ${MAX_IMAGE_BLOCKS}`));
+    expect(branchWith(gallery.slice(0, MAX_IMAGE_BLOCKS))).not.toThrow();
+  });
+
+  it("counts a branch's images against its block cap", () => {
+    const sections = Array.from({ length: MAX_BLOCKS }, (_, i) => `Section ${i}`);
+
+    expect(branchWith([{ label: "One too many", url: "/ipfs/Qm" }], sections)).toThrow(
+      new RegExp(`limit is ${MAX_BLOCKS}`),
+    );
   });
 
   it("caps a branch section, naming the branch", () => {

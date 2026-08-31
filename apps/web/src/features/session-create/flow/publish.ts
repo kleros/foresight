@@ -3,7 +3,7 @@ import type { SessionMetadataDocument } from "@foresight/session-metadata";
 import type { MetadataUploader } from "@/lib/atlas/types";
 
 import { buildSessionMetadata } from "./metadata";
-import type { SessionMetadataInput } from "./types";
+import type { ChildMetadataInput, GalleryImage, SessionMetadataInput } from "./types";
 
 /**
  * Puts the display metadata on IPFS and proves it is there before any gas is
@@ -12,6 +12,17 @@ import type { SessionMetadataInput } from "./types";
 
 /** A file to upload, or a uri for something already on IPFS (a resumed deploy). */
 export type ImageSource = File | string;
+
+export type GalleryImageSource = {
+  outcomeIndex: number;
+  label: string;
+  source: ImageSource;
+};
+
+/** The metadata before its uploads: image locations exist only once this runs. */
+export type UnpublishedMetadata = Omit<SessionMetadataInput, "heroImage" | "icon" | "children"> & {
+  children: Array<Omit<ChildMetadataInput, "gallery">>;
+};
 
 type PublishStage = "images" | "document" | "verifying";
 
@@ -30,8 +41,8 @@ const isUploaded = (image: ImageSource): image is string => typeof image === "st
 
 export async function publishSessionMetadata(args: {
   uploader: MetadataUploader;
-  images: { hero: ImageSource; icon?: ImageSource };
-  metadata: Omit<SessionMetadataInput, "heroImage" | "icon">;
+  images: { hero: ImageSource; icon?: ImageSource; gallery?: GalleryImageSource[] };
+  metadata: UnpublishedMetadata;
   onProgress?: (stage: PublishStage) => void;
   /** How many times to ask the gateway before giving up. */
   attempts?: number;
@@ -46,9 +57,23 @@ export async function publishSessionMetadata(args: {
   const put = async (image: ImageSource) => (isUploaded(image) ? image : uploader.uploadFile(image));
   const heroImage = await put(images.hero);
   const icon = images.icon ? await put(images.icon) : undefined;
+  const uploaded: Array<GalleryImage & { outcomeIndex: number }> = [];
+  for (const image of images.gallery ?? []) {
+    uploaded.push({ outcomeIndex: image.outcomeIndex, label: image.label, url: await put(image.source) });
+  }
 
   onProgress?.("document");
-  const document = buildSessionMetadata({ ...metadata, heroImage, icon });
+  const children = metadata.children.map((child) => ({
+    ...child,
+    gallery: uploaded
+      .filter((image) => image.outcomeIndex === child.outcomeIndex)
+      .map(({ label, url }) => ({ label, url })),
+  }));
+  const placed = children.reduce((count, child) => count + child.gallery.length, 0);
+  if (placed !== uploaded.length) {
+    throw new Error("An image points at a branch the session does not have.");
+  }
+  const document = buildSessionMetadata({ ...metadata, heroImage, icon, children });
   const uri = await uploader.uploadJson("session-metadata.json", document);
 
   onProgress?.("verifying");

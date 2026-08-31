@@ -335,3 +335,17 @@ describe("assessDraft, step 3, display metadata", () => {
     expect(texts(draft)).toContainEqual("Villeneuve has a colour that is not legible in both themes.");
   });
 });
+
+describe("the branch galleries", () => {
+  it("flags an untitled image, naming its branch", () => {
+    const draft = draftWithSecondBranch({ images: [{ id: "g1", title: "  ", fileName: "poster.png" }] });
+
+    expect(texts(draft)).toContainEqual("Gerwig: image 1 has no title.");
+  });
+
+  it("passes a titled image", () => {
+    const draft = draftWithSecondBranch({ images: [{ id: "g1", title: "The poster", fileName: "poster.png" }] });
+
+    expect(texts(draft)).toEqual([]);
+  });
+});

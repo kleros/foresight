@@ -12,8 +12,7 @@ export type OutcomeDraft = {
   color: string;
   colorTouched: boolean;
   detailsMarkdown: string;
-  /** Images are held locally until deploy; only the name is drafted. */
-  imageName: string | null;
+  images: OutcomeImageDraft[];
   /** Per-branch overrides. */
   override: boolean;
   /** Overridden child question, without the unit. */
@@ -22,6 +21,13 @@ export type OutcomeDraft = {
   upper: string;
   metricDate: string;
   metricTime: string;
+};
+
+/** A branch gallery image. The bytes live in the image store under `image:<id>`. */
+export type OutcomeImageDraft = {
+  id: string;
+  title: string;
+  fileName: string;
 };
 
 export type SessionDraft = {

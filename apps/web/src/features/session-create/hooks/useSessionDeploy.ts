@@ -29,7 +29,7 @@ import { createIndexerSessionLookup } from "../deploy/sessionLookup";
 import { toDeployInput, toMetadataInput } from "../deploy/toDeployInput";
 import type { SessionDeployDriver, SessionDeployProgress } from "../deploy/types";
 import { useDraftStore } from "../stores/draftStore";
-import { getImageFile } from "../stores/imageStore";
+import { getImageFile, imageSlot } from "../stores/imageStore";
 
 function createRunStore(): FlowRunStore {
   const storage = typeof window === "undefined" ? createMemoryStorage() : fromWebStorage(window.localStorage);
@@ -80,10 +80,19 @@ export function useSessionDeploy(outcomeCount: number): {
           const { draft } = draftStore.getState();
           const hero = getImageFile("hero");
           if (!hero) throw new Error("Pick a hero image before deploying.");
+          const gallery = draft.outcomes.flatMap((outcome, outcomeIndex) =>
+            outcome.images.map((image) => {
+              const source = getImageFile(imageSlot(image.id));
+              if (!source) {
+                throw new Error(`The image "${image.fileName}" did not survive the last reload. Re-add or remove it.`);
+              }
+              return { outcomeIndex, label: image.title, source };
+            }),
+          );
           return {
             deploy: toDeployInput(draft),
             metadata: toMetadataInput(draft),
-            images: { hero, icon: getImageFile("icon") },
+            images: { hero, icon: getImageFile("icon"), gallery },
           };
         },
       }),

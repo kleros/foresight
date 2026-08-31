@@ -31,7 +31,7 @@ export function MarkdownField({
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">{header}</div>
-        <Tooltip text={action} place="top" small>
+        <Tooltip text={action} place="top" className="px-2.5 py-1 [&_small]:type-caption">
           <button
             type="button"
             onClick={() => setPreviewing((v) => !v)}

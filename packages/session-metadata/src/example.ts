@@ -30,7 +30,14 @@ export const EXAMPLE_METADATA: SessionMetadataDocument = {
       outcomeIndex: 0,
       displayName: "Movie A",
       color: "#7e1bd4",
-      blocks: [{ type: "markdown", body: "The art-house pick." }],
+      blocks: [
+        { type: "markdown", body: "The art-house pick." },
+        {
+          type: "image",
+          label: "The poster",
+          url: "ipfs://bafybeigd7cvhmnq4scooby0postera00000000000000000000000000/poster.png",
+        },
+      ],
     },
     { outcomeIndex: 1, displayName: "Movie B", color: "#009aff", blocks: [] },
     { outcomeIndex: 2, displayName: "Movie C", color: "#00c42b", blocks: [] },

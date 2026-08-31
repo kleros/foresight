@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { MAX_IMAGE_BLOCKS } from "../../flow/metadata";
 import { useDraftStore } from "../draftStore";
 
 const KEY = "foresight.create-draft.v1";
@@ -82,5 +83,45 @@ describe("rehydrating a draft saved by an older build", () => {
     expect(draft.title).toBe("Also kept");
     expect(draft.multi).toBe(true);
     expect(draft.minBond).toBe("5");
+  });
+});
+
+describe("rehydrating a branch gallery", () => {
+  const withImages = (images: unknown) =>
+    saved({
+      outcomes: [
+        { id: "x", label: "Alpha", images },
+        { id: "y", label: "Beta" },
+      ],
+    });
+
+  it("keeps a saved image on its branch, defaulting what the entry is missing", async () => {
+    withImages([{ id: "g1", title: "The poster" }]);
+
+    const draft = await rehydrate();
+
+    expect(draft.outcomes[0]?.images).toEqual([{ id: "g1", title: "The poster", fileName: "" }]);
+    expect(draft.outcomes[1]?.images).toEqual([]);
+  });
+
+  it("drops an entry with no id", async () => {
+    withImages([{ title: "junk" }, "junk", { id: "g1" }]);
+
+    expect((await rehydrate()).outcomes[0]?.images.map((i) => i.id)).toEqual(["g1"]);
+  });
+
+  it("keeps the first of two entries sharing an id", async () => {
+    withImages([
+      { id: "g1", title: "First" },
+      { id: "g1", title: "Second" },
+    ]);
+
+    expect((await rehydrate()).outcomes[0]?.images).toEqual([{ id: "g1", title: "First", fileName: "" }]);
+  });
+
+  it("caps a hand-edited save at the branch's block limit", async () => {
+    withImages(Array.from({ length: MAX_IMAGE_BLOCKS + 2 }, (_, i) => ({ id: `g${i}` })));
+
+    expect((await rehydrate()).outcomes[0]?.images).toHaveLength(MAX_IMAGE_BLOCKS);
   });
 });

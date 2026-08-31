@@ -23,10 +23,10 @@ const nextConfig = {
           {
             loader: "@svgr/webpack",
             options: {
-              // Without the viewBox, an icon rendered below its natural size clips
-              // instead of scaling.
+              // svgr's own defaults, keeping the viewBox (an undersized icon clips
+              // without it); prefixIds keeps inlined icons' clipPath ids from colliding.
               svgoConfig: {
-                plugins: [{ name: "preset-default", params: { overrides: { removeViewBox: false } } }],
+                plugins: [{ name: "preset-default", params: { overrides: { removeViewBox: false } } }, "prefixIds"],
               },
             },
           },

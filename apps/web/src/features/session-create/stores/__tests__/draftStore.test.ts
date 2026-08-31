@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { MAX_IMAGE_BLOCKS } from "../../flow/metadata";
 import { isLegibleBranchColor } from "../../utils/branchColor";
 import { useDraftStore } from "../draftStore";
 
@@ -141,6 +142,49 @@ describe("draftStore branch overrides", () => {
     store().toggleOverride(id);
 
     expect(outcomeAt(0)).toMatchObject({ override: false, lower: "", upper: "" });
+  });
+});
+
+describe("draftStore gallery", () => {
+  const image = (id: string) => ({ id, title: "", fileName: `${id}.png` });
+  const branch = (index: number) => outcomeIds()[index]!;
+
+  it("adds an image to its branch alone", () => {
+    expect(store().addImage(branch(0), image("g1"))).toBe(true);
+
+    expect(outcomeAt(0).images).toEqual([{ id: "g1", title: "", fileName: "g1.png" }]);
+    expect(outcomeAt(1).images).toEqual([]);
+  });
+
+  it("refuses an image beyond the branch's cap, leaving the other branches room", () => {
+    for (let i = 0; i < MAX_IMAGE_BLOCKS; i++) expect(store().addImage(branch(0), image(`g${i}`))).toBe(true);
+
+    expect(store().addImage(branch(0), image("extra"))).toBe(false);
+    expect(outcomeAt(0).images).toHaveLength(MAX_IMAGE_BLOCKS);
+    expect(store().addImage(branch(1), image("other"))).toBe(true);
+  });
+
+  it("refuses an image for a branch that does not exist", () => {
+    expect(store().addImage("missing", image("g1"))).toBe(false);
+  });
+
+  it("titles an image by id, leaving the others alone", () => {
+    store().addImage(branch(0), image("g1"));
+    store().addImage(branch(1), image("g2"));
+
+    store().patchImage("g2", { title: "The poster" });
+
+    expect(outcomeAt(0).images[0]?.title).toBe("");
+    expect(outcomeAt(1).images[0]?.title).toBe("The poster");
+  });
+
+  it("removes an image by id, keeping the rest in order", () => {
+    store().addImage(branch(0), image("g1"));
+    store().addImage(branch(0), image("g2"));
+
+    store().removeImage("g1");
+
+    expect(outcomeAt(0).images.map((i) => i.id)).toEqual(["g2"]);
   });
 });
 

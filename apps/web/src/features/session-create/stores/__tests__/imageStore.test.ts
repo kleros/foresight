@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getImageFile, reconcileImageNames, setImageFile, subscribeImages } from "../imageStore";
+import { getImageFile, imageIdOf, imageSlot, reconcileImageNames, setImageFile, subscribeImages } from "../imageStore";
 
 const file = (name: string) => new File(["bytes"], name, { type: "image/jpeg" });
 
 beforeEach(() => {
   setImageFile("hero", null);
   setImageFile("icon", null);
+  setImageFile(imageSlot("g1"), null);
 });
 
 describe("the picked image files", () => {
@@ -89,5 +90,22 @@ describe("reconciling drafted names against the files", () => {
 
   it("reports both slots when both are gone", () => {
     expect(reconcileImageNames({ hero: "hero.jpg", icon: "icon.png" })).toEqual(["hero", "icon"]);
+  });
+
+  it("reports a gallery image whose bytes are gone, by its slot", () => {
+    setImageFile(imageSlot("g1"), file("g1.png"));
+
+    expect(reconcileImageNames({ hero: null, icon: null, images: [{ id: "g1" }, { id: "g2" }] })).toEqual(["image:g2"]);
+  });
+});
+
+describe("the gallery slot naming", () => {
+  it("gives the id back out of the slot it built", () => {
+    expect(imageIdOf(imageSlot("g1"))).toBe("g1");
+  });
+
+  it("has no id for the fixed slots", () => {
+    expect(imageIdOf("hero")).toBeNull();
+    expect(imageIdOf("icon")).toBeNull();
   });
 });

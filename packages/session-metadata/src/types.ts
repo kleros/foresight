@@ -1,11 +1,20 @@
 export const SCHEMA_VERSION = 1;
 
-/** Everything beyond name and colour is a block, and a v1 block is markdown. */
-export type DisplayBlock = {
-  type: "markdown";
-  label?: string;
-  body: string;
-};
+/**
+ * The indexer's parser refuses a type it does not know, so a new member here must reach it first.
+ */
+export type DisplayBlock =
+  | {
+      type: "markdown";
+      label?: string;
+      body: string;
+    }
+  | {
+      type: "image";
+      label: string;
+      /** An ipfs uri or a gateway path. */
+      url: string;
+    };
 
 /** Display entry for one child market, keyed by its parent outcome index. */
 export type ChildDisplay = {

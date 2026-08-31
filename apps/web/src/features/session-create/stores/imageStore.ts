@@ -1,4 +1,14 @@
-export type ImageSlot = "hero" | "icon";
+export type ImageSlot = "hero" | "icon" | `image:${string}`;
+
+/** The slot a gallery image's bytes live under. */
+export const imageSlot = (id: string): ImageSlot => `image:${id}`;
+
+/** The id back out of a gallery slot, or null for hero and icon. */
+export function imageIdOf(slot: `image:${string}`): string;
+export function imageIdOf(slot: ImageSlot): string | null;
+export function imageIdOf(slot: ImageSlot): string | null {
+  return slot.startsWith("image:") ? slot.slice("image:".length) : null;
+}
 
 const files = new Map<ImageSlot, File>();
 const listeners = new Set<() => void>();
@@ -28,9 +38,16 @@ export function getImageFile(slot: ImageSlot): File | undefined {
  * says "hero.jpg" but there is nothing to upload.
  * @returns the slots that were cleared.
  */
-export function reconcileImageNames(names: { hero: string | null; icon: string | null }): ImageSlot[] {
+export function reconcileImageNames(names: {
+  hero: string | null;
+  icon: string | null;
+  images?: Array<{ id: string }>;
+}): ImageSlot[] {
   const lost: ImageSlot[] = [];
   if (names.hero && !files.has("hero")) lost.push("hero");
   if (names.icon && !files.has("icon")) lost.push("icon");
+  for (const image of names.images ?? []) {
+    if (!files.has(imageSlot(image.id))) lost.push(imageSlot(image.id));
+  }
   return lost;
 }

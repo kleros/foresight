@@ -5,21 +5,31 @@ import clsx from "clsx";
 
 import { ForesightIcon } from "@/components/ui/ForesightIcon";
 
+import TrashIcon from "@/assets/svg/trash.svg";
+
 import { allowedOf, formatBytes, type UploadRestriction } from "@/lib/atlas/uploads";
 
 import { AdvancedToggle, FieldLabel, hintTooltipClass, InfoTip } from "./fields";
+import { ImageLightbox } from "./ImageLightbox";
 import { MarkdownField } from "./MarkdownField";
 import { SectionHeader } from "./SectionHeader";
+import { MAX_IMAGE_BLOCKS } from "../flow/metadata";
+import { useImageUrl } from "../hooks/useImageUrl";
 import { useDraftStore } from "../stores/draftStore";
-import { getImageFile, setImageFile, type ImageSlot } from "../stores/imageStore";
-import type { DraftAssessment } from "../types/draft";
+import { getImageFile, imageSlot, setImageFile } from "../stores/imageStore";
+import type { DraftAssessment, OutcomeImageDraft } from "../types/draft";
 import { isLegibleBranchColor } from "../utils/branchColor";
 
 const MARKDOWN_INPUT = "w-full text-sm";
 
+const UPLOADER = "w-full [&_small]:text-sm";
+
 /** What this step offers, before the role's own allow-list narrows it. */
 const HERO_TYPES = ["image/png", "image/jpeg"];
 const ICON_TYPES = [...HERO_TYPES, "image/svg+xml"];
+
+/** Which uploader a size error belongs to: hero, icon, or a branch's outcome id. */
+type UploaderKey = string;
 
 /**
  * Step 3: the IPFS metadata document. Permanent once deployed: its hash goes
@@ -37,10 +47,10 @@ export function DisplayMetadataStep({
   active: boolean;
   restriction?: UploadRestriction;
 }) {
-  const { draft, setDraftField, patchOutcome } = useDraftStore();
+  const { draft, setDraftField, patchOutcome, addImage, patchImage, removeImage } = useDraftStore();
   const [advanced, setAdvanced] = useState(true);
 
-  const [tooBig, setTooBig] = useState<Record<ImageSlot, string | null>>({ hero: null, icon: null });
+  const [tooBig, setTooBig] = useState<Record<UploaderKey, string | null>>({});
 
   const maxSize = restriction?.maxSize;
   const limitCopy = maxSize ? `, up to ${formatBytes(maxSize)}` : "";
@@ -49,19 +59,25 @@ export function DisplayMetadataStep({
    * Atlas rejects an oversized file itself, at the start of the deploy. Catching
    * it here only moves that failure to the step that can still fix it.
    */
-  const withinLimit = (file: File | undefined, slot: ImageSlot) => {
+  const withinLimit = (file: File | undefined, uploader: UploaderKey) => {
     const over = !!file && !!maxSize && file.size > maxSize;
     setTooBig((current) => ({
       ...current,
-      [slot]:
+      [uploader]:
         over && maxSize ? `${file.name} is ${formatBytes(file.size)}. The limit is ${formatBytes(maxSize)}.` : null,
     }));
     return !!file && !over;
   };
 
-  const pick = (slot: ImageSlot, field: "heroImageName" | "iconName", file: File) => {
+  const pick = (slot: "hero" | "icon", field: "heroImageName" | "iconName", file: File) => {
     setImageFile(slot, file);
     setDraftField(field, file.name);
+  };
+
+  const addGalleryImage = (outcomeId: string, file: File) => {
+    const id = crypto.randomUUID();
+    // The draft entry first: bytes stored for an entry the cap refused would leak.
+    if (addImage(outcomeId, { id, title: "", fileName: file.name })) setImageFile(imageSlot(id), file);
   };
 
   const cardComplete = !!draft.description.trim() && !!draft.heroImageName && !!draft.iconName;
@@ -213,7 +229,7 @@ export function DisplayMetadataStep({
               <div>
                 <div className="type-label text-fs-text-secondary pb-1">Creator mark</div>
                 <FileUploader
-                  className="w-full"
+                  className={UPLOADER}
                   callback={(file) => pick("icon", "iconName", file)}
                   acceptedFileTypes={allowedOf(ICON_TYPES, restriction)}
                   validationFunction={(file) => withinLimit(file, "icon")}
@@ -226,12 +242,12 @@ export function DisplayMetadataStep({
               <div>
                 <div className="type-label text-fs-text-secondary pb-1">Hero image</div>
                 <FileUploader
-                  className="w-full"
+                  className={UPLOADER}
                   callback={(file) => pick("hero", "heroImageName", file)}
                   acceptedFileTypes={allowedOf(HERO_TYPES, restriction)}
                   validationFunction={(file) => withinLimit(file, "hero")}
                   selectedFile={getImageFile("hero")}
-                  msg={tooBig.hero ?? `PNG or JPG${limitCopy}. Held locally until you deploy.`}
+                  msg={tooBig.hero ?? `PNG or JPG${limitCopy}.`}
                   variant={tooBig.hero ? "error" : undefined}
                 />
                 <div className="type-caption text-fs-text-secondary pt-2 text-pretty">
@@ -239,24 +255,132 @@ export function DisplayMetadataStep({
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2">
-                {draft.outcomes.map((o, i) => (
-                  <MarkdownField
-                    key={o.id}
-                    header={
-                      <span className="text-fs-text-primary text-sm font-semibold">{o.label || `Outcome ${i + 1}`}</span>
-                    }
-                    value={o.detailsMarkdown}
-                    onChange={(v) => patchOutcome(o.id, { detailsMarkdown: v })}
-                    placeholder="Anything else about this branch, in Markdown"
-                    ariaLabel={`Details for ${o.label || `outcome ${i + 1}`}`}
-                  />
-                ))}
+              <div className="flex flex-col gap-5">
+                {draft.outcomes.map((o, i) => {
+                  const branch = o.label || `outcome ${i + 1}`;
+                  return (
+                    <div key={o.id} className="flex flex-col gap-2">
+                      <MarkdownField
+                        header={
+                          <span className="text-fs-text-primary text-sm font-semibold">
+                            {o.label || `Outcome ${i + 1}`}
+                          </span>
+                        }
+                        value={o.detailsMarkdown}
+                        onChange={(v) => patchOutcome(o.id, { detailsMarkdown: v })}
+                        placeholder="Anything else about this branch, in Markdown"
+                        ariaLabel={`Details for ${branch}`}
+                      />
+                      {o.images.map((image, j) => (
+                        <GalleryImageRow
+                          key={image.id}
+                          image={image}
+                          index={j}
+                          branch={branch}
+                          onTitle={(title) => patchImage(image.id, { title })}
+                          onRemove={() => {
+                            removeImage(image.id);
+                            setImageFile(imageSlot(image.id), null);
+                            // A size error belongs to the uploader, which this reopens.
+                            setTooBig((current) => ({ ...current, [o.id]: null }));
+                          }}
+                        />
+                      ))}
+                      {o.images.length < MAX_IMAGE_BLOCKS ? (
+                        <FileUploader
+                          className={UPLOADER}
+                          // Remounting after each add clears the uploader for the next one.
+                          key={o.images.length}
+                          callback={(file) => addGalleryImage(o.id, file)}
+                          acceptedFileTypes={allowedOf(HERO_TYPES, restriction)}
+                          validationFunction={(file) => withinLimit(file, o.id)}
+                          msg={
+                            tooBig[o.id] ??
+                            `Images for this branch, each with a title. PNG or JPG${limitCopy}, up to ${MAX_IMAGE_BLOCKS}.`
+                          }
+                          variant={tooBig[o.id] ? "error" : undefined}
+                        />
+                      ) : (
+                        <div className="type-caption text-fs-text-secondary">
+                          All {MAX_IMAGE_BLOCKS} image slots for this branch are used.
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ) : null}
         </div>
       </div>
     </section>
+  );
+}
+
+function GalleryImageRow({
+  image,
+  index,
+  branch,
+  onTitle,
+  onRemove,
+}: {
+  image: OutcomeImageDraft;
+  index: number;
+  /** Scopes the row's accessible names, since every branch counts its images from 1. */
+  branch: string;
+  onTitle: (title: string) => void;
+  onRemove: () => void;
+}) {
+  const url = useImageUrl(imageSlot(image.id));
+  const [openedFrom, setOpenedFrom] = useState<{ left: number; top: number; width: number; height: number } | null>(
+    null,
+  );
+  const untitled = !image.title.trim();
+
+  return (
+    <div className="rounded-fs bg-fs-surface-sunken border-fs-border border px-2.5 py-2">
+      <div className="flex items-center gap-3">
+        {url ? (
+          <button
+            type="button"
+            onClick={(event) => setOpenedFrom(event.currentTarget.getBoundingClientRect())}
+            aria-label={`View image ${index + 1} of ${branch} full size`}
+            className="h-10 w-10 flex-none cursor-zoom-in border-none bg-transparent p-0"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element -- a local blob preview, which next/image cannot load */}
+            <img src={url} alt="" className="rounded-xs border-fs-border h-full w-full border object-cover" />
+          </button>
+        ) : (
+          <span className="rounded-xs bg-fs-surface-tint h-10 w-10 flex-none" />
+        )}
+        <TextField
+          className="min-w-0 flex-1"
+          value={image.title}
+          onChange={onTitle}
+          placeholder="What this image shows"
+          aria-label={`Title for image ${index + 1} of ${branch}`}
+          variant={untitled ? "warning" : undefined}
+        />
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={`Remove image ${index + 1} of ${branch}`}
+          className="fs-echo rounded-fs text-fs-text-secondary flex h-8 w-8 flex-none cursor-pointer items-center justify-center border-none bg-transparent"
+        >
+          <TrashIcon width={16} height={16} />
+        </button>
+      </div>
+      {untitled ? (
+        <div className="type-caption text-fs-tone-warning pt-1.5 pl-13">Required. Shown with the image.</div>
+      ) : null}
+      {openedFrom && url ? (
+        <ImageLightbox
+          src={url}
+          alt={image.title || image.fileName}
+          from={openedFrom}
+          onClose={() => setOpenedFrom(null)}
+        />
+      ) : null}
+    </div>
   );
 }

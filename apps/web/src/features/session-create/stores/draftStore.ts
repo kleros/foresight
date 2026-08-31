@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-import type { OutcomeDraft, SessionDraft } from "../types/draft";
+import { MAX_IMAGE_BLOCKS } from "../flow/metadata";
+import type { OutcomeDraft, OutcomeImageDraft, SessionDraft } from "../types/draft";
 import { nextBranchColor } from "../utils/branchColor";
 import { slugToken } from "../utils/slugToken";
 
@@ -19,7 +20,7 @@ function blankOutcome(taken: readonly string[]): OutcomeDraft {
     color: nextBranchColor(taken),
     colorTouched: false,
     detailsMarkdown: "",
-    imageName: null,
+    images: [],
     override: false,
     childQuestion: "",
     lower: "",
@@ -70,7 +71,7 @@ function normalizeOutcome(value: unknown, taken: readonly string[]): OutcomeDraf
     color: asString(saved.color, blank.color),
     colorTouched: asBoolean(saved.colorTouched, blank.colorTouched),
     detailsMarkdown: asString(saved.detailsMarkdown, blank.detailsMarkdown),
-    imageName: asFileName(saved.imageName),
+    images: normalizeImages(saved.images),
     override: asBoolean(saved.override, blank.override),
     childQuestion: asString(saved.childQuestion, blank.childQuestion),
     lower: asString(saved.lower, blank.lower),
@@ -78,6 +79,20 @@ function normalizeOutcome(value: unknown, taken: readonly string[]): OutcomeDraf
     metricDate: asString(saved.metricDate, blank.metricDate),
     metricTime: asString(saved.metricTime, blank.metricTime),
   };
+}
+
+function normalizeImages(value: unknown): OutcomeImageDraft[] {
+  const images: OutcomeImageDraft[] = [];
+  const seen = new Set<string>();
+  for (const entry of Array.isArray(value) ? value : []) {
+    if (!entry || typeof entry !== "object") continue;
+    const saved = entry as Record<string, unknown>;
+    // The id keys the byte slot and the React row, so a duplicate is unusable.
+    if (typeof saved.id !== "string" || !saved.id || seen.has(saved.id)) continue;
+    seen.add(saved.id);
+    images.push({ id: saved.id, title: asString(saved.title, ""), fileName: asString(saved.fileName, "") });
+  }
+  return images.slice(0, MAX_IMAGE_BLOCKS);
 }
 
 function normalizeOutcomes(value: unknown): OutcomeDraft[] {
@@ -131,6 +146,11 @@ type DraftStore = {
   draft: SessionDraft;
   setDraftField: <K extends keyof SessionDraft>(field: K, value: SessionDraft[K]) => void;
   patchOutcome: (id: string, patch: Partial<OutcomeDraft>) => void;
+  /** @returns false at the branch's cap, with the draft unchanged. */
+  addImage: (outcomeId: string, image: OutcomeImageDraft) => boolean;
+  /** Image ids are unique across branches, so patch and remove need no outcome. */
+  patchImage: (imageId: string, patch: Partial<Pick<OutcomeImageDraft, "title">>) => void;
+  removeImage: (imageId: string) => void;
   setOutcomeToken: (id: string, token: string) => void;
   addOutcome: () => void;
   removeOutcome: (id: string) => void;
@@ -162,6 +182,45 @@ export const useDraftStore = create<DraftStore>()(
               }
               return next;
             }),
+          },
+        })),
+
+      addImage: (outcomeId, image) => {
+        let added = false;
+        set((s) => ({
+          draft: {
+            ...s.draft,
+            outcomes: s.draft.outcomes.map((o) => {
+              if (o.id !== outcomeId || o.images.length >= MAX_IMAGE_BLOCKS) return o;
+              added = true;
+              return { ...o, images: [...o.images, image] };
+            }),
+          },
+        }));
+        return added;
+      },
+
+      patchImage: (imageId, patch) =>
+        set((s) => ({
+          draft: {
+            ...s.draft,
+            outcomes: s.draft.outcomes.map((o) =>
+              o.images.some((i) => i.id === imageId)
+                ? { ...o, images: o.images.map((i) => (i.id === imageId ? { ...i, ...patch } : i)) }
+                : o,
+            ),
+          },
+        })),
+
+      removeImage: (imageId) =>
+        set((s) => ({
+          draft: {
+            ...s.draft,
+            outcomes: s.draft.outcomes.map((o) =>
+              o.images.some((i) => i.id === imageId)
+                ? { ...o, images: o.images.filter((i) => i.id !== imageId) }
+                : o,
+            ),
           },
         })),
 

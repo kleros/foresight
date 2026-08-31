@@ -185,6 +185,12 @@ export function assessDraft(draft: SessionDraft, now: Date): DraftAssessment {
   if (!draft.heroImageName) add(3, "No hero image. The card has no artwork.");
   if (!draft.iconName) add(3, "No icon. The card falls back to a generated one.");
   draft.outcomes.forEach((o, i) => {
+    const branch = o.label.trim() || `Branch ${i + 1}`;
+    o.images.forEach((image, j) => {
+      if (!image.title.trim()) add(3, `${branch}: image ${j + 1} has no title.`);
+    });
+  });
+  draft.outcomes.forEach((o, i) => {
     if (!isLegibleBranchColor(o.color)) {
       const branch = o.label.trim() || `Branch ${i + 1}`;
       add(3, `${branch} has a colour that is not legible in both themes.`);
