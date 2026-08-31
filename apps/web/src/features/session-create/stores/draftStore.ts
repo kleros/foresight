@@ -217,9 +217,7 @@ export const useDraftStore = create<DraftStore>()(
           draft: {
             ...s.draft,
             outcomes: s.draft.outcomes.map((o) =>
-              o.images.some((i) => i.id === imageId)
-                ? { ...o, images: o.images.filter((i) => i.id !== imageId) }
-                : o,
+              o.images.some((i) => i.id === imageId) ? { ...o, images: o.images.filter((i) => i.id !== imageId) } : o,
             ),
           },
         })),

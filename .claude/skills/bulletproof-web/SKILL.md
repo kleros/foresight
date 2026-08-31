@@ -57,15 +57,15 @@ src/
 
 Imports flow one way: **shared → features → app**. `import-x/no-restricted-paths` enforces it, discovering feature folders from disk. Each app opts in from its own flat config — `architectureConfig(import.meta.dirname)` in `eslint.config.mjs`, after `...nextJsConfig`. The app root is a required argument because every zone resolves against it: given the wrong root the rule matches nothing and reports clean while enforcing nothing.
 
-| Rule                      | Detail                                                                                                                     |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Thin routes               | Route files compose features and do little else — no data fetching or business logic inline                                |
-| No cross-feature imports  | A feature never imports another feature. Routes compose features; that is the only place two features meet                 |
-| Promote, don't cross-link | When a second feature needs something, move it into a shared layer and both import it downward. Never sideways             |
-| Shared knows nothing      | `components/`, `hooks/`, `lib/`, `utils/`, `config/` must not import from `features/` or `app/` — they stay reusable alone |
-| Shared means shared       | Something used by one feature belongs to that feature, not `components/`. Promote on the second consumer, not the first    |
+| Rule                      | Detail                                                                                                                              |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Thin routes               | Route files compose features and do little else — no data fetching or business logic inline                                         |
+| No cross-feature imports  | A feature never imports another feature. Routes compose features; that is the only place two features meet                          |
+| Promote, don't cross-link | When a second feature needs something, move it into a shared layer and both import it downward. Never sideways                      |
+| Shared knows nothing      | `components/`, `hooks/`, `lib/`, `utils/`, `config/` must not import from `features/` or `app/` — they stay reusable alone          |
+| Shared means shared       | Something used by one feature belongs to that feature, not `components/`. Promote on the second consumer, not the first             |
 | Logic out of components   | Domain and math logic goes in `features/*/utils` or `lib/` so it tests without rendering; hooks wrap IO. Full rule: `ui-logic-seam` |
-| No parallel layer schemes | Don't add `screens/`, `widgets/`, `entities/`, or a Pages-Router `pages/` alongside this structure                         |
+| No parallel layer schemes | Don't add `screens/`, `widgets/`, `entities/`, or a Pages-Router `pages/` alongside this structure                                  |
 
 Features are **domain modules**, not routes. `features/markets`, not `features/create`. One route may compose several features, and one feature may serve several routes.
 

@@ -61,15 +61,15 @@ See [packages/contracts/README.md](packages/contracts/README.md) for deploy and 
 
 The chain is never inferred, it comes from a file or a flag.
 
-|                | local                                         | gnosis-fork                                          | gnosis                                              |
-| -------------- | --------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------- |
-| chain          | hardhat, `31337`, `yarn local-node:contracts` | hardhat fork of Gnosis, `100`, pinned at the live deployment | Gnosis, `100`, live                          |
-| Seer factory   | `MockSeerMarketFactory`, deployed locally     | real one, on the fork                                | real one, from `@seer-pm/contracts`                 |
-| Atlas + IPFS   | `yarn mock-atlas` on `:4747`                  | `yarn mock-atlas` on `:4747`                         | staging/production Atlas                            |
-| contracts      | `yarn local-node:deploy`                      | none - the fork carries the live deployment          | `yarn workspace @foresight/contracts deploy:gnosis` |
-| indexer config | `config.localhost.yaml`                       | `config.gnosis-fork.yaml`                            | `config.gnosis.yaml`                                |
-| indexer        | `yarn indexer:dev`                            | `yarn indexer:dev:gnosis-fork`                       | `yarn indexer:dev:gnosis`                           |
-| web            | `yarn dev`                                    | `yarn dev:gnosis-fork`                               | `yarn dev:gnosis`                                   |
+|                | local                                         | gnosis-fork                                                  | gnosis                                              |
+| -------------- | --------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------- |
+| chain          | hardhat, `31337`, `yarn local-node:contracts` | hardhat fork of Gnosis, `100`, pinned at the live deployment | Gnosis, `100`, live                                 |
+| Seer factory   | `MockSeerMarketFactory`, deployed locally     | real one, on the fork                                        | real one, from `@seer-pm/contracts`                 |
+| Atlas + IPFS   | `yarn mock-atlas` on `:4747`                  | `yarn mock-atlas` on `:4747`                                 | staging/production Atlas                            |
+| contracts      | `yarn local-node:deploy`                      | none - the fork carries the live deployment                  | `yarn workspace @foresight/contracts deploy:gnosis` |
+| indexer config | `config.localhost.yaml`                       | `config.gnosis-fork.yaml`                                    | `config.gnosis.yaml`                                |
+| indexer        | `yarn indexer:dev`                            | `yarn indexer:dev:gnosis-fork`                               | `yarn indexer:dev:gnosis`                           |
+| web            | `yarn dev`                                    | `yarn dev:gnosis-fork`                                       | `yarn dev:gnosis`                                   |
 
 `yarn local-stack gnosis-fork` runs the same stack on the fork: real Seer contracts, real
 Swapr pools. `yarn simulate:session:gnosis-fork --liquidity` seeds a session with pools.

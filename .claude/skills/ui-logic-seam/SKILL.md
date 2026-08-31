@@ -17,19 +17,19 @@ Grep for these in any file that returns JSX:
 - `writeContract`, `sendTransaction`, `fetch`, `createPublicClient`, or any SDK construction
 - Keys, secrets, nonces, signatures, SIWE messages
 - Amount maths — decimals, `parseEther`, slippage, fees, rounding, bounds scaling
-- The decision of *which* calls to make, or in what order
+- The decision of _which_ calls to make, or in what order
 - `invalidateQueries`, retry, timeout, or error classification
 
 What it may contain: markup, layout, local UI state (open, focused, which tab), display formatting through a shared formatter, and a hook call. Comparing a connected chain against a **named** constant to decide what to render is UI state, not business logic.
 
 ## Where each layer lives
 
-| Layer | Path | Tested by |
-| ----- | ---- | --------- |
-| **Pure functions** | `features/<x>/utils/` — maths, encoding, planning, validation | Direct call, no mocks |
-| **Services** | `lib/<thing>/` — one operation done to the world, reused across features | Direct call, fake client injected |
-| **Hooks + requests** | `features/<x>/api/`, one file per request | Rarely worth testing |
-| **Components** | `features/<x>/components/`, `app/<route>/_components/` | Rendering |
+| Layer                | Path                                                                     | Tested by                         |
+| -------------------- | ------------------------------------------------------------------------ | --------------------------------- |
+| **Pure functions**   | `features/<x>/utils/` — maths, encoding, planning, validation            | Direct call, no mocks             |
+| **Services**         | `lib/<thing>/` — one operation done to the world, reused across features | Direct call, fake client injected |
+| **Hooks + requests** | `features/<x>/api/`, one file per request                                | Rarely worth testing              |
+| **Components**       | `features/<x>/components/`, `app/<route>/_components/`                   | Rendering                         |
 
 **A `lib/` module takes its viem client as an argument and imports no React.** Constructing a client inside it makes it untestable without intercepting the network and unusable against a second chain or a fork. This is also what lets the same module serve a hook, an e2e fixture, and a vitest suite.
 
@@ -37,7 +37,11 @@ What it may contain: markup, layout, local UI state (open, focused, which tab), 
 
 ```ts
 // The operation — plain async, explicit arguments, no React, no wagmi.
-interface DepositArgs { account: Address; token: Address; amount: bigint }
+interface DepositArgs {
+  account: Address;
+  token: Address;
+  amount: bigint;
+}
 
 async function deposit(client: Client, args: DepositArgs): Promise<Receipt> {
   // encode, submit, wait, throw on failure

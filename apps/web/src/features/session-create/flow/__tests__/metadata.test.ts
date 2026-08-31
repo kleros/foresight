@@ -196,7 +196,10 @@ describe("buildSessionMetadata, bounds on what reaches a renderer", () => {
   });
 
   it("refuses more images than a branch's cap", () => {
-    const gallery = Array.from({ length: MAX_IMAGE_BLOCKS + 1 }, (_, i) => ({ label: `Still ${i}`, url: `/ipfs/Qm${i}` }));
+    const gallery = Array.from({ length: MAX_IMAGE_BLOCKS + 1 }, (_, i) => ({
+      label: `Still ${i}`,
+      url: `/ipfs/Qm${i}`,
+    }));
 
     expect(branchWith(gallery)).toThrow(new RegExp(`limit is ${MAX_IMAGE_BLOCKS}`));
     expect(branchWith(gallery.slice(0, MAX_IMAGE_BLOCKS))).not.toThrow();
