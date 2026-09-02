@@ -1,9 +1,10 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+import { nextBranchColor } from "@/utils/branchColor";
+
 import { MAX_IMAGE_BLOCKS } from "../flow/metadata";
 import type { OutcomeDraft, OutcomeImageDraft, SessionDraft } from "../types/draft";
-import { nextBranchColor } from "../utils/branchColor";
 import { slugToken } from "../utils/slugToken";
 
 /**

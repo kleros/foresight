@@ -23,8 +23,8 @@ indexer.onEvent({ contract: "SessionFactory", event: "ParentMarketDeployed" }, a
   context.Session.set({
     id: event.params.sessionId.toString(),
     sessionId: event.params.sessionId,
-    deployer: event.params.deployer,
-    parentMarket: event.params.parentMarket,
+    deployer: event.params.deployer.toLowerCase(),
+    parentMarket: event.params.parentMarket.toLowerCase(),
     outcomeCount: event.params.outcomeCount,
     deployedChildCount: 0n,
     openedAt: BigInt(event.block.timestamp),
@@ -72,6 +72,7 @@ indexer.onEvent({ contract: "SessionFactory", event: "ChildMarketDeployed" }, as
   }
 
   const outcomeIndex = Number(event.params.parentOutcomeIndex);
+  const childMarket = event.params.childMarket.toLowerCase();
 
   const [metadata, market] = await Promise.all([
     context.effect(fetchSessionMetadata, { path: ipfsPath(session.metadataUri) }),
@@ -86,12 +87,12 @@ indexer.onEvent({ contract: "SessionFactory", event: "ChildMarketDeployed" }, as
     [market.underlying, undefined],
   ] as const) {
     if (isAvailable(address)) {
-      context.Token.set({ id: address, childMarket_id: event.params.childMarket, outcomeIndex: side });
+      context.Token.set({ id: address, childMarket_id: childMarket, outcomeIndex: side });
     }
   }
 
   context.ChildMarket.set({
-    id: event.params.childMarket,
+    id: childMarket,
     session_id: sessionId,
     parentOutcomeIndex: event.params.parentOutcomeIndex,
     parentOutcome: session.outcomes[outcomeIndex] ?? UNAVAILABLE,

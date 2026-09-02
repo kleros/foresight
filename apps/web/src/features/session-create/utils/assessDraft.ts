@@ -1,6 +1,6 @@
+import { isLegibleBranchColor } from "@/utils/branchColor";
 import { utcInstant } from "@/utils/date";
 
-import { isLegibleBranchColor } from "./branchColor";
 import { branchBoundSources, branchBounds, branchBoundsWei, branchQuestion, branchToken } from "./branchFields";
 import { OUTCOME_PLACEHOLDER } from "./composeMarketName";
 import { scaleToWei } from "./scaleToWei";

@@ -1,3 +1,4 @@
+import { getAddress } from "viem";
 import { describe, expect, it } from "vitest";
 
 import type { GraphqlFetch } from "@/lib/graphql/batcher";
@@ -9,7 +10,13 @@ import { ACCEPTABLE_LAG, createIndexerSessionLookup, IndexerNotReadyError } from
  * a negative depends on the indexer being caught up, so only it can throw.
  */
 
-const ASKED = { deployer: "0xdeployer", metadataUri: "/ipfs/QmDoc", since: 1_700_000_000 } as const;
+/** Arbitrary addresses, written the way the indexer stores them: lowercase. */
+const DEPLOYER = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const PARENT = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const CHILD_0 = "0xcccccccccccccccccccccccccccccccccccccccc";
+const CHILD_1 = "0xdddddddddddddddddddddddddddddddddddddddd";
+
+const ASKED = { deployer: getAddress(DEPLOYER), metadataUri: "/ipfs/QmDoc", since: 1_700_000_000 } as const;
 
 function indexerReturning(result: {
   sessions?: Array<{
@@ -44,15 +51,15 @@ function indexerReturning(result: {
 }
 
 describe("The indexer session lookup", () => {
-  it("reports an existing session with its children", async () => {
+  it("reports an existing session with its children, addresses checksummed", async () => {
     const { lookup } = indexerReturning({
       sessions: [
         {
           sessionId: "7",
-          parentMarket: "0xparent",
+          parentMarket: PARENT,
           children: [
-            { id: "0xchild0", parentOutcomeIndex: "0" },
-            { id: "0xchild1", parentOutcomeIndex: "1" },
+            { id: CHILD_0, parentOutcomeIndex: "0" },
+            { id: CHILD_1, parentOutcomeIndex: "1" },
           ],
         },
       ],
@@ -60,10 +67,10 @@ describe("The indexer session lookup", () => {
 
     expect(await lookup(ASKED)).toEqual({
       sessionId: 7n,
-      parentMarket: "0xparent",
+      parentMarket: getAddress(PARENT),
       childMarkets: [
-        { outcomeIndex: 0, address: "0xchild0" },
-        { outcomeIndex: 1, address: "0xchild1" },
+        { outcomeIndex: 0, address: getAddress(CHILD_0) },
+        { outcomeIndex: 1, address: getAddress(CHILD_1) },
       ],
     });
   });
@@ -82,7 +89,7 @@ describe("The indexer session lookup", () => {
 
   it("returns a match found while behind", async () => {
     const { lookup } = indexerReturning({
-      sessions: [{ sessionId: "7", parentMarket: "0xparent", children: [] }],
+      sessions: [{ sessionId: "7", parentMarket: PARENT, children: [] }],
       processed: 100 - (ACCEPTABLE_LAG + 1),
       head: 100,
     });
@@ -128,6 +135,6 @@ describe("The indexer session lookup", () => {
 
     await lookup(ASKED);
 
-    expect(asked[0]).toEqual({ deployer: "0xdeployer", metadataUri: "/ipfs/QmDoc", since: "1700000000" });
+    expect(asked[0]).toEqual({ deployer: DEPLOYER, metadataUri: "/ipfs/QmDoc", since: "1700000000" });
   });
 });

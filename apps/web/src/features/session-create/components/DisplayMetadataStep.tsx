@@ -7,6 +7,8 @@ import { ForesightIcon } from "@/components/ui/ForesightIcon";
 
 import TrashIcon from "@/assets/svg/trash.svg";
 
+import { isLegibleBranchColor } from "@/utils/branchColor";
+
 import { allowedOf, formatBytes, type UploadRestriction } from "@/lib/atlas/uploads";
 
 import { AdvancedToggle, FieldLabel, hintTooltipClass, InfoTip } from "./fields";
@@ -18,7 +20,6 @@ import { useImageUrl } from "../hooks/useImageUrl";
 import { useDraftStore } from "../stores/draftStore";
 import { getImageFile, imageSlot, setImageFile } from "../stores/imageStore";
 import type { DraftAssessment, OutcomeImageDraft } from "../types/draft";
-import { isLegibleBranchColor } from "../utils/branchColor";
 
 const MARKDOWN_INPUT = "w-full text-sm";
 

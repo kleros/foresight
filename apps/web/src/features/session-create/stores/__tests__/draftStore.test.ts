@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { isLegibleBranchColor } from "@/utils/branchColor";
+
 import { MAX_IMAGE_BLOCKS } from "../../flow/metadata";
-import { isLegibleBranchColor } from "../../utils/branchColor";
 import { useDraftStore } from "../draftStore";
 
 beforeEach(() => {

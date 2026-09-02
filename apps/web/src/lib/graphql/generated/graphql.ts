@@ -42,6 +42,7 @@ export type ChildMarket = {
   deployedAt: Scalars['numeric']['output'];
   /** resolved from the session's metadata document, keyed by parentOutcomeIndex */
   displayName?: Maybe<Scalars['String']['output']>;
+  downToken: Scalars['String']['output'];
   /** child market address */
   id: Scalars['String']['output'];
   keyword: Scalars['String']['output'];
@@ -50,10 +51,16 @@ export type ChildMarket = {
   marketName: Scalars['String']['output'];
   parentOutcome: Scalars['String']['output'];
   parentOutcomeIndex: Scalars['numeric']['output'];
+  /** An array relationship */
+  pools: Array<Pool>;
+  /** An array relationship */
+  predictions: Array<Prediction>;
   /** An object relationship */
   session?: Maybe<Session>;
   session_id: Scalars['String']['output'];
   transactionHash: Scalars['String']['output'];
+  underlyingToken: Scalars['String']['output'];
+  upToken: Scalars['String']['output'];
   upperBound: Scalars['numeric']['output'];
 };
 
@@ -61,6 +68,26 @@ export type ChildMarket = {
 /** columns and relationships of "ChildMarket" */
 export type ChildMarketBlocksArgs = {
   path?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/** columns and relationships of "ChildMarket" */
+export type ChildMarketPoolsArgs = {
+  distinct_on?: InputMaybe<Array<Pool_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Pool_Order_By>>;
+  where?: InputMaybe<Pool_Bool_Exp>;
+};
+
+
+/** columns and relationships of "ChildMarket" */
+export type ChildMarketPredictionsArgs = {
+  distinct_on?: InputMaybe<Array<Prediction_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Prediction_Order_By>>;
+  where?: InputMaybe<Prediction_Bool_Exp>;
 };
 
 /** order by aggregate values of table "ChildMarket" */
@@ -95,15 +122,20 @@ export type ChildMarket_Bool_Exp = {
   color?: InputMaybe<String_Comparison_Exp>;
   deployedAt?: InputMaybe<Numeric_Comparison_Exp>;
   displayName?: InputMaybe<String_Comparison_Exp>;
+  downToken?: InputMaybe<String_Comparison_Exp>;
   id?: InputMaybe<String_Comparison_Exp>;
   keyword?: InputMaybe<String_Comparison_Exp>;
   lowerBound?: InputMaybe<Numeric_Comparison_Exp>;
   marketName?: InputMaybe<String_Comparison_Exp>;
   parentOutcome?: InputMaybe<String_Comparison_Exp>;
   parentOutcomeIndex?: InputMaybe<Numeric_Comparison_Exp>;
+  pools?: InputMaybe<Pool_Bool_Exp>;
+  predictions?: InputMaybe<Prediction_Bool_Exp>;
   session?: InputMaybe<Session_Bool_Exp>;
   session_id?: InputMaybe<String_Comparison_Exp>;
   transactionHash?: InputMaybe<String_Comparison_Exp>;
+  underlyingToken?: InputMaybe<String_Comparison_Exp>;
+  upToken?: InputMaybe<String_Comparison_Exp>;
   upperBound?: InputMaybe<Numeric_Comparison_Exp>;
 };
 
@@ -113,6 +145,7 @@ export type ChildMarket_Max_Order_By = {
   deployedAt?: InputMaybe<Order_By>;
   /** resolved from the session's metadata document, keyed by parentOutcomeIndex */
   displayName?: InputMaybe<Order_By>;
+  downToken?: InputMaybe<Order_By>;
   /** child market address */
   id?: InputMaybe<Order_By>;
   keyword?: InputMaybe<Order_By>;
@@ -123,6 +156,8 @@ export type ChildMarket_Max_Order_By = {
   parentOutcomeIndex?: InputMaybe<Order_By>;
   session_id?: InputMaybe<Order_By>;
   transactionHash?: InputMaybe<Order_By>;
+  underlyingToken?: InputMaybe<Order_By>;
+  upToken?: InputMaybe<Order_By>;
   upperBound?: InputMaybe<Order_By>;
 };
 
@@ -132,6 +167,7 @@ export type ChildMarket_Min_Order_By = {
   deployedAt?: InputMaybe<Order_By>;
   /** resolved from the session's metadata document, keyed by parentOutcomeIndex */
   displayName?: InputMaybe<Order_By>;
+  downToken?: InputMaybe<Order_By>;
   /** child market address */
   id?: InputMaybe<Order_By>;
   keyword?: InputMaybe<Order_By>;
@@ -142,6 +178,8 @@ export type ChildMarket_Min_Order_By = {
   parentOutcomeIndex?: InputMaybe<Order_By>;
   session_id?: InputMaybe<Order_By>;
   transactionHash?: InputMaybe<Order_By>;
+  underlyingToken?: InputMaybe<Order_By>;
+  upToken?: InputMaybe<Order_By>;
   upperBound?: InputMaybe<Order_By>;
 };
 
@@ -151,15 +189,20 @@ export type ChildMarket_Order_By = {
   color?: InputMaybe<Order_By>;
   deployedAt?: InputMaybe<Order_By>;
   displayName?: InputMaybe<Order_By>;
+  downToken?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
   keyword?: InputMaybe<Order_By>;
   lowerBound?: InputMaybe<Order_By>;
   marketName?: InputMaybe<Order_By>;
   parentOutcome?: InputMaybe<Order_By>;
   parentOutcomeIndex?: InputMaybe<Order_By>;
+  pools_aggregate?: InputMaybe<Pool_Aggregate_Order_By>;
+  predictions_aggregate?: InputMaybe<Prediction_Aggregate_Order_By>;
   session?: InputMaybe<Session_Order_By>;
   session_id?: InputMaybe<Order_By>;
   transactionHash?: InputMaybe<Order_By>;
+  underlyingToken?: InputMaybe<Order_By>;
+  upToken?: InputMaybe<Order_By>;
   upperBound?: InputMaybe<Order_By>;
 };
 
@@ -173,6 +216,8 @@ export enum ChildMarket_Select_Column {
   DeployedAt = 'deployedAt',
   /** column name */
   DisplayName = 'displayName',
+  /** column name */
+  DownToken = 'downToken',
   /** column name */
   Id = 'id',
   /** column name */
@@ -189,6 +234,10 @@ export enum ChildMarket_Select_Column {
   SessionId = 'session_id',
   /** column name */
   TransactionHash = 'transactionHash',
+  /** column name */
+  UnderlyingToken = 'underlyingToken',
+  /** column name */
+  UpToken = 'upToken',
   /** column name */
   UpperBound = 'upperBound'
 }
@@ -233,6 +282,7 @@ export type ChildMarket_Stream_Cursor_Value_Input = {
   deployedAt?: InputMaybe<Scalars['numeric']['input']>;
   /** resolved from the session's metadata document, keyed by parentOutcomeIndex */
   displayName?: InputMaybe<Scalars['String']['input']>;
+  downToken?: InputMaybe<Scalars['String']['input']>;
   /** child market address */
   id?: InputMaybe<Scalars['String']['input']>;
   keyword?: InputMaybe<Scalars['String']['input']>;
@@ -243,6 +293,8 @@ export type ChildMarket_Stream_Cursor_Value_Input = {
   parentOutcomeIndex?: InputMaybe<Scalars['numeric']['input']>;
   session_id?: InputMaybe<Scalars['String']['input']>;
   transactionHash?: InputMaybe<Scalars['String']['input']>;
+  underlyingToken?: InputMaybe<Scalars['String']['input']>;
+  upToken?: InputMaybe<Scalars['String']['input']>;
   upperBound?: InputMaybe<Scalars['numeric']['input']>;
 };
 
@@ -278,6 +330,92 @@ export type ChildMarket_Variance_Order_By = {
   upperBound?: InputMaybe<Order_By>;
 };
 
+/** columns and relationships of "Executor" */
+export type Executor = {
+  __typename?: 'Executor';
+  deployedAt: Scalars['numeric']['output'];
+  /** executor address */
+  id: Scalars['String']['output'];
+  owner: Scalars['String']['output'];
+  /** An array relationship */
+  positions: Array<Position>;
+  /** An array relationship */
+  predictions: Array<Prediction>;
+  transactionHash: Scalars['String']['output'];
+};
+
+
+/** columns and relationships of "Executor" */
+export type ExecutorPositionsArgs = {
+  distinct_on?: InputMaybe<Array<Position_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Position_Order_By>>;
+  where?: InputMaybe<Position_Bool_Exp>;
+};
+
+
+/** columns and relationships of "Executor" */
+export type ExecutorPredictionsArgs = {
+  distinct_on?: InputMaybe<Array<Prediction_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Prediction_Order_By>>;
+  where?: InputMaybe<Prediction_Bool_Exp>;
+};
+
+/** Boolean expression to filter rows from the table "Executor". All fields are combined with a logical 'AND'. */
+export type Executor_Bool_Exp = {
+  _and?: InputMaybe<Array<Executor_Bool_Exp>>;
+  _not?: InputMaybe<Executor_Bool_Exp>;
+  _or?: InputMaybe<Array<Executor_Bool_Exp>>;
+  deployedAt?: InputMaybe<Numeric_Comparison_Exp>;
+  id?: InputMaybe<String_Comparison_Exp>;
+  owner?: InputMaybe<String_Comparison_Exp>;
+  positions?: InputMaybe<Position_Bool_Exp>;
+  predictions?: InputMaybe<Prediction_Bool_Exp>;
+  transactionHash?: InputMaybe<String_Comparison_Exp>;
+};
+
+/** Ordering options when selecting data from "Executor". */
+export type Executor_Order_By = {
+  deployedAt?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  owner?: InputMaybe<Order_By>;
+  positions_aggregate?: InputMaybe<Position_Aggregate_Order_By>;
+  predictions_aggregate?: InputMaybe<Prediction_Aggregate_Order_By>;
+  transactionHash?: InputMaybe<Order_By>;
+};
+
+/** select columns of table "Executor" */
+export enum Executor_Select_Column {
+  /** column name */
+  DeployedAt = 'deployedAt',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  Owner = 'owner',
+  /** column name */
+  TransactionHash = 'transactionHash'
+}
+
+/** Streaming cursor of the table "Executor" */
+export type Executor_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Executor_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Executor_Stream_Cursor_Value_Input = {
+  deployedAt?: InputMaybe<Scalars['numeric']['input']>;
+  /** executor address */
+  id?: InputMaybe<Scalars['String']['input']>;
+  owner?: InputMaybe<Scalars['String']['input']>;
+  transactionHash?: InputMaybe<Scalars['String']['input']>;
+};
+
 /** Boolean expression to compare columns of type "Float". All fields are combined with logical 'AND'. */
 export type Float_Comparison_Exp = {
   _eq?: InputMaybe<Scalars['Float']['input']>;
@@ -302,6 +440,973 @@ export type Int_Comparison_Exp = {
   _lte?: InputMaybe<Scalars['Int']['input']>;
   _neq?: InputMaybe<Scalars['Int']['input']>;
   _nin?: InputMaybe<Array<Scalars['Int']['input']>>;
+};
+
+/** An Algebra pool trading one side of a child market. */
+export type Pool = {
+  __typename?: 'Pool';
+  /** An object relationship */
+  childMarket?: Maybe<ChildMarket>;
+  childMarket_id: Scalars['String']['output'];
+  /** pool address */
+  id: Scalars['String']['output'];
+  /** the concentrated-liquidity L the last swap reported */
+  liquidity: Scalars['numeric']['output'];
+  /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
+  outcomeIndex: Scalars['Int']['output'];
+  /** whether the outcome token is token0 */
+  outcomeIsToken0: Scalars['Boolean']['output'];
+  outcomeToken: Scalars['String']['output'];
+  /** sqrt price the pool was last left at, X96 */
+  price: Scalars['numeric']['output'];
+  /** An array relationship */
+  swaps: Array<Swap>;
+  tick: Scalars['Int']['output'];
+  underlyingToken: Scalars['String']['output'];
+  updatedAt: Scalars['numeric']['output'];
+  /** lifetime absolute amount swapped either way */
+  volumeOutcome: Scalars['numeric']['output'];
+  volumeUnderlying: Scalars['numeric']['output'];
+};
+
+
+/** An Algebra pool trading one side of a child market. */
+export type PoolSwapsArgs = {
+  distinct_on?: InputMaybe<Array<Swap_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Swap_Order_By>>;
+  where?: InputMaybe<Swap_Bool_Exp>;
+};
+
+/** order by aggregate values of table "Pool" */
+export type Pool_Aggregate_Order_By = {
+  avg?: InputMaybe<Pool_Avg_Order_By>;
+  count?: InputMaybe<Order_By>;
+  max?: InputMaybe<Pool_Max_Order_By>;
+  min?: InputMaybe<Pool_Min_Order_By>;
+  stddev?: InputMaybe<Pool_Stddev_Order_By>;
+  stddev_pop?: InputMaybe<Pool_Stddev_Pop_Order_By>;
+  stddev_samp?: InputMaybe<Pool_Stddev_Samp_Order_By>;
+  sum?: InputMaybe<Pool_Sum_Order_By>;
+  var_pop?: InputMaybe<Pool_Var_Pop_Order_By>;
+  var_samp?: InputMaybe<Pool_Var_Samp_Order_By>;
+  variance?: InputMaybe<Pool_Variance_Order_By>;
+};
+
+/** order by avg() on columns of table "Pool" */
+export type Pool_Avg_Order_By = {
+  /** the concentrated-liquidity L the last swap reported */
+  liquidity?: InputMaybe<Order_By>;
+  /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
+  outcomeIndex?: InputMaybe<Order_By>;
+  /** sqrt price the pool was last left at, X96 */
+  price?: InputMaybe<Order_By>;
+  tick?: InputMaybe<Order_By>;
+  updatedAt?: InputMaybe<Order_By>;
+  /** lifetime absolute amount swapped either way */
+  volumeOutcome?: InputMaybe<Order_By>;
+  volumeUnderlying?: InputMaybe<Order_By>;
+};
+
+/** Boolean expression to filter rows from the table "Pool". All fields are combined with a logical 'AND'. */
+export type Pool_Bool_Exp = {
+  _and?: InputMaybe<Array<Pool_Bool_Exp>>;
+  _not?: InputMaybe<Pool_Bool_Exp>;
+  _or?: InputMaybe<Array<Pool_Bool_Exp>>;
+  childMarket?: InputMaybe<ChildMarket_Bool_Exp>;
+  childMarket_id?: InputMaybe<String_Comparison_Exp>;
+  id?: InputMaybe<String_Comparison_Exp>;
+  liquidity?: InputMaybe<Numeric_Comparison_Exp>;
+  outcomeIndex?: InputMaybe<Int_Comparison_Exp>;
+  outcomeIsToken0?: InputMaybe<Boolean_Comparison_Exp>;
+  outcomeToken?: InputMaybe<String_Comparison_Exp>;
+  price?: InputMaybe<Numeric_Comparison_Exp>;
+  swaps?: InputMaybe<Swap_Bool_Exp>;
+  tick?: InputMaybe<Int_Comparison_Exp>;
+  underlyingToken?: InputMaybe<String_Comparison_Exp>;
+  updatedAt?: InputMaybe<Numeric_Comparison_Exp>;
+  volumeOutcome?: InputMaybe<Numeric_Comparison_Exp>;
+  volumeUnderlying?: InputMaybe<Numeric_Comparison_Exp>;
+};
+
+/** order by max() on columns of table "Pool" */
+export type Pool_Max_Order_By = {
+  childMarket_id?: InputMaybe<Order_By>;
+  /** pool address */
+  id?: InputMaybe<Order_By>;
+  /** the concentrated-liquidity L the last swap reported */
+  liquidity?: InputMaybe<Order_By>;
+  /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
+  outcomeIndex?: InputMaybe<Order_By>;
+  outcomeToken?: InputMaybe<Order_By>;
+  /** sqrt price the pool was last left at, X96 */
+  price?: InputMaybe<Order_By>;
+  tick?: InputMaybe<Order_By>;
+  underlyingToken?: InputMaybe<Order_By>;
+  updatedAt?: InputMaybe<Order_By>;
+  /** lifetime absolute amount swapped either way */
+  volumeOutcome?: InputMaybe<Order_By>;
+  volumeUnderlying?: InputMaybe<Order_By>;
+};
+
+/** order by min() on columns of table "Pool" */
+export type Pool_Min_Order_By = {
+  childMarket_id?: InputMaybe<Order_By>;
+  /** pool address */
+  id?: InputMaybe<Order_By>;
+  /** the concentrated-liquidity L the last swap reported */
+  liquidity?: InputMaybe<Order_By>;
+  /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
+  outcomeIndex?: InputMaybe<Order_By>;
+  outcomeToken?: InputMaybe<Order_By>;
+  /** sqrt price the pool was last left at, X96 */
+  price?: InputMaybe<Order_By>;
+  tick?: InputMaybe<Order_By>;
+  underlyingToken?: InputMaybe<Order_By>;
+  updatedAt?: InputMaybe<Order_By>;
+  /** lifetime absolute amount swapped either way */
+  volumeOutcome?: InputMaybe<Order_By>;
+  volumeUnderlying?: InputMaybe<Order_By>;
+};
+
+/** Ordering options when selecting data from "Pool". */
+export type Pool_Order_By = {
+  childMarket?: InputMaybe<ChildMarket_Order_By>;
+  childMarket_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  liquidity?: InputMaybe<Order_By>;
+  outcomeIndex?: InputMaybe<Order_By>;
+  outcomeIsToken0?: InputMaybe<Order_By>;
+  outcomeToken?: InputMaybe<Order_By>;
+  price?: InputMaybe<Order_By>;
+  swaps_aggregate?: InputMaybe<Swap_Aggregate_Order_By>;
+  tick?: InputMaybe<Order_By>;
+  underlyingToken?: InputMaybe<Order_By>;
+  updatedAt?: InputMaybe<Order_By>;
+  volumeOutcome?: InputMaybe<Order_By>;
+  volumeUnderlying?: InputMaybe<Order_By>;
+};
+
+/** select columns of table "Pool" */
+export enum Pool_Select_Column {
+  /** column name */
+  ChildMarketId = 'childMarket_id',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  Liquidity = 'liquidity',
+  /** column name */
+  OutcomeIndex = 'outcomeIndex',
+  /** column name */
+  OutcomeIsToken0 = 'outcomeIsToken0',
+  /** column name */
+  OutcomeToken = 'outcomeToken',
+  /** column name */
+  Price = 'price',
+  /** column name */
+  Tick = 'tick',
+  /** column name */
+  UnderlyingToken = 'underlyingToken',
+  /** column name */
+  UpdatedAt = 'updatedAt',
+  /** column name */
+  VolumeOutcome = 'volumeOutcome',
+  /** column name */
+  VolumeUnderlying = 'volumeUnderlying'
+}
+
+/** order by stddev() on columns of table "Pool" */
+export type Pool_Stddev_Order_By = {
+  /** the concentrated-liquidity L the last swap reported */
+  liquidity?: InputMaybe<Order_By>;
+  /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
+  outcomeIndex?: InputMaybe<Order_By>;
+  /** sqrt price the pool was last left at, X96 */
+  price?: InputMaybe<Order_By>;
+  tick?: InputMaybe<Order_By>;
+  updatedAt?: InputMaybe<Order_By>;
+  /** lifetime absolute amount swapped either way */
+  volumeOutcome?: InputMaybe<Order_By>;
+  volumeUnderlying?: InputMaybe<Order_By>;
+};
+
+/** order by stddev_pop() on columns of table "Pool" */
+export type Pool_Stddev_Pop_Order_By = {
+  /** the concentrated-liquidity L the last swap reported */
+  liquidity?: InputMaybe<Order_By>;
+  /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
+  outcomeIndex?: InputMaybe<Order_By>;
+  /** sqrt price the pool was last left at, X96 */
+  price?: InputMaybe<Order_By>;
+  tick?: InputMaybe<Order_By>;
+  updatedAt?: InputMaybe<Order_By>;
+  /** lifetime absolute amount swapped either way */
+  volumeOutcome?: InputMaybe<Order_By>;
+  volumeUnderlying?: InputMaybe<Order_By>;
+};
+
+/** order by stddev_samp() on columns of table "Pool" */
+export type Pool_Stddev_Samp_Order_By = {
+  /** the concentrated-liquidity L the last swap reported */
+  liquidity?: InputMaybe<Order_By>;
+  /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
+  outcomeIndex?: InputMaybe<Order_By>;
+  /** sqrt price the pool was last left at, X96 */
+  price?: InputMaybe<Order_By>;
+  tick?: InputMaybe<Order_By>;
+  updatedAt?: InputMaybe<Order_By>;
+  /** lifetime absolute amount swapped either way */
+  volumeOutcome?: InputMaybe<Order_By>;
+  volumeUnderlying?: InputMaybe<Order_By>;
+};
+
+/** Streaming cursor of the table "Pool" */
+export type Pool_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Pool_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Pool_Stream_Cursor_Value_Input = {
+  childMarket_id?: InputMaybe<Scalars['String']['input']>;
+  /** pool address */
+  id?: InputMaybe<Scalars['String']['input']>;
+  /** the concentrated-liquidity L the last swap reported */
+  liquidity?: InputMaybe<Scalars['numeric']['input']>;
+  /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
+  outcomeIndex?: InputMaybe<Scalars['Int']['input']>;
+  /** whether the outcome token is token0 */
+  outcomeIsToken0?: InputMaybe<Scalars['Boolean']['input']>;
+  outcomeToken?: InputMaybe<Scalars['String']['input']>;
+  /** sqrt price the pool was last left at, X96 */
+  price?: InputMaybe<Scalars['numeric']['input']>;
+  tick?: InputMaybe<Scalars['Int']['input']>;
+  underlyingToken?: InputMaybe<Scalars['String']['input']>;
+  updatedAt?: InputMaybe<Scalars['numeric']['input']>;
+  /** lifetime absolute amount swapped either way */
+  volumeOutcome?: InputMaybe<Scalars['numeric']['input']>;
+  volumeUnderlying?: InputMaybe<Scalars['numeric']['input']>;
+};
+
+/** order by sum() on columns of table "Pool" */
+export type Pool_Sum_Order_By = {
+  /** the concentrated-liquidity L the last swap reported */
+  liquidity?: InputMaybe<Order_By>;
+  /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
+  outcomeIndex?: InputMaybe<Order_By>;
+  /** sqrt price the pool was last left at, X96 */
+  price?: InputMaybe<Order_By>;
+  tick?: InputMaybe<Order_By>;
+  updatedAt?: InputMaybe<Order_By>;
+  /** lifetime absolute amount swapped either way */
+  volumeOutcome?: InputMaybe<Order_By>;
+  volumeUnderlying?: InputMaybe<Order_By>;
+};
+
+/** order by var_pop() on columns of table "Pool" */
+export type Pool_Var_Pop_Order_By = {
+  /** the concentrated-liquidity L the last swap reported */
+  liquidity?: InputMaybe<Order_By>;
+  /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
+  outcomeIndex?: InputMaybe<Order_By>;
+  /** sqrt price the pool was last left at, X96 */
+  price?: InputMaybe<Order_By>;
+  tick?: InputMaybe<Order_By>;
+  updatedAt?: InputMaybe<Order_By>;
+  /** lifetime absolute amount swapped either way */
+  volumeOutcome?: InputMaybe<Order_By>;
+  volumeUnderlying?: InputMaybe<Order_By>;
+};
+
+/** order by var_samp() on columns of table "Pool" */
+export type Pool_Var_Samp_Order_By = {
+  /** the concentrated-liquidity L the last swap reported */
+  liquidity?: InputMaybe<Order_By>;
+  /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
+  outcomeIndex?: InputMaybe<Order_By>;
+  /** sqrt price the pool was last left at, X96 */
+  price?: InputMaybe<Order_By>;
+  tick?: InputMaybe<Order_By>;
+  updatedAt?: InputMaybe<Order_By>;
+  /** lifetime absolute amount swapped either way */
+  volumeOutcome?: InputMaybe<Order_By>;
+  volumeUnderlying?: InputMaybe<Order_By>;
+};
+
+/** order by variance() on columns of table "Pool" */
+export type Pool_Variance_Order_By = {
+  /** the concentrated-liquidity L the last swap reported */
+  liquidity?: InputMaybe<Order_By>;
+  /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
+  outcomeIndex?: InputMaybe<Order_By>;
+  /** sqrt price the pool was last left at, X96 */
+  price?: InputMaybe<Order_By>;
+  tick?: InputMaybe<Order_By>;
+  updatedAt?: InputMaybe<Order_By>;
+  /** lifetime absolute amount swapped either way */
+  volumeOutcome?: InputMaybe<Order_By>;
+  volumeUnderlying?: InputMaybe<Order_By>;
+};
+
+/** An executor's running balance of one token, summed off its transfers. Prediction rows copy their balances from here. */
+export type Position = {
+  __typename?: 'Position';
+  balance: Scalars['numeric']['output'];
+  /** An object relationship */
+  executor?: Maybe<Executor>;
+  executor_id: Scalars['String']['output'];
+  /** executor-token */
+  id: Scalars['String']['output'];
+  token: Scalars['String']['output'];
+  updatedAt: Scalars['numeric']['output'];
+};
+
+/** order by aggregate values of table "Position" */
+export type Position_Aggregate_Order_By = {
+  avg?: InputMaybe<Position_Avg_Order_By>;
+  count?: InputMaybe<Order_By>;
+  max?: InputMaybe<Position_Max_Order_By>;
+  min?: InputMaybe<Position_Min_Order_By>;
+  stddev?: InputMaybe<Position_Stddev_Order_By>;
+  stddev_pop?: InputMaybe<Position_Stddev_Pop_Order_By>;
+  stddev_samp?: InputMaybe<Position_Stddev_Samp_Order_By>;
+  sum?: InputMaybe<Position_Sum_Order_By>;
+  var_pop?: InputMaybe<Position_Var_Pop_Order_By>;
+  var_samp?: InputMaybe<Position_Var_Samp_Order_By>;
+  variance?: InputMaybe<Position_Variance_Order_By>;
+};
+
+/** order by avg() on columns of table "Position" */
+export type Position_Avg_Order_By = {
+  balance?: InputMaybe<Order_By>;
+  updatedAt?: InputMaybe<Order_By>;
+};
+
+/** Boolean expression to filter rows from the table "Position". All fields are combined with a logical 'AND'. */
+export type Position_Bool_Exp = {
+  _and?: InputMaybe<Array<Position_Bool_Exp>>;
+  _not?: InputMaybe<Position_Bool_Exp>;
+  _or?: InputMaybe<Array<Position_Bool_Exp>>;
+  balance?: InputMaybe<Numeric_Comparison_Exp>;
+  executor?: InputMaybe<Executor_Bool_Exp>;
+  executor_id?: InputMaybe<String_Comparison_Exp>;
+  id?: InputMaybe<String_Comparison_Exp>;
+  token?: InputMaybe<String_Comparison_Exp>;
+  updatedAt?: InputMaybe<Numeric_Comparison_Exp>;
+};
+
+/** order by max() on columns of table "Position" */
+export type Position_Max_Order_By = {
+  balance?: InputMaybe<Order_By>;
+  executor_id?: InputMaybe<Order_By>;
+  /** executor-token */
+  id?: InputMaybe<Order_By>;
+  token?: InputMaybe<Order_By>;
+  updatedAt?: InputMaybe<Order_By>;
+};
+
+/** order by min() on columns of table "Position" */
+export type Position_Min_Order_By = {
+  balance?: InputMaybe<Order_By>;
+  executor_id?: InputMaybe<Order_By>;
+  /** executor-token */
+  id?: InputMaybe<Order_By>;
+  token?: InputMaybe<Order_By>;
+  updatedAt?: InputMaybe<Order_By>;
+};
+
+/** Ordering options when selecting data from "Position". */
+export type Position_Order_By = {
+  balance?: InputMaybe<Order_By>;
+  executor?: InputMaybe<Executor_Order_By>;
+  executor_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  token?: InputMaybe<Order_By>;
+  updatedAt?: InputMaybe<Order_By>;
+};
+
+/** select columns of table "Position" */
+export enum Position_Select_Column {
+  /** column name */
+  Balance = 'balance',
+  /** column name */
+  ExecutorId = 'executor_id',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  Token = 'token',
+  /** column name */
+  UpdatedAt = 'updatedAt'
+}
+
+/** order by stddev() on columns of table "Position" */
+export type Position_Stddev_Order_By = {
+  balance?: InputMaybe<Order_By>;
+  updatedAt?: InputMaybe<Order_By>;
+};
+
+/** order by stddev_pop() on columns of table "Position" */
+export type Position_Stddev_Pop_Order_By = {
+  balance?: InputMaybe<Order_By>;
+  updatedAt?: InputMaybe<Order_By>;
+};
+
+/** order by stddev_samp() on columns of table "Position" */
+export type Position_Stddev_Samp_Order_By = {
+  balance?: InputMaybe<Order_By>;
+  updatedAt?: InputMaybe<Order_By>;
+};
+
+/** Streaming cursor of the table "Position" */
+export type Position_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Position_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Position_Stream_Cursor_Value_Input = {
+  balance?: InputMaybe<Scalars['numeric']['input']>;
+  executor_id?: InputMaybe<Scalars['String']['input']>;
+  /** executor-token */
+  id?: InputMaybe<Scalars['String']['input']>;
+  token?: InputMaybe<Scalars['String']['input']>;
+  updatedAt?: InputMaybe<Scalars['numeric']['input']>;
+};
+
+/** order by sum() on columns of table "Position" */
+export type Position_Sum_Order_By = {
+  balance?: InputMaybe<Order_By>;
+  updatedAt?: InputMaybe<Order_By>;
+};
+
+/** order by var_pop() on columns of table "Position" */
+export type Position_Var_Pop_Order_By = {
+  balance?: InputMaybe<Order_By>;
+  updatedAt?: InputMaybe<Order_By>;
+};
+
+/** order by var_samp() on columns of table "Position" */
+export type Position_Var_Samp_Order_By = {
+  balance?: InputMaybe<Order_By>;
+  updatedAt?: InputMaybe<Order_By>;
+};
+
+/** order by variance() on columns of table "Position" */
+export type Position_Variance_Order_By = {
+  balance?: InputMaybe<Order_By>;
+  updatedAt?: InputMaybe<Order_By>;
+};
+
+/** An executor's net trading in one child market within one transaction. */
+export type Prediction = {
+  __typename?: 'Prediction';
+  blockNumber: Scalars['numeric']['output'];
+  /** An object relationship */
+  childMarket?: Maybe<ChildMarket>;
+  childMarket_id: Scalars['String']['output'];
+  /** underlying paid per whole token averaged over the transaction */
+  downAvgPrice?: Maybe<Scalars['numeric']['output']>;
+  downBalance: Scalars['numeric']['output'];
+  downDelta: Scalars['numeric']['output'];
+  downPriceAfter?: Maybe<Scalars['numeric']['output']>;
+  /** the pool price before this side's first swap and after its last */
+  downPriceBefore?: Maybe<Scalars['numeric']['output']>;
+  downSwapTokens: Scalars['numeric']['output'];
+  /** totals over every swap on that side in the transaction */
+  downSwapUnderlying: Scalars['numeric']['output'];
+  /** An object relationship */
+  executor?: Maybe<Executor>;
+  executor_id: Scalars['String']['output'];
+  /** transactionHash-executor-childMarket */
+  id: Scalars['String']['output'];
+  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  impliedPrediction?: Maybe<Scalars['numeric']['output']>;
+  timestamp: Scalars['numeric']['output'];
+  transactionHash: Scalars['String']['output'];
+  /** the executor's balances once the transaction settled */
+  underlyingBalance: Scalars['numeric']['output'];
+  /** signed net movement over the whole transaction */
+  underlyingDelta: Scalars['numeric']['output'];
+  upAvgPrice?: Maybe<Scalars['numeric']['output']>;
+  upBalance: Scalars['numeric']['output'];
+  upDelta: Scalars['numeric']['output'];
+  upPriceAfter?: Maybe<Scalars['numeric']['output']>;
+  upPriceBefore?: Maybe<Scalars['numeric']['output']>;
+  upSwapTokens: Scalars['numeric']['output'];
+  upSwapUnderlying: Scalars['numeric']['output'];
+};
+
+/** order by aggregate values of table "Prediction" */
+export type Prediction_Aggregate_Order_By = {
+  avg?: InputMaybe<Prediction_Avg_Order_By>;
+  count?: InputMaybe<Order_By>;
+  max?: InputMaybe<Prediction_Max_Order_By>;
+  min?: InputMaybe<Prediction_Min_Order_By>;
+  stddev?: InputMaybe<Prediction_Stddev_Order_By>;
+  stddev_pop?: InputMaybe<Prediction_Stddev_Pop_Order_By>;
+  stddev_samp?: InputMaybe<Prediction_Stddev_Samp_Order_By>;
+  sum?: InputMaybe<Prediction_Sum_Order_By>;
+  var_pop?: InputMaybe<Prediction_Var_Pop_Order_By>;
+  var_samp?: InputMaybe<Prediction_Var_Samp_Order_By>;
+  variance?: InputMaybe<Prediction_Variance_Order_By>;
+};
+
+/** order by avg() on columns of table "Prediction" */
+export type Prediction_Avg_Order_By = {
+  blockNumber?: InputMaybe<Order_By>;
+  /** underlying paid per whole token averaged over the transaction */
+  downAvgPrice?: InputMaybe<Order_By>;
+  downBalance?: InputMaybe<Order_By>;
+  downDelta?: InputMaybe<Order_By>;
+  downPriceAfter?: InputMaybe<Order_By>;
+  /** the pool price before this side's first swap and after its last */
+  downPriceBefore?: InputMaybe<Order_By>;
+  downSwapTokens?: InputMaybe<Order_By>;
+  /** totals over every swap on that side in the transaction */
+  downSwapUnderlying?: InputMaybe<Order_By>;
+  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  impliedPrediction?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  /** the executor's balances once the transaction settled */
+  underlyingBalance?: InputMaybe<Order_By>;
+  /** signed net movement over the whole transaction */
+  underlyingDelta?: InputMaybe<Order_By>;
+  upAvgPrice?: InputMaybe<Order_By>;
+  upBalance?: InputMaybe<Order_By>;
+  upDelta?: InputMaybe<Order_By>;
+  upPriceAfter?: InputMaybe<Order_By>;
+  upPriceBefore?: InputMaybe<Order_By>;
+  upSwapTokens?: InputMaybe<Order_By>;
+  upSwapUnderlying?: InputMaybe<Order_By>;
+};
+
+/** Boolean expression to filter rows from the table "Prediction". All fields are combined with a logical 'AND'. */
+export type Prediction_Bool_Exp = {
+  _and?: InputMaybe<Array<Prediction_Bool_Exp>>;
+  _not?: InputMaybe<Prediction_Bool_Exp>;
+  _or?: InputMaybe<Array<Prediction_Bool_Exp>>;
+  blockNumber?: InputMaybe<Numeric_Comparison_Exp>;
+  childMarket?: InputMaybe<ChildMarket_Bool_Exp>;
+  childMarket_id?: InputMaybe<String_Comparison_Exp>;
+  downAvgPrice?: InputMaybe<Numeric_Comparison_Exp>;
+  downBalance?: InputMaybe<Numeric_Comparison_Exp>;
+  downDelta?: InputMaybe<Numeric_Comparison_Exp>;
+  downPriceAfter?: InputMaybe<Numeric_Comparison_Exp>;
+  downPriceBefore?: InputMaybe<Numeric_Comparison_Exp>;
+  downSwapTokens?: InputMaybe<Numeric_Comparison_Exp>;
+  downSwapUnderlying?: InputMaybe<Numeric_Comparison_Exp>;
+  executor?: InputMaybe<Executor_Bool_Exp>;
+  executor_id?: InputMaybe<String_Comparison_Exp>;
+  id?: InputMaybe<String_Comparison_Exp>;
+  impliedPrediction?: InputMaybe<Numeric_Comparison_Exp>;
+  timestamp?: InputMaybe<Numeric_Comparison_Exp>;
+  transactionHash?: InputMaybe<String_Comparison_Exp>;
+  underlyingBalance?: InputMaybe<Numeric_Comparison_Exp>;
+  underlyingDelta?: InputMaybe<Numeric_Comparison_Exp>;
+  upAvgPrice?: InputMaybe<Numeric_Comparison_Exp>;
+  upBalance?: InputMaybe<Numeric_Comparison_Exp>;
+  upDelta?: InputMaybe<Numeric_Comparison_Exp>;
+  upPriceAfter?: InputMaybe<Numeric_Comparison_Exp>;
+  upPriceBefore?: InputMaybe<Numeric_Comparison_Exp>;
+  upSwapTokens?: InputMaybe<Numeric_Comparison_Exp>;
+  upSwapUnderlying?: InputMaybe<Numeric_Comparison_Exp>;
+};
+
+/** order by max() on columns of table "Prediction" */
+export type Prediction_Max_Order_By = {
+  blockNumber?: InputMaybe<Order_By>;
+  childMarket_id?: InputMaybe<Order_By>;
+  /** underlying paid per whole token averaged over the transaction */
+  downAvgPrice?: InputMaybe<Order_By>;
+  downBalance?: InputMaybe<Order_By>;
+  downDelta?: InputMaybe<Order_By>;
+  downPriceAfter?: InputMaybe<Order_By>;
+  /** the pool price before this side's first swap and after its last */
+  downPriceBefore?: InputMaybe<Order_By>;
+  downSwapTokens?: InputMaybe<Order_By>;
+  /** totals over every swap on that side in the transaction */
+  downSwapUnderlying?: InputMaybe<Order_By>;
+  executor_id?: InputMaybe<Order_By>;
+  /** transactionHash-executor-childMarket */
+  id?: InputMaybe<Order_By>;
+  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  impliedPrediction?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  transactionHash?: InputMaybe<Order_By>;
+  /** the executor's balances once the transaction settled */
+  underlyingBalance?: InputMaybe<Order_By>;
+  /** signed net movement over the whole transaction */
+  underlyingDelta?: InputMaybe<Order_By>;
+  upAvgPrice?: InputMaybe<Order_By>;
+  upBalance?: InputMaybe<Order_By>;
+  upDelta?: InputMaybe<Order_By>;
+  upPriceAfter?: InputMaybe<Order_By>;
+  upPriceBefore?: InputMaybe<Order_By>;
+  upSwapTokens?: InputMaybe<Order_By>;
+  upSwapUnderlying?: InputMaybe<Order_By>;
+};
+
+/** order by min() on columns of table "Prediction" */
+export type Prediction_Min_Order_By = {
+  blockNumber?: InputMaybe<Order_By>;
+  childMarket_id?: InputMaybe<Order_By>;
+  /** underlying paid per whole token averaged over the transaction */
+  downAvgPrice?: InputMaybe<Order_By>;
+  downBalance?: InputMaybe<Order_By>;
+  downDelta?: InputMaybe<Order_By>;
+  downPriceAfter?: InputMaybe<Order_By>;
+  /** the pool price before this side's first swap and after its last */
+  downPriceBefore?: InputMaybe<Order_By>;
+  downSwapTokens?: InputMaybe<Order_By>;
+  /** totals over every swap on that side in the transaction */
+  downSwapUnderlying?: InputMaybe<Order_By>;
+  executor_id?: InputMaybe<Order_By>;
+  /** transactionHash-executor-childMarket */
+  id?: InputMaybe<Order_By>;
+  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  impliedPrediction?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  transactionHash?: InputMaybe<Order_By>;
+  /** the executor's balances once the transaction settled */
+  underlyingBalance?: InputMaybe<Order_By>;
+  /** signed net movement over the whole transaction */
+  underlyingDelta?: InputMaybe<Order_By>;
+  upAvgPrice?: InputMaybe<Order_By>;
+  upBalance?: InputMaybe<Order_By>;
+  upDelta?: InputMaybe<Order_By>;
+  upPriceAfter?: InputMaybe<Order_By>;
+  upPriceBefore?: InputMaybe<Order_By>;
+  upSwapTokens?: InputMaybe<Order_By>;
+  upSwapUnderlying?: InputMaybe<Order_By>;
+};
+
+/** Ordering options when selecting data from "Prediction". */
+export type Prediction_Order_By = {
+  blockNumber?: InputMaybe<Order_By>;
+  childMarket?: InputMaybe<ChildMarket_Order_By>;
+  childMarket_id?: InputMaybe<Order_By>;
+  downAvgPrice?: InputMaybe<Order_By>;
+  downBalance?: InputMaybe<Order_By>;
+  downDelta?: InputMaybe<Order_By>;
+  downPriceAfter?: InputMaybe<Order_By>;
+  downPriceBefore?: InputMaybe<Order_By>;
+  downSwapTokens?: InputMaybe<Order_By>;
+  downSwapUnderlying?: InputMaybe<Order_By>;
+  executor?: InputMaybe<Executor_Order_By>;
+  executor_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  impliedPrediction?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  transactionHash?: InputMaybe<Order_By>;
+  underlyingBalance?: InputMaybe<Order_By>;
+  underlyingDelta?: InputMaybe<Order_By>;
+  upAvgPrice?: InputMaybe<Order_By>;
+  upBalance?: InputMaybe<Order_By>;
+  upDelta?: InputMaybe<Order_By>;
+  upPriceAfter?: InputMaybe<Order_By>;
+  upPriceBefore?: InputMaybe<Order_By>;
+  upSwapTokens?: InputMaybe<Order_By>;
+  upSwapUnderlying?: InputMaybe<Order_By>;
+};
+
+/** select columns of table "Prediction" */
+export enum Prediction_Select_Column {
+  /** column name */
+  BlockNumber = 'blockNumber',
+  /** column name */
+  ChildMarketId = 'childMarket_id',
+  /** column name */
+  DownAvgPrice = 'downAvgPrice',
+  /** column name */
+  DownBalance = 'downBalance',
+  /** column name */
+  DownDelta = 'downDelta',
+  /** column name */
+  DownPriceAfter = 'downPriceAfter',
+  /** column name */
+  DownPriceBefore = 'downPriceBefore',
+  /** column name */
+  DownSwapTokens = 'downSwapTokens',
+  /** column name */
+  DownSwapUnderlying = 'downSwapUnderlying',
+  /** column name */
+  ExecutorId = 'executor_id',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  ImpliedPrediction = 'impliedPrediction',
+  /** column name */
+  Timestamp = 'timestamp',
+  /** column name */
+  TransactionHash = 'transactionHash',
+  /** column name */
+  UnderlyingBalance = 'underlyingBalance',
+  /** column name */
+  UnderlyingDelta = 'underlyingDelta',
+  /** column name */
+  UpAvgPrice = 'upAvgPrice',
+  /** column name */
+  UpBalance = 'upBalance',
+  /** column name */
+  UpDelta = 'upDelta',
+  /** column name */
+  UpPriceAfter = 'upPriceAfter',
+  /** column name */
+  UpPriceBefore = 'upPriceBefore',
+  /** column name */
+  UpSwapTokens = 'upSwapTokens',
+  /** column name */
+  UpSwapUnderlying = 'upSwapUnderlying'
+}
+
+/** order by stddev() on columns of table "Prediction" */
+export type Prediction_Stddev_Order_By = {
+  blockNumber?: InputMaybe<Order_By>;
+  /** underlying paid per whole token averaged over the transaction */
+  downAvgPrice?: InputMaybe<Order_By>;
+  downBalance?: InputMaybe<Order_By>;
+  downDelta?: InputMaybe<Order_By>;
+  downPriceAfter?: InputMaybe<Order_By>;
+  /** the pool price before this side's first swap and after its last */
+  downPriceBefore?: InputMaybe<Order_By>;
+  downSwapTokens?: InputMaybe<Order_By>;
+  /** totals over every swap on that side in the transaction */
+  downSwapUnderlying?: InputMaybe<Order_By>;
+  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  impliedPrediction?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  /** the executor's balances once the transaction settled */
+  underlyingBalance?: InputMaybe<Order_By>;
+  /** signed net movement over the whole transaction */
+  underlyingDelta?: InputMaybe<Order_By>;
+  upAvgPrice?: InputMaybe<Order_By>;
+  upBalance?: InputMaybe<Order_By>;
+  upDelta?: InputMaybe<Order_By>;
+  upPriceAfter?: InputMaybe<Order_By>;
+  upPriceBefore?: InputMaybe<Order_By>;
+  upSwapTokens?: InputMaybe<Order_By>;
+  upSwapUnderlying?: InputMaybe<Order_By>;
+};
+
+/** order by stddev_pop() on columns of table "Prediction" */
+export type Prediction_Stddev_Pop_Order_By = {
+  blockNumber?: InputMaybe<Order_By>;
+  /** underlying paid per whole token averaged over the transaction */
+  downAvgPrice?: InputMaybe<Order_By>;
+  downBalance?: InputMaybe<Order_By>;
+  downDelta?: InputMaybe<Order_By>;
+  downPriceAfter?: InputMaybe<Order_By>;
+  /** the pool price before this side's first swap and after its last */
+  downPriceBefore?: InputMaybe<Order_By>;
+  downSwapTokens?: InputMaybe<Order_By>;
+  /** totals over every swap on that side in the transaction */
+  downSwapUnderlying?: InputMaybe<Order_By>;
+  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  impliedPrediction?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  /** the executor's balances once the transaction settled */
+  underlyingBalance?: InputMaybe<Order_By>;
+  /** signed net movement over the whole transaction */
+  underlyingDelta?: InputMaybe<Order_By>;
+  upAvgPrice?: InputMaybe<Order_By>;
+  upBalance?: InputMaybe<Order_By>;
+  upDelta?: InputMaybe<Order_By>;
+  upPriceAfter?: InputMaybe<Order_By>;
+  upPriceBefore?: InputMaybe<Order_By>;
+  upSwapTokens?: InputMaybe<Order_By>;
+  upSwapUnderlying?: InputMaybe<Order_By>;
+};
+
+/** order by stddev_samp() on columns of table "Prediction" */
+export type Prediction_Stddev_Samp_Order_By = {
+  blockNumber?: InputMaybe<Order_By>;
+  /** underlying paid per whole token averaged over the transaction */
+  downAvgPrice?: InputMaybe<Order_By>;
+  downBalance?: InputMaybe<Order_By>;
+  downDelta?: InputMaybe<Order_By>;
+  downPriceAfter?: InputMaybe<Order_By>;
+  /** the pool price before this side's first swap and after its last */
+  downPriceBefore?: InputMaybe<Order_By>;
+  downSwapTokens?: InputMaybe<Order_By>;
+  /** totals over every swap on that side in the transaction */
+  downSwapUnderlying?: InputMaybe<Order_By>;
+  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  impliedPrediction?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  /** the executor's balances once the transaction settled */
+  underlyingBalance?: InputMaybe<Order_By>;
+  /** signed net movement over the whole transaction */
+  underlyingDelta?: InputMaybe<Order_By>;
+  upAvgPrice?: InputMaybe<Order_By>;
+  upBalance?: InputMaybe<Order_By>;
+  upDelta?: InputMaybe<Order_By>;
+  upPriceAfter?: InputMaybe<Order_By>;
+  upPriceBefore?: InputMaybe<Order_By>;
+  upSwapTokens?: InputMaybe<Order_By>;
+  upSwapUnderlying?: InputMaybe<Order_By>;
+};
+
+/** Streaming cursor of the table "Prediction" */
+export type Prediction_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Prediction_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Prediction_Stream_Cursor_Value_Input = {
+  blockNumber?: InputMaybe<Scalars['numeric']['input']>;
+  childMarket_id?: InputMaybe<Scalars['String']['input']>;
+  /** underlying paid per whole token averaged over the transaction */
+  downAvgPrice?: InputMaybe<Scalars['numeric']['input']>;
+  downBalance?: InputMaybe<Scalars['numeric']['input']>;
+  downDelta?: InputMaybe<Scalars['numeric']['input']>;
+  downPriceAfter?: InputMaybe<Scalars['numeric']['input']>;
+  /** the pool price before this side's first swap and after its last */
+  downPriceBefore?: InputMaybe<Scalars['numeric']['input']>;
+  downSwapTokens?: InputMaybe<Scalars['numeric']['input']>;
+  /** totals over every swap on that side in the transaction */
+  downSwapUnderlying?: InputMaybe<Scalars['numeric']['input']>;
+  executor_id?: InputMaybe<Scalars['String']['input']>;
+  /** transactionHash-executor-childMarket */
+  id?: InputMaybe<Scalars['String']['input']>;
+  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  impliedPrediction?: InputMaybe<Scalars['numeric']['input']>;
+  timestamp?: InputMaybe<Scalars['numeric']['input']>;
+  transactionHash?: InputMaybe<Scalars['String']['input']>;
+  /** the executor's balances once the transaction settled */
+  underlyingBalance?: InputMaybe<Scalars['numeric']['input']>;
+  /** signed net movement over the whole transaction */
+  underlyingDelta?: InputMaybe<Scalars['numeric']['input']>;
+  upAvgPrice?: InputMaybe<Scalars['numeric']['input']>;
+  upBalance?: InputMaybe<Scalars['numeric']['input']>;
+  upDelta?: InputMaybe<Scalars['numeric']['input']>;
+  upPriceAfter?: InputMaybe<Scalars['numeric']['input']>;
+  upPriceBefore?: InputMaybe<Scalars['numeric']['input']>;
+  upSwapTokens?: InputMaybe<Scalars['numeric']['input']>;
+  upSwapUnderlying?: InputMaybe<Scalars['numeric']['input']>;
+};
+
+/** order by sum() on columns of table "Prediction" */
+export type Prediction_Sum_Order_By = {
+  blockNumber?: InputMaybe<Order_By>;
+  /** underlying paid per whole token averaged over the transaction */
+  downAvgPrice?: InputMaybe<Order_By>;
+  downBalance?: InputMaybe<Order_By>;
+  downDelta?: InputMaybe<Order_By>;
+  downPriceAfter?: InputMaybe<Order_By>;
+  /** the pool price before this side's first swap and after its last */
+  downPriceBefore?: InputMaybe<Order_By>;
+  downSwapTokens?: InputMaybe<Order_By>;
+  /** totals over every swap on that side in the transaction */
+  downSwapUnderlying?: InputMaybe<Order_By>;
+  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  impliedPrediction?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  /** the executor's balances once the transaction settled */
+  underlyingBalance?: InputMaybe<Order_By>;
+  /** signed net movement over the whole transaction */
+  underlyingDelta?: InputMaybe<Order_By>;
+  upAvgPrice?: InputMaybe<Order_By>;
+  upBalance?: InputMaybe<Order_By>;
+  upDelta?: InputMaybe<Order_By>;
+  upPriceAfter?: InputMaybe<Order_By>;
+  upPriceBefore?: InputMaybe<Order_By>;
+  upSwapTokens?: InputMaybe<Order_By>;
+  upSwapUnderlying?: InputMaybe<Order_By>;
+};
+
+/** order by var_pop() on columns of table "Prediction" */
+export type Prediction_Var_Pop_Order_By = {
+  blockNumber?: InputMaybe<Order_By>;
+  /** underlying paid per whole token averaged over the transaction */
+  downAvgPrice?: InputMaybe<Order_By>;
+  downBalance?: InputMaybe<Order_By>;
+  downDelta?: InputMaybe<Order_By>;
+  downPriceAfter?: InputMaybe<Order_By>;
+  /** the pool price before this side's first swap and after its last */
+  downPriceBefore?: InputMaybe<Order_By>;
+  downSwapTokens?: InputMaybe<Order_By>;
+  /** totals over every swap on that side in the transaction */
+  downSwapUnderlying?: InputMaybe<Order_By>;
+  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  impliedPrediction?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  /** the executor's balances once the transaction settled */
+  underlyingBalance?: InputMaybe<Order_By>;
+  /** signed net movement over the whole transaction */
+  underlyingDelta?: InputMaybe<Order_By>;
+  upAvgPrice?: InputMaybe<Order_By>;
+  upBalance?: InputMaybe<Order_By>;
+  upDelta?: InputMaybe<Order_By>;
+  upPriceAfter?: InputMaybe<Order_By>;
+  upPriceBefore?: InputMaybe<Order_By>;
+  upSwapTokens?: InputMaybe<Order_By>;
+  upSwapUnderlying?: InputMaybe<Order_By>;
+};
+
+/** order by var_samp() on columns of table "Prediction" */
+export type Prediction_Var_Samp_Order_By = {
+  blockNumber?: InputMaybe<Order_By>;
+  /** underlying paid per whole token averaged over the transaction */
+  downAvgPrice?: InputMaybe<Order_By>;
+  downBalance?: InputMaybe<Order_By>;
+  downDelta?: InputMaybe<Order_By>;
+  downPriceAfter?: InputMaybe<Order_By>;
+  /** the pool price before this side's first swap and after its last */
+  downPriceBefore?: InputMaybe<Order_By>;
+  downSwapTokens?: InputMaybe<Order_By>;
+  /** totals over every swap on that side in the transaction */
+  downSwapUnderlying?: InputMaybe<Order_By>;
+  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  impliedPrediction?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  /** the executor's balances once the transaction settled */
+  underlyingBalance?: InputMaybe<Order_By>;
+  /** signed net movement over the whole transaction */
+  underlyingDelta?: InputMaybe<Order_By>;
+  upAvgPrice?: InputMaybe<Order_By>;
+  upBalance?: InputMaybe<Order_By>;
+  upDelta?: InputMaybe<Order_By>;
+  upPriceAfter?: InputMaybe<Order_By>;
+  upPriceBefore?: InputMaybe<Order_By>;
+  upSwapTokens?: InputMaybe<Order_By>;
+  upSwapUnderlying?: InputMaybe<Order_By>;
+};
+
+/** order by variance() on columns of table "Prediction" */
+export type Prediction_Variance_Order_By = {
+  blockNumber?: InputMaybe<Order_By>;
+  /** underlying paid per whole token averaged over the transaction */
+  downAvgPrice?: InputMaybe<Order_By>;
+  downBalance?: InputMaybe<Order_By>;
+  downDelta?: InputMaybe<Order_By>;
+  downPriceAfter?: InputMaybe<Order_By>;
+  /** the pool price before this side's first swap and after its last */
+  downPriceBefore?: InputMaybe<Order_By>;
+  downSwapTokens?: InputMaybe<Order_By>;
+  /** totals over every swap on that side in the transaction */
+  downSwapUnderlying?: InputMaybe<Order_By>;
+  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  impliedPrediction?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  /** the executor's balances once the transaction settled */
+  underlyingBalance?: InputMaybe<Order_By>;
+  /** signed net movement over the whole transaction */
+  underlyingDelta?: InputMaybe<Order_By>;
+  upAvgPrice?: InputMaybe<Order_By>;
+  upBalance?: InputMaybe<Order_By>;
+  upDelta?: InputMaybe<Order_By>;
+  upPriceAfter?: InputMaybe<Order_By>;
+  upPriceBefore?: InputMaybe<Order_By>;
+  upSwapTokens?: InputMaybe<Order_By>;
+  upSwapUnderlying?: InputMaybe<Order_By>;
 };
 
 /** columns and relationships of "Session" */
@@ -596,6 +1701,469 @@ export type String_Comparison_Exp = {
   _similar?: InputMaybe<Scalars['String']['input']>;
 };
 
+/** A swap through a followed pool */
+export type Swap = {
+  __typename?: 'Swap';
+  blockNumber: Scalars['numeric']['output'];
+  /** An object relationship */
+  childMarket?: Maybe<ChildMarket>;
+  childMarket_id: Scalars['String']['output'];
+  /** An object relationship */
+  executor?: Maybe<Executor>;
+  /** set when the swap paid out to one of our executors */
+  executor_id?: Maybe<Scalars['String']['output']>;
+  /** transactionHash-logIndex */
+  id: Scalars['String']['output'];
+  logIndex: Scalars['Int']['output'];
+  /** signed from the pool's side, so the outcome amount is negative when the trader bought */
+  outcomeAmount: Scalars['numeric']['output'];
+  /** An object relationship */
+  pool?: Maybe<Pool>;
+  pool_id: Scalars['String']['output'];
+  priceAfter: Scalars['numeric']['output'];
+  /** what the previous swap left the pool at */
+  priceBefore: Scalars['numeric']['output'];
+  tickAfter: Scalars['Int']['output'];
+  tickBefore: Scalars['Int']['output'];
+  timestamp: Scalars['numeric']['output'];
+  transactionHash: Scalars['String']['output'];
+  underlyingAmount: Scalars['numeric']['output'];
+};
+
+/** order by aggregate values of table "Swap" */
+export type Swap_Aggregate_Order_By = {
+  avg?: InputMaybe<Swap_Avg_Order_By>;
+  count?: InputMaybe<Order_By>;
+  max?: InputMaybe<Swap_Max_Order_By>;
+  min?: InputMaybe<Swap_Min_Order_By>;
+  stddev?: InputMaybe<Swap_Stddev_Order_By>;
+  stddev_pop?: InputMaybe<Swap_Stddev_Pop_Order_By>;
+  stddev_samp?: InputMaybe<Swap_Stddev_Samp_Order_By>;
+  sum?: InputMaybe<Swap_Sum_Order_By>;
+  var_pop?: InputMaybe<Swap_Var_Pop_Order_By>;
+  var_samp?: InputMaybe<Swap_Var_Samp_Order_By>;
+  variance?: InputMaybe<Swap_Variance_Order_By>;
+};
+
+/** order by avg() on columns of table "Swap" */
+export type Swap_Avg_Order_By = {
+  blockNumber?: InputMaybe<Order_By>;
+  logIndex?: InputMaybe<Order_By>;
+  /** signed from the pool's side, so the outcome amount is negative when the trader bought */
+  outcomeAmount?: InputMaybe<Order_By>;
+  priceAfter?: InputMaybe<Order_By>;
+  /** what the previous swap left the pool at */
+  priceBefore?: InputMaybe<Order_By>;
+  tickAfter?: InputMaybe<Order_By>;
+  tickBefore?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  underlyingAmount?: InputMaybe<Order_By>;
+};
+
+/** Boolean expression to filter rows from the table "Swap". All fields are combined with a logical 'AND'. */
+export type Swap_Bool_Exp = {
+  _and?: InputMaybe<Array<Swap_Bool_Exp>>;
+  _not?: InputMaybe<Swap_Bool_Exp>;
+  _or?: InputMaybe<Array<Swap_Bool_Exp>>;
+  blockNumber?: InputMaybe<Numeric_Comparison_Exp>;
+  childMarket?: InputMaybe<ChildMarket_Bool_Exp>;
+  childMarket_id?: InputMaybe<String_Comparison_Exp>;
+  executor?: InputMaybe<Executor_Bool_Exp>;
+  executor_id?: InputMaybe<String_Comparison_Exp>;
+  id?: InputMaybe<String_Comparison_Exp>;
+  logIndex?: InputMaybe<Int_Comparison_Exp>;
+  outcomeAmount?: InputMaybe<Numeric_Comparison_Exp>;
+  pool?: InputMaybe<Pool_Bool_Exp>;
+  pool_id?: InputMaybe<String_Comparison_Exp>;
+  priceAfter?: InputMaybe<Numeric_Comparison_Exp>;
+  priceBefore?: InputMaybe<Numeric_Comparison_Exp>;
+  tickAfter?: InputMaybe<Int_Comparison_Exp>;
+  tickBefore?: InputMaybe<Int_Comparison_Exp>;
+  timestamp?: InputMaybe<Numeric_Comparison_Exp>;
+  transactionHash?: InputMaybe<String_Comparison_Exp>;
+  underlyingAmount?: InputMaybe<Numeric_Comparison_Exp>;
+};
+
+/** order by max() on columns of table "Swap" */
+export type Swap_Max_Order_By = {
+  blockNumber?: InputMaybe<Order_By>;
+  childMarket_id?: InputMaybe<Order_By>;
+  /** set when the swap paid out to one of our executors */
+  executor_id?: InputMaybe<Order_By>;
+  /** transactionHash-logIndex */
+  id?: InputMaybe<Order_By>;
+  logIndex?: InputMaybe<Order_By>;
+  /** signed from the pool's side, so the outcome amount is negative when the trader bought */
+  outcomeAmount?: InputMaybe<Order_By>;
+  pool_id?: InputMaybe<Order_By>;
+  priceAfter?: InputMaybe<Order_By>;
+  /** what the previous swap left the pool at */
+  priceBefore?: InputMaybe<Order_By>;
+  tickAfter?: InputMaybe<Order_By>;
+  tickBefore?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  transactionHash?: InputMaybe<Order_By>;
+  underlyingAmount?: InputMaybe<Order_By>;
+};
+
+/** order by min() on columns of table "Swap" */
+export type Swap_Min_Order_By = {
+  blockNumber?: InputMaybe<Order_By>;
+  childMarket_id?: InputMaybe<Order_By>;
+  /** set when the swap paid out to one of our executors */
+  executor_id?: InputMaybe<Order_By>;
+  /** transactionHash-logIndex */
+  id?: InputMaybe<Order_By>;
+  logIndex?: InputMaybe<Order_By>;
+  /** signed from the pool's side, so the outcome amount is negative when the trader bought */
+  outcomeAmount?: InputMaybe<Order_By>;
+  pool_id?: InputMaybe<Order_By>;
+  priceAfter?: InputMaybe<Order_By>;
+  /** what the previous swap left the pool at */
+  priceBefore?: InputMaybe<Order_By>;
+  tickAfter?: InputMaybe<Order_By>;
+  tickBefore?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  transactionHash?: InputMaybe<Order_By>;
+  underlyingAmount?: InputMaybe<Order_By>;
+};
+
+/** Ordering options when selecting data from "Swap". */
+export type Swap_Order_By = {
+  blockNumber?: InputMaybe<Order_By>;
+  childMarket?: InputMaybe<ChildMarket_Order_By>;
+  childMarket_id?: InputMaybe<Order_By>;
+  executor?: InputMaybe<Executor_Order_By>;
+  executor_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  logIndex?: InputMaybe<Order_By>;
+  outcomeAmount?: InputMaybe<Order_By>;
+  pool?: InputMaybe<Pool_Order_By>;
+  pool_id?: InputMaybe<Order_By>;
+  priceAfter?: InputMaybe<Order_By>;
+  priceBefore?: InputMaybe<Order_By>;
+  tickAfter?: InputMaybe<Order_By>;
+  tickBefore?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  transactionHash?: InputMaybe<Order_By>;
+  underlyingAmount?: InputMaybe<Order_By>;
+};
+
+/** select columns of table "Swap" */
+export enum Swap_Select_Column {
+  /** column name */
+  BlockNumber = 'blockNumber',
+  /** column name */
+  ChildMarketId = 'childMarket_id',
+  /** column name */
+  ExecutorId = 'executor_id',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  LogIndex = 'logIndex',
+  /** column name */
+  OutcomeAmount = 'outcomeAmount',
+  /** column name */
+  PoolId = 'pool_id',
+  /** column name */
+  PriceAfter = 'priceAfter',
+  /** column name */
+  PriceBefore = 'priceBefore',
+  /** column name */
+  TickAfter = 'tickAfter',
+  /** column name */
+  TickBefore = 'tickBefore',
+  /** column name */
+  Timestamp = 'timestamp',
+  /** column name */
+  TransactionHash = 'transactionHash',
+  /** column name */
+  UnderlyingAmount = 'underlyingAmount'
+}
+
+/** order by stddev() on columns of table "Swap" */
+export type Swap_Stddev_Order_By = {
+  blockNumber?: InputMaybe<Order_By>;
+  logIndex?: InputMaybe<Order_By>;
+  /** signed from the pool's side, so the outcome amount is negative when the trader bought */
+  outcomeAmount?: InputMaybe<Order_By>;
+  priceAfter?: InputMaybe<Order_By>;
+  /** what the previous swap left the pool at */
+  priceBefore?: InputMaybe<Order_By>;
+  tickAfter?: InputMaybe<Order_By>;
+  tickBefore?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  underlyingAmount?: InputMaybe<Order_By>;
+};
+
+/** order by stddev_pop() on columns of table "Swap" */
+export type Swap_Stddev_Pop_Order_By = {
+  blockNumber?: InputMaybe<Order_By>;
+  logIndex?: InputMaybe<Order_By>;
+  /** signed from the pool's side, so the outcome amount is negative when the trader bought */
+  outcomeAmount?: InputMaybe<Order_By>;
+  priceAfter?: InputMaybe<Order_By>;
+  /** what the previous swap left the pool at */
+  priceBefore?: InputMaybe<Order_By>;
+  tickAfter?: InputMaybe<Order_By>;
+  tickBefore?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  underlyingAmount?: InputMaybe<Order_By>;
+};
+
+/** order by stddev_samp() on columns of table "Swap" */
+export type Swap_Stddev_Samp_Order_By = {
+  blockNumber?: InputMaybe<Order_By>;
+  logIndex?: InputMaybe<Order_By>;
+  /** signed from the pool's side, so the outcome amount is negative when the trader bought */
+  outcomeAmount?: InputMaybe<Order_By>;
+  priceAfter?: InputMaybe<Order_By>;
+  /** what the previous swap left the pool at */
+  priceBefore?: InputMaybe<Order_By>;
+  tickAfter?: InputMaybe<Order_By>;
+  tickBefore?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  underlyingAmount?: InputMaybe<Order_By>;
+};
+
+/** Streaming cursor of the table "Swap" */
+export type Swap_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Swap_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Swap_Stream_Cursor_Value_Input = {
+  blockNumber?: InputMaybe<Scalars['numeric']['input']>;
+  childMarket_id?: InputMaybe<Scalars['String']['input']>;
+  /** set when the swap paid out to one of our executors */
+  executor_id?: InputMaybe<Scalars['String']['input']>;
+  /** transactionHash-logIndex */
+  id?: InputMaybe<Scalars['String']['input']>;
+  logIndex?: InputMaybe<Scalars['Int']['input']>;
+  /** signed from the pool's side, so the outcome amount is negative when the trader bought */
+  outcomeAmount?: InputMaybe<Scalars['numeric']['input']>;
+  pool_id?: InputMaybe<Scalars['String']['input']>;
+  priceAfter?: InputMaybe<Scalars['numeric']['input']>;
+  /** what the previous swap left the pool at */
+  priceBefore?: InputMaybe<Scalars['numeric']['input']>;
+  tickAfter?: InputMaybe<Scalars['Int']['input']>;
+  tickBefore?: InputMaybe<Scalars['Int']['input']>;
+  timestamp?: InputMaybe<Scalars['numeric']['input']>;
+  transactionHash?: InputMaybe<Scalars['String']['input']>;
+  underlyingAmount?: InputMaybe<Scalars['numeric']['input']>;
+};
+
+/** order by sum() on columns of table "Swap" */
+export type Swap_Sum_Order_By = {
+  blockNumber?: InputMaybe<Order_By>;
+  logIndex?: InputMaybe<Order_By>;
+  /** signed from the pool's side, so the outcome amount is negative when the trader bought */
+  outcomeAmount?: InputMaybe<Order_By>;
+  priceAfter?: InputMaybe<Order_By>;
+  /** what the previous swap left the pool at */
+  priceBefore?: InputMaybe<Order_By>;
+  tickAfter?: InputMaybe<Order_By>;
+  tickBefore?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  underlyingAmount?: InputMaybe<Order_By>;
+};
+
+/** order by var_pop() on columns of table "Swap" */
+export type Swap_Var_Pop_Order_By = {
+  blockNumber?: InputMaybe<Order_By>;
+  logIndex?: InputMaybe<Order_By>;
+  /** signed from the pool's side, so the outcome amount is negative when the trader bought */
+  outcomeAmount?: InputMaybe<Order_By>;
+  priceAfter?: InputMaybe<Order_By>;
+  /** what the previous swap left the pool at */
+  priceBefore?: InputMaybe<Order_By>;
+  tickAfter?: InputMaybe<Order_By>;
+  tickBefore?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  underlyingAmount?: InputMaybe<Order_By>;
+};
+
+/** order by var_samp() on columns of table "Swap" */
+export type Swap_Var_Samp_Order_By = {
+  blockNumber?: InputMaybe<Order_By>;
+  logIndex?: InputMaybe<Order_By>;
+  /** signed from the pool's side, so the outcome amount is negative when the trader bought */
+  outcomeAmount?: InputMaybe<Order_By>;
+  priceAfter?: InputMaybe<Order_By>;
+  /** what the previous swap left the pool at */
+  priceBefore?: InputMaybe<Order_By>;
+  tickAfter?: InputMaybe<Order_By>;
+  tickBefore?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  underlyingAmount?: InputMaybe<Order_By>;
+};
+
+/** order by variance() on columns of table "Swap" */
+export type Swap_Variance_Order_By = {
+  blockNumber?: InputMaybe<Order_By>;
+  logIndex?: InputMaybe<Order_By>;
+  /** signed from the pool's side, so the outcome amount is negative when the trader bought */
+  outcomeAmount?: InputMaybe<Order_By>;
+  priceAfter?: InputMaybe<Order_By>;
+  /** what the previous swap left the pool at */
+  priceBefore?: InputMaybe<Order_By>;
+  tickAfter?: InputMaybe<Order_By>;
+  tickBefore?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  underlyingAmount?: InputMaybe<Order_By>;
+};
+
+/** An outcome or underlying token of a child market. */
+export type Token = {
+  __typename?: 'Token';
+  /** An object relationship */
+  childMarket?: Maybe<ChildMarket>;
+  childMarket_id: Scalars['String']['output'];
+  /** token address, lowercase */
+  id: Scalars['String']['output'];
+  /** 0 is DOWN and 1 is UP; null for the underlying */
+  outcomeIndex?: Maybe<Scalars['Int']['output']>;
+};
+
+/** Boolean expression to filter rows from the table "Token". All fields are combined with a logical 'AND'. */
+export type Token_Bool_Exp = {
+  _and?: InputMaybe<Array<Token_Bool_Exp>>;
+  _not?: InputMaybe<Token_Bool_Exp>;
+  _or?: InputMaybe<Array<Token_Bool_Exp>>;
+  childMarket?: InputMaybe<ChildMarket_Bool_Exp>;
+  childMarket_id?: InputMaybe<String_Comparison_Exp>;
+  id?: InputMaybe<String_Comparison_Exp>;
+  outcomeIndex?: InputMaybe<Int_Comparison_Exp>;
+};
+
+/** Ordering options when selecting data from "Token". */
+export type Token_Order_By = {
+  childMarket?: InputMaybe<ChildMarket_Order_By>;
+  childMarket_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  outcomeIndex?: InputMaybe<Order_By>;
+};
+
+/** select columns of table "Token" */
+export enum Token_Select_Column {
+  /** column name */
+  ChildMarketId = 'childMarket_id',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  OutcomeIndex = 'outcomeIndex'
+}
+
+/** Streaming cursor of the table "Token" */
+export type Token_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Token_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Token_Stream_Cursor_Value_Input = {
+  childMarket_id?: InputMaybe<Scalars['String']['input']>;
+  /** token address, lowercase */
+  id?: InputMaybe<Scalars['String']['input']>;
+  /** 0 is DOWN and 1 is UP; null for the underlying */
+  outcomeIndex?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/** A token movement in or out of an executor. */
+export type Transfer = {
+  __typename?: 'Transfer';
+  /** positive into the executor, negative out */
+  amount: Scalars['numeric']['output'];
+  blockNumber: Scalars['numeric']['output'];
+  /** who the tokens came from or went to */
+  counterparty: Scalars['String']['output'];
+  /** An object relationship */
+  executor?: Maybe<Executor>;
+  executor_id: Scalars['String']['output'];
+  /** transactionHash-logIndex-executor */
+  id: Scalars['String']['output'];
+  timestamp: Scalars['numeric']['output'];
+  token: Scalars['String']['output'];
+  transactionHash: Scalars['String']['output'];
+};
+
+/** Boolean expression to filter rows from the table "Transfer". All fields are combined with a logical 'AND'. */
+export type Transfer_Bool_Exp = {
+  _and?: InputMaybe<Array<Transfer_Bool_Exp>>;
+  _not?: InputMaybe<Transfer_Bool_Exp>;
+  _or?: InputMaybe<Array<Transfer_Bool_Exp>>;
+  amount?: InputMaybe<Numeric_Comparison_Exp>;
+  blockNumber?: InputMaybe<Numeric_Comparison_Exp>;
+  counterparty?: InputMaybe<String_Comparison_Exp>;
+  executor?: InputMaybe<Executor_Bool_Exp>;
+  executor_id?: InputMaybe<String_Comparison_Exp>;
+  id?: InputMaybe<String_Comparison_Exp>;
+  timestamp?: InputMaybe<Numeric_Comparison_Exp>;
+  token?: InputMaybe<String_Comparison_Exp>;
+  transactionHash?: InputMaybe<String_Comparison_Exp>;
+};
+
+/** Ordering options when selecting data from "Transfer". */
+export type Transfer_Order_By = {
+  amount?: InputMaybe<Order_By>;
+  blockNumber?: InputMaybe<Order_By>;
+  counterparty?: InputMaybe<Order_By>;
+  executor?: InputMaybe<Executor_Order_By>;
+  executor_id?: InputMaybe<Order_By>;
+  id?: InputMaybe<Order_By>;
+  timestamp?: InputMaybe<Order_By>;
+  token?: InputMaybe<Order_By>;
+  transactionHash?: InputMaybe<Order_By>;
+};
+
+/** select columns of table "Transfer" */
+export enum Transfer_Select_Column {
+  /** column name */
+  Amount = 'amount',
+  /** column name */
+  BlockNumber = 'blockNumber',
+  /** column name */
+  Counterparty = 'counterparty',
+  /** column name */
+  ExecutorId = 'executor_id',
+  /** column name */
+  Id = 'id',
+  /** column name */
+  Timestamp = 'timestamp',
+  /** column name */
+  Token = 'token',
+  /** column name */
+  TransactionHash = 'transactionHash'
+}
+
+/** Streaming cursor of the table "Transfer" */
+export type Transfer_Stream_Cursor_Input = {
+  /** Stream column input with initial value */
+  initial_value: Transfer_Stream_Cursor_Value_Input;
+  /** cursor ordering */
+  ordering?: InputMaybe<Cursor_Ordering>;
+};
+
+/** Initial value of the column from where the streaming should start */
+export type Transfer_Stream_Cursor_Value_Input = {
+  /** positive into the executor, negative out */
+  amount?: InputMaybe<Scalars['numeric']['input']>;
+  blockNumber?: InputMaybe<Scalars['numeric']['input']>;
+  /** who the tokens came from or went to */
+  counterparty?: InputMaybe<Scalars['String']['input']>;
+  executor_id?: InputMaybe<Scalars['String']['input']>;
+  /** transactionHash-logIndex-executor */
+  id?: InputMaybe<Scalars['String']['input']>;
+  timestamp?: InputMaybe<Scalars['numeric']['input']>;
+  token?: InputMaybe<Scalars['String']['input']>;
+  transactionHash?: InputMaybe<Scalars['String']['input']>;
+};
+
 /** columns and relationships of "_meta" */
 export type _Meta = {
   __typename?: '_meta';
@@ -870,6 +2438,22 @@ export type Query_Root = {
   ChildMarket: Array<ChildMarket>;
   /** fetch data from the table: "ChildMarket" using primary key columns */
   ChildMarket_by_pk?: Maybe<ChildMarket>;
+  /** fetch data from the table: "Executor" */
+  Executor: Array<Executor>;
+  /** fetch data from the table: "Executor" using primary key columns */
+  Executor_by_pk?: Maybe<Executor>;
+  /** fetch data from the table: "Pool" */
+  Pool: Array<Pool>;
+  /** fetch data from the table: "Pool" using primary key columns */
+  Pool_by_pk?: Maybe<Pool>;
+  /** fetch data from the table: "Position" */
+  Position: Array<Position>;
+  /** fetch data from the table: "Position" using primary key columns */
+  Position_by_pk?: Maybe<Position>;
+  /** fetch data from the table: "Prediction" */
+  Prediction: Array<Prediction>;
+  /** fetch data from the table: "Prediction" using primary key columns */
+  Prediction_by_pk?: Maybe<Prediction>;
   /** fetch data from the table: "Session" */
   Session: Array<Session>;
   /** fetch data from the table: "SessionCounter" */
@@ -878,6 +2462,18 @@ export type Query_Root = {
   SessionCounter_by_pk?: Maybe<SessionCounter>;
   /** fetch data from the table: "Session" using primary key columns */
   Session_by_pk?: Maybe<Session>;
+  /** fetch data from the table: "Swap" */
+  Swap: Array<Swap>;
+  /** fetch data from the table: "Swap" using primary key columns */
+  Swap_by_pk?: Maybe<Swap>;
+  /** fetch data from the table: "Token" */
+  Token: Array<Token>;
+  /** fetch data from the table: "Token" using primary key columns */
+  Token_by_pk?: Maybe<Token>;
+  /** fetch data from the table: "Transfer" */
+  Transfer: Array<Transfer>;
+  /** fetch data from the table: "Transfer" using primary key columns */
+  Transfer_by_pk?: Maybe<Transfer>;
   /** fetch data from the table: "_meta" */
   _meta: Array<_Meta>;
   /** fetch data from the table: "chain_metadata" */
@@ -899,6 +2495,62 @@ export type Query_RootChildMarketArgs = {
 
 
 export type Query_RootChildMarket_By_PkArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+export type Query_RootExecutorArgs = {
+  distinct_on?: InputMaybe<Array<Executor_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Executor_Order_By>>;
+  where?: InputMaybe<Executor_Bool_Exp>;
+};
+
+
+export type Query_RootExecutor_By_PkArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+export type Query_RootPoolArgs = {
+  distinct_on?: InputMaybe<Array<Pool_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Pool_Order_By>>;
+  where?: InputMaybe<Pool_Bool_Exp>;
+};
+
+
+export type Query_RootPool_By_PkArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+export type Query_RootPositionArgs = {
+  distinct_on?: InputMaybe<Array<Position_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Position_Order_By>>;
+  where?: InputMaybe<Position_Bool_Exp>;
+};
+
+
+export type Query_RootPosition_By_PkArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+export type Query_RootPredictionArgs = {
+  distinct_on?: InputMaybe<Array<Prediction_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Prediction_Order_By>>;
+  where?: InputMaybe<Prediction_Bool_Exp>;
+};
+
+
+export type Query_RootPrediction_By_PkArgs = {
   id: Scalars['String']['input'];
 };
 
@@ -927,6 +2579,48 @@ export type Query_RootSessionCounter_By_PkArgs = {
 
 
 export type Query_RootSession_By_PkArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+export type Query_RootSwapArgs = {
+  distinct_on?: InputMaybe<Array<Swap_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Swap_Order_By>>;
+  where?: InputMaybe<Swap_Bool_Exp>;
+};
+
+
+export type Query_RootSwap_By_PkArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+export type Query_RootTokenArgs = {
+  distinct_on?: InputMaybe<Array<Token_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Token_Order_By>>;
+  where?: InputMaybe<Token_Bool_Exp>;
+};
+
+
+export type Query_RootToken_By_PkArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+export type Query_RootTransferArgs = {
+  distinct_on?: InputMaybe<Array<Transfer_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Transfer_Order_By>>;
+  where?: InputMaybe<Transfer_Bool_Exp>;
+};
+
+
+export type Query_RootTransfer_By_PkArgs = {
   id: Scalars['String']['input'];
 };
 
@@ -1098,6 +2792,30 @@ export type Subscription_Root = {
   ChildMarket_by_pk?: Maybe<ChildMarket>;
   /** fetch data from the table in a streaming manner: "ChildMarket" */
   ChildMarket_stream: Array<ChildMarket>;
+  /** fetch data from the table: "Executor" */
+  Executor: Array<Executor>;
+  /** fetch data from the table: "Executor" using primary key columns */
+  Executor_by_pk?: Maybe<Executor>;
+  /** fetch data from the table in a streaming manner: "Executor" */
+  Executor_stream: Array<Executor>;
+  /** fetch data from the table: "Pool" */
+  Pool: Array<Pool>;
+  /** fetch data from the table: "Pool" using primary key columns */
+  Pool_by_pk?: Maybe<Pool>;
+  /** fetch data from the table in a streaming manner: "Pool" */
+  Pool_stream: Array<Pool>;
+  /** fetch data from the table: "Position" */
+  Position: Array<Position>;
+  /** fetch data from the table: "Position" using primary key columns */
+  Position_by_pk?: Maybe<Position>;
+  /** fetch data from the table in a streaming manner: "Position" */
+  Position_stream: Array<Position>;
+  /** fetch data from the table: "Prediction" */
+  Prediction: Array<Prediction>;
+  /** fetch data from the table: "Prediction" using primary key columns */
+  Prediction_by_pk?: Maybe<Prediction>;
+  /** fetch data from the table in a streaming manner: "Prediction" */
+  Prediction_stream: Array<Prediction>;
   /** fetch data from the table: "Session" */
   Session: Array<Session>;
   /** fetch data from the table: "SessionCounter" */
@@ -1110,6 +2828,24 @@ export type Subscription_Root = {
   Session_by_pk?: Maybe<Session>;
   /** fetch data from the table in a streaming manner: "Session" */
   Session_stream: Array<Session>;
+  /** fetch data from the table: "Swap" */
+  Swap: Array<Swap>;
+  /** fetch data from the table: "Swap" using primary key columns */
+  Swap_by_pk?: Maybe<Swap>;
+  /** fetch data from the table in a streaming manner: "Swap" */
+  Swap_stream: Array<Swap>;
+  /** fetch data from the table: "Token" */
+  Token: Array<Token>;
+  /** fetch data from the table: "Token" using primary key columns */
+  Token_by_pk?: Maybe<Token>;
+  /** fetch data from the table in a streaming manner: "Token" */
+  Token_stream: Array<Token>;
+  /** fetch data from the table: "Transfer" */
+  Transfer: Array<Transfer>;
+  /** fetch data from the table: "Transfer" using primary key columns */
+  Transfer_by_pk?: Maybe<Transfer>;
+  /** fetch data from the table in a streaming manner: "Transfer" */
+  Transfer_stream: Array<Transfer>;
   /** fetch data from the table: "_meta" */
   _meta: Array<_Meta>;
   /** fetch data from the table in a streaming manner: "_meta" */
@@ -1145,6 +2881,90 @@ export type Subscription_RootChildMarket_StreamArgs = {
   batch_size: Scalars['Int']['input'];
   cursor: Array<InputMaybe<ChildMarket_Stream_Cursor_Input>>;
   where?: InputMaybe<ChildMarket_Bool_Exp>;
+};
+
+
+export type Subscription_RootExecutorArgs = {
+  distinct_on?: InputMaybe<Array<Executor_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Executor_Order_By>>;
+  where?: InputMaybe<Executor_Bool_Exp>;
+};
+
+
+export type Subscription_RootExecutor_By_PkArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+export type Subscription_RootExecutor_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Executor_Stream_Cursor_Input>>;
+  where?: InputMaybe<Executor_Bool_Exp>;
+};
+
+
+export type Subscription_RootPoolArgs = {
+  distinct_on?: InputMaybe<Array<Pool_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Pool_Order_By>>;
+  where?: InputMaybe<Pool_Bool_Exp>;
+};
+
+
+export type Subscription_RootPool_By_PkArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+export type Subscription_RootPool_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Pool_Stream_Cursor_Input>>;
+  where?: InputMaybe<Pool_Bool_Exp>;
+};
+
+
+export type Subscription_RootPositionArgs = {
+  distinct_on?: InputMaybe<Array<Position_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Position_Order_By>>;
+  where?: InputMaybe<Position_Bool_Exp>;
+};
+
+
+export type Subscription_RootPosition_By_PkArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+export type Subscription_RootPosition_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Position_Stream_Cursor_Input>>;
+  where?: InputMaybe<Position_Bool_Exp>;
+};
+
+
+export type Subscription_RootPredictionArgs = {
+  distinct_on?: InputMaybe<Array<Prediction_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Prediction_Order_By>>;
+  where?: InputMaybe<Prediction_Bool_Exp>;
+};
+
+
+export type Subscription_RootPrediction_By_PkArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+export type Subscription_RootPrediction_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Prediction_Stream_Cursor_Input>>;
+  where?: InputMaybe<Prediction_Bool_Exp>;
 };
 
 
@@ -1187,6 +3007,69 @@ export type Subscription_RootSession_StreamArgs = {
   batch_size: Scalars['Int']['input'];
   cursor: Array<InputMaybe<Session_Stream_Cursor_Input>>;
   where?: InputMaybe<Session_Bool_Exp>;
+};
+
+
+export type Subscription_RootSwapArgs = {
+  distinct_on?: InputMaybe<Array<Swap_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Swap_Order_By>>;
+  where?: InputMaybe<Swap_Bool_Exp>;
+};
+
+
+export type Subscription_RootSwap_By_PkArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+export type Subscription_RootSwap_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Swap_Stream_Cursor_Input>>;
+  where?: InputMaybe<Swap_Bool_Exp>;
+};
+
+
+export type Subscription_RootTokenArgs = {
+  distinct_on?: InputMaybe<Array<Token_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Token_Order_By>>;
+  where?: InputMaybe<Token_Bool_Exp>;
+};
+
+
+export type Subscription_RootToken_By_PkArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+export type Subscription_RootToken_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Token_Stream_Cursor_Input>>;
+  where?: InputMaybe<Token_Bool_Exp>;
+};
+
+
+export type Subscription_RootTransferArgs = {
+  distinct_on?: InputMaybe<Array<Transfer_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Transfer_Order_By>>;
+  where?: InputMaybe<Transfer_Bool_Exp>;
+};
+
+
+export type Subscription_RootTransfer_By_PkArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+export type Subscription_RootTransfer_StreamArgs = {
+  batch_size: Scalars['Int']['input'];
+  cursor: Array<InputMaybe<Transfer_Stream_Cursor_Input>>;
+  where?: InputMaybe<Transfer_Bool_Exp>;
 };
 
 
@@ -1271,6 +3154,20 @@ export type SessionByMetadataQueryVariables = Exact<{
 
 export type SessionByMetadataQuery = { __typename?: 'query_root', Session: Array<{ __typename?: 'Session', sessionId: string, parentMarket: string, transactionHash: string, children: Array<{ __typename?: 'ChildMarket', id: string, parentOutcomeIndex: string, transactionHash: string }> }>, chain_metadata: Array<{ __typename?: 'chain_metadata', latest_processed_block?: number | null, block_height?: number | null }> };
 
+export type SessionDetailQueryVariables = Exact<{
+  parentMarket: Scalars['String']['input'];
+}>;
+
+
+export type SessionDetailQuery = { __typename?: 'query_root', Session: Array<{ __typename?: 'Session', id: string, parentMarket: string, deployer: string, marketName: string, title?: string | null, description?: string | null, icon?: string | null, heroImage?: string | null, itemName?: string | null, itemNamePlural?: string | null, metadataResolved: boolean, outcomeCount: string, deployedChildCount: string, openedAt: string, completedAt: string, openingTime?: string | null, blocks: unknown, children: Array<{ __typename?: 'ChildMarket', id: string, parentOutcomeIndex: string, parentOutcome: string, marketName: string, lowerBound: string, upperBound: string, displayName?: string | null, color?: string | null, blocks: unknown, upToken: string, downToken: string, underlyingToken: string }> }> };
+
+export type SessionStatsQueryVariables = Exact<{
+  sessionId: Scalars['String']['input'];
+}>;
+
+
+export type SessionStatsQuery = { __typename?: 'query_root', Prediction: Array<{ __typename?: 'Prediction', executor_id: string }>, Pool: Array<{ __typename?: 'Pool', id: string, volumeUnderlying: string }> };
+
 export type SessionsQueryVariables = Exact<{
   limit: Scalars['Int']['input'];
   offset: Scalars['Int']['input'];
@@ -1283,4 +3180,6 @@ export type SessionsQuery = { __typename?: 'query_root', SessionCounter: Array<{
 
 export const SessionIndexedDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionIndexed"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Session"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"IntValue","value":"1"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"children"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]}}]} as unknown as DocumentNode<SessionIndexedQuery, SessionIndexedQueryVariables>;
 export const SessionByMetadataDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionByMetadata"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"deployer"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"metadataUri"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"since"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"numeric"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Session"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"deployer"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"deployer"}}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"metadataUri"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"metadataUri"}}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"openedAt"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_gte"},"value":{"kind":"Variable","name":{"kind":"Name","value":"since"}}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"openedAt"},"value":{"kind":"EnumValue","value":"desc"}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"IntValue","value":"1"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"sessionId"}},{"kind":"Field","name":{"kind":"Name","value":"parentMarket"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}},{"kind":"Field","name":{"kind":"Name","value":"children"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"parentOutcomeIndex"},"value":{"kind":"EnumValue","value":"asc"}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentOutcomeIndex"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"chain_metadata"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"latest_processed_block"}},{"kind":"Field","name":{"kind":"Name","value":"block_height"}}]}}]}}]} as unknown as DocumentNode<SessionByMetadataQuery, SessionByMetadataQueryVariables>;
+export const SessionDetailDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionDetail"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"parentMarket"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Session"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"parentMarket"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"parentMarket"}}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"IntValue","value":"1"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentMarket"}},{"kind":"Field","name":{"kind":"Name","value":"deployer"}},{"kind":"Field","name":{"kind":"Name","value":"marketName"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"icon"}},{"kind":"Field","name":{"kind":"Name","value":"heroImage"}},{"kind":"Field","name":{"kind":"Name","value":"itemName"}},{"kind":"Field","name":{"kind":"Name","value":"itemNamePlural"}},{"kind":"Field","name":{"kind":"Name","value":"metadataResolved"}},{"kind":"Field","name":{"kind":"Name","value":"outcomeCount"}},{"kind":"Field","name":{"kind":"Name","value":"deployedChildCount"}},{"kind":"Field","name":{"kind":"Name","value":"openedAt"}},{"kind":"Field","name":{"kind":"Name","value":"completedAt"}},{"kind":"Field","name":{"kind":"Name","value":"openingTime"}},{"kind":"Field","name":{"kind":"Name","value":"blocks"}},{"kind":"Field","name":{"kind":"Name","value":"children"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"parentOutcomeIndex"},"value":{"kind":"EnumValue","value":"asc"}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentOutcomeIndex"}},{"kind":"Field","name":{"kind":"Name","value":"parentOutcome"}},{"kind":"Field","name":{"kind":"Name","value":"marketName"}},{"kind":"Field","name":{"kind":"Name","value":"lowerBound"}},{"kind":"Field","name":{"kind":"Name","value":"upperBound"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"color"}},{"kind":"Field","name":{"kind":"Name","value":"blocks"}},{"kind":"Field","name":{"kind":"Name","value":"upToken"}},{"kind":"Field","name":{"kind":"Name","value":"downToken"}},{"kind":"Field","name":{"kind":"Name","value":"underlyingToken"}}]}}]}}]}}]} as unknown as DocumentNode<SessionDetailQuery, SessionDetailQueryVariables>;
+export const SessionStatsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionStats"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Prediction"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"childMarket"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"session_id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}}}]}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"distinct_on"},"value":{"kind":"EnumValue","value":"executor_id"}},{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"executor_id"},"value":{"kind":"EnumValue","value":"asc"}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"executor_id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"Pool"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"childMarket"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"session_id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}}}]}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"volumeUnderlying"}}]}}]}}]} as unknown as DocumentNode<SessionStatsQuery, SessionStatsQueryVariables>;
 export const SessionsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Sessions"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"limit"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"offset"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"where"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Session_bool_exp"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"SessionCounter"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"count"}}]}},{"kind":"Field","name":{"kind":"Name","value":"Session"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"Variable","name":{"kind":"Name","value":"where"}}},{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"openedAt"},"value":{"kind":"EnumValue","value":"desc"}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"Variable","name":{"kind":"Name","value":"limit"}}},{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"Variable","name":{"kind":"Name","value":"offset"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentMarket"}},{"kind":"Field","name":{"kind":"Name","value":"deployer"}},{"kind":"Field","name":{"kind":"Name","value":"marketName"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"icon"}},{"kind":"Field","name":{"kind":"Name","value":"heroImage"}},{"kind":"Field","name":{"kind":"Name","value":"itemNamePlural"}},{"kind":"Field","name":{"kind":"Name","value":"outcomeCount"}},{"kind":"Field","name":{"kind":"Name","value":"keyword"}},{"kind":"Field","name":{"kind":"Name","value":"openingTime"}}]}}]}}]} as unknown as DocumentNode<SessionsQuery, SessionsQueryVariables>;

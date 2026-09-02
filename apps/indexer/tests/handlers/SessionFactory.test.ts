@@ -1,7 +1,7 @@
 import { createTestIndexer } from "envio";
 import { createServer, type Server } from "node:http";
 import { type AddressInfo } from "node:net";
-import { decodeFunctionData, encodeFunctionResult, type Address, type Hex } from "viem";
+import { decodeFunctionData, encodeFunctionResult, getAddress, type Address, type Hex } from "viem";
 import { afterAll, beforeAll, describe, it } from "vitest";
 
 import { EXAMPLE_METADATA, EXAMPLE_METADATA_CID, EXAMPLE_METADATA_URI } from "@foresight/session-metadata";
@@ -24,7 +24,7 @@ const CHILD_1_UP = "0x0000000000000000000000000000000000000d11" as const;
 const CHILD_0_UNDERLYING = "0x0000000000000000000000000000000000000c0a" as const;
 const CHILD_1_UNDERLYING = "0x0000000000000000000000000000000000000c0b" as const;
 
-const PARENT_MARKET = "0x0000000000000000000000000000000000000a11" as const;
+const PARENT_MARKET = "0x0000000000000000000000000000000000000ace" as const;
 const CHILD_MARKET_0 = "0x0000000000000000000000000000000000000c00" as const;
 const CHILD_MARKET_1 = "0x0000000000000000000000000000000000000c01" as const;
 const DEPLOYER = "0x0000000000000000000000000000000000000de9" as const;
@@ -126,8 +126,8 @@ const parentDeployed = (block: number, metadataUri = EXAMPLE_METADATA_URI, sessi
   block: { number: block, timestamp: block },
   params: {
     sessionId,
-    deployer: DEPLOYER,
-    parentMarket: PARENT_MARKET,
+    deployer: getAddress(DEPLOYER),
+    parentMarket: getAddress(PARENT_MARKET),
     outcomeCount: BigInt(OUTCOMES.length),
     metadataUri,
   },
@@ -140,8 +140,8 @@ const childDeployed = (block: number, outcomeIndex: number, childMarket: Address
   params: {
     sessionId,
     parentOutcomeIndex: BigInt(outcomeIndex),
-    childMarket,
-    parentMarket: PARENT_MARKET,
+    childMarket: getAddress(childMarket),
+    parentMarket: getAddress(PARENT_MARKET),
   },
 });
 

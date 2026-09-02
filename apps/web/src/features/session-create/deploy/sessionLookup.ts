@@ -1,4 +1,4 @@
-import type { Address } from "viem";
+import { getAddress } from "viem";
 
 import type { GraphqlFetch } from "@/lib/graphql/batcher";
 import { graphql } from "@/lib/graphql/generated";
@@ -82,17 +82,19 @@ function assertCaughtUp(metadata: SessionByMetadataQuery["chain_metadata"], head
 /** @param chainHead read only when the indexer reports no session. */
 export function createIndexerSessionLookup(fetch: GraphqlFetch, chainHead: () => Promise<bigint>): SessionLookup {
   return async ({ deployer, metadataUri, since }) => {
-    const result = await askIndexer(() => fetch(SESSION_BY_METADATA, { deployer, metadataUri, since: String(since) }));
+    const result = await askIndexer(() =>
+      fetch(SESSION_BY_METADATA, { deployer: deployer.toLowerCase(), metadataUri, since: String(since) }),
+    );
 
     const session = result.Session[0];
     if (session) {
       return {
         sessionId: BigInt(session.sessionId),
-        parentMarket: session.parentMarket as Address,
+        parentMarket: getAddress(session.parentMarket),
         transactionHash: session.transactionHash,
         childMarkets: session.children.map((child) => ({
           outcomeIndex: Number(child.parentOutcomeIndex),
-          address: child.id as Address,
+          address: getAddress(child.id),
           transactionHash: child.transactionHash,
         })),
       } satisfies DeployedMarkets;

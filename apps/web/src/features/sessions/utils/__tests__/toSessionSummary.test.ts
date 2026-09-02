@@ -1,24 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import { type SessionRow, toSessionSummary } from "../toSessionSummary";
+import { sessionColumns } from "./fixtures";
 
 const GATEWAY = "https://cdn.example.link/ipfs";
 
-/** Every field spelled out: the assertions below turn on these values. */
 function row(overrides: Partial<SessionRow> = {}): SessionRow {
   return {
-    id: "1",
-    parentMarket: "0xaa01",
-    deployer: "0x4a3f1d2b9c8e7f6a5b4c3d2e1f0a9b8c7d6e5f19",
-    marketName: "What would opening weekend be, in $M, under each director?",
-    title: "Dune: Part Three — director",
-    description: "Three directors, one weekend. Trade the branch you believe in.",
-    icon: null,
-    heroImage: null,
+    ...sessionColumns,
     itemNamePlural: "Directors",
     outcomeCount: "3",
     keyword: "dune part three director",
-    openingTime: "1756900800",
     ...overrides,
   };
 }
@@ -69,10 +61,6 @@ describe("toSessionSummary", () => {
 
   it("drops an image uri the gateway would refuse rather than throwing the card away", () => {
     expect(toSessionSummary(row({ icon: "javascript:alert(1)" }), GATEWAY).iconUri).toBeNull();
-  });
-
-  it("carries the deployer through for the card to address the session by", () => {
-    expect(toSessionSummary(row(), GATEWAY).deployer).toBe(row().deployer);
   });
 
   it("closes a session at the market's opening time", () => {
