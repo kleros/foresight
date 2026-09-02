@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { VALID_CID } from "@/testing/fixtures";
+
 import { gatewayUrl, tryGatewayUrl } from "../ipfs";
 
 /**
@@ -8,7 +10,7 @@ import { gatewayUrl, tryGatewayUrl } from "../ipfs";
  * a request somewhere else entirely.
  */
 
-const CID = "QmbWqxBEKC3P8tqsKc98xmWNzrzDtRLMiMPL8wBuTGsMnR";
+const CID = VALID_CID;
 const GATEWAY = "https://ipfs.io/ipfs";
 
 describe("gatewayUrl, normalising", () => {

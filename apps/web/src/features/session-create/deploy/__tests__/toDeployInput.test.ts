@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { dune } from "@/testing/fixtures";
+
 import { outcomeDraft, sessionDraft } from "../../__tests__/support/drafts";
 import type { OutcomeDraft, SessionDraft } from "../../types/draft";
 import { toDeployInput, toMetadataInput } from "../toDeployInput";
@@ -24,14 +26,14 @@ const draft = (overrides: Partial<SessionDraft> = {}): SessionDraft =>
     minBond: "1",
     decisionDate: "2099-09-20",
     decisionTime: "12:00",
-    template: "Opening weekend gross if {outcome} directs",
-    unit: "$M",
+    template: dune.template,
+    unit: dune.unit,
     lower: "0",
     upper: "500",
-    title: "Dune: Part Three, director",
-    description: "Opening weekend gross per director.",
-    itemName: "Director",
-    itemNamePlural: "Directors",
+    title: dune.title,
+    description: dune.description,
+    itemName: dune.itemName,
+    itemNamePlural: dune.itemNamePlural,
     ...overrides,
   });
 
@@ -138,10 +140,10 @@ describe("toDeployInput", () => {
 describe("toMetadataInput", () => {
   it("carries the session display fields", () => {
     expect(toMetadataInput(draft())).toMatchObject({
-      title: "Dune: Part Three, director",
-      description: "Opening weekend gross per director.",
-      itemName: "Director",
-      itemNamePlural: "Directors",
+      title: dune.title,
+      description: dune.description,
+      itemName: dune.itemName,
+      itemNamePlural: dune.itemNamePlural,
     });
   });
 

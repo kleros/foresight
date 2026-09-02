@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import { GATEWAY } from "@/testing/fixtures";
+
 import { type SessionRow, toSessionSummary } from "../toSessionSummary";
 import { sessionColumns } from "./fixtures";
-
-const GATEWAY = "https://cdn.example.link/ipfs";
 
 function row(overrides: Partial<SessionRow> = {}): SessionRow {
   return {
@@ -17,7 +17,7 @@ function row(overrides: Partial<SessionRow> = {}): SessionRow {
 
 describe("toSessionSummary", () => {
   it("names a session by its metadata title", () => {
-    expect(toSessionSummary(row(), GATEWAY).name).toBe("Dune: Part Three — director");
+    expect(toSessionSummary(row(), GATEWAY).name).toBe("Dune: Part Three, director");
   });
 
   it("falls back to the parent market name when metadata carried no title", () => {

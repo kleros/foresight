@@ -1,3 +1,5 @@
+import { dune } from "@/testing/fixtures";
+
 import { deployMode } from "../../params";
 import type { SessionDeployInput, SessionDeploySnapshot, SessionMetadataInput } from "../../types";
 
@@ -37,9 +39,9 @@ export function deployInput(childCount: number): SessionDeployInput {
 export function metadataInput(childCount: number): Omit<SessionMetadataInput, "heroImage" | "icon"> {
   return {
     title: "Best director",
-    description: "Opening weekend gross per director.",
-    itemName: "Director",
-    itemNamePlural: "Directors",
+    description: dune.description,
+    itemName: dune.itemName,
+    itemNamePlural: dune.itemNamePlural,
     children: branches(childCount).map((i) => ({
       outcomeIndex: i,
       displayName: `Director ${i}`,

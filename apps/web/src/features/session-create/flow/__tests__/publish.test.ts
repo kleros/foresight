@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import type { MetadataUploader } from "@/lib/atlas/types";
 
+import { dune } from "@/testing/fixtures";
+
 import { publishSessionMetadata, READ_BACK_ATTEMPTS, type UnpublishedMetadata } from "../publish";
 import { fakeIpfs } from "./support/ipfs";
 
@@ -12,10 +14,10 @@ import { fakeIpfs } from "./support/ipfs";
  */
 
 const metadata: UnpublishedMetadata = {
-  title: "Dune: Part Three, director",
-  description: "Opening weekend gross per director.",
-  itemName: "Director",
-  itemNamePlural: "Directors",
+  title: dune.title,
+  description: dune.description,
+  itemName: dune.itemName,
+  itemNamePlural: dune.itemNamePlural,
   children: [
     { outcomeIndex: 0, displayName: "Villeneuve", color: "#7e1bd4" },
     { outcomeIndex: 1, displayName: "Gerwig", color: "#009aff" },

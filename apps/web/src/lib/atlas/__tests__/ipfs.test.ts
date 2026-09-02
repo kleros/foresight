@@ -1,6 +1,8 @@
 import { IpfsProduct, Roles, uploadToIpfs } from "@kleros/kleros-app";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { VALID_CID } from "@/testing/fixtures";
+
 import { createMetadataUploader, isRateLimited, UPLOAD_ATTEMPTS } from "../ipfs";
 import { createUploadMemory, type UploadMemory } from "../uploadMemory";
 
@@ -10,7 +12,7 @@ import { createUploadMemory, type UploadMemory } from "../uploadMemory";
  * document that cannot be read back from the gateway readers will use.
  */
 
-const CID = "QmbWqxBEKC3P8tqsKc98xmWNzrzDtRLMiMPL8wBuTGsMnR";
+const CID = VALID_CID;
 
 /** What Atlas answers an upload with, and so what a read is later given. */
 const UPLOADED_URI = `/ipfs/${CID}`;

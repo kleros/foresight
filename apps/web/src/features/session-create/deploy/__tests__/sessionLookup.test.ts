@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 import type { GraphqlFetch } from "@/lib/graphql/batcher";
 
+import { addresses } from "@/testing/fixtures";
+
 import { ACCEPTABLE_LAG, createIndexerSessionLookup, IndexerNotReadyError } from "../sessionLookup";
 
 /**
@@ -10,11 +12,9 @@ import { ACCEPTABLE_LAG, createIndexerSessionLookup, IndexerNotReadyError } from
  * a negative depends on the indexer being caught up, so only it can throw.
  */
 
-/** Arbitrary addresses, written the way the indexer stores them: lowercase. */
-const DEPLOYER = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-const PARENT = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-const CHILD_0 = "0xcccccccccccccccccccccccccccccccccccccccc";
-const CHILD_1 = "0xdddddddddddddddddddddddddddddddddddddddd";
+const DEPLOYER = addresses.deployer;
+const PARENT = addresses.parentMarket;
+const [CHILD_0, CHILD_1] = addresses.childMarkets;
 
 const ASKED = { deployer: getAddress(DEPLOYER), metadataUri: "/ipfs/QmDoc", since: 1_700_000_000 } as const;
 

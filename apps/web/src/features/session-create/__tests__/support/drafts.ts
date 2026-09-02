@@ -1,3 +1,5 @@
+import { dune } from "@/testing/fixtures";
+
 import type { DraftAssessment, OutcomeDraft, SessionDraft } from "../../types/draft";
 
 /**
@@ -9,7 +11,7 @@ import type { DraftAssessment, OutcomeDraft, SessionDraft } from "../../types/dr
 export function outcomeDraft(overrides: Partial<OutcomeDraft> = {}): OutcomeDraft {
   return {
     id: "o0",
-    label: "Villeneuve",
+    label: dune.directors[0],
     token: "",
     tokenTouched: false,
     displayName: "",
@@ -30,22 +32,25 @@ export function outcomeDraft(overrides: Partial<OutcomeDraft> = {}): OutcomeDraf
 /** Valid, and far enough out that a suite's own clock does not close it. */
 export function sessionDraft(overrides: Partial<SessionDraft> = {}): SessionDraft {
   return {
-    name: "Which director for Dune: Part Three?",
-    outcomes: [outcomeDraft({ id: "a", label: "Villeneuve" }), outcomeDraft({ id: "b", label: "Gerwig" })],
+    name: dune.question,
+    outcomes: [
+      outcomeDraft({ id: "a", label: dune.directors[0] }),
+      outcomeDraft({ id: "b", label: dune.directors[1] }),
+    ],
     multi: false,
     category: "market",
     language: "en_US",
     minBond: "0.1",
     decisionDate: "2099-09-20",
     decisionTime: "12:00",
-    template: "Opening weekend gross if {outcome} directs",
-    unit: "$M",
+    template: dune.template,
+    unit: dune.unit,
     lower: "0",
     upper: "500",
-    title: "Dune: Part Three, director",
-    description: "Opening weekend gross per director.",
-    itemName: "Director",
-    itemNamePlural: "Directors",
+    title: dune.title,
+    description: dune.description,
+    itemName: dune.itemName,
+    itemNamePlural: dune.itemNamePlural,
     heroImageName: "hero.jpg",
     iconName: "icon.png",
     ...overrides,

@@ -1,6 +1,8 @@
 import { SCHEMA_VERSION } from "@foresight/session-metadata";
 import { describe, expect, it } from "vitest";
 
+import { dune } from "@/testing/fixtures";
+
 import { buildSessionMetadata, MAX_BLOCK_CHARS, MAX_BLOCKS, MAX_IMAGE_BLOCKS } from "../metadata";
 import type { SessionMetadataInput } from "../types";
 
@@ -11,10 +13,10 @@ import type { SessionMetadataInput } from "../types";
  */
 
 const base: SessionMetadataInput = {
-  title: "Dune: Part Three, director",
-  description: "Opening weekend gross per director.",
-  itemName: "Director",
-  itemNamePlural: "Directors",
+  title: dune.title,
+  description: dune.description,
+  itemName: dune.itemName,
+  itemNamePlural: dune.itemNamePlural,
   heroImage: "/ipfs/QmHero",
   icon: "/ipfs/QmIcon",
   children: [

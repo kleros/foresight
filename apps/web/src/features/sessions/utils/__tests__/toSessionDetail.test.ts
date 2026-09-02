@@ -2,28 +2,27 @@ import { describe, expect, it } from "vitest";
 
 import { branchColor } from "@/utils/branchColor";
 
+import { addresses, dune, GATEWAY } from "@/testing/fixtures";
+
 import { sessionStatus, type SessionDetailRow, toSessionDetail } from "../toSessionDetail";
 import { sessionColumns } from "./fixtures";
 
-const GATEWAY = "https://cdn.example.link/ipfs";
-
 type ChildRow = SessionDetailRow["children"][number];
 
-/** Every field spelled out: the assertions below turn on these values. */
 function child(overrides: Partial<ChildRow> = {}): ChildRow {
   return {
-    id: "0x9c31a1b2c3d4e5f60718293a4b5c6d7e8f901234",
+    id: addresses.childMarkets[0],
     parentOutcomeIndex: "1",
-    parentOutcome: "Gerwig",
-    marketName: "What opening weekend would Gerwig deliver? [$M]",
-    lowerBound: "0",
-    upperBound: "500000000000000000000",
-    displayName: "Greta Gerwig",
-    color: "#009aff",
+    parentOutcome: dune.director.outcome,
+    marketName: dune.director.marketName,
+    lowerBound: dune.director.lowerBound,
+    upperBound: dune.director.upperBound,
+    displayName: dune.director.displayName,
+    color: dune.director.color,
     blocks: [],
-    upToken: "0x1111111111111111111111111111111111111111",
-    downToken: "0x2222222222222222222222222222222222222222",
-    underlyingToken: "0x3333333333333333333333333333333333333333",
+    upToken: addresses.upToken,
+    downToken: addresses.downToken,
+    underlyingToken: addresses.underlyingToken,
     ...overrides,
   };
 }
@@ -46,7 +45,7 @@ function row(overrides: Partial<SessionDetailRow> = {}): SessionDetailRow {
 
 describe("toSessionDetail", () => {
   it("names a session by its metadata title", () => {
-    expect(toSessionDetail(row(), GATEWAY).name).toBe("Dune: Part Three — director");
+    expect(toSessionDetail(row(), GATEWAY).name).toBe("Dune: Part Three, director");
   });
 
   it("falls back to the parent market name when metadata carried no title", () => {
@@ -113,7 +112,7 @@ describe("toSessionDetail", () => {
   it("splits the unit out of the option's market name", () => {
     const option = toSessionDetail(row(), GATEWAY).options[0];
 
-    expect([option?.question, option?.unit]).toEqual(["What opening weekend would Gerwig deliver?", "$M"]);
+    expect([option?.question, option?.unit]).toEqual(["Opening weekend gross if Gerwig directs", "$M"]);
   });
 
   it("de-scales the 1e18 bounds into the unit's own terms", () => {
