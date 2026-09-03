@@ -54,12 +54,24 @@ export async function publishSessionMetadata(args: {
   const attempts = Math.max(1, args.attempts ?? READ_BACK_ATTEMPTS);
 
   onProgress?.("images");
-  const put = async (image: ImageSource) => (isUploaded(image) ? image : uploader.uploadFile(image));
-  const heroImage = await put(images.hero);
-  const icon = images.icon ? await put(images.icon) : undefined;
+  // A uri carried over from an earlier attempt has no bytes to fall back on, so a
+  // dead one has to stop the deploy here rather than go into the document.
+  const put = async (image: ImageSource, what: string) => {
+    if (!isUploaded(image)) return uploader.uploadFile(image);
+    if (!(await uploader.isServed(image))) {
+      throw new Error(`The ${what} uploaded earlier can no longer be found. Add it again and redeploy.`);
+    }
+    return image;
+  };
+  const heroImage = await put(images.hero, "hero image");
+  const icon = images.icon ? await put(images.icon, "icon") : undefined;
   const uploaded: Array<GalleryImage & { outcomeIndex: number }> = [];
   for (const image of images.gallery ?? []) {
-    uploaded.push({ outcomeIndex: image.outcomeIndex, label: image.label, url: await put(image.source) });
+    uploaded.push({
+      outcomeIndex: image.outcomeIndex,
+      label: image.label,
+      url: await put(image.source, `"${image.label}" image`),
+    });
   }
 
   onProgress?.("document");

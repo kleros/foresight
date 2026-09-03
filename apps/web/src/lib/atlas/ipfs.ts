@@ -60,9 +60,23 @@ export function createMetadataUploader(opts: {
     }
   };
 
+  /** A recall trades the rate-limited upload for this cheap read: the memory can
+      outlive the store behind the gateway, so it only counts while this answers ok. */
+  const stillServed = async (path: string): Promise<boolean> => {
+    try {
+      const response = await doFetch(gatewayUrl(opts.gateway, path), {
+        method: "HEAD",
+        signal: AbortSignal.timeout(5_000),
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  };
+
   const put = async (file: File, upload: (file: File) => Promise<string | null>): Promise<string> => {
     const kept = await memory.recall(file);
-    if (kept !== undefined) return kept;
+    if (kept !== undefined && (await stillServed(kept))) return kept;
 
     const path = await attempt(file, upload);
     // A missing or expired session makes `uploadFile` answer null rather than
@@ -77,6 +91,8 @@ export function createMetadataUploader(opts: {
   };
 
   return {
+    isServed: stillServed,
+
     uploadFile: (file) => put(file, opts.uploadImage),
 
     uploadJson: (name, value) =>

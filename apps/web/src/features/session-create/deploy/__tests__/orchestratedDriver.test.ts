@@ -87,7 +87,7 @@ function sources(): DeploySources {
   return {
     deploy: deployInput(PHASED),
     metadata: metadataInput(PHASED),
-    images: { hero: "/ipfs/QmHero" },
+    images: { hero: new File(["hero-bytes"], "hero.jpg", { type: "image/jpeg" }) },
   };
 }
 
@@ -416,7 +416,7 @@ describe("The orchestrated deploy, recovering a stored run", () => {
       hashOf(3),
     ]);
     // The document is on IPFS, and so is what it points at.
-    expect(progress.images).toEqual({ hero: "/ipfs/QmHero" });
+    expect(progress.images?.hero).toMatch(/^\/ipfs\//);
   });
 
   it("reports canSelfCheck false when the tab died awaiting a signature", async () => {

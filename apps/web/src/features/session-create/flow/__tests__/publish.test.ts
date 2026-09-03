@@ -220,6 +220,8 @@ describe("publishSessionMetadata", () => {
 
   it("keeps a gallery image already on IPFS instead of uploading it again", async () => {
     const ipfs = fakeIpfs();
+    ipfs.stored.set("/ipfs/QmHero", "hero-bytes");
+    ipfs.stored.set("/ipfs/QmPoster", "poster-bytes");
 
     const { document } = await publishSessionMetadata({
       uploader: ipfs.uploader,
@@ -232,9 +234,12 @@ describe("publishSessionMetadata", () => {
   });
 
   it("refuses an image pointing at a branch the session does not have", async () => {
+    const ipfs = fakeIpfs();
+    ipfs.stored.set("/ipfs/QmPoster", "poster-bytes");
+
     await expect(
       publishSessionMetadata({
-        uploader: fakeIpfs().uploader,
+        uploader: ipfs.uploader,
         images: { hero: hero(), gallery: [{ outcomeIndex: 7, label: "The poster", source: "/ipfs/QmPoster" }] },
         metadata,
       }),
@@ -243,6 +248,7 @@ describe("publishSessionMetadata", () => {
 
   it("keeps an image already on IPFS instead of uploading it again", async () => {
     const ipfs = fakeIpfs();
+    ipfs.stored.set("/ipfs/QmAlreadyThere", "hero-bytes");
 
     const { document } = await publishSessionMetadata({
       uploader: ipfs.uploader,
@@ -252,5 +258,27 @@ describe("publishSessionMetadata", () => {
 
     expect(ipfs.filesUploaded).toEqual([]);
     expect(document.session.heroImage).toBe("/ipfs/QmAlreadyThere");
+  });
+
+  it("refuses a carried-over image the gateway no longer serves, naming it", async () => {
+    const failed = publishSessionMetadata({
+      uploader: fakeIpfs().uploader,
+      images: { hero: "/ipfs/QmGoneWithTheStore" },
+      metadata,
+    });
+
+    await expect(failed).rejects.toThrow(/hero image uploaded earlier can no longer be found/);
+  });
+
+  it("names the gallery image that no longer serves by its label", async () => {
+    const ipfs = fakeIpfs();
+
+    const failed = publishSessionMetadata({
+      uploader: ipfs.uploader,
+      images: { hero: hero(), gallery: [{ outcomeIndex: 0, label: "The poster", source: "/ipfs/QmGone" }] },
+      metadata,
+    });
+
+    await expect(failed).rejects.toThrow(/"The poster" image uploaded earlier can no longer be found/);
   });
 });

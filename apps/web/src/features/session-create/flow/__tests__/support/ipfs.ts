@@ -22,6 +22,9 @@ export function fakeIpfs() {
       if (!stored.has(uri)) throw new Error(`nothing at ${uri}`);
       return stored.get(uri);
     },
+    async isServed(uri: string) {
+      return stored.has(uri);
+    },
   };
 
   return { uploader, filesUploaded, stored };

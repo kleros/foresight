@@ -204,6 +204,32 @@ describe("riding out the rate limiter", () => {
     await expect(afterReload.client.uploadFile(new File(["same-bytes"], "hero.png"))).resolves.toBe(UPLOADED_URI);
     expect(afterReload.attemptsSeen).toEqual([]);
   });
+
+  it("re-uploads bytes whose remembered upload the gateway no longer serves", async () => {
+    const storage = fakeStorage();
+    const before = atlas({ memory: createUploadMemory({ storage }) });
+    await before.client.uploadFile(new File(["same-bytes"], "hero.png"));
+
+    const storeWiped = atlas({
+      memory: createUploadMemory({ storage }),
+      serve: () => new Response(null, { status: 404 }),
+    });
+
+    await expect(storeWiped.client.uploadFile(new File(["same-bytes"], "hero.png"))).resolves.toBe(UPLOADED_URI);
+    expect(storeWiped.attemptsSeen).toHaveLength(1);
+  });
+
+  it("re-uploads bytes whose remembered path the gateway would refuse outright", async () => {
+    const storage = fakeStorage();
+    const memory = createUploadMemory({ storage });
+    const file = new File(["same-bytes"], "hero.png");
+    await memory.keep(file, "javascript:nowhere");
+
+    const a = atlas({ memory: createUploadMemory({ storage }) });
+
+    await expect(a.client.uploadFile(new File(["same-bytes"], "hero.png"))).resolves.toBe(UPLOADED_URI);
+    expect(a.attemptsSeen).toHaveLength(1);
+  });
 });
 
 describe("reading back", () => {

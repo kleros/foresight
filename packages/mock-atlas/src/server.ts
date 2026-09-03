@@ -7,14 +7,15 @@
  *   - `GET  /ipfs/<cid>`   gateway read, for the indexer's ENVIO_IPFS_GATEWAY
  *   - `GET  /healthz`      readiness probe
  *
- * State is in-memory and resets on restart.
+ * Auth state resets on restart; uploaded files persist in `.store/` and a
+ * gateway miss falls back to real IPFS gateways, so forked chains resolve.
  */
 import { createServer } from "node:http";
 
 import { handleGraphql } from "./atlas";
 import { CORS_HEADERS, log, send, sendJson } from "./http";
 import { DEFAULT_PORT } from "./index";
-import { handleGateway, handleUpload, seedExampleMetadata } from "./ipfs";
+import { handleGateway, handleUpload, initStore, seedExampleMetadata } from "./ipfs";
 
 const PORT = Number(process.env.MOCK_ATLAS_PORT ?? DEFAULT_PORT);
 
@@ -29,7 +30,9 @@ const server = createServer((req, res) => {
     if (req.method === "GET" && pathname === "/healthz") return send(res, 200, "ok", "text/plain");
     if (req.method === "POST" && pathname === "/graphql") return handleGraphql(req, res);
     if (req.method === "POST" && pathname === "/ipfs/file") return handleUpload(req, res);
-    if (req.method === "GET" && pathname.startsWith("/ipfs/")) return handleGateway(res, pathname);
+    if ((req.method === "GET" || req.method === "HEAD") && pathname.startsWith("/ipfs/")) {
+      return handleGateway(res, pathname, req.method === "HEAD");
+    }
 
     return sendJson(res, 404, { message: `mock-atlas: no route for ${req.method} ${pathname}` });
   };
@@ -40,6 +43,7 @@ const server = createServer((req, res) => {
   });
 });
 
+initStore();
 seedExampleMetadata();
 
 server.listen(PORT, () => {

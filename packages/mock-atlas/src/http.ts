@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 export const CORS_HEADERS = {
   "access-control-allow-origin": "*",
   "access-control-allow-headers": "content-type, authorization",
-  "access-control-allow-methods": "GET, POST, OPTIONS",
+  "access-control-allow-methods": "GET, HEAD, POST, OPTIONS",
 } as const;
 
 export const log = (message: string) => console.log(`[mock-atlas] ${message}`);

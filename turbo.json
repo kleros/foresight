@@ -1,6 +1,6 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
-  "globalEnv": ["CI", "NODE_ENV", "MOCK_ATLAS_PORT"],
+  "globalEnv": ["CI", "NODE_ENV", "MOCK_ATLAS_PORT", "MOCK_ATLAS_STORE_DIR", "MOCK_ATLAS_UPSTREAM_GATEWAYS"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
