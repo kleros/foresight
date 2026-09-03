@@ -27,9 +27,13 @@ const witnessed = (resume: DeployResume) => resume.outcome === "unknown" && Bool
  * again would strand a phased session only its deployer can finish.
  */
 export function RecoveredRunBanner({ resume, driver }: { resume: DeployResume; driver: SessionDeployDriver }) {
-  const seen = witnessed(resume);
-  const blind = !resume.canSelfCheck && !seen;
-  const line = [`It stopped at ${resume.label.toLowerCase()}.`, seen ? OUTCOME.confirmed : OUTCOME[resume.outcome]]
+  const blocked = resume.blocked;
+  const seen = !blocked && witnessed(resume);
+  const blind = !blocked && !resume.canSelfCheck && !seen;
+  const line = [
+    `It stopped at ${resume.label.toLowerCase()}.`,
+    blocked ?? (seen ? OUTCOME.confirmed : OUTCOME[resume.outcome]),
+  ]
     .filter(Boolean)
     .join(" ");
 
@@ -38,7 +42,7 @@ export function RecoveredRunBanner({ resume, driver }: { resume: DeployResume; d
       data-screen-label="Continue an unfinished deploy"
       className="rounded-fs bg-fs-tone-warning-bg border-fs-tone-warning flex gap-3.5 border px-5 py-4"
     >
-      <ForesightIcon name={blind ? "alert" : "phased-deploy"} size={20} className="text-fs-tone-warning" />
+      <ForesightIcon name={blocked || blind ? "alert" : "phased-deploy"} size={20} className="text-fs-tone-warning" />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-2.5">
           <span className="text-fs-text-primary text-sm font-semibold">Unfinished deploy found</span>
@@ -53,18 +57,24 @@ export function RecoveredRunBanner({ resume, driver }: { resume: DeployResume; d
         ) : null}
 
         <div className="flex flex-wrap items-center gap-4 pt-3">
-          {/* Continuing signs. Without the deploying wallet on the right chain
-              there is nothing to continue with, so it asks for that first. */}
-          <EnsureChain>
-            <Button text="Continue this deploy" small onPress={() => driver.continueRecovered()} />
-          </EnsureChain>
-          <button
-            type="button"
-            onClick={() => driver.reset()}
-            className="type-label text-fs-accent cursor-pointer border-none bg-transparent p-0"
-          >
-            Discard it
-          </button>
+          {blocked ? (
+            <Button text="Discard it" small onPress={() => driver.reset()} />
+          ) : (
+            <>
+              {/* Continuing signs. Without the deploying wallet on the right chain
+                  there is nothing to continue with, so it asks for that first. */}
+              <EnsureChain>
+                <Button text="Continue this deploy" small onPress={() => driver.continueRecovered()} />
+              </EnsureChain>
+              <button
+                type="button"
+                onClick={() => driver.reset()}
+                className="type-label text-fs-accent cursor-pointer border-none bg-transparent p-0"
+              >
+                Discard it
+              </button>
+            </>
+          )}
           <span className="type-caption text-fs-text-secondary">Discarding undoes nothing already created.</span>
         </div>
       </div>

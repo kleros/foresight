@@ -36,6 +36,8 @@ export type DeployResume = {
   /** False means continuing may pay for work already on chain. */
   canSelfCheck: boolean;
   hash?: string;
+  /** Why the stored run cannot be continued. Set, the only offer is discarding. */
+  blocked?: string;
 };
 
 export type SessionDeployProgress = {

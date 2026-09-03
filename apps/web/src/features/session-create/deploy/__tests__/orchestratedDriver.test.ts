@@ -447,13 +447,10 @@ describe("The orchestrated deploy, recovering a stored run", () => {
     driver.dispose();
   }
 
-  it("refuses a stored run whose plan can no longer be built", async () => {
-    const store = createFlowRunStore({ storage: createMemoryStorage(), now: () => NOW_MS });
-    await interruptedRun(store);
-
-    // Back the next day: the decision the stored run was planned for has closed.
+  /** A driver arriving after the stored run's decision has closed. */
+  function driverAfterTradingClosed(store: FlowRunStore) {
     const afterTradingClosed = (sources().deploy.parent.openingTime + 1) * 1000;
-    const tooLate = createOrchestratedDeploy({
+    return createOrchestratedDeploy({
       gateway: gatewayConfirming([]).gateway,
       uploader: fakeIpfs().uploader,
       ctx: () => ctx,
@@ -463,31 +460,60 @@ describe("The orchestrated deploy, recovering a stored run", () => {
       store,
       now: () => afterTradingClosed,
     });
+  }
 
+  it("offers a run it cannot re-plan back, with the reason continuing is off", async () => {
+    const store = createFlowRunStore({ storage: createMemoryStorage(), now: () => NOW_MS });
+    await interruptedRun(store);
+
+    // Back the next day: the decision the stored run was planned for has closed.
+    const tooLate = driverAfterTradingClosed(store);
     tooLate.recover();
 
-    await vi.waitFor(() => expect(tooLate.getProgress().failure).toBeDefined());
-    expect(tooLate.getProgress().failure).toMatchObject({ message: /already closed/, retryable: false });
-    expect(tooLate.getProgress().resume).toBeUndefined();
+    await vi.waitFor(() => expect(tooLate.getProgress().resume).toBeDefined());
+    expect(tooLate.getProgress().resume).toMatchObject({
+      stepId: STEP_ID.parent,
+      blocked: expect.stringMatching(/already closed/) as string,
+      // The parent was in flight when the tab died, and the hash is all that
+      // is left to point at.
+      hash: hashOf(1),
+    });
+    expect(tooLate.getProgress().failure).toBeUndefined();
+  });
+
+  it("halts the deploy screen on a run it cannot re-plan", async () => {
+    const store = createFlowRunStore({ storage: createMemoryStorage(), now: () => NOW_MS });
+    await interruptedRun(store);
+
+    const tooLate = driverAfterTradingClosed(store);
+    tooLate.recover();
+
+    await vi.waitFor(() => expect(tooLate.getProgress().resume).toBeDefined());
+    expect(tooLate.getProgress().stage).toBe("halted");
+  });
+
+  it("does not continue a run it could not re-plan", async () => {
+    const store = createFlowRunStore({ storage: createMemoryStorage(), now: () => NOW_MS });
+    await interruptedRun(store);
+
+    const tooLate = driverAfterTradingClosed(store);
+    tooLate.recover();
+    await vi.waitFor(() => expect(tooLate.getProgress().resume).toBeDefined());
+
+    tooLate.continueRecovered();
+
+    // Still on offer: continuing would sign a deploy the chain refuses.
+    expect(tooLate.getProgress().resume).toBeDefined();
+    expect(tooLate.getProgress().stage).toBe("halted");
   });
 
   it("frees the next deploy once a run it could not re-plan is discarded", async () => {
     const store = createFlowRunStore({ storage: createMemoryStorage(), now: () => NOW_MS });
     await interruptedRun(store);
 
-    const afterTradingClosed = (sources().deploy.parent.openingTime + 1) * 1000;
-    const tooLate = createOrchestratedDeploy({
-      gateway: gatewayConfirming([]).gateway,
-      uploader: fakeIpfs().uploader,
-      ctx: () => ctx,
-      flowId: FLOW_ID,
-      outcomeCount: PHASED,
-      sources,
-      store,
-      now: () => afterTradingClosed,
-    });
+    const tooLate = driverAfterTradingClosed(store);
     tooLate.recover();
-    await vi.waitFor(() => expect(tooLate.getProgress().failure).toBeDefined());
+    await vi.waitFor(() => expect(tooLate.getProgress().resume).toBeDefined());
 
     tooLate.reset();
 
@@ -496,6 +522,22 @@ describe("The orchestrated deploy, recovering a stored run", () => {
     const again = deployDriver({ gateway: next.gateway, store });
     again.start();
     await vi.waitFor(() => expect(next.sent).toHaveLength(1));
+  });
+
+  it("recovers a stored run instead of deploying over it", async () => {
+    const store = createFlowRunStore({ storage: createMemoryStorage(), now: () => NOW_MS });
+    await interruptedRun(store);
+
+    const next = gatewayConfirming([]);
+    const ipfs = fakeIpfs();
+    const driver = deployDriver({ gateway: next.gateway, store, uploader: ipfs.uploader });
+
+    driver.start();
+
+    await vi.waitFor(() => expect(driver.getProgress().resume).toBeDefined());
+    // Nothing paid for: no second document, no second session signed.
+    expect(ipfs.stored.size).toBe(0);
+    expect(next.sent).toHaveLength(0);
   });
 
   it("reports a chain it could not reach instead of offering the run back", async () => {

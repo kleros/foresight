@@ -8,6 +8,7 @@ import {
   type FlowRunStore,
   type FlowScope,
   type OrchestratorRun,
+  type PersistedFlowRun,
   type TxGateway,
 } from "@foresight/tx-orchestrator";
 
@@ -27,6 +28,21 @@ import type { SessionDeployCtx, SessionDeployInput, SessionDeploySnapshot, Sessi
 
 function errorOf(run: OrchestratorRun<SessionDeploySnapshot, SessionDeployCtx> | null): FlowError | undefined {
   return run?.status === "paused" || run?.status === "failed" ? run.error : undefined;
+}
+
+/** A stored run that cannot be rebuilt, read from its persisted summaries alone. */
+function blockedResume(stored: PersistedFlowRun<SessionDeploySnapshot, SessionDeployCtx>, blocked: string): DeployResume {
+  const stopped = stored.steps.find(
+    (step) => step.outcome.status !== "confirmed" && step.outcome.status !== "skipped",
+  );
+  return {
+    stepId: stopped?.stepId ?? STEP_ID.atomic,
+    label: stopped?.label ?? "the deploy",
+    outcome: "unknown",
+    canSelfCheck: false,
+    hash: stopped?.outcome.status === "submitted" ? stopped.outcome.hash : undefined,
+    blocked,
+  };
 }
 
 export type DeploySources = {
@@ -149,6 +165,10 @@ export function createOrchestratedDeploy(args: {
   function stage(): SessionDeployProgress["stage"] {
     if (uploadPhase === "uploading") return "uploading";
     if (uploadPhase === "verifying") return "verifying";
+
+    // A blocked resume has no run behind it, and the switch below would read
+    // idle — arming the deploy button over a record `start` refuses.
+    if (resume) return "halted";
 
     const run = orchestrator.getRun();
     if (!run) return uploadPhase === "done" ? "signing" : "idle";
@@ -330,7 +350,10 @@ export function createOrchestratedDeploy(args: {
         steps: planSessionDeploy(stored.snapshot, { now: now(), findSession: args.findSession }),
       });
     } catch (error) {
-      report({ message: describeTxError(error) });
+      // The record still blocks the next deploy, so it is offered back for
+      // discarding rather than reported as a failure of a deploy nobody started.
+      resume = blockedResume(stored, describeTxError(error));
+      notify();
       return;
     }
     if (!restored) return;
@@ -409,6 +432,12 @@ export function createOrchestratedDeploy(args: {
   return {
     start() {
       if (uploadPhase !== "idle" || orchestrator.getStatus() !== "idle") return;
+      // A stored run makes `orchestrator.start` refuse, after the upload is
+      // already paid for. It goes back through recovery instead.
+      if (args.store?.load(args.flowId)) {
+        recoverStoredRun();
+        return;
+      }
       startRun();
     },
 
@@ -417,7 +446,7 @@ export function createOrchestratedDeploy(args: {
     },
 
     continueRecovered() {
-      if (!resume) return;
+      if (!resume || resume.blocked) return;
       resume = undefined;
       uploadPhase = "done";
       notify();

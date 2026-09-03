@@ -78,4 +78,36 @@ describe("RecoveredRunBanner", () => {
     expect(driver.reset).toHaveBeenCalled();
     expect(screen.getByText("Discarding undoes nothing already created.")).toBeInTheDocument();
   });
+
+  const BLOCKED = "The decision already closed, at 2026-09-01T12:00:00.000Z.";
+
+  it("offers only discard for a deploy that cannot be continued", () => {
+    render(<RecoveredRunBanner resume={resumeOf({ blocked: BLOCKED })} driver={stubDriver()} />);
+
+    expect(screen.queryByRole("button", { name: "Continue this deploy" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Discard it" })).toBeInTheDocument();
+  });
+
+  it("says why the deploy cannot be continued", () => {
+    render(<RecoveredRunBanner resume={resumeOf({ blocked: BLOCKED })} driver={stubDriver()} />);
+
+    expect(screen.getByText(/The decision already closed/)).toBeInTheDocument();
+  });
+
+  it("does not say a blocked deploy went through on the strength of a hash", () => {
+    // A hash beside `unknown` normally reads as landed; unchecked here, it may not have.
+    render(
+      <RecoveredRunBanner resume={resumeOf({ blocked: BLOCKED, outcome: "unknown", hash: HASH })} driver={stubDriver()} />,
+    );
+
+    expect(screen.queryByText(/It went through while you were away\./)).toBeNull();
+  });
+
+  it("does not warn about paying twice when continuing is not offered", () => {
+    render(
+      <RecoveredRunBanner resume={resumeOf({ blocked: BLOCKED, canSelfCheck: false })} driver={stubDriver()} />,
+    );
+
+    expect(screen.queryByText(WARNING)).toBeNull();
+  });
 });
