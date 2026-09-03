@@ -27,6 +27,8 @@ const SESSION_DETAIL = graphql(`
       metadataResolved
       outcomeCount
       deployedChildCount
+      collateralDecimals
+      collateralSymbol
       openedAt
       completedAt
       openingTime
@@ -44,6 +46,11 @@ const SESSION_DETAIL = graphql(`
         upToken
         downToken
         underlyingToken
+        tokens {
+          outcomeIndex
+          decimals
+          symbol
+        }
       }
     }
   }

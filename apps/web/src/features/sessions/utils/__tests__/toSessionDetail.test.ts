@@ -2,42 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import { branchColor } from "@/utils/branchColor";
 
-import { addresses, dune, GATEWAY } from "@/testing/fixtures";
+import { GATEWAY } from "@/testing/fixtures";
 
 import { sessionStatus, type SessionDetailRow, toSessionDetail } from "../toSessionDetail";
-import { sessionColumns } from "./fixtures";
-
-type ChildRow = SessionDetailRow["children"][number];
-
-function child(overrides: Partial<ChildRow> = {}): ChildRow {
-  return {
-    id: addresses.childMarkets[0],
-    parentOutcomeIndex: "1",
-    parentOutcome: dune.director.outcome,
-    marketName: dune.director.marketName,
-    lowerBound: dune.director.lowerBound,
-    upperBound: dune.director.upperBound,
-    displayName: dune.director.displayName,
-    color: dune.director.color,
-    blocks: [],
-    upToken: addresses.upToken,
-    downToken: addresses.downToken,
-    underlyingToken: addresses.underlyingToken,
-    ...overrides,
-  };
-}
+import { sessionChildRow as child, sessionDetailColumns } from "./fixtures";
 
 function row(overrides: Partial<SessionDetailRow> = {}): SessionDetailRow {
   return {
-    ...sessionColumns,
-    itemName: "Director",
-    itemNamePlural: "Directors",
-    metadataResolved: true,
-    outcomeCount: "3",
-    deployedChildCount: "3",
-    openedAt: "1756000000",
-    completedAt: "1756000600",
-    blocks: [],
+    ...sessionDetailColumns,
     children: [child()],
     ...overrides,
   };
@@ -125,6 +97,54 @@ describe("toSessionDetail", () => {
     const detail = toSessionDetail(row({ children: [child({ upToken: "" })] }), GATEWAY);
 
     expect(detail.options[0]?.upToken).toBeNull();
+  });
+
+  it("treats an empty item name the same as a missing one", () => {
+    const detail = toSessionDetail(row({ itemName: "", itemNamePlural: "" }), GATEWAY);
+
+    expect([detail.itemName, detail.itemNamePlural]).toEqual([null, null]);
+  });
+
+  it("narrows session blocks, resolving image uris against the gateway", () => {
+    const blocks = [{ type: "image", label: "Poster", url: "ipfs://QmPoster" }, { type: "video" }];
+    const detail = toSessionDetail(row({ blocks }), GATEWAY);
+
+    expect(detail.blocks).toEqual([{ type: "image", label: "Poster", url: `${GATEWAY}/QmPoster` }]);
+  });
+
+  it("carries the collateral's decimals and symbol", () => {
+    const detail = toSessionDetail(row(), GATEWAY);
+
+    expect([detail.collateralDecimals, detail.collateralSymbol]).toEqual([18, "sDAI"]);
+  });
+
+  it("reports no collateral meta where the factory reads failed", () => {
+    const detail = toSessionDetail(row({ collateralDecimals: null, collateralSymbol: null }), GATEWAY);
+
+    expect([detail.collateralDecimals, detail.collateralSymbol]).toEqual([null, null]);
+  });
+
+  it("carries an option's underlying token meta", () => {
+    const option = toSessionDetail(row(), GATEWAY).options[0];
+
+    expect([option?.underlyingDecimals, option?.underlyingSymbol]).toEqual([18, "sDAI"]);
+  });
+
+  it("reports no underlying meta where the token reads failed", () => {
+    const tokens = [{ outcomeIndex: null, decimals: null, symbol: null }];
+    const option = toSessionDetail(row({ children: [child({ tokens })] }), GATEWAY).options[0];
+
+    expect([option?.underlyingDecimals, option?.underlyingSymbol]).toEqual([null, null]);
+  });
+
+  it("narrows an option's blocks the same way", () => {
+    const blocks = [
+      { type: "markdown", body: "Directed *Barbie*." },
+      { type: "markdown", body: 42 },
+    ];
+    const detail = toSessionDetail(row({ children: [child({ blocks })] }), GATEWAY);
+
+    expect(detail.options[0]?.blocks).toEqual([{ type: "markdown", body: "Directed *Barbie*." }]);
   });
 });
 

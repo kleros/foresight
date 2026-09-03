@@ -1,6 +1,7 @@
 import { Accordion, Button, Copiable, CustomTimeline } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
+import { ExternalLink } from "@/components/ui/ExternalLink";
 import { ForesightIcon, type ForesightIconName, type ForesightIconState } from "@/components/ui/ForesightIcon";
 
 import { formatUtcInstant, utcInstant } from "@/utils/date";
@@ -361,16 +362,7 @@ export function DeployStep({
               </div>
               <div className="flex flex-wrap items-center gap-4">
                 <Button text="Seed liquidity" isDisabled />
-                {seerUrl ? (
-                  <a
-                    href={seerUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="type-label text-fs-accent underline underline-offset-2"
-                  >
-                    View on Seer
-                  </a>
-                ) : null}
+                {seerUrl ? <ExternalLink href={seerUrl}>View on Seer</ExternalLink> : null}
                 <button
                   type="button"
                   onClick={() => driver.reset()}

@@ -2,8 +2,8 @@ import { Button } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
 import { ForesightIcon } from "@/components/ui/ForesightIcon";
+import { StatusChip } from "@/components/ui/StatusChip";
 
-import { StatusChip } from "./StatusChip";
 import { TxHashLink } from "./TxHashLink";
 import type { SessionDeployProgress } from "../deploy/types";
 import { useDraftStore } from "../stores/draftStore";

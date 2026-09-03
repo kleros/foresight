@@ -19,6 +19,11 @@ type Session {
   marketName: String!
   outcomes: [String!]!
 
+  "the seer factory's collateral"
+  collateralToken: String
+  collateralDecimals: Int
+  collateralSymbol: String
+
   "when trading stops"
   openingTime: BigInt
 
@@ -74,6 +79,7 @@ type ChildMarket {
 
   pools: [Pool!]! @derivedFrom(field: "childMarket")
   predictions: [Prediction!]! @derivedFrom(field: "childMarket")
+  tokens: [Token!]! @derivedFrom(field: "childMarket")
 }
 
 type Executor {
@@ -124,6 +130,10 @@ type Token {
 
   "0 is DOWN and 1 is UP; null for the underlying"
   outcomeIndex: Int
+
+  "null where the on-chain read failed"
+  decimals: Int
+  symbol: String
 }
 
 "An executor's net trading in one child market within one transaction."

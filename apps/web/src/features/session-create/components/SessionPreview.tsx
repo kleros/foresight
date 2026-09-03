@@ -4,13 +4,13 @@ import clsx from "clsx";
 
 import { ForesightIcon } from "@/components/ui/ForesightIcon";
 import { ScrollFade } from "@/components/ui/ScrollFade";
+import { StatusChip } from "@/components/ui/StatusChip";
 
 import { formatUtcInstant, utcInstant } from "@/utils/date";
 
 import { paths } from "@/config/paths";
 
 import { ScalarRangeTrack } from "./ScalarRangeTrack";
-import { StatusChip } from "./StatusChip";
 import type { SessionDeployProgress } from "../deploy/types";
 import { useImageUrl } from "../hooks/useImageUrl";
 import { useDraftStore } from "../stores/draftStore";

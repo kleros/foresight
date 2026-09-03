@@ -6,6 +6,7 @@ import { branchColor, isLegibleBranchColor } from "@/utils/branchColor";
 import type { SessionDetailQuery } from "@/lib/graphql/generated/graphql";
 
 import type { SessionDetail, SessionOption, SessionStatus } from "../types";
+import { displayBlocks } from "./displayBlocks";
 import { splitMarketName } from "./marketName";
 import { toSessionCore } from "./toSessionCore";
 
@@ -15,9 +16,10 @@ const scaledBound = (bound: string) => Number(formatEther(BigInt(bound)));
 
 const asToken = (value: string): Address | null => (value ? (value as Address) : null);
 
-function toSessionOption(child: SessionDetailRow["children"][number]): SessionOption {
+function toSessionOption(child: SessionDetailRow["children"][number], gateway: string): SessionOption {
   const index = Number(child.parentOutcomeIndex);
   const { question, unit } = splitMarketName(child.marketName);
+  const underlying = child.tokens.find((token) => token.outcomeIndex == null);
 
   return {
     market: child.id as Address,
@@ -32,7 +34,9 @@ function toSessionOption(child: SessionDetailRow["children"][number]): SessionOp
     upToken: asToken(child.upToken),
     downToken: asToken(child.downToken),
     underlyingToken: asToken(child.underlyingToken),
-    blocks: child.blocks,
+    underlyingDecimals: underlying?.decimals ?? null,
+    underlyingSymbol: underlying?.symbol ?? null,
+    blocks: displayBlocks(child.blocks, gateway),
   };
 }
 
@@ -40,15 +44,17 @@ export function toSessionDetail(row: SessionDetailRow, gateway: string): Session
   return {
     ...toSessionCore(row, gateway),
     question: row.marketName,
-    itemName: row.itemName ?? null,
-    itemNamePlural: row.itemNamePlural ?? null,
+    itemName: row.itemName || null,
+    itemNamePlural: row.itemNamePlural || null,
     metadataResolved: row.metadataResolved,
     outcomeCount: Number(row.outcomeCount),
     deployedChildCount: Number(row.deployedChildCount),
     setupComplete: row.completedAt !== "0",
     openedAt: new Date(Number(row.openedAt) * 1000),
-    blocks: row.blocks,
-    options: row.children.map(toSessionOption),
+    collateralDecimals: row.collateralDecimals ?? null,
+    collateralSymbol: row.collateralSymbol ?? null,
+    blocks: displayBlocks(row.blocks, gateway),
+    options: row.children.map((child) => toSessionOption(child, gateway)),
   };
 }
 

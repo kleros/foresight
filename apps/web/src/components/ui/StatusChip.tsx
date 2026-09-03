@@ -6,7 +6,7 @@ const TONES = {
   none: { tone: "neutral", icon: "empty" },
 } satisfies Record<string, { tone: string; icon: ForesightIconName }>;
 
-type StatusTone = keyof typeof TONES;
+export type StatusTone = keyof typeof TONES;
 
 export function StatusChip({ tone, label }: { tone: StatusTone; label: string }) {
   const { tone: token, icon } = TONES[tone];

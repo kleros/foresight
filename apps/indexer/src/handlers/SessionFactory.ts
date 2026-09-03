@@ -2,8 +2,10 @@ import { indexer } from "envio";
 
 import { ipfsPath } from "../utils";
 import { fetchChildMarket } from "../utils/contracts/fetchChildMarket";
+import { fetchCollateral } from "../utils/contracts/fetchCollateral";
 import { fetchOpeningTime } from "../utils/contracts/fetchOpeningTime";
 import { fetchParentMarket } from "../utils/contracts/fetchParentMarket";
+import { fetchToken } from "../utils/contracts/fetchToken";
 import { fetchSessionMetadata } from "../utils/ipfs/fetchSessionMetadata";
 import { isAvailable, UNAVAILABLE } from "../utils/unavailable";
 
@@ -14,10 +16,11 @@ const SESSION_COUNTER_ID = "global";
 indexer.onEvent({ contract: "SessionFactory", event: "ParentMarketDeployed" }, async ({ event, context }) => {
   const outcomeCount = Number(event.params.outcomeCount);
 
-  const [market, metadata, openingTime] = await Promise.all([
+  const [market, metadata, openingTime, collateral] = await Promise.all([
     context.effect(fetchParentMarket, { chainId: event.chainId, address: event.params.parentMarket, outcomeCount }),
     context.effect(fetchSessionMetadata, { path: ipfsPath(event.params.metadataUri) }),
     context.effect(fetchOpeningTime, { chainId: event.chainId, address: event.params.parentMarket }),
+    context.effect(fetchCollateral, { chainId: event.chainId, factory: event.srcAddress }),
   ]);
 
   context.Session.set({
@@ -31,6 +34,9 @@ indexer.onEvent({ contract: "SessionFactory", event: "ParentMarketDeployed" }, a
     completedAt: 0n,
     marketName: market.marketName,
     outcomes: market.outcomes,
+    collateralToken: collateral.token ?? undefined,
+    collateralDecimals: collateral.decimals ?? undefined,
+    collateralSymbol: collateral.symbol ?? undefined,
     openingTime: openingTime === null ? undefined : BigInt(openingTime),
     metadataUri: event.params.metadataUri,
     metadataResolved: metadata !== null,
@@ -81,15 +87,25 @@ indexer.onEvent({ contract: "SessionFactory", event: "ChildMarketDeployed" }, as
 
   const display = metadata?.children.find((child) => child.outcomeIndex === outcomeIndex) ?? null;
 
-  for (const [address, side] of [
-    [market.down, 0],
-    [market.up, 1],
-    [market.underlying, undefined],
-  ] as const) {
-    if (isAvailable(address)) {
-      context.Token.set({ id: address, childMarket_id: childMarket, outcomeIndex: side });
-    }
-  }
+  const sides = (
+    [
+      [market.down, 0],
+      [market.up, 1],
+      [market.underlying, undefined],
+    ] as const
+  ).filter(([address]) => isAvailable(address));
+  const metas = await Promise.all(
+    sides.map(([address]) => context.effect(fetchToken, { chainId: event.chainId, address })),
+  );
+  sides.forEach(([address, side], index) => {
+    context.Token.set({
+      id: address,
+      childMarket_id: childMarket,
+      outcomeIndex: side,
+      decimals: metas[index]?.decimals ?? undefined,
+      symbol: metas[index]?.symbol ?? undefined,
+    });
+  });
 
   context.ChildMarket.set({
     id: childMarket,

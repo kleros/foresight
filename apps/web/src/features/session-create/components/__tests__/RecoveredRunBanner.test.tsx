@@ -97,16 +97,17 @@ describe("RecoveredRunBanner", () => {
   it("does not say a blocked deploy went through on the strength of a hash", () => {
     // A hash beside `unknown` normally reads as landed; unchecked here, it may not have.
     render(
-      <RecoveredRunBanner resume={resumeOf({ blocked: BLOCKED, outcome: "unknown", hash: HASH })} driver={stubDriver()} />,
+      <RecoveredRunBanner
+        resume={resumeOf({ blocked: BLOCKED, outcome: "unknown", hash: HASH })}
+        driver={stubDriver()}
+      />,
     );
 
     expect(screen.queryByText(/It went through while you were away\./)).toBeNull();
   });
 
   it("does not warn about paying twice when continuing is not offered", () => {
-    render(
-      <RecoveredRunBanner resume={resumeOf({ blocked: BLOCKED, canSelfCheck: false })} driver={stubDriver()} />,
-    );
+    render(<RecoveredRunBanner resume={resumeOf({ blocked: BLOCKED, canSelfCheck: false })} driver={stubDriver()} />);
 
     expect(screen.queryByText(WARNING)).toBeNull();
   });

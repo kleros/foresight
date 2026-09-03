@@ -121,9 +121,15 @@ export const seedMarket = async (indexer: TestIndexer, market: SeededMarket) => 
     transactionHash: "0x",
   });
 
-  await indexer.Token.set({ id: market.down, childMarket_id: market.id, outcomeIndex: 0 });
-  await indexer.Token.set({ id: market.up, childMarket_id: market.id, outcomeIndex: 1 });
-  await indexer.Token.set({ id: market.underlying, childMarket_id: market.id, outcomeIndex: undefined });
+  await indexer.Token.set({ id: market.down, childMarket_id: market.id, outcomeIndex: 0, decimals: 18, symbol: "UP" });
+  await indexer.Token.set({ id: market.up, childMarket_id: market.id, outcomeIndex: 1, decimals: 18, symbol: "DOWN" });
+  await indexer.Token.set({
+    id: market.underlying,
+    childMarket_id: market.id,
+    outcomeIndex: undefined,
+    decimals: 18,
+    symbol: "sDAI",
+  });
 };
 
 /** Pool-signed swap amounts, for pools created with the underlying as token0. */

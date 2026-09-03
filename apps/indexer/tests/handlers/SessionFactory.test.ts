@@ -6,8 +6,13 @@ import { afterAll, beforeAll, describe, it } from "vitest";
 
 import { EXAMPLE_METADATA, EXAMPLE_METADATA_CID, EXAMPLE_METADATA_URI } from "@foresight/session-metadata";
 
+import { abi as erc20Abi } from "../../abis/Erc20";
 import { abi as seerMarketAbi } from "../../abis/SeerMarket";
+import { abi as seerMarketFactoryAbi } from "../../abis/SeerMarketFactory";
+import { abi as sessionFactoryViewsAbi } from "../../abis/SessionFactoryViews";
 import { BLOCK } from "../support/harness";
+
+const readableAbi = [...seerMarketAbi, ...erc20Abi, ...seerMarketFactoryAbi, ...sessionFactoryViewsAbi];
 
 const [FIRST_CHILD, SECOND_CHILD] = [EXAMPLE_METADATA.children[0]!, EXAMPLE_METADATA.children[1]!];
 
@@ -23,6 +28,11 @@ const CHILD_1_DOWN = "0x0000000000000000000000000000000000000d10" as const;
 const CHILD_1_UP = "0x0000000000000000000000000000000000000d11" as const;
 const CHILD_0_UNDERLYING = "0x0000000000000000000000000000000000000c0a" as const;
 const CHILD_1_UNDERLYING = "0x0000000000000000000000000000000000000c0b" as const;
+
+/** The configured SessionFactory address in config.localhost.yaml, which simulated events carry. */
+const SESSION_FACTORY = "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512" as const;
+const SEER_FACTORY = "0x00000000000000000000000000000000000005ee" as const;
+const COLLATERAL = "0x000000000000000000000000000000000000c011" as const;
 
 const PARENT_MARKET = "0x0000000000000000000000000000000000000ace" as const;
 const CHILD_MARKET_0 = "0x0000000000000000000000000000000000000c00" as const;
@@ -43,14 +53,20 @@ const childReads = (down: string, up: string, underlying: string) => ({
 });
 
 const marketReads: Record<string, Record<string, unknown>> = {
+  [SESSION_FACTORY]: { seerMarketFactory: SEER_FACTORY },
+  [SEER_FACTORY]: { collateralToken: COLLATERAL },
+  [COLLATERAL]: { decimals: 18, symbol: "sDAI" },
   [PARENT_MARKET]: { marketName: MARKET_NAME, outcomes: OUTCOMES },
   [CHILD_MARKET_0]: childReads(CHILD_0_DOWN, CHILD_0_UP, CHILD_0_UNDERLYING),
   [CHILD_MARKET_1]: childReads(CHILD_1_DOWN, CHILD_1_UP, CHILD_1_UNDERLYING),
+  [CHILD_0_DOWN]: { decimals: 18, symbol: "DUNE0-DOWN" },
+  [CHILD_0_UP]: { decimals: 18, symbol: "DUNE0-UP" },
+  [CHILD_0_UNDERLYING]: { decimals: 6, symbol: "USDC" },
 };
 
 const ethCall = (params: [{ to: string; data: Hex }]) => {
   const { to, data } = params[0];
-  const { functionName, args } = decodeFunctionData({ abi: seerMarketAbi, data });
+  const { functionName, args } = decodeFunctionData({ abi: readableAbi, data });
   const reads = marketReads[to.toLowerCase()] ?? {};
 
   const indexed = (key: "outcomes" | "wrappedOutcome") => (reads[key] as unknown[] | undefined)?.[Number(args?.[0])];
@@ -61,7 +77,7 @@ const ethCall = (params: [{ to: string; data: Hex }]) => {
   // an address we know nothing about behaves like a market that is not there
   if (result === undefined) throw new Error(`no value for ${functionName} on ${to}`);
 
-  return encodeFunctionResult({ abi: seerMarketAbi, functionName, result } as never);
+  return encodeFunctionResult({ abi: readableAbi, functionName, result } as never);
 };
 
 type RpcCall = { id: number; method: string; params: never };
@@ -169,6 +185,9 @@ describe("SessionFactory indexing", () => {
     t.expect(session.completedAt).toBe(BigInt(BLOCK));
     t.expect(session.marketName).toBe(MARKET_NAME);
     t.expect(session.outcomes).toEqual(OUTCOMES);
+    t.expect(session.collateralToken).toBe(COLLATERAL);
+    t.expect(session.collateralDecimals).toBe(18);
+    t.expect(session.collateralSymbol).toBe("sDAI");
     t.expect(session.metadataUri).toBe(EXAMPLE_METADATA_URI);
     t.expect(session.metadataResolved).toBe(true);
     t.expect(session.title).toBe(EXAMPLE_METADATA.session.title);
@@ -198,10 +217,14 @@ describe("SessionFactory indexing", () => {
     const up = await indexer.Token.getOrThrow(CHILD_0_UP);
     t.expect(up.outcomeIndex).toBe(1);
     t.expect(up.childMarket_id).toBe(CHILD_MARKET_0);
+    t.expect(up.decimals).toBe(18);
+    t.expect(up.symbol).toBe("DUNE0-UP");
     t.expect((await indexer.Token.getOrThrow(CHILD_0_DOWN)).outcomeIndex).toBe(0);
     const underlying = await indexer.Token.getOrThrow(CHILD_0_UNDERLYING);
     t.expect(underlying.outcomeIndex).toBeUndefined();
     t.expect(underlying.childMarket_id).toBe(CHILD_MARKET_0);
+    t.expect(underlying.decimals).toBe(6);
+    t.expect(underlying.symbol).toBe("USDC");
 
     t.expect(child.lowerBound).toBe(LOWER_BOUND);
     t.expect(child.upperBound).toBe(UPPER_BOUND);
@@ -214,6 +237,16 @@ describe("SessionFactory indexing", () => {
     t.expect(second.parentOutcomeIndex).toBe(1n);
     t.expect(second.parentOutcome).toBe("Gerwig");
     t.expect(second.displayName).toBe(SECOND_CHILD.displayName);
+  });
+
+  it("leaves token decimals and symbol unset where the token does not answer", async (t) => {
+    const indexer = createTestIndexer();
+
+    await indexEvents(indexer, [parentDeployed(BLOCK), childDeployed(BLOCK, 1, CHILD_MARKET_1)]);
+
+    const token = await indexer.Token.getOrThrow(CHILD_1_UP);
+    t.expect(token.decimals).toBeUndefined();
+    t.expect(token.symbol).toBeUndefined();
   });
 
   it("counts children as a phased deploy progresses, completing on the last", async (t) => {

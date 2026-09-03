@@ -1,3 +1,4 @@
+import type { DisplayBlock } from "@foresight/session-metadata";
 import type { Address } from "viem";
 
 export type SessionStatus = "setting-up" | "trading" | "closed";
@@ -34,7 +35,11 @@ export interface SessionOption {
   upToken: Address | null;
   downToken: Address | null;
   underlyingToken: Address | null;
-  blocks: unknown;
+  /** The underlying's on-chain meta; null where the read failed at indexing time. */
+  underlyingDecimals: number | null;
+  underlyingSymbol: string | null;
+  /** Display blocks with image uris already resolved against the gateway. */
+  blocks: DisplayBlock[];
 }
 
 export interface SessionDetail extends SessionCore {
@@ -48,8 +53,11 @@ export interface SessionDetail extends SessionCore {
   /** True once every child market exists; until then the session cannot be traded. */
   setupComplete: boolean;
   openedAt: Date;
-  /** Session-level display blocks from the metadata document. */
-  blocks: unknown;
+  /** The seer factory's collateral behind every market here; null where the read failed. */
+  collateralDecimals: number | null;
+  collateralSymbol: string | null;
+  /** Session-level display blocks, image uris already resolved against the gateway. */
+  blocks: DisplayBlock[];
   options: SessionOption[];
 }
 

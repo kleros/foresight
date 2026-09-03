@@ -58,6 +58,8 @@ export type ChildMarket = {
   /** An object relationship */
   session?: Maybe<Session>;
   session_id: Scalars['String']['output'];
+  /** An array relationship */
+  tokens: Array<Token>;
   transactionHash: Scalars['String']['output'];
   underlyingToken: Scalars['String']['output'];
   upToken: Scalars['String']['output'];
@@ -88,6 +90,16 @@ export type ChildMarketPredictionsArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   order_by?: InputMaybe<Array<Prediction_Order_By>>;
   where?: InputMaybe<Prediction_Bool_Exp>;
+};
+
+
+/** columns and relationships of "ChildMarket" */
+export type ChildMarketTokensArgs = {
+  distinct_on?: InputMaybe<Array<Token_Select_Column>>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  order_by?: InputMaybe<Array<Token_Order_By>>;
+  where?: InputMaybe<Token_Bool_Exp>;
 };
 
 /** order by aggregate values of table "ChildMarket" */
@@ -133,6 +145,7 @@ export type ChildMarket_Bool_Exp = {
   predictions?: InputMaybe<Prediction_Bool_Exp>;
   session?: InputMaybe<Session_Bool_Exp>;
   session_id?: InputMaybe<String_Comparison_Exp>;
+  tokens?: InputMaybe<Token_Bool_Exp>;
   transactionHash?: InputMaybe<String_Comparison_Exp>;
   underlyingToken?: InputMaybe<String_Comparison_Exp>;
   upToken?: InputMaybe<String_Comparison_Exp>;
@@ -200,6 +213,7 @@ export type ChildMarket_Order_By = {
   predictions_aggregate?: InputMaybe<Prediction_Aggregate_Order_By>;
   session?: InputMaybe<Session_Order_By>;
   session_id?: InputMaybe<Order_By>;
+  tokens_aggregate?: InputMaybe<Token_Aggregate_Order_By>;
   transactionHash?: InputMaybe<Order_By>;
   underlyingToken?: InputMaybe<Order_By>;
   upToken?: InputMaybe<Order_By>;
@@ -1415,6 +1429,10 @@ export type Session = {
   blocks: Scalars['jsonb']['output'];
   /** An array relationship */
   children: Array<ChildMarket>;
+  collateralDecimals?: Maybe<Scalars['Int']['output']>;
+  collateralSymbol?: Maybe<Scalars['String']['output']>;
+  /** the seer factory's collateral */
+  collateralToken?: Maybe<Scalars['String']['output']>;
   completedAt: Scalars['numeric']['output'];
   deployedChildCount: Scalars['numeric']['output'];
   deployer: Scalars['String']['output'];
@@ -1512,6 +1530,9 @@ export type Session_Bool_Exp = {
   _or?: InputMaybe<Array<Session_Bool_Exp>>;
   blocks?: InputMaybe<Jsonb_Comparison_Exp>;
   children?: InputMaybe<ChildMarket_Bool_Exp>;
+  collateralDecimals?: InputMaybe<Int_Comparison_Exp>;
+  collateralSymbol?: InputMaybe<String_Comparison_Exp>;
+  collateralToken?: InputMaybe<String_Comparison_Exp>;
   completedAt?: InputMaybe<Numeric_Comparison_Exp>;
   deployedChildCount?: InputMaybe<Numeric_Comparison_Exp>;
   deployer?: InputMaybe<String_Comparison_Exp>;
@@ -1539,6 +1560,9 @@ export type Session_Bool_Exp = {
 export type Session_Order_By = {
   blocks?: InputMaybe<Order_By>;
   children_aggregate?: InputMaybe<ChildMarket_Aggregate_Order_By>;
+  collateralDecimals?: InputMaybe<Order_By>;
+  collateralSymbol?: InputMaybe<Order_By>;
+  collateralToken?: InputMaybe<Order_By>;
   completedAt?: InputMaybe<Order_By>;
   deployedChildCount?: InputMaybe<Order_By>;
   deployer?: InputMaybe<Order_By>;
@@ -1566,6 +1590,12 @@ export type Session_Order_By = {
 export enum Session_Select_Column {
   /** column name */
   Blocks = 'blocks',
+  /** column name */
+  CollateralDecimals = 'collateralDecimals',
+  /** column name */
+  CollateralSymbol = 'collateralSymbol',
+  /** column name */
+  CollateralToken = 'collateralToken',
   /** column name */
   CompletedAt = 'completedAt',
   /** column name */
@@ -1621,6 +1651,10 @@ export type Session_Stream_Cursor_Input = {
 /** Initial value of the column from where the streaming should start */
 export type Session_Stream_Cursor_Value_Input = {
   blocks?: InputMaybe<Scalars['jsonb']['input']>;
+  collateralDecimals?: InputMaybe<Scalars['Int']['input']>;
+  collateralSymbol?: InputMaybe<Scalars['String']['input']>;
+  /** the seer factory's collateral */
+  collateralToken?: InputMaybe<Scalars['String']['input']>;
   completedAt?: InputMaybe<Scalars['numeric']['input']>;
   deployedChildCount?: InputMaybe<Scalars['numeric']['input']>;
   deployer?: InputMaybe<Scalars['String']['input']>;
@@ -2022,10 +2056,36 @@ export type Token = {
   /** An object relationship */
   childMarket?: Maybe<ChildMarket>;
   childMarket_id: Scalars['String']['output'];
+  /** null where the on-chain read failed */
+  decimals?: Maybe<Scalars['Int']['output']>;
   /** token address, lowercase */
   id: Scalars['String']['output'];
   /** 0 is DOWN and 1 is UP; null for the underlying */
   outcomeIndex?: Maybe<Scalars['Int']['output']>;
+  symbol?: Maybe<Scalars['String']['output']>;
+};
+
+/** order by aggregate values of table "Token" */
+export type Token_Aggregate_Order_By = {
+  avg?: InputMaybe<Token_Avg_Order_By>;
+  count?: InputMaybe<Order_By>;
+  max?: InputMaybe<Token_Max_Order_By>;
+  min?: InputMaybe<Token_Min_Order_By>;
+  stddev?: InputMaybe<Token_Stddev_Order_By>;
+  stddev_pop?: InputMaybe<Token_Stddev_Pop_Order_By>;
+  stddev_samp?: InputMaybe<Token_Stddev_Samp_Order_By>;
+  sum?: InputMaybe<Token_Sum_Order_By>;
+  var_pop?: InputMaybe<Token_Var_Pop_Order_By>;
+  var_samp?: InputMaybe<Token_Var_Samp_Order_By>;
+  variance?: InputMaybe<Token_Variance_Order_By>;
+};
+
+/** order by avg() on columns of table "Token" */
+export type Token_Avg_Order_By = {
+  /** null where the on-chain read failed */
+  decimals?: InputMaybe<Order_By>;
+  /** 0 is DOWN and 1 is UP; null for the underlying */
+  outcomeIndex?: InputMaybe<Order_By>;
 };
 
 /** Boolean expression to filter rows from the table "Token". All fields are combined with a logical 'AND'. */
@@ -2035,16 +2095,44 @@ export type Token_Bool_Exp = {
   _or?: InputMaybe<Array<Token_Bool_Exp>>;
   childMarket?: InputMaybe<ChildMarket_Bool_Exp>;
   childMarket_id?: InputMaybe<String_Comparison_Exp>;
+  decimals?: InputMaybe<Int_Comparison_Exp>;
   id?: InputMaybe<String_Comparison_Exp>;
   outcomeIndex?: InputMaybe<Int_Comparison_Exp>;
+  symbol?: InputMaybe<String_Comparison_Exp>;
+};
+
+/** order by max() on columns of table "Token" */
+export type Token_Max_Order_By = {
+  childMarket_id?: InputMaybe<Order_By>;
+  /** null where the on-chain read failed */
+  decimals?: InputMaybe<Order_By>;
+  /** token address, lowercase */
+  id?: InputMaybe<Order_By>;
+  /** 0 is DOWN and 1 is UP; null for the underlying */
+  outcomeIndex?: InputMaybe<Order_By>;
+  symbol?: InputMaybe<Order_By>;
+};
+
+/** order by min() on columns of table "Token" */
+export type Token_Min_Order_By = {
+  childMarket_id?: InputMaybe<Order_By>;
+  /** null where the on-chain read failed */
+  decimals?: InputMaybe<Order_By>;
+  /** token address, lowercase */
+  id?: InputMaybe<Order_By>;
+  /** 0 is DOWN and 1 is UP; null for the underlying */
+  outcomeIndex?: InputMaybe<Order_By>;
+  symbol?: InputMaybe<Order_By>;
 };
 
 /** Ordering options when selecting data from "Token". */
 export type Token_Order_By = {
   childMarket?: InputMaybe<ChildMarket_Order_By>;
   childMarket_id?: InputMaybe<Order_By>;
+  decimals?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
   outcomeIndex?: InputMaybe<Order_By>;
+  symbol?: InputMaybe<Order_By>;
 };
 
 /** select columns of table "Token" */
@@ -2052,10 +2140,38 @@ export enum Token_Select_Column {
   /** column name */
   ChildMarketId = 'childMarket_id',
   /** column name */
+  Decimals = 'decimals',
+  /** column name */
   Id = 'id',
   /** column name */
-  OutcomeIndex = 'outcomeIndex'
+  OutcomeIndex = 'outcomeIndex',
+  /** column name */
+  Symbol = 'symbol'
 }
+
+/** order by stddev() on columns of table "Token" */
+export type Token_Stddev_Order_By = {
+  /** null where the on-chain read failed */
+  decimals?: InputMaybe<Order_By>;
+  /** 0 is DOWN and 1 is UP; null for the underlying */
+  outcomeIndex?: InputMaybe<Order_By>;
+};
+
+/** order by stddev_pop() on columns of table "Token" */
+export type Token_Stddev_Pop_Order_By = {
+  /** null where the on-chain read failed */
+  decimals?: InputMaybe<Order_By>;
+  /** 0 is DOWN and 1 is UP; null for the underlying */
+  outcomeIndex?: InputMaybe<Order_By>;
+};
+
+/** order by stddev_samp() on columns of table "Token" */
+export type Token_Stddev_Samp_Order_By = {
+  /** null where the on-chain read failed */
+  decimals?: InputMaybe<Order_By>;
+  /** 0 is DOWN and 1 is UP; null for the underlying */
+  outcomeIndex?: InputMaybe<Order_By>;
+};
 
 /** Streaming cursor of the table "Token" */
 export type Token_Stream_Cursor_Input = {
@@ -2068,10 +2184,45 @@ export type Token_Stream_Cursor_Input = {
 /** Initial value of the column from where the streaming should start */
 export type Token_Stream_Cursor_Value_Input = {
   childMarket_id?: InputMaybe<Scalars['String']['input']>;
+  /** null where the on-chain read failed */
+  decimals?: InputMaybe<Scalars['Int']['input']>;
   /** token address, lowercase */
   id?: InputMaybe<Scalars['String']['input']>;
   /** 0 is DOWN and 1 is UP; null for the underlying */
   outcomeIndex?: InputMaybe<Scalars['Int']['input']>;
+  symbol?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** order by sum() on columns of table "Token" */
+export type Token_Sum_Order_By = {
+  /** null where the on-chain read failed */
+  decimals?: InputMaybe<Order_By>;
+  /** 0 is DOWN and 1 is UP; null for the underlying */
+  outcomeIndex?: InputMaybe<Order_By>;
+};
+
+/** order by var_pop() on columns of table "Token" */
+export type Token_Var_Pop_Order_By = {
+  /** null where the on-chain read failed */
+  decimals?: InputMaybe<Order_By>;
+  /** 0 is DOWN and 1 is UP; null for the underlying */
+  outcomeIndex?: InputMaybe<Order_By>;
+};
+
+/** order by var_samp() on columns of table "Token" */
+export type Token_Var_Samp_Order_By = {
+  /** null where the on-chain read failed */
+  decimals?: InputMaybe<Order_By>;
+  /** 0 is DOWN and 1 is UP; null for the underlying */
+  outcomeIndex?: InputMaybe<Order_By>;
+};
+
+/** order by variance() on columns of table "Token" */
+export type Token_Variance_Order_By = {
+  /** null where the on-chain read failed */
+  decimals?: InputMaybe<Order_By>;
+  /** 0 is DOWN and 1 is UP; null for the underlying */
+  outcomeIndex?: InputMaybe<Order_By>;
 };
 
 /** A token movement in or out of an executor. */
@@ -3159,7 +3310,7 @@ export type SessionDetailQueryVariables = Exact<{
 }>;
 
 
-export type SessionDetailQuery = { __typename?: 'query_root', Session: Array<{ __typename?: 'Session', id: string, parentMarket: string, deployer: string, marketName: string, title?: string | null, description?: string | null, icon?: string | null, heroImage?: string | null, itemName?: string | null, itemNamePlural?: string | null, metadataResolved: boolean, outcomeCount: string, deployedChildCount: string, openedAt: string, completedAt: string, openingTime?: string | null, blocks: unknown, children: Array<{ __typename?: 'ChildMarket', id: string, parentOutcomeIndex: string, parentOutcome: string, marketName: string, lowerBound: string, upperBound: string, displayName?: string | null, color?: string | null, blocks: unknown, upToken: string, downToken: string, underlyingToken: string }> }> };
+export type SessionDetailQuery = { __typename?: 'query_root', Session: Array<{ __typename?: 'Session', id: string, parentMarket: string, deployer: string, marketName: string, title?: string | null, description?: string | null, icon?: string | null, heroImage?: string | null, itemName?: string | null, itemNamePlural?: string | null, metadataResolved: boolean, outcomeCount: string, deployedChildCount: string, collateralDecimals?: number | null, collateralSymbol?: string | null, openedAt: string, completedAt: string, openingTime?: string | null, blocks: unknown, children: Array<{ __typename?: 'ChildMarket', id: string, parentOutcomeIndex: string, parentOutcome: string, marketName: string, lowerBound: string, upperBound: string, displayName?: string | null, color?: string | null, blocks: unknown, upToken: string, downToken: string, underlyingToken: string, tokens: Array<{ __typename?: 'Token', outcomeIndex?: number | null, decimals?: number | null, symbol?: string | null }> }> }> };
 
 export type SessionStatsQueryVariables = Exact<{
   sessionId: Scalars['String']['input'];
@@ -3180,6 +3331,6 @@ export type SessionsQuery = { __typename?: 'query_root', SessionCounter: Array<{
 
 export const SessionIndexedDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionIndexed"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Session"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"IntValue","value":"1"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"children"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]}}]} as unknown as DocumentNode<SessionIndexedQuery, SessionIndexedQueryVariables>;
 export const SessionByMetadataDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionByMetadata"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"deployer"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"metadataUri"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"since"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"numeric"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Session"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"deployer"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"deployer"}}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"metadataUri"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"metadataUri"}}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"openedAt"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_gte"},"value":{"kind":"Variable","name":{"kind":"Name","value":"since"}}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"openedAt"},"value":{"kind":"EnumValue","value":"desc"}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"IntValue","value":"1"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"sessionId"}},{"kind":"Field","name":{"kind":"Name","value":"parentMarket"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}},{"kind":"Field","name":{"kind":"Name","value":"children"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"parentOutcomeIndex"},"value":{"kind":"EnumValue","value":"asc"}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentOutcomeIndex"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"chain_metadata"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"latest_processed_block"}},{"kind":"Field","name":{"kind":"Name","value":"block_height"}}]}}]}}]} as unknown as DocumentNode<SessionByMetadataQuery, SessionByMetadataQueryVariables>;
-export const SessionDetailDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionDetail"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"parentMarket"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Session"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"parentMarket"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"parentMarket"}}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"IntValue","value":"1"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentMarket"}},{"kind":"Field","name":{"kind":"Name","value":"deployer"}},{"kind":"Field","name":{"kind":"Name","value":"marketName"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"icon"}},{"kind":"Field","name":{"kind":"Name","value":"heroImage"}},{"kind":"Field","name":{"kind":"Name","value":"itemName"}},{"kind":"Field","name":{"kind":"Name","value":"itemNamePlural"}},{"kind":"Field","name":{"kind":"Name","value":"metadataResolved"}},{"kind":"Field","name":{"kind":"Name","value":"outcomeCount"}},{"kind":"Field","name":{"kind":"Name","value":"deployedChildCount"}},{"kind":"Field","name":{"kind":"Name","value":"openedAt"}},{"kind":"Field","name":{"kind":"Name","value":"completedAt"}},{"kind":"Field","name":{"kind":"Name","value":"openingTime"}},{"kind":"Field","name":{"kind":"Name","value":"blocks"}},{"kind":"Field","name":{"kind":"Name","value":"children"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"parentOutcomeIndex"},"value":{"kind":"EnumValue","value":"asc"}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentOutcomeIndex"}},{"kind":"Field","name":{"kind":"Name","value":"parentOutcome"}},{"kind":"Field","name":{"kind":"Name","value":"marketName"}},{"kind":"Field","name":{"kind":"Name","value":"lowerBound"}},{"kind":"Field","name":{"kind":"Name","value":"upperBound"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"color"}},{"kind":"Field","name":{"kind":"Name","value":"blocks"}},{"kind":"Field","name":{"kind":"Name","value":"upToken"}},{"kind":"Field","name":{"kind":"Name","value":"downToken"}},{"kind":"Field","name":{"kind":"Name","value":"underlyingToken"}}]}}]}}]}}]} as unknown as DocumentNode<SessionDetailQuery, SessionDetailQueryVariables>;
+export const SessionDetailDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionDetail"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"parentMarket"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Session"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"parentMarket"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"parentMarket"}}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"IntValue","value":"1"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentMarket"}},{"kind":"Field","name":{"kind":"Name","value":"deployer"}},{"kind":"Field","name":{"kind":"Name","value":"marketName"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"icon"}},{"kind":"Field","name":{"kind":"Name","value":"heroImage"}},{"kind":"Field","name":{"kind":"Name","value":"itemName"}},{"kind":"Field","name":{"kind":"Name","value":"itemNamePlural"}},{"kind":"Field","name":{"kind":"Name","value":"metadataResolved"}},{"kind":"Field","name":{"kind":"Name","value":"outcomeCount"}},{"kind":"Field","name":{"kind":"Name","value":"deployedChildCount"}},{"kind":"Field","name":{"kind":"Name","value":"collateralDecimals"}},{"kind":"Field","name":{"kind":"Name","value":"collateralSymbol"}},{"kind":"Field","name":{"kind":"Name","value":"openedAt"}},{"kind":"Field","name":{"kind":"Name","value":"completedAt"}},{"kind":"Field","name":{"kind":"Name","value":"openingTime"}},{"kind":"Field","name":{"kind":"Name","value":"blocks"}},{"kind":"Field","name":{"kind":"Name","value":"children"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"parentOutcomeIndex"},"value":{"kind":"EnumValue","value":"asc"}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentOutcomeIndex"}},{"kind":"Field","name":{"kind":"Name","value":"parentOutcome"}},{"kind":"Field","name":{"kind":"Name","value":"marketName"}},{"kind":"Field","name":{"kind":"Name","value":"lowerBound"}},{"kind":"Field","name":{"kind":"Name","value":"upperBound"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"color"}},{"kind":"Field","name":{"kind":"Name","value":"blocks"}},{"kind":"Field","name":{"kind":"Name","value":"upToken"}},{"kind":"Field","name":{"kind":"Name","value":"downToken"}},{"kind":"Field","name":{"kind":"Name","value":"underlyingToken"}},{"kind":"Field","name":{"kind":"Name","value":"tokens"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"outcomeIndex"}},{"kind":"Field","name":{"kind":"Name","value":"decimals"}},{"kind":"Field","name":{"kind":"Name","value":"symbol"}}]}}]}}]}}]}}]} as unknown as DocumentNode<SessionDetailQuery, SessionDetailQueryVariables>;
 export const SessionStatsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionStats"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Prediction"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"childMarket"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"session_id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}}}]}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"distinct_on"},"value":{"kind":"EnumValue","value":"executor_id"}},{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"executor_id"},"value":{"kind":"EnumValue","value":"asc"}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"executor_id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"Pool"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"childMarket"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"session_id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}}}]}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"volumeUnderlying"}}]}}]}}]} as unknown as DocumentNode<SessionStatsQuery, SessionStatsQueryVariables>;
 export const SessionsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Sessions"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"limit"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"offset"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"where"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Session_bool_exp"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"SessionCounter"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"count"}}]}},{"kind":"Field","name":{"kind":"Name","value":"Session"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"Variable","name":{"kind":"Name","value":"where"}}},{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"openedAt"},"value":{"kind":"EnumValue","value":"desc"}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"Variable","name":{"kind":"Name","value":"limit"}}},{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"Variable","name":{"kind":"Name","value":"offset"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentMarket"}},{"kind":"Field","name":{"kind":"Name","value":"deployer"}},{"kind":"Field","name":{"kind":"Name","value":"marketName"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"icon"}},{"kind":"Field","name":{"kind":"Name","value":"heroImage"}},{"kind":"Field","name":{"kind":"Name","value":"itemNamePlural"}},{"kind":"Field","name":{"kind":"Name","value":"outcomeCount"}},{"kind":"Field","name":{"kind":"Name","value":"keyword"}},{"kind":"Field","name":{"kind":"Name","value":"openingTime"}}]}}]}}]} as unknown as DocumentNode<SessionsQuery, SessionsQueryVariables>;

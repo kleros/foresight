@@ -31,10 +31,11 @@ function errorOf(run: OrchestratorRun<SessionDeploySnapshot, SessionDeployCtx> |
 }
 
 /** A stored run that cannot be rebuilt, read from its persisted summaries alone. */
-function blockedResume(stored: PersistedFlowRun<SessionDeploySnapshot, SessionDeployCtx>, blocked: string): DeployResume {
-  const stopped = stored.steps.find(
-    (step) => step.outcome.status !== "confirmed" && step.outcome.status !== "skipped",
-  );
+function blockedResume(
+  stored: PersistedFlowRun<SessionDeploySnapshot, SessionDeployCtx>,
+  blocked: string,
+): DeployResume {
+  const stopped = stored.steps.find((step) => step.outcome.status !== "confirmed" && step.outcome.status !== "skipped");
   return {
     stepId: stopped?.stepId ?? STEP_ID.atomic,
     label: stopped?.label ?? "the deploy",

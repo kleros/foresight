@@ -1,7 +1,8 @@
 export const SCHEMA_VERSION = 1;
 
 /**
- * The indexer's parser refuses a type it does not know, so a new member here must reach it first.
+ * Two parsers gate this union: the indexer refuses a document carrying a type it does not know,
+ * and the web drops unknown blocks on read (features/sessions displayBlocks). A new member must reach both.
  */
 export type DisplayBlock =
   | {

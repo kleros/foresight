@@ -11,34 +11,8 @@ import { formatUtcInstant, timeLeftUntil } from "@/utils/date";
 import { paths } from "@/config/paths";
 
 import type { SessionSummary } from "../types";
-
-function bannerStyle(heroUri: string | null) {
-  return heroUri
-    ? { backgroundImage: `url(${JSON.stringify(heroUri)})` }
-    : {
-        backgroundImage:
-          "linear-gradient(135deg, color-mix(in oklch, var(--fs-grad-from) 82%, transparent) 0%," +
-          " color-mix(in oklch, var(--fs-grad-to) 74%, transparent) 100%)",
-      };
-}
-
-function DetailRow({
-  Icon,
-  label,
-  value,
-}: {
-  Icon: React.FC<React.SVGProps<SVGElement>>;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Icon className="text-fs-accent size-4 shrink-0 [&_path]:fill-current" />
-      <span className="text-fs-text-secondary shrink-0 text-sm">{label}</span>
-      <span className="text-fs-text-primary text-sm font-semibold">{value}</span>
-    </div>
-  );
-}
+import { SessionStat } from "./SessionStat";
+import { bannerStyle } from "../utils/bannerStyle";
 
 export function SessionCard({ session }: { session: SessionSummary }) {
   const { closesAt } = session;
@@ -66,8 +40,12 @@ export function SessionCard({ session }: { session: SessionSummary }) {
 
             {closesAt ? (
               <div className="fs-session-card__reveal mt-2 flex shrink-0 flex-col gap-2">
-                <DetailRow Icon={TradingIcon} label="Trading until:" value={formatUtcInstant(closesAt)} />
-                <DetailRow Icon={CountdownIcon} label="Countdown:" value={timeLeftUntil(closesAt.toISOString())} />
+                <SessionStat Icon={TradingIcon} label="Trading until">
+                  {formatUtcInstant(closesAt)}
+                </SessionStat>
+                <SessionStat Icon={CountdownIcon} label="Countdown">
+                  {timeLeftUntil(closesAt.toISOString())}
+                </SessionStat>
               </div>
             ) : null}
           </div>
