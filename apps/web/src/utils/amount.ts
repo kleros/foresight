@@ -1,4 +1,7 @@
-import { formatUnits, parseUnits } from "viem";
+import { formatEther, formatUnits, parseUnits } from "viem";
+
+/** A wad is a 1e18 fixed-point value (the indexer's prices and bounds); back to a plain number. */
+export const fromWad = (value: string): number => Number(formatEther(BigInt(value)));
 
 /** Null unless the input is a positive decimal the token's precision can hold. */
 export function parseAmount(raw: string, decimals: number): bigint | null {

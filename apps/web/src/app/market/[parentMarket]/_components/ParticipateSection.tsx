@@ -1,9 +1,11 @@
 import { Button } from "@kleros/ui-components-library";
 
+import { optionNoun } from "@/features/sessions/utils/optionNoun";
+
 import { SectionCard } from "./SectionCard";
 
 export function ParticipateSection({ itemNamePlural }: { itemNamePlural: string | null }) {
-  const noun = (itemNamePlural || "branches").toLowerCase();
+  const noun = optionNoun(itemNamePlural);
 
   return (
     <section className="flex w-full flex-col gap-4">

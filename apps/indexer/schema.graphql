@@ -60,6 +60,8 @@ type ChildMarket {
 
   "read from the Seer child market"
   marketName: String!
+
+  "the scalar range, 1e18-scaled like Reality's answers"
   lowerBound: BigInt!
   upperBound: BigInt!
 
@@ -162,17 +164,17 @@ type Prediction {
   upSwapUnderlying: BigInt!
   upSwapTokens: BigInt!
 
-  "underlying paid per whole token averaged over the transaction"
+  "underlying paid per whole token averaged over the transaction, 1e18-scaled"
   downAvgPrice: BigInt
   upAvgPrice: BigInt
 
-  "the pool price before this side's first swap and after its last"
+  "actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last"
   downPriceBefore: BigInt
   downPriceAfter: BigInt
   upPriceBefore: BigInt
   upPriceAfter: BigInt
 
-  "the forecast the executed prices imply, not the target the user stated; in the market's own units"
+  "the forecast the executed prices imply, not the target the user stated; on lowerBound/upperBound's scale"
   impliedPrediction: BigInt
 }
 
@@ -193,6 +195,9 @@ type Pool {
   "sqrt price the pool was last left at, X96"
   price: BigInt!
   tick: Int!
+
+  "the actual price: underlying per whole outcome token, 1e18-scaled; null until the pool prices"
+  underlyingPerOutcome: BigInt
 
   "the concentrated-liquidity L the last swap reported"
   liquidity: BigInt!
@@ -219,11 +224,14 @@ type Swap {
   outcomeAmount: BigInt!
   underlyingAmount: BigInt!
 
-  "what the previous swap left the pool at"
+  "sqrt prices X96: what the previous swap left the pool at, and what this one did"
   priceBefore: BigInt!
   priceAfter: BigInt!
   tickBefore: Int!
   tickAfter: Int!
+
+  "the actual price after this swap: underlying per whole outcome token, 1e18-scaled"
+  underlyingPerOutcomeAfter: BigInt
 
   blockNumber: BigInt!
   timestamp: BigInt!

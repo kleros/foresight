@@ -12528,6 +12528,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"fancy-canvas@npm:2.1.0":
+  version: 2.1.0
+  resolution: "fancy-canvas@npm:2.1.0"
+  checksum: 10c0/2b863b1548214ac793a5104154be389dbca6847c53c8bda88e4309f14bcdb498f4da21e368b573f3ab5f458d3b47c3f0ef731a7b90c8264b23c1cf0bfc9d1da3
+  languageName: node
+  linkType: hard
+
 "fast-copy@npm:^4.0.0":
   version: 4.0.4
   resolution: "fast-copy@npm:4.0.4"
@@ -15181,6 +15188,15 @@ __metadata:
     lightningcss-win32-x64-msvc:
       optional: true
   checksum: 10c0/ce1f8279fbae636dbf37fa6e7385d5f98ed881d72af3362f24afbd4685e19c1fcdfecf17e5dd77f2ebee3d0c23ade276230d85842d07292229a2cffba8ff20a3
+  languageName: node
+  linkType: hard
+
+"lightweight-charts@npm:^5.0.8":
+  version: 5.2.1
+  resolution: "lightweight-charts@npm:5.2.1"
+  dependencies:
+    fancy-canvas: "npm:2.1.0"
+  checksum: 10c0/4ef34cf8ad164f0c6956d62a33de8f3f95a4e84b1a4c3b58c5802cd3f2a2d7ad0f18d9c4879dc49b8b2e5bda120a6c71a9f9dd3b99abeb604778212dec3a019e
   languageName: node
   linkType: hard
 
@@ -21769,6 +21785,7 @@ __metadata:
     graphql-request: "npm:^7.4.0"
     jose: "npm:^5.10.0"
     jsdom: "npm:^30.0.1"
+    lightweight-charts: "npm:^5.0.8"
     next: "npm:14.2.35"
     next-themes: "npm:^0.4.6"
     postcss: "npm:^8.5.19"

@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen } from "@testing-library/react";
+import type { DocumentNode, OperationDefinitionNode } from "graphql";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { sessionKey } from "@/features/sessions/api/getSession";
-import { sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
+import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 
 import { fetchGraphql } from "@/lib/graphql/batcher";
 
@@ -19,14 +20,28 @@ const fetchMock = vi.mocked(fetchGraphql);
 
 const sessionResult = { Session: [{ ...sessionDetailColumns, children: [] }] };
 
+const queryName = (document: DocumentNode) =>
+  document.definitions.find((d): d is OperationDefinitionNode => d.kind === "OperationDefinition")?.name?.value;
+
+/** Answers each query by name; the chart's answer (or a promise of it) comes from the caller. */
+function answerQueries(chart: unknown) {
+  fetchMock.mockImplementation(async (document) => {
+    if (queryName(document) === "SessionDetail") {
+      return { Session: [{ ...sessionDetailColumns, children: [sessionChildRow()] }] };
+    }
+    if (queryName(document) === "SessionChart") return chart;
+    return { Prediction: [], Pool: [] };
+  });
+}
+
 function renderPage(parentMarket: string = addresses.parentMarket) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
+  const { container } = render(
     <QueryClientProvider client={client}>
       <MarketPage parentMarket={parentMarket} />
     </QueryClientProvider>,
   );
-  return client;
+  return { client, container };
 }
 
 beforeEach(() => {
@@ -61,7 +76,7 @@ describe("MarketPage", () => {
     fetchMock.mockResolvedValueOnce(sessionResult);
     fetchMock.mockRejectedValue(new Error("boom"));
 
-    const client = renderPage();
+    const { client } = renderPage();
     await screen.findByRole("heading", { level: 1, name: "Dune: Part Three, director" });
 
     /* act flushes the re-render the failed refetch triggers, so the DOM below is post-error. */
@@ -70,5 +85,16 @@ describe("MarketPage", () => {
     expect(client.getQueryState(sessionKey(addresses.parentMarket))?.status).toBe("error");
     expect(screen.getByRole("heading", { level: 1, name: "Dune: Part Three, director" })).toBeInTheDocument();
     expect(screen.queryByText("Could not load this session")).toBeNull();
+  });
+
+  /* The chart itself is canvas: rendered states would need the real component under
+     jsdom or a stub asserting its own scaffolding, so they are verified live instead. */
+  it("holds the chart's place while the price history loads", async () => {
+    answerQueries(new Promise(() => {}));
+
+    const { container } = renderPage();
+    await screen.findByRole("heading", { level: 1, name: "Dune: Part Three, director" });
+
+    expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
   });
 });

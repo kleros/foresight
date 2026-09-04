@@ -46,6 +46,7 @@ export type ChildMarket = {
   /** child market address */
   id: Scalars['String']['output'];
   keyword: Scalars['String']['output'];
+  /** the scalar range, 1e18-scaled like Reality's answers */
   lowerBound: Scalars['numeric']['output'];
   /** read from the Seer child market */
   marketName: Scalars['String']['output'];
@@ -120,6 +121,7 @@ export type ChildMarket_Aggregate_Order_By = {
 /** order by avg() on columns of table "ChildMarket" */
 export type ChildMarket_Avg_Order_By = {
   deployedAt?: InputMaybe<Order_By>;
+  /** the scalar range, 1e18-scaled like Reality's answers */
   lowerBound?: InputMaybe<Order_By>;
   parentOutcomeIndex?: InputMaybe<Order_By>;
   upperBound?: InputMaybe<Order_By>;
@@ -162,6 +164,7 @@ export type ChildMarket_Max_Order_By = {
   /** child market address */
   id?: InputMaybe<Order_By>;
   keyword?: InputMaybe<Order_By>;
+  /** the scalar range, 1e18-scaled like Reality's answers */
   lowerBound?: InputMaybe<Order_By>;
   /** read from the Seer child market */
   marketName?: InputMaybe<Order_By>;
@@ -184,6 +187,7 @@ export type ChildMarket_Min_Order_By = {
   /** child market address */
   id?: InputMaybe<Order_By>;
   keyword?: InputMaybe<Order_By>;
+  /** the scalar range, 1e18-scaled like Reality's answers */
   lowerBound?: InputMaybe<Order_By>;
   /** read from the Seer child market */
   marketName?: InputMaybe<Order_By>;
@@ -259,6 +263,7 @@ export enum ChildMarket_Select_Column {
 /** order by stddev() on columns of table "ChildMarket" */
 export type ChildMarket_Stddev_Order_By = {
   deployedAt?: InputMaybe<Order_By>;
+  /** the scalar range, 1e18-scaled like Reality's answers */
   lowerBound?: InputMaybe<Order_By>;
   parentOutcomeIndex?: InputMaybe<Order_By>;
   upperBound?: InputMaybe<Order_By>;
@@ -267,6 +272,7 @@ export type ChildMarket_Stddev_Order_By = {
 /** order by stddev_pop() on columns of table "ChildMarket" */
 export type ChildMarket_Stddev_Pop_Order_By = {
   deployedAt?: InputMaybe<Order_By>;
+  /** the scalar range, 1e18-scaled like Reality's answers */
   lowerBound?: InputMaybe<Order_By>;
   parentOutcomeIndex?: InputMaybe<Order_By>;
   upperBound?: InputMaybe<Order_By>;
@@ -275,6 +281,7 @@ export type ChildMarket_Stddev_Pop_Order_By = {
 /** order by stddev_samp() on columns of table "ChildMarket" */
 export type ChildMarket_Stddev_Samp_Order_By = {
   deployedAt?: InputMaybe<Order_By>;
+  /** the scalar range, 1e18-scaled like Reality's answers */
   lowerBound?: InputMaybe<Order_By>;
   parentOutcomeIndex?: InputMaybe<Order_By>;
   upperBound?: InputMaybe<Order_By>;
@@ -300,6 +307,7 @@ export type ChildMarket_Stream_Cursor_Value_Input = {
   /** child market address */
   id?: InputMaybe<Scalars['String']['input']>;
   keyword?: InputMaybe<Scalars['String']['input']>;
+  /** the scalar range, 1e18-scaled like Reality's answers */
   lowerBound?: InputMaybe<Scalars['numeric']['input']>;
   /** read from the Seer child market */
   marketName?: InputMaybe<Scalars['String']['input']>;
@@ -315,6 +323,7 @@ export type ChildMarket_Stream_Cursor_Value_Input = {
 /** order by sum() on columns of table "ChildMarket" */
 export type ChildMarket_Sum_Order_By = {
   deployedAt?: InputMaybe<Order_By>;
+  /** the scalar range, 1e18-scaled like Reality's answers */
   lowerBound?: InputMaybe<Order_By>;
   parentOutcomeIndex?: InputMaybe<Order_By>;
   upperBound?: InputMaybe<Order_By>;
@@ -323,6 +332,7 @@ export type ChildMarket_Sum_Order_By = {
 /** order by var_pop() on columns of table "ChildMarket" */
 export type ChildMarket_Var_Pop_Order_By = {
   deployedAt?: InputMaybe<Order_By>;
+  /** the scalar range, 1e18-scaled like Reality's answers */
   lowerBound?: InputMaybe<Order_By>;
   parentOutcomeIndex?: InputMaybe<Order_By>;
   upperBound?: InputMaybe<Order_By>;
@@ -331,6 +341,7 @@ export type ChildMarket_Var_Pop_Order_By = {
 /** order by var_samp() on columns of table "ChildMarket" */
 export type ChildMarket_Var_Samp_Order_By = {
   deployedAt?: InputMaybe<Order_By>;
+  /** the scalar range, 1e18-scaled like Reality's answers */
   lowerBound?: InputMaybe<Order_By>;
   parentOutcomeIndex?: InputMaybe<Order_By>;
   upperBound?: InputMaybe<Order_By>;
@@ -339,6 +350,7 @@ export type ChildMarket_Var_Samp_Order_By = {
 /** order by variance() on columns of table "ChildMarket" */
 export type ChildMarket_Variance_Order_By = {
   deployedAt?: InputMaybe<Order_By>;
+  /** the scalar range, 1e18-scaled like Reality's answers */
   lowerBound?: InputMaybe<Order_By>;
   parentOutcomeIndex?: InputMaybe<Order_By>;
   upperBound?: InputMaybe<Order_By>;
@@ -476,6 +488,8 @@ export type Pool = {
   /** An array relationship */
   swaps: Array<Swap>;
   tick: Scalars['Int']['output'];
+  /** the actual price: underlying per whole outcome token, 1e18-scaled; null until the pool prices */
+  underlyingPerOutcome?: Maybe<Scalars['numeric']['output']>;
   underlyingToken: Scalars['String']['output'];
   updatedAt: Scalars['numeric']['output'];
   /** lifetime absolute amount swapped either way */
@@ -517,6 +531,8 @@ export type Pool_Avg_Order_By = {
   /** sqrt price the pool was last left at, X96 */
   price?: InputMaybe<Order_By>;
   tick?: InputMaybe<Order_By>;
+  /** the actual price: underlying per whole outcome token, 1e18-scaled; null until the pool prices */
+  underlyingPerOutcome?: InputMaybe<Order_By>;
   updatedAt?: InputMaybe<Order_By>;
   /** lifetime absolute amount swapped either way */
   volumeOutcome?: InputMaybe<Order_By>;
@@ -538,6 +554,7 @@ export type Pool_Bool_Exp = {
   price?: InputMaybe<Numeric_Comparison_Exp>;
   swaps?: InputMaybe<Swap_Bool_Exp>;
   tick?: InputMaybe<Int_Comparison_Exp>;
+  underlyingPerOutcome?: InputMaybe<Numeric_Comparison_Exp>;
   underlyingToken?: InputMaybe<String_Comparison_Exp>;
   updatedAt?: InputMaybe<Numeric_Comparison_Exp>;
   volumeOutcome?: InputMaybe<Numeric_Comparison_Exp>;
@@ -557,6 +574,8 @@ export type Pool_Max_Order_By = {
   /** sqrt price the pool was last left at, X96 */
   price?: InputMaybe<Order_By>;
   tick?: InputMaybe<Order_By>;
+  /** the actual price: underlying per whole outcome token, 1e18-scaled; null until the pool prices */
+  underlyingPerOutcome?: InputMaybe<Order_By>;
   underlyingToken?: InputMaybe<Order_By>;
   updatedAt?: InputMaybe<Order_By>;
   /** lifetime absolute amount swapped either way */
@@ -577,6 +596,8 @@ export type Pool_Min_Order_By = {
   /** sqrt price the pool was last left at, X96 */
   price?: InputMaybe<Order_By>;
   tick?: InputMaybe<Order_By>;
+  /** the actual price: underlying per whole outcome token, 1e18-scaled; null until the pool prices */
+  underlyingPerOutcome?: InputMaybe<Order_By>;
   underlyingToken?: InputMaybe<Order_By>;
   updatedAt?: InputMaybe<Order_By>;
   /** lifetime absolute amount swapped either way */
@@ -596,6 +617,7 @@ export type Pool_Order_By = {
   price?: InputMaybe<Order_By>;
   swaps_aggregate?: InputMaybe<Swap_Aggregate_Order_By>;
   tick?: InputMaybe<Order_By>;
+  underlyingPerOutcome?: InputMaybe<Order_By>;
   underlyingToken?: InputMaybe<Order_By>;
   updatedAt?: InputMaybe<Order_By>;
   volumeOutcome?: InputMaybe<Order_By>;
@@ -621,6 +643,8 @@ export enum Pool_Select_Column {
   /** column name */
   Tick = 'tick',
   /** column name */
+  UnderlyingPerOutcome = 'underlyingPerOutcome',
+  /** column name */
   UnderlyingToken = 'underlyingToken',
   /** column name */
   UpdatedAt = 'updatedAt',
@@ -639,6 +663,8 @@ export type Pool_Stddev_Order_By = {
   /** sqrt price the pool was last left at, X96 */
   price?: InputMaybe<Order_By>;
   tick?: InputMaybe<Order_By>;
+  /** the actual price: underlying per whole outcome token, 1e18-scaled; null until the pool prices */
+  underlyingPerOutcome?: InputMaybe<Order_By>;
   updatedAt?: InputMaybe<Order_By>;
   /** lifetime absolute amount swapped either way */
   volumeOutcome?: InputMaybe<Order_By>;
@@ -654,6 +680,8 @@ export type Pool_Stddev_Pop_Order_By = {
   /** sqrt price the pool was last left at, X96 */
   price?: InputMaybe<Order_By>;
   tick?: InputMaybe<Order_By>;
+  /** the actual price: underlying per whole outcome token, 1e18-scaled; null until the pool prices */
+  underlyingPerOutcome?: InputMaybe<Order_By>;
   updatedAt?: InputMaybe<Order_By>;
   /** lifetime absolute amount swapped either way */
   volumeOutcome?: InputMaybe<Order_By>;
@@ -669,6 +697,8 @@ export type Pool_Stddev_Samp_Order_By = {
   /** sqrt price the pool was last left at, X96 */
   price?: InputMaybe<Order_By>;
   tick?: InputMaybe<Order_By>;
+  /** the actual price: underlying per whole outcome token, 1e18-scaled; null until the pool prices */
+  underlyingPerOutcome?: InputMaybe<Order_By>;
   updatedAt?: InputMaybe<Order_By>;
   /** lifetime absolute amount swapped either way */
   volumeOutcome?: InputMaybe<Order_By>;
@@ -698,6 +728,8 @@ export type Pool_Stream_Cursor_Value_Input = {
   /** sqrt price the pool was last left at, X96 */
   price?: InputMaybe<Scalars['numeric']['input']>;
   tick?: InputMaybe<Scalars['Int']['input']>;
+  /** the actual price: underlying per whole outcome token, 1e18-scaled; null until the pool prices */
+  underlyingPerOutcome?: InputMaybe<Scalars['numeric']['input']>;
   underlyingToken?: InputMaybe<Scalars['String']['input']>;
   updatedAt?: InputMaybe<Scalars['numeric']['input']>;
   /** lifetime absolute amount swapped either way */
@@ -714,6 +746,8 @@ export type Pool_Sum_Order_By = {
   /** sqrt price the pool was last left at, X96 */
   price?: InputMaybe<Order_By>;
   tick?: InputMaybe<Order_By>;
+  /** the actual price: underlying per whole outcome token, 1e18-scaled; null until the pool prices */
+  underlyingPerOutcome?: InputMaybe<Order_By>;
   updatedAt?: InputMaybe<Order_By>;
   /** lifetime absolute amount swapped either way */
   volumeOutcome?: InputMaybe<Order_By>;
@@ -729,6 +763,8 @@ export type Pool_Var_Pop_Order_By = {
   /** sqrt price the pool was last left at, X96 */
   price?: InputMaybe<Order_By>;
   tick?: InputMaybe<Order_By>;
+  /** the actual price: underlying per whole outcome token, 1e18-scaled; null until the pool prices */
+  underlyingPerOutcome?: InputMaybe<Order_By>;
   updatedAt?: InputMaybe<Order_By>;
   /** lifetime absolute amount swapped either way */
   volumeOutcome?: InputMaybe<Order_By>;
@@ -744,6 +780,8 @@ export type Pool_Var_Samp_Order_By = {
   /** sqrt price the pool was last left at, X96 */
   price?: InputMaybe<Order_By>;
   tick?: InputMaybe<Order_By>;
+  /** the actual price: underlying per whole outcome token, 1e18-scaled; null until the pool prices */
+  underlyingPerOutcome?: InputMaybe<Order_By>;
   updatedAt?: InputMaybe<Order_By>;
   /** lifetime absolute amount swapped either way */
   volumeOutcome?: InputMaybe<Order_By>;
@@ -759,6 +797,8 @@ export type Pool_Variance_Order_By = {
   /** sqrt price the pool was last left at, X96 */
   price?: InputMaybe<Order_By>;
   tick?: InputMaybe<Order_By>;
+  /** the actual price: underlying per whole outcome token, 1e18-scaled; null until the pool prices */
+  underlyingPerOutcome?: InputMaybe<Order_By>;
   updatedAt?: InputMaybe<Order_By>;
   /** lifetime absolute amount swapped either way */
   volumeOutcome?: InputMaybe<Order_By>;
@@ -923,12 +963,12 @@ export type Prediction = {
   /** An object relationship */
   childMarket?: Maybe<ChildMarket>;
   childMarket_id: Scalars['String']['output'];
-  /** underlying paid per whole token averaged over the transaction */
+  /** underlying paid per whole token averaged over the transaction, 1e18-scaled */
   downAvgPrice?: Maybe<Scalars['numeric']['output']>;
   downBalance: Scalars['numeric']['output'];
   downDelta: Scalars['numeric']['output'];
   downPriceAfter?: Maybe<Scalars['numeric']['output']>;
-  /** the pool price before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
   downPriceBefore?: Maybe<Scalars['numeric']['output']>;
   downSwapTokens: Scalars['numeric']['output'];
   /** totals over every swap on that side in the transaction */
@@ -938,7 +978,7 @@ export type Prediction = {
   executor_id: Scalars['String']['output'];
   /** transactionHash-executor-childMarket */
   id: Scalars['String']['output'];
-  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  /** the forecast the executed prices imply, not the target the user stated; on lowerBound/upperBound's scale */
   impliedPrediction?: Maybe<Scalars['numeric']['output']>;
   timestamp: Scalars['numeric']['output'];
   transactionHash: Scalars['String']['output'];
@@ -973,17 +1013,17 @@ export type Prediction_Aggregate_Order_By = {
 /** order by avg() on columns of table "Prediction" */
 export type Prediction_Avg_Order_By = {
   blockNumber?: InputMaybe<Order_By>;
-  /** underlying paid per whole token averaged over the transaction */
+  /** underlying paid per whole token averaged over the transaction, 1e18-scaled */
   downAvgPrice?: InputMaybe<Order_By>;
   downBalance?: InputMaybe<Order_By>;
   downDelta?: InputMaybe<Order_By>;
   downPriceAfter?: InputMaybe<Order_By>;
-  /** the pool price before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
   downPriceBefore?: InputMaybe<Order_By>;
   downSwapTokens?: InputMaybe<Order_By>;
   /** totals over every swap on that side in the transaction */
   downSwapUnderlying?: InputMaybe<Order_By>;
-  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  /** the forecast the executed prices imply, not the target the user stated; on lowerBound/upperBound's scale */
   impliedPrediction?: InputMaybe<Order_By>;
   timestamp?: InputMaybe<Order_By>;
   /** the executor's balances once the transaction settled */
@@ -1035,12 +1075,12 @@ export type Prediction_Bool_Exp = {
 export type Prediction_Max_Order_By = {
   blockNumber?: InputMaybe<Order_By>;
   childMarket_id?: InputMaybe<Order_By>;
-  /** underlying paid per whole token averaged over the transaction */
+  /** underlying paid per whole token averaged over the transaction, 1e18-scaled */
   downAvgPrice?: InputMaybe<Order_By>;
   downBalance?: InputMaybe<Order_By>;
   downDelta?: InputMaybe<Order_By>;
   downPriceAfter?: InputMaybe<Order_By>;
-  /** the pool price before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
   downPriceBefore?: InputMaybe<Order_By>;
   downSwapTokens?: InputMaybe<Order_By>;
   /** totals over every swap on that side in the transaction */
@@ -1048,7 +1088,7 @@ export type Prediction_Max_Order_By = {
   executor_id?: InputMaybe<Order_By>;
   /** transactionHash-executor-childMarket */
   id?: InputMaybe<Order_By>;
-  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  /** the forecast the executed prices imply, not the target the user stated; on lowerBound/upperBound's scale */
   impliedPrediction?: InputMaybe<Order_By>;
   timestamp?: InputMaybe<Order_By>;
   transactionHash?: InputMaybe<Order_By>;
@@ -1069,12 +1109,12 @@ export type Prediction_Max_Order_By = {
 export type Prediction_Min_Order_By = {
   blockNumber?: InputMaybe<Order_By>;
   childMarket_id?: InputMaybe<Order_By>;
-  /** underlying paid per whole token averaged over the transaction */
+  /** underlying paid per whole token averaged over the transaction, 1e18-scaled */
   downAvgPrice?: InputMaybe<Order_By>;
   downBalance?: InputMaybe<Order_By>;
   downDelta?: InputMaybe<Order_By>;
   downPriceAfter?: InputMaybe<Order_By>;
-  /** the pool price before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
   downPriceBefore?: InputMaybe<Order_By>;
   downSwapTokens?: InputMaybe<Order_By>;
   /** totals over every swap on that side in the transaction */
@@ -1082,7 +1122,7 @@ export type Prediction_Min_Order_By = {
   executor_id?: InputMaybe<Order_By>;
   /** transactionHash-executor-childMarket */
   id?: InputMaybe<Order_By>;
-  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  /** the forecast the executed prices imply, not the target the user stated; on lowerBound/upperBound's scale */
   impliedPrediction?: InputMaybe<Order_By>;
   timestamp?: InputMaybe<Order_By>;
   transactionHash?: InputMaybe<Order_By>;
@@ -1181,17 +1221,17 @@ export enum Prediction_Select_Column {
 /** order by stddev() on columns of table "Prediction" */
 export type Prediction_Stddev_Order_By = {
   blockNumber?: InputMaybe<Order_By>;
-  /** underlying paid per whole token averaged over the transaction */
+  /** underlying paid per whole token averaged over the transaction, 1e18-scaled */
   downAvgPrice?: InputMaybe<Order_By>;
   downBalance?: InputMaybe<Order_By>;
   downDelta?: InputMaybe<Order_By>;
   downPriceAfter?: InputMaybe<Order_By>;
-  /** the pool price before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
   downPriceBefore?: InputMaybe<Order_By>;
   downSwapTokens?: InputMaybe<Order_By>;
   /** totals over every swap on that side in the transaction */
   downSwapUnderlying?: InputMaybe<Order_By>;
-  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  /** the forecast the executed prices imply, not the target the user stated; on lowerBound/upperBound's scale */
   impliedPrediction?: InputMaybe<Order_By>;
   timestamp?: InputMaybe<Order_By>;
   /** the executor's balances once the transaction settled */
@@ -1210,17 +1250,17 @@ export type Prediction_Stddev_Order_By = {
 /** order by stddev_pop() on columns of table "Prediction" */
 export type Prediction_Stddev_Pop_Order_By = {
   blockNumber?: InputMaybe<Order_By>;
-  /** underlying paid per whole token averaged over the transaction */
+  /** underlying paid per whole token averaged over the transaction, 1e18-scaled */
   downAvgPrice?: InputMaybe<Order_By>;
   downBalance?: InputMaybe<Order_By>;
   downDelta?: InputMaybe<Order_By>;
   downPriceAfter?: InputMaybe<Order_By>;
-  /** the pool price before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
   downPriceBefore?: InputMaybe<Order_By>;
   downSwapTokens?: InputMaybe<Order_By>;
   /** totals over every swap on that side in the transaction */
   downSwapUnderlying?: InputMaybe<Order_By>;
-  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  /** the forecast the executed prices imply, not the target the user stated; on lowerBound/upperBound's scale */
   impliedPrediction?: InputMaybe<Order_By>;
   timestamp?: InputMaybe<Order_By>;
   /** the executor's balances once the transaction settled */
@@ -1239,17 +1279,17 @@ export type Prediction_Stddev_Pop_Order_By = {
 /** order by stddev_samp() on columns of table "Prediction" */
 export type Prediction_Stddev_Samp_Order_By = {
   blockNumber?: InputMaybe<Order_By>;
-  /** underlying paid per whole token averaged over the transaction */
+  /** underlying paid per whole token averaged over the transaction, 1e18-scaled */
   downAvgPrice?: InputMaybe<Order_By>;
   downBalance?: InputMaybe<Order_By>;
   downDelta?: InputMaybe<Order_By>;
   downPriceAfter?: InputMaybe<Order_By>;
-  /** the pool price before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
   downPriceBefore?: InputMaybe<Order_By>;
   downSwapTokens?: InputMaybe<Order_By>;
   /** totals over every swap on that side in the transaction */
   downSwapUnderlying?: InputMaybe<Order_By>;
-  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  /** the forecast the executed prices imply, not the target the user stated; on lowerBound/upperBound's scale */
   impliedPrediction?: InputMaybe<Order_By>;
   timestamp?: InputMaybe<Order_By>;
   /** the executor's balances once the transaction settled */
@@ -1277,12 +1317,12 @@ export type Prediction_Stream_Cursor_Input = {
 export type Prediction_Stream_Cursor_Value_Input = {
   blockNumber?: InputMaybe<Scalars['numeric']['input']>;
   childMarket_id?: InputMaybe<Scalars['String']['input']>;
-  /** underlying paid per whole token averaged over the transaction */
+  /** underlying paid per whole token averaged over the transaction, 1e18-scaled */
   downAvgPrice?: InputMaybe<Scalars['numeric']['input']>;
   downBalance?: InputMaybe<Scalars['numeric']['input']>;
   downDelta?: InputMaybe<Scalars['numeric']['input']>;
   downPriceAfter?: InputMaybe<Scalars['numeric']['input']>;
-  /** the pool price before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
   downPriceBefore?: InputMaybe<Scalars['numeric']['input']>;
   downSwapTokens?: InputMaybe<Scalars['numeric']['input']>;
   /** totals over every swap on that side in the transaction */
@@ -1290,7 +1330,7 @@ export type Prediction_Stream_Cursor_Value_Input = {
   executor_id?: InputMaybe<Scalars['String']['input']>;
   /** transactionHash-executor-childMarket */
   id?: InputMaybe<Scalars['String']['input']>;
-  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  /** the forecast the executed prices imply, not the target the user stated; on lowerBound/upperBound's scale */
   impliedPrediction?: InputMaybe<Scalars['numeric']['input']>;
   timestamp?: InputMaybe<Scalars['numeric']['input']>;
   transactionHash?: InputMaybe<Scalars['String']['input']>;
@@ -1310,17 +1350,17 @@ export type Prediction_Stream_Cursor_Value_Input = {
 /** order by sum() on columns of table "Prediction" */
 export type Prediction_Sum_Order_By = {
   blockNumber?: InputMaybe<Order_By>;
-  /** underlying paid per whole token averaged over the transaction */
+  /** underlying paid per whole token averaged over the transaction, 1e18-scaled */
   downAvgPrice?: InputMaybe<Order_By>;
   downBalance?: InputMaybe<Order_By>;
   downDelta?: InputMaybe<Order_By>;
   downPriceAfter?: InputMaybe<Order_By>;
-  /** the pool price before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
   downPriceBefore?: InputMaybe<Order_By>;
   downSwapTokens?: InputMaybe<Order_By>;
   /** totals over every swap on that side in the transaction */
   downSwapUnderlying?: InputMaybe<Order_By>;
-  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  /** the forecast the executed prices imply, not the target the user stated; on lowerBound/upperBound's scale */
   impliedPrediction?: InputMaybe<Order_By>;
   timestamp?: InputMaybe<Order_By>;
   /** the executor's balances once the transaction settled */
@@ -1339,17 +1379,17 @@ export type Prediction_Sum_Order_By = {
 /** order by var_pop() on columns of table "Prediction" */
 export type Prediction_Var_Pop_Order_By = {
   blockNumber?: InputMaybe<Order_By>;
-  /** underlying paid per whole token averaged over the transaction */
+  /** underlying paid per whole token averaged over the transaction, 1e18-scaled */
   downAvgPrice?: InputMaybe<Order_By>;
   downBalance?: InputMaybe<Order_By>;
   downDelta?: InputMaybe<Order_By>;
   downPriceAfter?: InputMaybe<Order_By>;
-  /** the pool price before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
   downPriceBefore?: InputMaybe<Order_By>;
   downSwapTokens?: InputMaybe<Order_By>;
   /** totals over every swap on that side in the transaction */
   downSwapUnderlying?: InputMaybe<Order_By>;
-  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  /** the forecast the executed prices imply, not the target the user stated; on lowerBound/upperBound's scale */
   impliedPrediction?: InputMaybe<Order_By>;
   timestamp?: InputMaybe<Order_By>;
   /** the executor's balances once the transaction settled */
@@ -1368,17 +1408,17 @@ export type Prediction_Var_Pop_Order_By = {
 /** order by var_samp() on columns of table "Prediction" */
 export type Prediction_Var_Samp_Order_By = {
   blockNumber?: InputMaybe<Order_By>;
-  /** underlying paid per whole token averaged over the transaction */
+  /** underlying paid per whole token averaged over the transaction, 1e18-scaled */
   downAvgPrice?: InputMaybe<Order_By>;
   downBalance?: InputMaybe<Order_By>;
   downDelta?: InputMaybe<Order_By>;
   downPriceAfter?: InputMaybe<Order_By>;
-  /** the pool price before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
   downPriceBefore?: InputMaybe<Order_By>;
   downSwapTokens?: InputMaybe<Order_By>;
   /** totals over every swap on that side in the transaction */
   downSwapUnderlying?: InputMaybe<Order_By>;
-  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  /** the forecast the executed prices imply, not the target the user stated; on lowerBound/upperBound's scale */
   impliedPrediction?: InputMaybe<Order_By>;
   timestamp?: InputMaybe<Order_By>;
   /** the executor's balances once the transaction settled */
@@ -1397,17 +1437,17 @@ export type Prediction_Var_Samp_Order_By = {
 /** order by variance() on columns of table "Prediction" */
 export type Prediction_Variance_Order_By = {
   blockNumber?: InputMaybe<Order_By>;
-  /** underlying paid per whole token averaged over the transaction */
+  /** underlying paid per whole token averaged over the transaction, 1e18-scaled */
   downAvgPrice?: InputMaybe<Order_By>;
   downBalance?: InputMaybe<Order_By>;
   downDelta?: InputMaybe<Order_By>;
   downPriceAfter?: InputMaybe<Order_By>;
-  /** the pool price before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
   downPriceBefore?: InputMaybe<Order_By>;
   downSwapTokens?: InputMaybe<Order_By>;
   /** totals over every swap on that side in the transaction */
   downSwapUnderlying?: InputMaybe<Order_By>;
-  /** the forecast the executed prices imply, not the target the user stated; in the market's own units */
+  /** the forecast the executed prices imply, not the target the user stated; on lowerBound/upperBound's scale */
   impliedPrediction?: InputMaybe<Order_By>;
   timestamp?: InputMaybe<Order_By>;
   /** the executor's balances once the transaction settled */
@@ -1755,13 +1795,15 @@ export type Swap = {
   pool?: Maybe<Pool>;
   pool_id: Scalars['String']['output'];
   priceAfter: Scalars['numeric']['output'];
-  /** what the previous swap left the pool at */
+  /** sqrt prices X96: what the previous swap left the pool at, and what this one did */
   priceBefore: Scalars['numeric']['output'];
   tickAfter: Scalars['Int']['output'];
   tickBefore: Scalars['Int']['output'];
   timestamp: Scalars['numeric']['output'];
   transactionHash: Scalars['String']['output'];
   underlyingAmount: Scalars['numeric']['output'];
+  /** the actual price after this swap: underlying per whole outcome token, 1e18-scaled */
+  underlyingPerOutcomeAfter?: Maybe<Scalars['numeric']['output']>;
 };
 
 /** order by aggregate values of table "Swap" */
@@ -1786,12 +1828,14 @@ export type Swap_Avg_Order_By = {
   /** signed from the pool's side, so the outcome amount is negative when the trader bought */
   outcomeAmount?: InputMaybe<Order_By>;
   priceAfter?: InputMaybe<Order_By>;
-  /** what the previous swap left the pool at */
+  /** sqrt prices X96: what the previous swap left the pool at, and what this one did */
   priceBefore?: InputMaybe<Order_By>;
   tickAfter?: InputMaybe<Order_By>;
   tickBefore?: InputMaybe<Order_By>;
   timestamp?: InputMaybe<Order_By>;
   underlyingAmount?: InputMaybe<Order_By>;
+  /** the actual price after this swap: underlying per whole outcome token, 1e18-scaled */
+  underlyingPerOutcomeAfter?: InputMaybe<Order_By>;
 };
 
 /** Boolean expression to filter rows from the table "Swap". All fields are combined with a logical 'AND'. */
@@ -1816,6 +1860,7 @@ export type Swap_Bool_Exp = {
   timestamp?: InputMaybe<Numeric_Comparison_Exp>;
   transactionHash?: InputMaybe<String_Comparison_Exp>;
   underlyingAmount?: InputMaybe<Numeric_Comparison_Exp>;
+  underlyingPerOutcomeAfter?: InputMaybe<Numeric_Comparison_Exp>;
 };
 
 /** order by max() on columns of table "Swap" */
@@ -1831,13 +1876,15 @@ export type Swap_Max_Order_By = {
   outcomeAmount?: InputMaybe<Order_By>;
   pool_id?: InputMaybe<Order_By>;
   priceAfter?: InputMaybe<Order_By>;
-  /** what the previous swap left the pool at */
+  /** sqrt prices X96: what the previous swap left the pool at, and what this one did */
   priceBefore?: InputMaybe<Order_By>;
   tickAfter?: InputMaybe<Order_By>;
   tickBefore?: InputMaybe<Order_By>;
   timestamp?: InputMaybe<Order_By>;
   transactionHash?: InputMaybe<Order_By>;
   underlyingAmount?: InputMaybe<Order_By>;
+  /** the actual price after this swap: underlying per whole outcome token, 1e18-scaled */
+  underlyingPerOutcomeAfter?: InputMaybe<Order_By>;
 };
 
 /** order by min() on columns of table "Swap" */
@@ -1853,13 +1900,15 @@ export type Swap_Min_Order_By = {
   outcomeAmount?: InputMaybe<Order_By>;
   pool_id?: InputMaybe<Order_By>;
   priceAfter?: InputMaybe<Order_By>;
-  /** what the previous swap left the pool at */
+  /** sqrt prices X96: what the previous swap left the pool at, and what this one did */
   priceBefore?: InputMaybe<Order_By>;
   tickAfter?: InputMaybe<Order_By>;
   tickBefore?: InputMaybe<Order_By>;
   timestamp?: InputMaybe<Order_By>;
   transactionHash?: InputMaybe<Order_By>;
   underlyingAmount?: InputMaybe<Order_By>;
+  /** the actual price after this swap: underlying per whole outcome token, 1e18-scaled */
+  underlyingPerOutcomeAfter?: InputMaybe<Order_By>;
 };
 
 /** Ordering options when selecting data from "Swap". */
@@ -1881,6 +1930,7 @@ export type Swap_Order_By = {
   timestamp?: InputMaybe<Order_By>;
   transactionHash?: InputMaybe<Order_By>;
   underlyingAmount?: InputMaybe<Order_By>;
+  underlyingPerOutcomeAfter?: InputMaybe<Order_By>;
 };
 
 /** select columns of table "Swap" */
@@ -1912,7 +1962,9 @@ export enum Swap_Select_Column {
   /** column name */
   TransactionHash = 'transactionHash',
   /** column name */
-  UnderlyingAmount = 'underlyingAmount'
+  UnderlyingAmount = 'underlyingAmount',
+  /** column name */
+  UnderlyingPerOutcomeAfter = 'underlyingPerOutcomeAfter'
 }
 
 /** order by stddev() on columns of table "Swap" */
@@ -1922,12 +1974,14 @@ export type Swap_Stddev_Order_By = {
   /** signed from the pool's side, so the outcome amount is negative when the trader bought */
   outcomeAmount?: InputMaybe<Order_By>;
   priceAfter?: InputMaybe<Order_By>;
-  /** what the previous swap left the pool at */
+  /** sqrt prices X96: what the previous swap left the pool at, and what this one did */
   priceBefore?: InputMaybe<Order_By>;
   tickAfter?: InputMaybe<Order_By>;
   tickBefore?: InputMaybe<Order_By>;
   timestamp?: InputMaybe<Order_By>;
   underlyingAmount?: InputMaybe<Order_By>;
+  /** the actual price after this swap: underlying per whole outcome token, 1e18-scaled */
+  underlyingPerOutcomeAfter?: InputMaybe<Order_By>;
 };
 
 /** order by stddev_pop() on columns of table "Swap" */
@@ -1937,12 +1991,14 @@ export type Swap_Stddev_Pop_Order_By = {
   /** signed from the pool's side, so the outcome amount is negative when the trader bought */
   outcomeAmount?: InputMaybe<Order_By>;
   priceAfter?: InputMaybe<Order_By>;
-  /** what the previous swap left the pool at */
+  /** sqrt prices X96: what the previous swap left the pool at, and what this one did */
   priceBefore?: InputMaybe<Order_By>;
   tickAfter?: InputMaybe<Order_By>;
   tickBefore?: InputMaybe<Order_By>;
   timestamp?: InputMaybe<Order_By>;
   underlyingAmount?: InputMaybe<Order_By>;
+  /** the actual price after this swap: underlying per whole outcome token, 1e18-scaled */
+  underlyingPerOutcomeAfter?: InputMaybe<Order_By>;
 };
 
 /** order by stddev_samp() on columns of table "Swap" */
@@ -1952,12 +2008,14 @@ export type Swap_Stddev_Samp_Order_By = {
   /** signed from the pool's side, so the outcome amount is negative when the trader bought */
   outcomeAmount?: InputMaybe<Order_By>;
   priceAfter?: InputMaybe<Order_By>;
-  /** what the previous swap left the pool at */
+  /** sqrt prices X96: what the previous swap left the pool at, and what this one did */
   priceBefore?: InputMaybe<Order_By>;
   tickAfter?: InputMaybe<Order_By>;
   tickBefore?: InputMaybe<Order_By>;
   timestamp?: InputMaybe<Order_By>;
   underlyingAmount?: InputMaybe<Order_By>;
+  /** the actual price after this swap: underlying per whole outcome token, 1e18-scaled */
+  underlyingPerOutcomeAfter?: InputMaybe<Order_By>;
 };
 
 /** Streaming cursor of the table "Swap" */
@@ -1981,13 +2039,15 @@ export type Swap_Stream_Cursor_Value_Input = {
   outcomeAmount?: InputMaybe<Scalars['numeric']['input']>;
   pool_id?: InputMaybe<Scalars['String']['input']>;
   priceAfter?: InputMaybe<Scalars['numeric']['input']>;
-  /** what the previous swap left the pool at */
+  /** sqrt prices X96: what the previous swap left the pool at, and what this one did */
   priceBefore?: InputMaybe<Scalars['numeric']['input']>;
   tickAfter?: InputMaybe<Scalars['Int']['input']>;
   tickBefore?: InputMaybe<Scalars['Int']['input']>;
   timestamp?: InputMaybe<Scalars['numeric']['input']>;
   transactionHash?: InputMaybe<Scalars['String']['input']>;
   underlyingAmount?: InputMaybe<Scalars['numeric']['input']>;
+  /** the actual price after this swap: underlying per whole outcome token, 1e18-scaled */
+  underlyingPerOutcomeAfter?: InputMaybe<Scalars['numeric']['input']>;
 };
 
 /** order by sum() on columns of table "Swap" */
@@ -1997,12 +2057,14 @@ export type Swap_Sum_Order_By = {
   /** signed from the pool's side, so the outcome amount is negative when the trader bought */
   outcomeAmount?: InputMaybe<Order_By>;
   priceAfter?: InputMaybe<Order_By>;
-  /** what the previous swap left the pool at */
+  /** sqrt prices X96: what the previous swap left the pool at, and what this one did */
   priceBefore?: InputMaybe<Order_By>;
   tickAfter?: InputMaybe<Order_By>;
   tickBefore?: InputMaybe<Order_By>;
   timestamp?: InputMaybe<Order_By>;
   underlyingAmount?: InputMaybe<Order_By>;
+  /** the actual price after this swap: underlying per whole outcome token, 1e18-scaled */
+  underlyingPerOutcomeAfter?: InputMaybe<Order_By>;
 };
 
 /** order by var_pop() on columns of table "Swap" */
@@ -2012,12 +2074,14 @@ export type Swap_Var_Pop_Order_By = {
   /** signed from the pool's side, so the outcome amount is negative when the trader bought */
   outcomeAmount?: InputMaybe<Order_By>;
   priceAfter?: InputMaybe<Order_By>;
-  /** what the previous swap left the pool at */
+  /** sqrt prices X96: what the previous swap left the pool at, and what this one did */
   priceBefore?: InputMaybe<Order_By>;
   tickAfter?: InputMaybe<Order_By>;
   tickBefore?: InputMaybe<Order_By>;
   timestamp?: InputMaybe<Order_By>;
   underlyingAmount?: InputMaybe<Order_By>;
+  /** the actual price after this swap: underlying per whole outcome token, 1e18-scaled */
+  underlyingPerOutcomeAfter?: InputMaybe<Order_By>;
 };
 
 /** order by var_samp() on columns of table "Swap" */
@@ -2027,12 +2091,14 @@ export type Swap_Var_Samp_Order_By = {
   /** signed from the pool's side, so the outcome amount is negative when the trader bought */
   outcomeAmount?: InputMaybe<Order_By>;
   priceAfter?: InputMaybe<Order_By>;
-  /** what the previous swap left the pool at */
+  /** sqrt prices X96: what the previous swap left the pool at, and what this one did */
   priceBefore?: InputMaybe<Order_By>;
   tickAfter?: InputMaybe<Order_By>;
   tickBefore?: InputMaybe<Order_By>;
   timestamp?: InputMaybe<Order_By>;
   underlyingAmount?: InputMaybe<Order_By>;
+  /** the actual price after this swap: underlying per whole outcome token, 1e18-scaled */
+  underlyingPerOutcomeAfter?: InputMaybe<Order_By>;
 };
 
 /** order by variance() on columns of table "Swap" */
@@ -2042,12 +2108,14 @@ export type Swap_Variance_Order_By = {
   /** signed from the pool's side, so the outcome amount is negative when the trader bought */
   outcomeAmount?: InputMaybe<Order_By>;
   priceAfter?: InputMaybe<Order_By>;
-  /** what the previous swap left the pool at */
+  /** sqrt prices X96: what the previous swap left the pool at, and what this one did */
   priceBefore?: InputMaybe<Order_By>;
   tickAfter?: InputMaybe<Order_By>;
   tickBefore?: InputMaybe<Order_By>;
   timestamp?: InputMaybe<Order_By>;
   underlyingAmount?: InputMaybe<Order_By>;
+  /** the actual price after this swap: underlying per whole outcome token, 1e18-scaled */
+  underlyingPerOutcomeAfter?: InputMaybe<Order_By>;
 };
 
 /** An outcome or underlying token of a child market. */
@@ -3312,6 +3380,14 @@ export type SessionDetailQueryVariables = Exact<{
 
 export type SessionDetailQuery = { __typename?: 'query_root', Session: Array<{ __typename?: 'Session', id: string, parentMarket: string, deployer: string, marketName: string, title?: string | null, description?: string | null, icon?: string | null, heroImage?: string | null, itemName?: string | null, itemNamePlural?: string | null, metadataResolved: boolean, outcomeCount: string, deployedChildCount: string, collateralDecimals?: number | null, collateralSymbol?: string | null, openedAt: string, completedAt: string, openingTime?: string | null, blocks: unknown, children: Array<{ __typename?: 'ChildMarket', id: string, parentOutcomeIndex: string, parentOutcome: string, marketName: string, lowerBound: string, upperBound: string, displayName?: string | null, color?: string | null, blocks: unknown, upToken: string, downToken: string, underlyingToken: string, tokens: Array<{ __typename?: 'Token', outcomeIndex?: number | null, decimals?: number | null, symbol?: string | null }> }> }> };
 
+export type SessionChartQueryVariables = Exact<{
+  sessionId: Scalars['String']['input'];
+  upOutcome: Scalars['Int']['input'];
+}>;
+
+
+export type SessionChartQuery = { __typename?: 'query_root', Pool: Array<{ __typename?: 'Pool', id: string, childMarket_id: string, underlyingPerOutcome?: string | null, updatedAt: string, swaps: Array<{ __typename?: 'Swap', underlyingPerOutcomeAfter?: string | null, timestamp: string }> }> };
+
 export type SessionStatsQueryVariables = Exact<{
   sessionId: Scalars['String']['input'];
 }>;
@@ -3332,5 +3408,6 @@ export type SessionsQuery = { __typename?: 'query_root', SessionCounter: Array<{
 export const SessionIndexedDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionIndexed"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Session"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"IntValue","value":"1"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"children"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]}}]} as unknown as DocumentNode<SessionIndexedQuery, SessionIndexedQueryVariables>;
 export const SessionByMetadataDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionByMetadata"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"deployer"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"metadataUri"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"since"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"numeric"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Session"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"deployer"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"deployer"}}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"metadataUri"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"metadataUri"}}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"openedAt"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_gte"},"value":{"kind":"Variable","name":{"kind":"Name","value":"since"}}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"openedAt"},"value":{"kind":"EnumValue","value":"desc"}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"IntValue","value":"1"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"sessionId"}},{"kind":"Field","name":{"kind":"Name","value":"parentMarket"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}},{"kind":"Field","name":{"kind":"Name","value":"children"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"parentOutcomeIndex"},"value":{"kind":"EnumValue","value":"asc"}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentOutcomeIndex"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"chain_metadata"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"latest_processed_block"}},{"kind":"Field","name":{"kind":"Name","value":"block_height"}}]}}]}}]} as unknown as DocumentNode<SessionByMetadataQuery, SessionByMetadataQueryVariables>;
 export const SessionDetailDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionDetail"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"parentMarket"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Session"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"parentMarket"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"parentMarket"}}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"IntValue","value":"1"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentMarket"}},{"kind":"Field","name":{"kind":"Name","value":"deployer"}},{"kind":"Field","name":{"kind":"Name","value":"marketName"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"icon"}},{"kind":"Field","name":{"kind":"Name","value":"heroImage"}},{"kind":"Field","name":{"kind":"Name","value":"itemName"}},{"kind":"Field","name":{"kind":"Name","value":"itemNamePlural"}},{"kind":"Field","name":{"kind":"Name","value":"metadataResolved"}},{"kind":"Field","name":{"kind":"Name","value":"outcomeCount"}},{"kind":"Field","name":{"kind":"Name","value":"deployedChildCount"}},{"kind":"Field","name":{"kind":"Name","value":"collateralDecimals"}},{"kind":"Field","name":{"kind":"Name","value":"collateralSymbol"}},{"kind":"Field","name":{"kind":"Name","value":"openedAt"}},{"kind":"Field","name":{"kind":"Name","value":"completedAt"}},{"kind":"Field","name":{"kind":"Name","value":"openingTime"}},{"kind":"Field","name":{"kind":"Name","value":"blocks"}},{"kind":"Field","name":{"kind":"Name","value":"children"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"parentOutcomeIndex"},"value":{"kind":"EnumValue","value":"asc"}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentOutcomeIndex"}},{"kind":"Field","name":{"kind":"Name","value":"parentOutcome"}},{"kind":"Field","name":{"kind":"Name","value":"marketName"}},{"kind":"Field","name":{"kind":"Name","value":"lowerBound"}},{"kind":"Field","name":{"kind":"Name","value":"upperBound"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"color"}},{"kind":"Field","name":{"kind":"Name","value":"blocks"}},{"kind":"Field","name":{"kind":"Name","value":"upToken"}},{"kind":"Field","name":{"kind":"Name","value":"downToken"}},{"kind":"Field","name":{"kind":"Name","value":"underlyingToken"}},{"kind":"Field","name":{"kind":"Name","value":"tokens"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"outcomeIndex"}},{"kind":"Field","name":{"kind":"Name","value":"decimals"}},{"kind":"Field","name":{"kind":"Name","value":"symbol"}}]}}]}}]}}]}}]} as unknown as DocumentNode<SessionDetailQuery, SessionDetailQueryVariables>;
+export const SessionChartDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionChart"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"upOutcome"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Pool"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"childMarket"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"session_id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}}}]}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"outcomeIndex"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"upOutcome"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"childMarket_id"}},{"kind":"Field","name":{"kind":"Name","value":"underlyingPerOutcome"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"swaps"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ListValue","values":[{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"timestamp"},"value":{"kind":"EnumValue","value":"asc"}}]},{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"logIndex"},"value":{"kind":"EnumValue","value":"asc"}}]}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"underlyingPerOutcomeAfter"}},{"kind":"Field","name":{"kind":"Name","value":"timestamp"}}]}}]}}]}}]} as unknown as DocumentNode<SessionChartQuery, SessionChartQueryVariables>;
 export const SessionStatsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionStats"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Prediction"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"childMarket"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"session_id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}}}]}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"distinct_on"},"value":{"kind":"EnumValue","value":"executor_id"}},{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"executor_id"},"value":{"kind":"EnumValue","value":"asc"}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"executor_id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"Pool"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"childMarket"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"session_id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}}}]}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"volumeUnderlying"}}]}}]}}]} as unknown as DocumentNode<SessionStatsQuery, SessionStatsQueryVariables>;
 export const SessionsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Sessions"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"limit"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"offset"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"where"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Session_bool_exp"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"SessionCounter"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"count"}}]}},{"kind":"Field","name":{"kind":"Name","value":"Session"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"Variable","name":{"kind":"Name","value":"where"}}},{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"openedAt"},"value":{"kind":"EnumValue","value":"desc"}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"Variable","name":{"kind":"Name","value":"limit"}}},{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"Variable","name":{"kind":"Name","value":"offset"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentMarket"}},{"kind":"Field","name":{"kind":"Name","value":"deployer"}},{"kind":"Field","name":{"kind":"Name","value":"marketName"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"icon"}},{"kind":"Field","name":{"kind":"Name","value":"heroImage"}},{"kind":"Field","name":{"kind":"Name","value":"itemNamePlural"}},{"kind":"Field","name":{"kind":"Name","value":"outcomeCount"}},{"kind":"Field","name":{"kind":"Name","value":"keyword"}},{"kind":"Field","name":{"kind":"Name","value":"openingTime"}}]}}]}}]} as unknown as DocumentNode<SessionsQuery, SessionsQueryVariables>;

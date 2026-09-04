@@ -1,6 +1,6 @@
-import { formatEther } from "viem";
 import type { Address } from "viem";
 
+import { fromWad } from "@/utils/amount";
 import { branchColor, isLegibleBranchColor } from "@/utils/branchColor";
 
 import type { SessionDetailQuery } from "@/lib/graphql/generated/graphql";
@@ -11,8 +11,6 @@ import { splitMarketName } from "./marketName";
 import { toSessionCore } from "./toSessionCore";
 
 export type SessionDetailRow = SessionDetailQuery["Session"][number];
-
-const scaledBound = (bound: string) => Number(formatEther(BigInt(bound)));
 
 const asToken = (value: string): Address | null => (value ? (value as Address) : null);
 
@@ -29,8 +27,8 @@ function toSessionOption(child: SessionDetailRow["children"][number], gateway: s
     color: child.color && isLegibleBranchColor(child.color) ? child.color : branchColor(index),
     question,
     unit,
-    lowerBound: scaledBound(child.lowerBound),
-    upperBound: scaledBound(child.upperBound),
+    lowerBound: fromWad(child.lowerBound),
+    upperBound: fromWad(child.upperBound),
     upToken: asToken(child.upToken),
     downToken: asToken(child.downToken),
     underlyingToken: asToken(child.underlyingToken),

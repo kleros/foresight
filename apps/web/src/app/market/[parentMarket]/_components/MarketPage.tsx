@@ -1,12 +1,15 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { isAddress } from "viem";
 
 import { useSession } from "@/features/sessions/api/getSession";
+import { useSessionChart } from "@/features/sessions/api/getSessionChart";
 import { useSessionStats } from "@/features/sessions/api/getSessionStats";
+import { optionNoun } from "@/features/sessions/utils/optionNoun";
 import { sessionStatus } from "@/features/sessions/utils/toSessionDetail";
 
 import { paths } from "@/config/paths";
@@ -17,9 +20,15 @@ import { ParticipateSection } from "./ParticipateSection";
 import { PredictCard } from "./PredictCard";
 import { SessionHeader } from "./SessionHeader";
 
+const SessionChart = dynamic(
+  () => import("@/features/sessions/components/SessionChart").then((m) => m.SessionChart),
+  { ssr: false, loading: () => <ChartSkeleton /> },
+);
+
 export function MarketPage({ parentMarket }: { parentMarket: string }) {
   const session = useSession(parentMarket);
   const stats = useSessionStats(session.data?.id);
+  const chart = useSessionChart(session.data ?? undefined);
 
   if (!isAddress(parentMarket, { strict: false }) || session.data === null) {
     return (
@@ -29,7 +38,6 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
     );
   }
 
-  /* A failed background refetch keeps the last good data; only error out with nothing to show. */
   if (session.data === undefined) {
     return (
       <PageColumn>
@@ -55,6 +63,16 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
         stats={stats.data}
         statsPending={stats.isPending}
       />
+      {chart.isPending ? (
+        <ChartSkeleton />
+      ) : chart.data !== undefined ? (
+        <SessionChart
+          data={chart.data}
+          startTime={Math.floor(detail.openedAt.getTime() / 1000)}
+          endTime={detail.closesAt ? Math.floor(detail.closesAt.getTime() / 1000) : null}
+          noun={optionNoun(detail.itemNamePlural)}
+        />
+      ) : null}
       <div className="mt-12 flex flex-col gap-4">
         <ParticipateSection itemNamePlural={detail.itemNamePlural} />
         {detail.options.map((option) => (
@@ -69,6 +87,15 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
 
 function PageColumn({ children }: { children: ReactNode }) {
   return <div className="mx-auto flex w-full max-w-294 flex-col">{children}</div>;
+}
+
+function ChartSkeleton() {
+  return (
+    <div className="mt-6 flex flex-col gap-2" aria-busy>
+      <div className="fs-skeleton h-6 w-40" />
+      <div className="fs-skeleton h-70 md:h-100" />
+    </div>
+  );
 }
 
 function MarketPageSkeleton() {

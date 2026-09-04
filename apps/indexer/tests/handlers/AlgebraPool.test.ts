@@ -97,6 +97,41 @@ describe("Algebra pool indexing", () => {
     t.expect(await indexer.Swap.getAll()).toHaveLength(0);
   });
 
+  it("leaves a pool unpriced until it initializes", async (t) => {
+    const indexer = createTestIndexer();
+    await seedMarket(indexer, MARKET);
+
+    await indexEvents(indexer, [poolCreated(UNDERLYING, UP, UP_POOL)]);
+
+    t.expect((await indexer.Pool.getOrThrow(UP_POOL)).underlyingPerOutcome).toBeUndefined();
+  });
+
+  it("prices the pool in underlying when it initializes", async (t) => {
+    const indexer = createTestIndexer();
+    await seedMarket(indexer, MARKET);
+
+    // UP is token1 here, and sqrt 2^97 is a token1-per-token0 ratio of 4
+    await indexEvents(indexer, [poolCreated(UNDERLYING, UP, UP_POOL), initialized(UP_POOL, 2n ** 97n)]);
+
+    t.expect((await indexer.Pool.getOrThrow(UP_POOL)).underlyingPerOutcome).toBe(WAD / 4n);
+  });
+
+  it("carries the underlying price a swap left onto the swap and the pool", async (t) => {
+    const indexer = createTestIndexer();
+    await seedMarket(indexer, MARKET);
+
+    // sqrt 2^95 is a token1-per-token0 ratio of 1/4, so the token1 outcome costs 4 underlying
+    await indexEvents(indexer, [
+      poolCreated(UNDERLYING, UP, UP_POOL),
+      initialized(UP_POOL, START_PRICE),
+      swapped(UP_POOL, STRANGER_TOKEN, 2n ** 95n, 120n),
+    ]);
+
+    const [swap] = await indexer.Swap.getAll();
+    t.expect(swap!.underlyingPerOutcomeAfter).toBe(4n * WAD);
+    t.expect((await indexer.Pool.getOrThrow(UP_POOL)).underlyingPerOutcome).toBe(4n * WAD);
+  });
+
   it("records what a swap left the pool at, against what it started from", async (t) => {
     const indexer = createTestIndexer();
     await seedMarket(indexer, MARKET);

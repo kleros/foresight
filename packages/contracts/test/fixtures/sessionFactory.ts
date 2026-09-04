@@ -75,7 +75,8 @@ export function buildOutcomeSession(outcomeCount: number, overrides?: SessionOve
       outcomes: ["DOWN", "UP"],
       tokenNames: [`${movieLabel}_DOWN`, `${movieLabel}_UP`],
       lowerBound: 0n,
-      upperBound: 100n,
+      // Reality answers scalar questions in 1e18 terms, so bounds are wei-scaled like /create writes them
+      upperBound: parseEther("100"),
       minBond: parseEther("1"),
       openingTime: openingTime + 100 + index * 100,
       category: "movies",

@@ -38,6 +38,7 @@ indexer.onEvent({ contract: "AlgebraFactory", event: "Pool" }, async ({ event, c
     outcomeIsToken0: outcome.id === token0,
     price: 0n,
     tick: 0,
+    underlyingPerOutcome: undefined,
     liquidity: 0n,
     volumeOutcome: 0n,
     volumeUnderlying: 0n,
@@ -52,7 +53,12 @@ indexer.onEvent({ contract: "AlgebraPool", event: "Initialize" }, async ({ event
     return;
   }
 
-  context.Pool.set({ ...pool, price: event.params.price, tick: Number(event.params.tick) });
+  context.Pool.set({
+    ...pool,
+    price: event.params.price,
+    tick: Number(event.params.tick),
+    underlyingPerOutcome: underlyingPerOutcome(event.params.price, pool.outcomeIsToken0),
+  });
 });
 
 indexer.onEvent({ contract: "AlgebraPool", event: "Swap" }, async ({ event, context }) => {
@@ -76,6 +82,8 @@ indexer.onEvent({ contract: "AlgebraPool", event: "Swap" }, async ({ event, cont
     ? [event.params.amount0, event.params.amount1]
     : [event.params.amount1, event.params.amount0];
 
+  const after = underlyingPerOutcome(event.params.price, pool.outcomeIsToken0);
+
   context.Swap.set({
     id: swapId(event.transaction.hash, event.logIndex),
     pool_id: poolId,
@@ -87,6 +95,7 @@ indexer.onEvent({ contract: "AlgebraPool", event: "Swap" }, async ({ event, cont
     priceAfter: event.params.price,
     tickBefore: pool.tick,
     tickAfter: Number(event.params.tick),
+    underlyingPerOutcomeAfter: after,
     blockNumber: BigInt(event.block.number),
     timestamp: BigInt(event.block.timestamp),
     logIndex: event.logIndex,
@@ -97,6 +106,7 @@ indexer.onEvent({ contract: "AlgebraPool", event: "Swap" }, async ({ event, cont
     ...pool,
     price: event.params.price,
     tick: Number(event.params.tick),
+    underlyingPerOutcome: after,
     liquidity: event.params.liquidity,
     volumeOutcome: pool.volumeOutcome + abs(outcomeAmount),
     volumeUnderlying: pool.volumeUnderlying + abs(underlyingAmount),
@@ -117,7 +127,6 @@ indexer.onEvent({ contract: "AlgebraPool", event: "Swap" }, async ({ event, cont
   };
 
   const before = underlyingPerOutcome(pool.price, pool.outcomeIsToken0);
-  const after = underlyingPerOutcome(event.params.price, pool.outcomeIsToken0);
   const around = isUp
     ? { upPriceBefore: prediction.upPriceBefore ?? before, upPriceAfter: after }
     : { downPriceBefore: prediction.downPriceBefore ?? before, downPriceAfter: after };

@@ -61,6 +61,27 @@ export interface SessionDetail extends SessionCore {
   options: SessionOption[];
 }
 
+export type SessionChartOption = Pick<
+  SessionOption,
+  "market" | "name" | "color" | "unit" | "lowerBound" | "upperBound"
+>;
+
+export interface SessionChartPoint {
+  /** Unix seconds. */
+  timestamp: number;
+  /** Market estimate in the option's own unit. */
+  value: number;
+}
+
+/** One option's estimate history, oldest first. */
+export interface SessionChartSeries {
+  option: SessionChartOption;
+  points: SessionChartPoint[];
+}
+
+/** One series per option; an option whose pool never priced has no points. */
+export type SessionChartData = SessionChartSeries[];
+
 export interface SessionStats {
   /** Executors that have predicted in this session. */
   traders: number;

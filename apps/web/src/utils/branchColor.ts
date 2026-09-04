@@ -41,6 +41,21 @@ export function isLegibleBranchColor(color: string): boolean {
   );
 }
 
+/**
+ * Black or white for text on a colour. BT.601 perceived luma.
+ */
+export function getReadableTextColor(bgColor: string) {
+  const hex = bgColor.replace("#", "");
+
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+
+  const luma = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+  return luma > 0.6 ? "#000000" : "#FFFFFF";
+}
+
 function hslToRgb(hue: number, saturation: number, lightness: number): number[] {
   const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
   const second = chroma * (1 - Math.abs(((hue / 60) % 2) - 1));

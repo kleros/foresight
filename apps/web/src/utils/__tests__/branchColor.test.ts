@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { branchColor, isLegibleBranchColor, nextBranchColor } from "../branchColor";
+import { branchColor, getReadableTextColor, isLegibleBranchColor, nextBranchColor } from "../branchColor";
 
 /** More branches than any wizard flow reaches, to cover the whole hue wheel. */
 const LONG_SESSION = 200;
@@ -22,6 +22,22 @@ describe("isLegibleBranchColor", () => {
     expect(isLegibleBranchColor("#fff")).toBe(false);
     expect(isLegibleBranchColor("9013fe")).toBe(false);
     expect(isLegibleBranchColor("#zzzzzz")).toBe(false);
+  });
+});
+
+describe("getReadableTextColor", () => {
+  it("puts black text on a light background", () => {
+    expect(getReadableTextColor("#ffffff")).toBe("#000000");
+  });
+
+  it("puts white text on a dark background", () => {
+    expect(getReadableTextColor("#000000")).toBe("#FFFFFF");
+  });
+
+  it("puts white text on every generated branch colour", () => {
+    for (let index = 0; index < LONG_SESSION; index++) {
+      expect(getReadableTextColor(branchColor(index))).toBe("#FFFFFF");
+    }
   });
 });
 
