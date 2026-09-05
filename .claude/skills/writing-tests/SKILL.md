@@ -69,7 +69,7 @@ Test through the public API. If a test knows about a private helper, a call orde
 
 ## Never assert that your stub rendered
 
-When a collaborator has to be replaced to make a test runnable at all — a canvas chart under jsdom, a component that needs a real browser API — the replacement is scaffolding. A test whose assertion is the stub's own output (`vi.mock` the chart, then `findByText("chart stub")`) proves the page rendered *something* where the stub was wired in; the real component's mounting, props handling and rendering are exactly what got swapped out. Green, and worth nothing.
+When a collaborator has to be replaced to make a test runnable at all — a canvas chart under jsdom, a component that needs a real browser API — the replacement is scaffolding. A test whose assertion is the stub's own output (`vi.mock` the chart, then `findByText("chart stub")`) proves the page rendered _something_ where the stub was wired in; the real component's mounting, props handling and rendering are exactly what got swapped out. Green, and worth nothing.
 
 The rule: if the behaviour is only observable through the stub, don't write the test. Cover that state where the real thing runs — a live check, an e2e — and say plainly in the suite which states are covered there instead. Do keep the neighbouring tests whose assertions never touch the stub (a loading skeleton that renders before the collaborator mounts is real DOM and stays testable).
 

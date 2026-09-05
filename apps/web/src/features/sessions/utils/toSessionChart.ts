@@ -27,7 +27,11 @@ export function toSessionChart(result: SessionChartQuery, options: SessionOption
     // A pool that initialised but never traded still has its seeded price.
     const current = toEstimate(pool?.underlyingPerOutcome, option);
     const last = points.at(-1);
-    if (pool !== undefined && current !== undefined && (last === undefined || last.timestamp < Number(pool.updatedAt))) {
+    if (
+      pool !== undefined &&
+      current !== undefined &&
+      (last === undefined || last.timestamp < Number(pool.updatedAt))
+    ) {
       points.push({ timestamp: Number(pool.updatedAt), value: current });
     }
 

@@ -12,7 +12,6 @@ import { formatEstimate } from "@/utils/formatEstimate";
 import type { SessionChartData } from "../types";
 import { shortenName } from "../utils/chartDisplay";
 
-
 interface ISessionChartLegend {
   data: SessionChartData;
   /** The creator's plural noun, already lowercased. */

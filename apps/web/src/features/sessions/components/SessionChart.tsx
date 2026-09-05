@@ -13,7 +13,6 @@ import { SessionChartLegend } from "./SessionChartLegend";
 import { shortenName, withAlpha } from "../utils/chartDisplay";
 import { buildChartSeries } from "../utils/chartSeries";
 
-
 interface ISessionChart {
   data: SessionChartData;
   /** Unix seconds. */

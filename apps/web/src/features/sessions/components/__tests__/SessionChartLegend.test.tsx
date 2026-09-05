@@ -31,14 +31,7 @@ function renderLegend({
   visibleKeys = new Set<string>(addresses.childMarkets),
   onToggle = vi.fn(),
 }: { visibleKeys?: Set<string>; onToggle?: (key: string) => void } = {}) {
-  render(
-    <SessionChartLegend
-      data={data}
-      noun="directors"
-      visibleKeys={visibleKeys}
-      onToggle={onToggle}
-    />,
-  );
+  render(<SessionChartLegend data={data} noun="directors" visibleKeys={visibleKeys} onToggle={onToggle} />);
 }
 
 describe("SessionChartLegend", () => {
