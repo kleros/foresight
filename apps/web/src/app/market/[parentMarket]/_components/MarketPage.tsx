@@ -20,10 +20,10 @@ import { ParticipateSection } from "./ParticipateSection";
 import { PredictCard } from "./PredictCard";
 import { SessionHeader } from "./SessionHeader";
 
-const SessionChart = dynamic(
-  () => import("@/features/sessions/components/SessionChart").then((m) => m.SessionChart),
-  { ssr: false, loading: () => <ChartSkeleton /> },
-);
+const SessionChart = dynamic(() => import("@/features/sessions/components/SessionChart").then((m) => m.SessionChart), {
+  ssr: false,
+  loading: () => <ChartSkeleton />,
+});
 
 export function MarketPage({ parentMarket }: { parentMarket: string }) {
   const session = useSession(parentMarket);
@@ -74,7 +74,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
         />
       ) : null}
       <div className="mt-12 flex flex-col gap-4">
-        <ParticipateSection itemNamePlural={detail.itemNamePlural} />
+        <ParticipateSection session={detail} />
         {detail.options.map((option) => (
           <OptionCard key={option.market} option={option} />
         ))}

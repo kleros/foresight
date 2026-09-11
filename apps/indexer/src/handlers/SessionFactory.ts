@@ -34,6 +34,7 @@ indexer.onEvent({ contract: "SessionFactory", event: "ParentMarketDeployed" }, a
     completedAt: 0n,
     marketName: market.marketName,
     outcomes: market.outcomes,
+    invalidToken: market.invalidToken ?? undefined,
     collateralToken: collateral.token ?? undefined,
     collateralDecimals: collateral.decimals ?? undefined,
     collateralSymbol: collateral.symbol ?? undefined,

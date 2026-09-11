@@ -54,8 +54,11 @@ export interface SessionDetail extends SessionCore {
   setupComplete: boolean;
   openedAt: Date;
   /** The seer factory's collateral behind every market here; null where the read failed. */
+  collateralToken: Address | null;
   collateralDecimals: number | null;
   collateralSymbol: string | null;
+  /** The decision's INVALID outcome token */
+  invalidToken: Address | null;
   /** Session-level display blocks, image uris already resolved against the gateway. */
   blocks: DisplayBlock[];
   options: SessionOption[];

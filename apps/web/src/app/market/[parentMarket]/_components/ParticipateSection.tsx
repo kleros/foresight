@@ -1,25 +1,22 @@
 import { Button } from "@kleros/ui-components-library";
 
+import type { SessionDetail } from "@/features/sessions/types";
 import { optionNoun } from "@/features/sessions/utils/optionNoun";
+import { TradeWallet } from "@/features/trade-executor/components/TradeWallet/TradeWallet";
 
-import { SectionCard } from "./SectionCard";
+import { SectionCard } from "@/components/ui/SectionCard";
 
-export function ParticipateSection({ itemNamePlural }: { itemNamePlural: string | null }) {
-  const noun = optionNoun(itemNamePlural);
+import { toWalletMarket } from "./toWalletMarket";
+
+export function ParticipateSection({ session }: { session: SessionDetail }) {
+  const noun = optionNoun(session.itemNamePlural);
+  const market = toWalletMarket(session);
 
   return (
     <section className="flex w-full flex-col gap-4">
       <h2 className="text-fs-text-primary text-2xl font-semibold">Participate</h2>
 
-      <SectionCard className="px-4 py-6 md:px-8">
-        <div className="flex flex-col gap-2">
-          <h3 className="text-fs-text-primary text-base font-semibold">Trade wallet</h3>
-          <p className="text-fs-text-secondary text-sm">
-            Holds the money behind your predictions and places them all in one transaction. Yours appears here once you
-            make your first prediction.
-          </p>
-        </div>
-      </SectionCard>
+      {market ? <TradeWallet market={market} noun={noun} /> : null}
 
       <SectionCard className="px-4 py-6 md:px-8">
         <p className="text-fs-text-secondary text-sm">

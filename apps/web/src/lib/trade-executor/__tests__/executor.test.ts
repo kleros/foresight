@@ -1,9 +1,9 @@
-import { decodeFunctionData, encodeFunctionResult, zeroAddress, type Address } from "viem";
+import { decodeFunctionData, encodeFunctionResult, getAddress, zeroAddress, type Address } from "viem";
 import { describe, expect, it } from "vitest";
 
-import { tradeExecutorFactoryAbi } from "@/config/contracts";
+import { tradeExecutorAbi, tradeExecutorFactoryAbi } from "@/config/contracts";
 
-import { createExecutorTx, fetchExecutorState } from "../executor";
+import { batchExecuteTx, batchValueExecuteTx, createExecutorTx, fetchExecutorState } from "../executor";
 import { readClient } from "./support/readClient";
 
 const FACTORY: Address = "0x00000000000000000000000000000000000000fa";
@@ -49,5 +49,41 @@ describe("createExecutorTx", () => {
     expect(tx.to).toBe(FACTORY);
     expect(tx.value).toBeUndefined();
     expect(decodeFunctionData({ abi: tradeExecutorFactoryAbi, data: tx.data! }).functionName).toBe("createExecutor");
+  });
+});
+
+// Checksummed, because decoded calldata comes back checksummed.
+const EXECUTOR: Address = getAddress("0x00000000000000000000000000000000000000ee");
+const TARGET: Address = getAddress("0x0000000000000000000000000000000000007a12");
+
+describe("batchExecuteTx", () => {
+  it("wraps the calls, in order, in one batchExecute on the executor", () => {
+    const calls = [
+      { to: TARGET, data: "0x01" as const },
+      { to: TARGET, data: "0x02" as const },
+    ];
+    const tx = batchExecuteTx(EXECUTOR, calls);
+
+    expect(tx.to).toBe(EXECUTOR);
+    expect(tx.value).toBeUndefined();
+    expect(decodeFunctionData({ abi: tradeExecutorAbi, data: tx.data! })).toEqual({
+      functionName: "batchExecute",
+      args: [calls],
+    });
+  });
+});
+
+describe("batchValueExecuteTx", () => {
+  it("wraps the calls with their value in one batchValueExecute on the executor", () => {
+    const calls = [{ to: TARGET, value: 7n, data: "0x" as const }];
+    const tx = batchValueExecuteTx(EXECUTOR, calls);
+
+    expect(tx.to).toBe(EXECUTOR);
+    // the executor pays each leg from its own balance; the transaction itself carries nothing
+    expect(tx.value).toBeUndefined();
+    expect(decodeFunctionData({ abi: tradeExecutorAbi, data: tx.data! })).toEqual({
+      functionName: "batchValueExecute",
+      args: [calls],
+    });
   });
 });

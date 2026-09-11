@@ -49,8 +49,10 @@ export function toSessionDetail(row: SessionDetailRow, gateway: string): Session
     deployedChildCount: Number(row.deployedChildCount),
     setupComplete: row.completedAt !== "0",
     openedAt: new Date(Number(row.openedAt) * 1000),
+    collateralToken: asToken(row.collateralToken ?? ""),
     collateralDecimals: row.collateralDecimals ?? null,
     collateralSymbol: row.collateralSymbol ?? null,
+    invalidToken: asToken(row.invalidToken ?? ""),
     blocks: displayBlocks(row.blocks, gateway),
     options: row.children.map((child) => toSessionOption(child, gateway)),
   };

@@ -1,4 +1,307 @@
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// GnosisRouter
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * [__View Contract on Gnosis Gnosisscan__](https://gnosisscan.io/address/0xeC9048b59b3467415b1a38F63416407eA0c70fB8)
+ */
+export const gnosisRouterAbi = [
+  {
+    type: "constructor",
+    inputs: [
+      { name: "_conditionalTokens", internalType: "contract IConditionalTokens", type: "address" },
+      { name: "_wrapped1155Factory", internalType: "contract IWrapped1155Factory", type: "address" },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    inputs: [],
+    name: "conditionalTokens",
+    outputs: [{ name: "", internalType: "contract IConditionalTokens", type: "address" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    inputs: [
+      { name: "collateralToken", internalType: "contract IERC20", type: "address" },
+      { name: "parentCollectionId", internalType: "bytes32", type: "bytes32" },
+      { name: "conditionId", internalType: "bytes32", type: "bytes32" },
+      { name: "indexSet", internalType: "uint256", type: "uint256" },
+    ],
+    name: "getTokenId",
+    outputs: [{ name: "", internalType: "uint256", type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    inputs: [{ name: "conditionId", internalType: "bytes32", type: "bytes32" }],
+    name: "getWinningOutcomes",
+    outputs: [{ name: "", internalType: "bool[]", type: "bool[]" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    inputs: [
+      { name: "collateralToken", internalType: "contract IERC20", type: "address" },
+      { name: "market", internalType: "contract Market", type: "address" },
+      { name: "amount", internalType: "uint256", type: "uint256" },
+    ],
+    name: "mergePositions",
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    inputs: [
+      { name: "market", internalType: "contract Market", type: "address" },
+      { name: "amount", internalType: "uint256", type: "uint256" },
+    ],
+    name: "mergeToBase",
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    inputs: [
+      { name: "", internalType: "address", type: "address" },
+      { name: "", internalType: "address", type: "address" },
+      { name: "", internalType: "uint256[]", type: "uint256[]" },
+      { name: "", internalType: "uint256[]", type: "uint256[]" },
+      { name: "", internalType: "bytes", type: "bytes" },
+    ],
+    name: "onERC1155BatchReceived",
+    outputs: [{ name: "", internalType: "bytes4", type: "bytes4" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    inputs: [
+      { name: "", internalType: "address", type: "address" },
+      { name: "", internalType: "address", type: "address" },
+      { name: "", internalType: "uint256", type: "uint256" },
+      { name: "", internalType: "uint256", type: "uint256" },
+      { name: "", internalType: "bytes", type: "bytes" },
+    ],
+    name: "onERC1155Received",
+    outputs: [{ name: "", internalType: "bytes4", type: "bytes4" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    inputs: [
+      { name: "collateralToken", internalType: "contract IERC20", type: "address" },
+      { name: "market", internalType: "contract Market", type: "address" },
+      { name: "outcomeIndexes", internalType: "uint256[]", type: "uint256[]" },
+      { name: "amounts", internalType: "uint256[]", type: "uint256[]" },
+    ],
+    name: "redeemPositions",
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    inputs: [
+      { name: "market", internalType: "contract Market", type: "address" },
+      { name: "outcomeIndexes", internalType: "uint256[]", type: "uint256[]" },
+      { name: "amounts", internalType: "uint256[]", type: "uint256[]" },
+    ],
+    name: "redeemToBase",
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    inputs: [],
+    name: "sDAI",
+    outputs: [{ name: "", internalType: "contract IERC20", type: "address" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    inputs: [],
+    name: "savingsXDaiAdapter",
+    outputs: [{ name: "", internalType: "contract ISavingsXDaiAdapter", type: "address" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    inputs: [{ name: "market", internalType: "contract Market", type: "address" }],
+    name: "splitFromBase",
+    outputs: [],
+    stateMutability: "payable",
+  },
+  {
+    type: "function",
+    inputs: [
+      { name: "collateralToken", internalType: "contract IERC20", type: "address" },
+      { name: "market", internalType: "contract Market", type: "address" },
+      { name: "amount", internalType: "uint256", type: "uint256" },
+    ],
+    name: "splitPosition",
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    inputs: [{ name: "interfaceId", internalType: "bytes4", type: "bytes4" }],
+    name: "supportsInterface",
+    outputs: [{ name: "", internalType: "bool", type: "bool" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    inputs: [],
+    name: "wrapped1155Factory",
+    outputs: [{ name: "", internalType: "contract IWrapped1155Factory", type: "address" }],
+    stateMutability: "view",
+  },
+] as const;
+
+/**
+ * [__View Contract on Gnosis Gnosisscan__](https://gnosisscan.io/address/0xeC9048b59b3467415b1a38F63416407eA0c70fB8)
+ */
+export const gnosisRouterAddress = {
+  100: "0xeC9048b59b3467415b1a38F63416407eA0c70fB8",
+} as const;
+
+/**
+ * [__View Contract on Gnosis Gnosisscan__](https://gnosisscan.io/address/0xeC9048b59b3467415b1a38F63416407eA0c70fB8)
+ */
+export const gnosisRouterConfig = { address: gnosisRouterAddress, abi: gnosisRouterAbi } as const;
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// SavingsXDai
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * [__View Contract on Gnosis Gnosisscan__](https://gnosisscan.io/address/0xaf204776c7245bF4147c2612BF6e5972Ee483701)
+ */
+export const savingsXDaiAbi = [
+  {
+    type: "event",
+    inputs: [
+      { name: "owner", type: "address", indexed: true },
+      { name: "spender", type: "address", indexed: true },
+      { name: "value", type: "uint256", indexed: false },
+    ],
+    name: "Approval",
+  },
+  {
+    type: "event",
+    inputs: [
+      { name: "from", type: "address", indexed: true },
+      { name: "to", type: "address", indexed: true },
+      { name: "value", type: "uint256", indexed: false },
+    ],
+    name: "Transfer",
+  },
+  {
+    type: "function",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" },
+    ],
+    name: "allowance",
+    outputs: [{ type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    name: "approve",
+    outputs: [{ type: "bool" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    inputs: [{ name: "account", type: "address" }],
+    name: "balanceOf",
+    outputs: [{ type: "uint256" }],
+    stateMutability: "view",
+  },
+  { type: "function", inputs: [], name: "decimals", outputs: [{ type: "uint8" }], stateMutability: "view" },
+  { type: "function", inputs: [], name: "name", outputs: [{ type: "string" }], stateMutability: "view" },
+  { type: "function", inputs: [], name: "symbol", outputs: [{ type: "string" }], stateMutability: "view" },
+  { type: "function", inputs: [], name: "totalSupply", outputs: [{ type: "uint256" }], stateMutability: "view" },
+  {
+    type: "function",
+    inputs: [
+      { name: "recipient", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    name: "transfer",
+    outputs: [{ type: "bool" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    inputs: [
+      { name: "sender", type: "address" },
+      { name: "recipient", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    name: "transferFrom",
+    outputs: [{ type: "bool" }],
+    stateMutability: "nonpayable",
+  },
+] as const;
+
+/**
+ * [__View Contract on Gnosis Gnosisscan__](https://gnosisscan.io/address/0xaf204776c7245bF4147c2612BF6e5972Ee483701)
+ */
+export const savingsXDaiAddress = {
+  100: "0xaf204776c7245bF4147c2612BF6e5972Ee483701",
+} as const;
+
+/**
+ * [__View Contract on Gnosis Gnosisscan__](https://gnosisscan.io/address/0xaf204776c7245bF4147c2612BF6e5972Ee483701)
+ */
+export const savingsXDaiConfig = { address: savingsXDaiAddress, abi: savingsXDaiAbi } as const;
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// SavingsXDaiAdapter
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * [__View Contract on Gnosis Gnosisscan__](https://gnosisscan.io/address/0xD499b51fcFc66bd31248ef4b28d656d67E591A94)
+ */
+export const savingsXDaiAdapterAbi = [
+  {
+    type: "function",
+    inputs: [{ name: "receiver", internalType: "address", type: "address" }],
+    name: "depositXDAI",
+    outputs: [{ name: "", internalType: "uint256", type: "uint256" }],
+    stateMutability: "payable",
+  },
+  {
+    type: "function",
+    inputs: [
+      { name: "shares", internalType: "uint256", type: "uint256" },
+      { name: "receiver", internalType: "address", type: "address" },
+    ],
+    name: "redeemXDAI",
+    outputs: [{ name: "", internalType: "uint256", type: "uint256" }],
+    stateMutability: "payable",
+  },
+] as const;
+
+/**
+ * [__View Contract on Gnosis Gnosisscan__](https://gnosisscan.io/address/0xD499b51fcFc66bd31248ef4b28d656d67E591A94)
+ */
+export const savingsXDaiAdapterAddress = {
+  100: "0xD499b51fcFc66bd31248ef4b28d656d67E591A94",
+} as const;
+
+/**
+ * [__View Contract on Gnosis Gnosisscan__](https://gnosisscan.io/address/0xD499b51fcFc66bd31248ef4b28d656d67E591A94)
+ */
+export const savingsXDaiAdapterConfig = { address: savingsXDaiAdapterAddress, abi: savingsXDaiAdapterAbi } as const;
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // SessionFactory
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

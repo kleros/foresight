@@ -1,8 +1,10 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { sendTransaction, waitForTransactionReceipt, type Config } from "@wagmi/core";
+import { sendTransaction } from "@wagmi/core";
 import type { Address } from "viem";
+
+import { wrapWithToast } from "@/utils/wrapWithToast";
 
 import { withdrawTx } from "@/lib/trade-executor/funding";
 import type { Asset } from "@/lib/trade-executor/types";
@@ -18,20 +20,17 @@ export interface WithdrawArgs {
   assets: Asset[];
 }
 
-async function withdrawFromExecutor(config: Config, args: WithdrawArgs): Promise<void> {
-  const tx = withdrawTx(args);
-
-  const hash = await sendTransaction(config, { to: tx.to, data: tx.data, chainId: DEFAULT_CHAIN_ID });
-  const receipt = await waitForTransactionReceipt(config, { hash });
-
-  if (receipt.status !== "success") throw new Error("The withdrawal reverted.");
-}
-
 export function useWithdrawFromExecutor(onSuccess?: () => void) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (args: WithdrawArgs) => withdrawFromExecutor(wagmiConfig, args),
+    mutationFn: (args: WithdrawArgs) => {
+      const tx = withdrawTx(args);
+
+      return wrapWithToast(wagmiConfig, () =>
+        sendTransaction(wagmiConfig, { to: tx.to, data: tx.data, chainId: DEFAULT_CHAIN_ID }),
+      );
+    },
     onSuccess: () => {
       onSuccess?.();
       void queryClient.invalidateQueries({ queryKey: fundsKeyPrefix });

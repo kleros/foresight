@@ -1,0 +1,44 @@
+"use client";
+
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { sendTransaction } from "@wagmi/core";
+import type { Address } from "viem";
+
+import { wrapWithToast } from "@/utils/wrapWithToast";
+
+import { mergeTx } from "@/lib/trade-executor/positions";
+import { wagmiConfig } from "@/lib/web3/wagmi";
+
+import { DEFAULT_CHAIN_ID } from "@/config/chains";
+import { gnosisRouterAddress } from "@/config/contracts";
+
+import { fundsKeyPrefix } from "./getFunds";
+
+export interface MergeArgs {
+  executor: Address;
+  collateral: Address;
+  parentMarket: Address;
+  outcomeTokens: Address[];
+  invalidToken: Address;
+  amount: bigint;
+}
+
+export function useMergeFromExecutor(onSuccess?: () => void) {
+  const queryClient = useQueryClient();
+  const router = gnosisRouterAddress(DEFAULT_CHAIN_ID);
+
+  return useMutation({
+    mutationFn: (args: MergeArgs) => {
+      if (!router) throw new Error("There is no Seer router on this network.");
+      const tx = mergeTx({ ...args, router });
+
+      return wrapWithToast(wagmiConfig, () =>
+        sendTransaction(wagmiConfig, { to: tx.to, data: tx.data, chainId: DEFAULT_CHAIN_ID }),
+      );
+    },
+    onSuccess: () => {
+      onSuccess?.();
+      void queryClient.invalidateQueries({ queryKey: fundsKeyPrefix });
+    },
+  });
+}

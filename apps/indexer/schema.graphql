@@ -19,6 +19,9 @@ type Session {
   marketName: String!
   outcomes: [String!]!
 
+  "the parent's INVALID outcome token"
+  invalidToken: String
+
   "the seer factory's collateral"
   collateralToken: String
   collateralDecimals: Int

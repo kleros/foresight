@@ -144,4 +144,12 @@ describe("SessionHeader", () => {
 
     expect(screen.queryByText(/could not be loaded/)).toBeNull();
   });
+
+  /* DEFAULT_CHAIN is the local node under test, and a local node has no explorer to link to.
+     Where one exists the link is built by `explorerAddressUrl`, which has its own tests. */
+  it("offers no explorer link on a chain without an explorer", () => {
+    renderHeader();
+
+    expect(screen.queryByRole("link", { name: /0x/ })).toBeNull();
+  });
 });

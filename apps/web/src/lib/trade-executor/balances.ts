@@ -2,15 +2,15 @@ import { erc20Abi, type Address } from "viem";
 
 import type { ExecutorReadClient, FundsReadClient } from "./types";
 
-export type TokenMeta = { symbol: string; decimals: number };
-
-export async function fetchTokenMeta(client: ExecutorReadClient, token: Address): Promise<TokenMeta> {
-  const [symbol, decimals] = await Promise.all([
-    client.readContract({ address: token, abi: erc20Abi, functionName: "symbol" }),
-    client.readContract({ address: token, abi: erc20Abi, functionName: "decimals" }),
-  ]);
-
-  return { symbol, decimals };
+export function fetchTokenBalances(
+  client: ExecutorReadClient,
+  args: { holder: Address; tokens: Address[] },
+): Promise<bigint[]> {
+  return Promise.all(
+    args.tokens.map((token) =>
+      client.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [args.holder] }),
+    ),
+  );
 }
 
 export type HolderFunds = {

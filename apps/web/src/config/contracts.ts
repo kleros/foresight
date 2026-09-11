@@ -1,5 +1,5 @@
 import { gnosis, localhost } from "@foresight/contracts";
-import type { Address } from "viem";
+import { isAddressEqual, type Address } from "viem";
 
 import { DEFAULT_CHAIN_ID } from "./chains";
 
@@ -26,4 +26,32 @@ const TRADE_EXECUTOR_FACTORY_ADDRESSES: Record<number, Address> = {
 
 export function tradeExecutorFactoryAddress(chainId: number = DEFAULT_CHAIN_ID) {
   return TRADE_EXECUTOR_FACTORY_ADDRESSES[chainId] ?? null;
+}
+
+/** Seer's router; splits, merges and redeems for any of its markets. Deployed on gnosis only. */
+export const gnosisRouterAbi = gnosis.gnosisRouterAbi;
+
+const GNOSIS_ROUTER_ADDRESSES: Record<number, Address> = { ...gnosis.gnosisRouterAddress };
+
+export function gnosisRouterAddress(chainId: number = DEFAULT_CHAIN_ID): Address | null {
+  return GNOSIS_ROUTER_ADDRESSES[chainId] ?? null;
+}
+
+export const sDaiAdapterAbi = gnosis.savingsXDaiAdapterAbi;
+
+const S_DAI_ADDRESSES: Record<number, Address> = { ...gnosis.savingsXDaiAddress };
+const S_DAI_ADAPTER_ADDRESSES: Record<number, Address> = { ...gnosis.savingsXDaiAdapterAddress };
+
+export type SDaiDepositRoute = { sDai: Address; sDaiAdapter: Address };
+
+/**
+ * Gnosis' savings adapter takes xDAI and mints sDAI to whichever address is named, so
+ * native currency can fund a market only where sDAI is its collateral.
+ */
+export function sDaiDepositRoute(collateral: Address, chainId: number = DEFAULT_CHAIN_ID): SDaiDepositRoute | null {
+  const sDai = S_DAI_ADDRESSES[chainId];
+  const sDaiAdapter = S_DAI_ADAPTER_ADDRESSES[chainId];
+  if (!sDai || !sDaiAdapter || !isAddressEqual(sDai, collateral)) return null;
+
+  return { sDai, sDaiAdapter };
 }

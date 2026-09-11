@@ -2,8 +2,10 @@ import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join, parse } from "node:path";
 
+import { erc20Abi, type Abi, type Address } from "viem";
 import { gnosis, hardhat } from "viem/chains";
-import type { Abi, Address } from "viem";
+
+import { getSeerDeployment } from "../config/seer";
 
 type HardhatDeployment = {
   address: Address;
@@ -87,6 +89,31 @@ export async function readAbiOnlyArtifacts() {
       abi: getAbi(await readArtifactJson(`artifacts/contracts/${name}.sol/${name}.json`)),
     })),
   );
+}
+
+/**
+ * Seer's contracts the app calls on gnosis, by the name each is deployed under. The adapter is a
+ * constant on `GnosisRouter` with no deployment file of its own, so its address sits in
+ * `deployments/external/gnosis`. sDAI ships without an ABI, so viem's ERC-20 one stands in.
+ */
+export async function readSeerArtifacts(chainName: DeploymentChainName): Promise<WagmiCodegenContract[]> {
+  if (chainName !== "gnosis") {
+    return [];
+  }
+
+  const { chainId } = DEPLOYMENT_CHAINS[chainName];
+  const router = getSeerDeployment(chainId, "GnosisRouter");
+  const sDai = getSeerDeployment(chainId, "SavingsXDai");
+  if (!router || !sDai) {
+    throw new Error("GnosisRouter and SavingsXDai must both be deployed under @seer-pm/contracts for gnosis");
+  }
+  const adapter = (await readArtifactJson("deployments/external/gnosis/SavingsXDaiAdapter.json")) as HardhatDeployment;
+
+  return [
+    { name: "GnosisRouter", address: { [chainId]: router.address }, abi: router.abi as Abi },
+    { name: "SavingsXDai", address: { [chainId]: sDai.address }, abi: erc20Abi },
+    { name: "SavingsXDaiAdapter", address: { [chainId]: adapter.address }, abi: adapter.abi },
+  ];
 }
 
 export function requireArtifacts(chainName: DeploymentChainName, contracts: WagmiCodegenContract[]) {

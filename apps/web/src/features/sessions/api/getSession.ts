@@ -27,6 +27,8 @@ const SESSION_DETAIL = graphql(`
       metadataResolved
       outcomeCount
       deployedChildCount
+      invalidToken
+      collateralToken
       collateralDecimals
       collateralSymbol
       openedAt

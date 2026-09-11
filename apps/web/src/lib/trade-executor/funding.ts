@@ -1,9 +1,19 @@
 import type { FlowTx } from "@foresight/tx-orchestrator";
 import { encodeFunctionData, erc20Abi, type Address, type Hex } from "viem";
 
-import { tradeExecutorAbi } from "@/config/contracts";
+import { sDaiAdapterAbi } from "@/config/contracts";
 
+import { batchValueExecuteTx } from "./executor";
 import type { Asset } from "./types";
+
+/** Pays xDAI to the adapter, which mints the sDAI it is worth straight to the executor. */
+export function depositNativeTx(args: { executor: Address; sDaiAdapter: Address; amount: bigint }): FlowTx {
+  return {
+    to: args.sDaiAdapter,
+    value: args.amount,
+    data: encodeFunctionData({ abi: sDaiAdapterAbi, functionName: "depositXDAI", args: [args.executor] }),
+  };
+}
 
 export function depositTx(args: { executor: Address; asset: Asset }): FlowTx {
   const { executor, asset } = args;
@@ -23,18 +33,16 @@ export function withdrawTx(args: { executor: Address; recipient: Address; assets
     throw new Error("Nothing to withdraw.");
   }
 
-  const calls = args.assets.map((asset) =>
-    asset.token === "native"
-      ? { to: args.recipient, value: asset.amount, data: "0x" as Hex }
-      : {
-          to: asset.token,
-          value: 0n,
-          data: encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [args.recipient, asset.amount] }),
-        },
+  return batchValueExecuteTx(
+    args.executor,
+    args.assets.map((asset) =>
+      asset.token === "native"
+        ? { to: args.recipient, value: asset.amount, data: "0x" as Hex }
+        : {
+            to: asset.token,
+            value: 0n,
+            data: encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [args.recipient, asset.amount] }),
+          },
+    ),
   );
-
-  return {
-    to: args.executor,
-    data: encodeFunctionData({ abi: tradeExecutorAbi, functionName: "batchValueExecute", args: [calls] }),
-  };
 }

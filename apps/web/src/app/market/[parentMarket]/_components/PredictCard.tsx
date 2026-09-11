@@ -1,7 +1,7 @@
 import { Button } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
-import { SectionCard } from "./SectionCard";
+import { SectionCard } from "@/components/ui/SectionCard";
 
 export function PredictCard() {
   return (

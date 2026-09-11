@@ -35,6 +35,9 @@ const SEER_FACTORY = "0x00000000000000000000000000000000000005ee" as const;
 const COLLATERAL = "0x000000000000000000000000000000000000c011" as const;
 
 const PARENT_MARKET = "0x0000000000000000000000000000000000000ace" as const;
+const PARENT_INVALID = "0x00000000000000000000000000000000000000a0" as const;
+const PARENT_OUTCOME_0 = "0x00000000000000000000000000000000000000a1" as const;
+const PARENT_OUTCOME_1 = "0x00000000000000000000000000000000000000a2" as const;
 const CHILD_MARKET_0 = "0x0000000000000000000000000000000000000c00" as const;
 const CHILD_MARKET_1 = "0x0000000000000000000000000000000000000c01" as const;
 const DEPLOYER = "0x0000000000000000000000000000000000000de9" as const;
@@ -56,7 +59,11 @@ const marketReads: Record<string, Record<string, unknown>> = {
   [SESSION_FACTORY]: { seerMarketFactory: SEER_FACTORY },
   [SEER_FACTORY]: { collateralToken: COLLATERAL },
   [COLLATERAL]: { decimals: 18, symbol: "sDAI" },
-  [PARENT_MARKET]: { marketName: MARKET_NAME, outcomes: OUTCOMES },
+  [PARENT_MARKET]: {
+    marketName: MARKET_NAME,
+    outcomes: OUTCOMES,
+    wrappedOutcome: [wrapped(PARENT_OUTCOME_0), wrapped(PARENT_OUTCOME_1), wrapped(PARENT_INVALID)],
+  },
   [CHILD_MARKET_0]: childReads(CHILD_0_DOWN, CHILD_0_UP, CHILD_0_UNDERLYING),
   [CHILD_MARKET_1]: childReads(CHILD_1_DOWN, CHILD_1_UP, CHILD_1_UNDERLYING),
   [CHILD_0_DOWN]: { decimals: 18, symbol: "DUNE0-DOWN" },
@@ -136,14 +143,19 @@ afterAll(async () => {
   await new Promise((resolve) => server.close(resolve));
 });
 
-const parentDeployed = (block: number, metadataUri = EXAMPLE_METADATA_URI, sessionId = 0n) => ({
+const parentDeployed = (
+  block: number,
+  metadataUri = EXAMPLE_METADATA_URI,
+  sessionId = 0n,
+  parentMarket: Address = PARENT_MARKET,
+) => ({
   contract: "SessionFactory" as const,
   event: "ParentMarketDeployed" as const,
   block: { number: block, timestamp: block },
   params: {
     sessionId,
     deployer: getAddress(DEPLOYER),
-    parentMarket: getAddress(PARENT_MARKET),
+    parentMarket: getAddress(parentMarket),
     outcomeCount: BigInt(OUTCOMES.length),
     metadataUri,
   },
@@ -185,6 +197,7 @@ describe("SessionFactory indexing", () => {
     t.expect(session.completedAt).toBe(BigInt(BLOCK));
     t.expect(session.marketName).toBe(MARKET_NAME);
     t.expect(session.outcomes).toEqual(OUTCOMES);
+    t.expect(session.invalidToken).toBe(PARENT_INVALID);
     t.expect(session.collateralToken).toBe(COLLATERAL);
     t.expect(session.collateralDecimals).toBe(18);
     t.expect(session.collateralSymbol).toBe("sDAI");
@@ -294,6 +307,19 @@ describe("SessionFactory indexing", () => {
     await indexer.ChildMarket.getOrThrow(CHILD_MARKET_0);
     t.expect(await indexer.ChildMarket.get(CHILD_MARKET_1)).toBeUndefined();
     t.expect((await indexer.Session.getOrThrow("0")).deployedChildCount).toBe(1n);
+  });
+
+  it("leaves the invalid token unset where the parent refuses to answer for it", async (t) => {
+    const indexer = createTestIndexer();
+    // named outcomes read, `wrappedOutcome` does not
+    const namedOnly = "0x00000000000000000000000000000000000dace0" as const;
+    marketReads[namedOnly] = { marketName: MARKET_NAME, outcomes: OUTCOMES };
+
+    await indexEvents(indexer, [parentDeployed(BLOCK, EXAMPLE_METADATA_URI, 0n, namedOnly)]);
+
+    const session = await indexer.Session.getOrThrow("0");
+    t.expect(session.invalidToken).toBeUndefined();
+    t.expect(session.outcomes).toEqual(OUTCOMES);
   });
 
   it("indexes a market that cannot be read, rather than dropping the session", async (t) => {

@@ -1,12 +1,11 @@
 import clsx from "clsx";
 
 import { ExternalLink } from "@/components/ui/ExternalLink";
+import { SectionCard } from "@/components/ui/SectionCard";
 import { SeerLogo } from "@/components/ui/SeerLogo";
 
 import { DEFAULT_CHAIN } from "@/config/chains";
 import { seerMarketUrl } from "@/config/site";
-
-import { SectionCard } from "./SectionCard";
 
 export function AdvancedSection({ parentMarket }: { parentMarket: string }) {
   const url = seerMarketUrl(parentMarket, DEFAULT_CHAIN.id);

@@ -13,6 +13,8 @@ export const addresses = {
   upToken: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as Address,
   downToken: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as Address,
   underlyingToken: "0xabababababababababababababababababababab" as Address,
+  collateralToken: "0xadadadadadadadadadadadadadadadadadadadad" as Address,
+  invalidToken: "0xa0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0" as Address,
 } as const;
 
 export const dune = {

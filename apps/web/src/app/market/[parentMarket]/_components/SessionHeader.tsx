@@ -8,6 +8,7 @@ import { bannerStyle } from "@/features/sessions/utils/bannerStyle";
 import { collateralVolume } from "@/features/sessions/utils/collateralVolume";
 import { statusChip } from "@/features/sessions/utils/statusChip";
 
+import { ExternalLink } from "@/components/ui/ExternalLink";
 import { ForesightIcon } from "@/components/ui/ForesightIcon";
 import { StatusChip } from "@/components/ui/StatusChip";
 
@@ -16,8 +17,12 @@ import CountdownIcon from "@/assets/svg/cronometer.svg";
 import TradersIcon from "@/assets/svg/eye-outline.svg";
 import VolumeIcon from "@/assets/svg/tag-category.svg";
 
+import { shortenAddress } from "@/utils/address";
 import { formatUtcInstant, timeLeftUntil } from "@/utils/date";
 import { formatEstimate } from "@/utils/formatEstimate";
+
+import { DEFAULT_CHAIN } from "@/config/chains";
+import { explorerAddressUrl } from "@/config/site";
 
 export function SessionHeader({
   session,
@@ -31,6 +36,7 @@ export function SessionHeader({
   statsPending: boolean;
 }) {
   const volume = stats ? collateralVolume(session, stats.volumeUnderlying) : null;
+  const explorer = explorerAddressUrl(session.parentMarket, DEFAULT_CHAIN);
 
   return (
     <header className="flex flex-col gap-4">
@@ -73,8 +79,9 @@ export function SessionHeader({
           </span>
         ) : null}
         <div className="flex flex-col gap-2.5 px-6 pt-8 pb-5">
-          <div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <StatusChip tone={statusChip[status].tone} label={statusChip[status].label} />
+            {explorer ? <ExternalLink href={explorer}>{shortenAddress(session.parentMarket)}</ExternalLink> : null}
           </div>
           <h2 className="text-fs-text-primary text-lg font-semibold text-pretty">{session.question}</h2>
           {session.description ? (

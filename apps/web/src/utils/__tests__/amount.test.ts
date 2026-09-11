@@ -20,6 +20,12 @@ describe("parseAmount", () => {
   it("rejects more fractional digits than the token holds", () => {
     expect(parseAmount("1.1234567", 6)).toBeNull();
   });
+
+  it("rejects exponential notation, so a caller has to write the digits out", () => {
+    expect(parseAmount("1e-8", 18)).toBeNull();
+    expect(parseAmount("1e+21", 18)).toBeNull();
+    expect(parseAmount("0.00000001", 18)).toBe(10_000_000_000n);
+  });
 });
 
 describe("formatAmount", () => {

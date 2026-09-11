@@ -15,6 +15,10 @@ import { MarketPage } from "../MarketPage";
 vi.mock("@/lib/graphql/batcher", () => ({ fetchGraphql: vi.fn() }));
 /* The factory cannot reference imports, so GATEWAY's value is restated. */
 vi.mock("@/config/ipfs", () => ({ IPFS_GATEWAY: "https://cdn.example.link/ipfs" }));
+/* The wallet reaches wagmi and the RPC config, neither of which this page's tests supply. */
+vi.mock("@/features/trade-executor/components/TradeWallet/TradeWallet", () => ({
+  TradeWallet: () => null,
+}));
 
 const fetchMock = vi.mocked(fetchGraphql);
 

@@ -1,25 +1,18 @@
 import { DropdownSelect } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
-export type SelectOption = { id: string; text: string };
+export type SelectOption = { id: string; text: string; icon?: React.ReactNode };
 
-/**
- * Wrapper over the library's `DropdownSelect` so the app depends on our
- * interface, not theirs.
- *
- * Why the cast: the library declares `SelectProps extends AriaSelectProps`
- * without type arguments, but react-aria-components v1.19 made
- * `SelectProps<T, M>` require them. The bare reference degrades, so the
- * published type loses `selectedKey` and `className` even though the
- * implementation destructures and uses both. Contained here rather than
- * repeated at every call site; delete once the library types are fixed.
- */
+/** Wrapper over the library's `DropdownSelect` so the app depends on our interface, not theirs. */
 export function Select({
   label,
   hideLabel,
   options,
   value,
   onChange,
+  placeholder,
+  variant = "field",
+  isDisabled,
   className,
 }: {
   label: string;
@@ -28,21 +21,21 @@ export function Select({
   options: SelectOption[];
   value: string;
   onChange: (id: string) => void;
+  placeholder?: string;
+  variant?: "field" | "menu";
+  isDisabled?: boolean;
   className?: string;
 }) {
-  const Untyped = DropdownSelect as unknown as React.FC<{
-    label: string;
-    items: SelectOption[];
-    selectedKey: string;
-    callback: (item: SelectOption) => void;
-    className?: string;
-  }>;
   return (
-    <Untyped
+    <DropdownSelect
       label={label}
       items={options}
       selectedKey={value}
-      callback={(item) => onChange(item.id)}
+      callback={(item) => onChange(String(item.id))}
+      placeholder={placeholder}
+      simpleButton={variant === "menu"}
+      smallButton={variant === "menu"}
+      isDisabled={isDisabled}
       className={clsx(hideLabel && "*:first:sr-only", className)}
     />
   );

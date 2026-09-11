@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { branchColor } from "@/utils/branchColor";
 
-import { GATEWAY } from "@/testing/fixtures";
+import { addresses, GATEWAY } from "@/testing/fixtures";
 
 import { sessionStatus, type SessionDetailRow, toSessionDetail } from "../toSessionDetail";
 import { sessionChildRow as child, sessionDetailColumns } from "./fixtures";
@@ -112,16 +112,31 @@ describe("toSessionDetail", () => {
     expect(detail.blocks).toEqual([{ type: "image", label: "Poster", url: `${GATEWAY}/QmPoster` }]);
   });
 
-  it("carries the collateral's decimals and symbol", () => {
+  it("carries the collateral's address, decimals and symbol", () => {
     const detail = toSessionDetail(row(), GATEWAY);
 
-    expect([detail.collateralDecimals, detail.collateralSymbol]).toEqual([18, "sDAI"]);
+    expect([detail.collateralToken, detail.collateralDecimals, detail.collateralSymbol]).toEqual([
+      addresses.collateralToken,
+      18,
+      "sDAI",
+    ]);
   });
 
   it("reports no collateral meta where the factory reads failed", () => {
-    const detail = toSessionDetail(row({ collateralDecimals: null, collateralSymbol: null }), GATEWAY);
+    const detail = toSessionDetail(
+      row({ collateralToken: null, collateralDecimals: null, collateralSymbol: null }),
+      GATEWAY,
+    );
 
-    expect([detail.collateralDecimals, detail.collateralSymbol]).toEqual([null, null]);
+    expect([detail.collateralToken, detail.collateralDecimals, detail.collateralSymbol]).toEqual([null, null, null]);
+  });
+
+  it("carries the decision's invalid outcome token", () => {
+    expect(toSessionDetail(row(), GATEWAY).invalidToken).toBe(addresses.invalidToken);
+  });
+
+  it("reports no invalid token where the decision market did not answer for one", () => {
+    expect(toSessionDetail(row({ invalidToken: null }), GATEWAY).invalidToken).toBeNull();
   });
 
   it("carries an option's underlying token meta", () => {

@@ -17,10 +17,6 @@ export const paths = {
   create: {
     getHref: () => "/create",
   },
-  /** Temporary dashboard for setting up and funding a trade executor. */
-  executor: {
-    getHref: () => "/executor",
-  },
   /** A session is read through its decision market, which is what addresses it. */
   market: {
     getHref: (parentMarket: string) => `/market/${parentMarket}`,

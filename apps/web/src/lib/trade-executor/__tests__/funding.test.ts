@@ -1,9 +1,9 @@
 import { decodeFunctionData, erc20Abi, getAddress, parseEther, type Address } from "viem";
 import { describe, expect, it } from "vitest";
 
-import { tradeExecutorAbi } from "@/config/contracts";
+import { sDaiAdapterAbi, tradeExecutorAbi } from "@/config/contracts";
 
-import { depositTx, withdrawTx } from "../funding";
+import { depositNativeTx, depositTx, withdrawTx } from "../funding";
 
 // Checksummed, because decoded calldata comes back checksummed.
 const EXECUTOR: Address = getAddress("0x00000000000000000000000000000000000000ee");
@@ -27,6 +27,20 @@ describe("depositTx", () => {
     expect(decodeFunctionData({ abi: erc20Abi, data: tx.data! })).toEqual({
       functionName: "transfer",
       args: [EXECUTOR, AMOUNT],
+    });
+  });
+});
+
+describe("depositNativeTx", () => {
+  it("sends the value to the sDAI adapter, naming the executor as who receives the sDAI", () => {
+    const sDaiAdapter = getAddress("0x00000000000000000000000000000000000000ad");
+    const tx = depositNativeTx({ executor: EXECUTOR, sDaiAdapter, amount: AMOUNT });
+
+    expect(tx.to).toBe(sDaiAdapter);
+    expect(tx.value).toBe(AMOUNT);
+    expect(decodeFunctionData({ abi: sDaiAdapterAbi, data: tx.data! })).toEqual({
+      functionName: "depositXDAI",
+      args: [EXECUTOR],
     });
   });
 });
