@@ -19,6 +19,9 @@ type Session {
   marketName: String!
   outcomes: [String!]!
 
+  "wrapped ERC-20 per named outcome"
+  outcomeTokens: [String!]!
+
   "the parent's INVALID outcome token"
   invalidToken: String
 
@@ -126,12 +129,17 @@ type Position {
   updatedAt: BigInt!
 }
 
-"An outcome or underlying token of a child market."
+"""
+An outcome or underlying token. An outcome token belongs to one child market; an underlying is
+a parent outcome token, priced against by every child conditional on that outcome, so its
+markets are the ChildMarket rows whose underlyingToken it is.
+"""
 type Token {
   "token address, lowercase"
   id: ID!
 
-  childMarket: ChildMarket! @index
+  "the child market an outcome token belongs to; null for an underlying"
+  childMarket: ChildMarket @index
 
   "0 is DOWN and 1 is UP; null for the underlying"
   outcomeIndex: Int

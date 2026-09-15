@@ -35,9 +35,6 @@ export interface SessionOption {
   upToken: Address | null;
   downToken: Address | null;
   underlyingToken: Address | null;
-  /** The underlying's on-chain meta; null where the read failed at indexing time. */
-  underlyingDecimals: number | null;
-  underlyingSymbol: string | null;
   /** Display blocks with image uris already resolved against the gateway. */
   blocks: DisplayBlock[];
 }

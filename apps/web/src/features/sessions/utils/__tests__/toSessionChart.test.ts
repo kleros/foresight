@@ -28,8 +28,6 @@ function option(overrides: Partial<SessionOption> = {}): SessionOption {
     upToken: addresses.upToken,
     downToken: addresses.downToken,
     underlyingToken: addresses.underlyingToken,
-    underlyingDecimals: 18,
-    underlyingSymbol: "sDAI",
     blocks: [],
     ...overrides,
   };

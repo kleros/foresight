@@ -23,6 +23,22 @@ indexer.onEvent({ contract: "SessionFactory", event: "ParentMarketDeployed" }, a
     context.effect(fetchCollateral, { chainId: event.chainId, factory: event.srcAddress }),
   ]);
 
+  // The parent owns its outcome tokens. Seer hands the same tokens to any parent asking the same
+  // question; writing the same row again changes nothing.
+  const outcomeTokens = market.outcomeTokens.filter(isAvailable);
+  const metas = await Promise.all(
+    outcomeTokens.map((address) => context.effect(fetchToken, { chainId: event.chainId, address })),
+  );
+  outcomeTokens.forEach((address, index) => {
+    context.Token.set({
+      id: address,
+      childMarket_id: undefined,
+      outcomeIndex: undefined,
+      decimals: metas[index]?.decimals ?? undefined,
+      symbol: metas[index]?.symbol ?? undefined,
+    });
+  });
+
   context.Session.set({
     id: event.params.sessionId.toString(),
     sessionId: event.params.sessionId,
@@ -34,6 +50,7 @@ indexer.onEvent({ contract: "SessionFactory", event: "ParentMarketDeployed" }, a
     completedAt: 0n,
     marketName: market.marketName,
     outcomes: market.outcomes,
+    outcomeTokens: market.outcomeTokens,
     invalidToken: market.invalidToken ?? undefined,
     collateralToken: collateral.token ?? undefined,
     collateralDecimals: collateral.decimals ?? undefined,
@@ -92,13 +109,21 @@ indexer.onEvent({ contract: "SessionFactory", event: "ChildMarketDeployed" }, as
     [
       [market.down, 0],
       [market.up, 1],
-      [market.underlying, undefined],
     ] as const
   ).filter(([address]) => isAvailable(address));
-  const metas = await Promise.all(
-    sides.map(([address]) => context.effect(fetchToken, { chainId: event.chainId, address })),
-  );
+  const [owners, metas] = await Promise.all([
+    Promise.all(sides.map(([address]) => context.Token.get(address))),
+    Promise.all(sides.map(([address]) => context.effect(fetchToken, { chainId: event.chainId, address }))),
+  ]);
   sides.forEach(([address, side], index) => {
+    const owner = owners[index]?.childMarket_id;
+    // Seer reuses the tokens of an identical question, so a redeployed child shares them with the
+    // original; the original keeps them, and with them the pools and predictions
+    if (owner !== undefined && owner !== childMarket) {
+      context.log.error(`Token ${address} already belongs to child ${owner}; child ${childMarket} duplicates it`);
+
+      return;
+    }
     context.Token.set({
       id: address,
       childMarket_id: childMarket,

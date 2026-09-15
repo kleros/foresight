@@ -26,8 +26,6 @@ const CHILD_0_DOWN = "0x0000000000000000000000000000000000000d00" as const;
 const CHILD_0_UP = "0x0000000000000000000000000000000000000d01" as const;
 const CHILD_1_DOWN = "0x0000000000000000000000000000000000000d10" as const;
 const CHILD_1_UP = "0x0000000000000000000000000000000000000d11" as const;
-const CHILD_0_UNDERLYING = "0x0000000000000000000000000000000000000c0a" as const;
-const CHILD_1_UNDERLYING = "0x0000000000000000000000000000000000000c0b" as const;
 
 /** The configured SessionFactory address in config.localhost.yaml, which simulated events carry. */
 const SESSION_FACTORY = "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512" as const;
@@ -64,11 +62,12 @@ const marketReads: Record<string, Record<string, unknown>> = {
     outcomes: OUTCOMES,
     wrappedOutcome: [wrapped(PARENT_OUTCOME_0), wrapped(PARENT_OUTCOME_1), wrapped(PARENT_INVALID)],
   },
-  [CHILD_MARKET_0]: childReads(CHILD_0_DOWN, CHILD_0_UP, CHILD_0_UNDERLYING),
-  [CHILD_MARKET_1]: childReads(CHILD_1_DOWN, CHILD_1_UP, CHILD_1_UNDERLYING),
+  // a child on outcome i prices against the parent's wrapped outcome i
+  [CHILD_MARKET_0]: childReads(CHILD_0_DOWN, CHILD_0_UP, PARENT_OUTCOME_0),
+  [CHILD_MARKET_1]: childReads(CHILD_1_DOWN, CHILD_1_UP, PARENT_OUTCOME_1),
   [CHILD_0_DOWN]: { decimals: 18, symbol: "DUNE0-DOWN" },
   [CHILD_0_UP]: { decimals: 18, symbol: "DUNE0-UP" },
-  [CHILD_0_UNDERLYING]: { decimals: 6, symbol: "USDC" },
+  [PARENT_OUTCOME_0]: { decimals: 18, symbol: "VILLENEUVE" },
 };
 
 const ethCall = (params: [{ to: string; data: Hex }]) => {
@@ -198,6 +197,7 @@ describe("SessionFactory indexing", () => {
     t.expect(session.marketName).toBe(MARKET_NAME);
     t.expect(session.outcomes).toEqual(OUTCOMES);
     t.expect(session.invalidToken).toBe(PARENT_INVALID);
+    t.expect(session.outcomeTokens).toEqual([PARENT_OUTCOME_0, PARENT_OUTCOME_1]);
     t.expect(session.collateralToken).toBe(COLLATERAL);
     t.expect(session.collateralDecimals).toBe(18);
     t.expect(session.collateralSymbol).toBe("sDAI");
@@ -233,11 +233,13 @@ describe("SessionFactory indexing", () => {
     t.expect(up.decimals).toBe(18);
     t.expect(up.symbol).toBe("DUNE0-UP");
     t.expect((await indexer.Token.getOrThrow(CHILD_0_DOWN)).outcomeIndex).toBe(0);
-    const underlying = await indexer.Token.getOrThrow(CHILD_0_UNDERLYING);
+    // the parent registered its outcome token; it prices every child on that outcome, so it names none
+    const underlying = await indexer.Token.getOrThrow(PARENT_OUTCOME_0);
     t.expect(underlying.outcomeIndex).toBeUndefined();
-    t.expect(underlying.childMarket_id).toBe(CHILD_MARKET_0);
-    t.expect(underlying.decimals).toBe(6);
-    t.expect(underlying.symbol).toBe("USDC");
+    t.expect(underlying.childMarket_id).toBeUndefined();
+    t.expect(underlying.decimals).toBe(18);
+    t.expect(underlying.symbol).toBe("VILLENEUVE");
+    t.expect(child.underlyingToken).toBe(PARENT_OUTCOME_0);
 
     t.expect(child.lowerBound).toBe(LOWER_BOUND);
     t.expect(child.upperBound).toBe(UPPER_BOUND);
@@ -292,6 +294,34 @@ describe("SessionFactory indexing", () => {
     // rather than leave gaps a search would have to match through
     t.expect(session.keyword).toBe(session.keyword.trim());
     t.expect(session.keyword).not.toMatch(/\s{2}/);
+  });
+
+  it("leaves a shared outcome token as the first parent registered it", async (t) => {
+    const indexer = createTestIndexer();
+    // a second parent asking the same question gets the same wrapped tokens from Seer
+    const twin = "0x00000000000000000000000000000000000dace1" as const;
+    marketReads[twin] = marketReads[PARENT_MARKET]!;
+
+    await indexEvents(indexer, [parentDeployed(BLOCK), parentDeployed(BLOCK + 1, EXAMPLE_METADATA_URI, 1n, twin)]);
+
+    t.expect((await indexer.Session.getOrThrow("1")).outcomeTokens).toEqual([PARENT_OUTCOME_0, PARENT_OUTCOME_1]);
+    t.expect(await indexer.Token.getAll()).toHaveLength(2);
+  });
+
+  it("keeps a child's tokens with the child that registered them first", async (t) => {
+    const indexer = createTestIndexer();
+    // a redeployed child asks the identical question, so Seer hands it the same tokens
+    const twinChild = "0x0000000000000000000000000000000000000c0f" as const;
+    marketReads[twinChild] = marketReads[CHILD_MARKET_0]!;
+
+    await indexEvents(indexer, [
+      parentDeployed(BLOCK),
+      childDeployed(BLOCK, 0, CHILD_MARKET_0),
+      childDeployed(BLOCK + 1, 0, twinChild),
+    ]);
+
+    t.expect((await indexer.Token.getOrThrow(CHILD_0_UP)).childMarket_id).toBe(CHILD_MARKET_0);
+    t.expect((await indexer.ChildMarket.getOrThrow(twinChild)).upToken).toBe(CHILD_0_UP);
   });
 
   it("skips a child whose session was never opened, since the contract cannot emit one", async (t) => {

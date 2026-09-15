@@ -73,6 +73,20 @@ describe("Algebra pool indexing", () => {
     t.expect(await indexer.Pool.getAll()).toHaveLength(0);
   });
 
+  it("follows a pool whose underlying is shared with a market indexed later", async (t) => {
+    const indexer = createTestIndexer();
+    await seedMarket(indexer, MARKET);
+    // a second child on the same parent outcome prices against the same token, and its
+    // Token row now names that child
+    await seedMarket(indexer, { ...SECOND_MARKET, underlying: UNDERLYING });
+
+    await indexEvents(indexer, [poolCreated(UNDERLYING, UP, UP_POOL)]);
+
+    const pool = await indexer.Pool.getOrThrow(UP_POOL);
+    t.expect(pool.childMarket_id).toBe(CHILD_MARKET);
+    t.expect(pool.underlyingToken).toBe(UNDERLYING);
+  });
+
   it("leaves a pool pairing tokens of two different markets unfollowed", async (t) => {
     const indexer = createTestIndexer();
     await seedMarket(indexer, MARKET);

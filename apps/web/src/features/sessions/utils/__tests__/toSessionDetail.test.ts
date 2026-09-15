@@ -139,19 +139,6 @@ describe("toSessionDetail", () => {
     expect(toSessionDetail(row({ invalidToken: null }), GATEWAY).invalidToken).toBeNull();
   });
 
-  it("carries an option's underlying token meta", () => {
-    const option = toSessionDetail(row(), GATEWAY).options[0];
-
-    expect([option?.underlyingDecimals, option?.underlyingSymbol]).toEqual([18, "sDAI"]);
-  });
-
-  it("reports no underlying meta where the token reads failed", () => {
-    const tokens = [{ outcomeIndex: null, decimals: null, symbol: null }];
-    const option = toSessionDetail(row({ children: [child({ tokens })] }), GATEWAY).options[0];
-
-    expect([option?.underlyingDecimals, option?.underlyingSymbol]).toEqual([null, null]);
-  });
-
   it("narrows an option's blocks the same way", () => {
     const blocks = [
       { type: "markdown", body: "Directed *Barbie*." },

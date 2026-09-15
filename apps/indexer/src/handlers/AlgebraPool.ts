@@ -10,22 +10,22 @@ indexer.contractRegister({ contract: "AlgebraFactory", event: "Pool" }, async ({
   context.chain.AlgebraPool.add(event.params.pool);
 });
 
+/** An outcome token's row names its market and side; an underlying's names neither. */
+const isOutcome = <T extends { childMarket_id?: string; outcomeIndex?: number }>(
+  row: T | undefined,
+): row is T & { childMarket_id: string; outcomeIndex: number } =>
+  row?.childMarket_id !== undefined && row.outcomeIndex !== undefined;
+
 indexer.onEvent({ contract: "AlgebraFactory", event: "Pool" }, async ({ event, context }) => {
   const [token0, token1] = [event.params.token0.toLowerCase(), event.params.token1.toLowerCase()];
   const [token0Row, token1Row] = await Promise.all([context.Token.get(token0), context.Token.get(token1)]);
 
-  const outcome =
-    token0Row?.outcomeIndex !== undefined ? token0Row : token1Row?.outcomeIndex !== undefined ? token1Row : undefined;
-  const underlying = outcome === token0Row ? token1Row : token0Row;
+  const outcome = isOutcome(token0Row) ? token0Row : isOutcome(token1Row) ? token1Row : undefined;
+  const other = outcome === token0Row ? token1 : token0;
+  const market = outcome === undefined ? undefined : await context.ChildMarket.get(outcome.childMarket_id);
 
-  // the other side has to be the underlying, not the opposite outcome
-  const paired =
-    outcome?.outcomeIndex !== undefined &&
-    underlying !== undefined &&
-    underlying.outcomeIndex === undefined &&
-    underlying.childMarket_id === outcome.childMarket_id;
-
-  if (context.isPreload || !paired) {
+  // the other side has to be this market's underlying, not the opposite outcome
+  if (context.isPreload || outcome === undefined || market === undefined || market.underlyingToken !== other) {
     return;
   }
 
@@ -33,7 +33,7 @@ indexer.onEvent({ contract: "AlgebraFactory", event: "Pool" }, async ({ event, c
     id: event.params.pool.toLowerCase(),
     childMarket_id: outcome.childMarket_id,
     outcomeToken: outcome.id,
-    underlyingToken: underlying.id,
+    underlyingToken: other,
     outcomeIndex: outcome.outcomeIndex,
     outcomeIsToken0: outcome.id === token0,
     price: 0n,

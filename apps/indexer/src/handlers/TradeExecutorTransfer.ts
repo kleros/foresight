@@ -3,6 +3,36 @@ import { indexer } from "envio";
 import { positionId, predictionId, transferId } from "../utils/ids";
 import { isAvailable } from "../utils/unavailable";
 
+const blankPrediction = (
+  event: { transaction: { hash: string }; block: { number: number; timestamp: number } },
+  executor: string,
+  childMarket: string,
+) => ({
+  id: predictionId(event.transaction.hash, executor, childMarket),
+  executor_id: executor,
+  childMarket_id: childMarket,
+  transactionHash: event.transaction.hash,
+  blockNumber: BigInt(event.block.number),
+  timestamp: BigInt(event.block.timestamp),
+  underlyingDelta: 0n,
+  downDelta: 0n,
+  upDelta: 0n,
+  underlyingBalance: 0n,
+  downBalance: 0n,
+  upBalance: 0n,
+  downSwapUnderlying: 0n,
+  downSwapTokens: 0n,
+  upSwapUnderlying: 0n,
+  upSwapTokens: 0n,
+  downAvgPrice: undefined,
+  upAvgPrice: undefined,
+  downPriceBefore: undefined,
+  downPriceAfter: undefined,
+  upPriceBefore: undefined,
+  upPriceAfter: undefined,
+  impliedPrediction: undefined,
+});
+
 indexer.onEvent(
   {
     contract: "TradeExecutor",
@@ -22,13 +52,22 @@ indexer.onEvent(
     }
 
     const token = event.srcAddress.toLowerCase();
+    const hash = event.transaction.hash;
     const [sender, recipient, knownToken] = await Promise.all([
       context.Executor.get(from),
       context.Executor.get(to),
       context.Token.get(token),
     ]);
 
-    const market = knownToken === undefined ? undefined : await context.ChildMarket.get(knownToken.childMarket_id);
+    // An outcome token names its market. An underlying is shared by every child priced against
+    // it, so its movement in this transaction is summed off the Transfer rows and joins whichever
+    // of those markets the transaction also trades, whichever leg the log lists first.
+    const market =
+      knownToken?.childMarket_id === undefined ? undefined : await context.ChildMarket.get(knownToken.childMarket_id);
+    const conditionalMarkets =
+      knownToken !== undefined && knownToken.childMarket_id === undefined
+        ? await context.ChildMarket.getWhere({ underlyingToken: { _eq: token } })
+        : [];
 
     // The transfer seen from each executor involved: negative leaving the sender, positive
     // entering the recipient. Both at once only when one executor pays another directly.
@@ -39,17 +78,36 @@ indexer.onEvent(
 
     const loadedSides = await Promise.all(
       sides.map(async (side) => {
-        const [previous, moved, down, up, underlying] = await Promise.all([
-          knownToken === undefined
-            ? undefined
-            : context.Prediction.get(predictionId(event.transaction.hash, side.executor, knownToken.childMarket_id)),
-          context.Position.get(positionId(side.executor, token)),
-          ...[market?.downToken, market?.upToken, market?.underlyingToken].map((held) =>
-            isAvailable(held) ? context.Position.get(positionId(side.executor, held)) : undefined,
+        const moved = await context.Position.get(positionId(side.executor, token));
+
+        if (market !== undefined) {
+          const [previous, legs, down, up, underlying] = await Promise.all([
+            context.Prediction.get(predictionId(hash, side.executor, market.id)),
+            context.Transfer.getWhere({ transactionHash: { _eq: hash }, token: { _eq: market.underlyingToken } }),
+            ...[market.downToken, market.upToken, market.underlyingToken].map((held) =>
+              isAvailable(held) ? context.Position.get(positionId(side.executor, held)) : undefined,
+            ),
+          ]);
+
+          const leg = legs
+            .filter((row) => row.executor_id === side.executor)
+            .reduce((sum, row) => sum + row.amount, 0n);
+
+          return { ...side, kind: "outcome" as const, moved, market, previous, leg, down, up, underlying };
+        }
+
+        const [legs, predictions] = await Promise.all([
+          context.Transfer.getWhere({ transactionHash: { _eq: hash }, token: { _eq: token } }),
+          Promise.all(
+            conditionalMarkets.map((candidate) =>
+              context.Prediction.get(predictionId(hash, side.executor, candidate.id)),
+            ),
           ),
         ]);
 
-        return { ...side, previous, moved, down, up, underlying };
+        const leg = legs.filter((row) => row.executor_id === side.executor).reduce((sum, row) => sum + row.amount, 0n);
+
+        return { ...side, kind: "underlying" as const, moved, leg, predictions };
       }),
     );
 
@@ -57,7 +115,8 @@ indexer.onEvent(
       return;
     }
 
-    for (const { executor, amount, counterparty, previous, moved, down, up, underlying } of loadedSides) {
+    for (const loaded of loadedSides) {
+      const { executor, amount, counterparty, moved } = loaded;
       const balance = (moved?.balance ?? 0n) + amount;
 
       context.Position.set({
@@ -69,55 +128,43 @@ indexer.onEvent(
       });
 
       context.Transfer.set({
-        id: transferId(event.transaction.hash, event.logIndex, executor),
+        id: transferId(hash, event.logIndex, executor),
         executor_id: executor,
         token,
         amount,
         counterparty,
         blockNumber: BigInt(event.block.number),
         timestamp: BigInt(event.block.timestamp),
-        transactionHash: event.transaction.hash,
+        transactionHash: hash,
       });
 
-      if (knownToken === undefined || market === undefined) {
+      if (loaded.kind === "outcome") {
+        const { market, previous, leg, down, up, underlying } = loaded;
+        const base = previous ?? blankPrediction(event, executor, market.id);
+
+        context.Prediction.set({
+          ...base,
+          underlyingDelta: leg,
+          downDelta: base.downDelta + (knownToken?.outcomeIndex === 0 ? amount : 0n),
+          upDelta: base.upDelta + (knownToken?.outcomeIndex === 1 ? amount : 0n),
+          underlyingBalance: underlying?.balance ?? 0n,
+          downBalance: market.downToken === token ? balance : (down?.balance ?? 0n),
+          upBalance: market.upToken === token ? balance : (up?.balance ?? 0n),
+        });
         continue;
       }
 
-      const base = previous ?? {
-        id: predictionId(event.transaction.hash, executor, knownToken.childMarket_id),
-        executor_id: executor,
-        childMarket_id: knownToken.childMarket_id,
-        transactionHash: event.transaction.hash,
-        blockNumber: BigInt(event.block.number),
-        timestamp: BigInt(event.block.timestamp),
-        underlyingDelta: 0n,
-        downDelta: 0n,
-        upDelta: 0n,
-        underlyingBalance: 0n,
-        downBalance: 0n,
-        upBalance: 0n,
-        downSwapUnderlying: 0n,
-        downSwapTokens: 0n,
-        upSwapUnderlying: 0n,
-        upSwapTokens: 0n,
-        downAvgPrice: undefined,
-        upAvgPrice: undefined,
-        downPriceBefore: undefined,
-        downPriceAfter: undefined,
-        upPriceBefore: undefined,
-        upPriceAfter: undefined,
-        impliedPrediction: undefined,
-      };
+      if (conditionalMarkets.length === 0) {
+        continue;
+      }
 
-      context.Prediction.set({
-        ...base,
-        underlyingDelta: base.underlyingDelta + (knownToken.outcomeIndex === undefined ? amount : 0n),
-        downDelta: base.downDelta + (knownToken.outcomeIndex === 0 ? amount : 0n),
-        upDelta: base.upDelta + (knownToken.outcomeIndex === 1 ? amount : 0n),
-        underlyingBalance: market.underlyingToken === token ? balance : (underlying?.balance ?? 0n),
-        downBalance: market.downToken === token ? balance : (down?.balance ?? 0n),
-        upBalance: market.upToken === token ? balance : (up?.balance ?? 0n),
-      });
+      const total = loaded.leg + amount;
+
+      // only a market this transaction already traded takes the leg; a bare underlying move is not a prediction
+      for (const prediction of loaded.predictions) {
+        if (prediction === undefined) continue;
+        context.Prediction.set({ ...prediction, underlyingDelta: total, underlyingBalance: balance });
+      }
     }
   },
 );

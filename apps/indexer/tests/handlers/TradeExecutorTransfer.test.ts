@@ -172,6 +172,52 @@ describe("prediction netting", () => {
     t.expect(trade.upDelta).toBe(100n);
   });
 
+  it("attributes a shared underlying to the market this transaction traded, whichever leg comes first", async (t) => {
+    for (const legs of [
+      [transfer(UNDERLYING, EXECUTOR, POOL, 40n), transfer(UP, POOL, EXECUTOR, 100n)],
+      [transfer(UP, POOL, EXECUTOR, 100n), transfer(UNDERLYING, EXECUTOR, POOL, 40n)],
+    ]) {
+      const indexer = createTestIndexer();
+      await seedMarket(indexer, MARKET);
+      // a second child priced against the same parent outcome token
+      await seedMarket(indexer, { ...SECOND_MARKET, underlying: UNDERLYING });
+
+      await indexEvents(indexer, [executorDeployed(OWNER, EXECUTOR), ...legs]);
+
+      const trade = await onlyPrediction(indexer);
+      t.expect(trade.childMarket_id).toBe(CHILD_MARKET);
+      t.expect([trade.underlyingDelta, trade.upDelta]).toEqual([-40n, 100n]);
+    }
+  });
+
+  it("counts only the executor's own underlying, not what it paid another executor in the same transaction", async (t) => {
+    const indexer = createTestIndexer();
+    await seedMarket(indexer, MARKET);
+
+    await indexEvents(indexer, [
+      executorDeployed(OWNER, EXECUTOR),
+      executorDeployed(OTHER_OWNER, OTHER_EXECUTOR),
+      transfer(UNDERLYING, EXECUTOR, OTHER_EXECUTOR, 30n),
+      transfer(UNDERLYING, EXECUTOR, POOL, 40n),
+      transfer(UP, POOL, EXECUTOR, 100n),
+    ]);
+
+    const trade = await onlyPrediction(indexer);
+    t.expect(trade.executor_id).toBe(EXECUTOR);
+    t.expect(trade.underlyingDelta).toBe(-70n);
+  });
+
+  it("records a bare underlying move as balance and history, never a prediction", async (t) => {
+    const indexer = createTestIndexer();
+    await seedMarket(indexer, MARKET);
+
+    await indexEvents(indexer, [executorDeployed(OWNER, EXECUTOR), transfer(UNDERLYING, OWNER, EXECUTOR, 100n)]);
+
+    t.expect((await indexer.Position.getOrThrow(`${EXECUTOR}-${UNDERLYING}`)).balance).toBe(100n);
+    t.expect(await indexer.Transfer.getAll()).toHaveLength(1);
+    t.expect(await indexer.Prediction.getAll()).toHaveLength(0);
+  });
+
   it("keeps each market's trading in its own row", async (t) => {
     const indexer = createTestIndexer();
     await seedMarket(indexer, MARKET);

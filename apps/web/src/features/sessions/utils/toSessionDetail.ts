@@ -17,8 +17,6 @@ const asToken = (value: string): Address | null => (value ? (value as Address) :
 function toSessionOption(child: SessionDetailRow["children"][number], gateway: string): SessionOption {
   const index = Number(child.parentOutcomeIndex);
   const { question, unit } = splitMarketName(child.marketName);
-  const underlying = child.tokens.find((token) => token.outcomeIndex == null);
-
   return {
     market: child.id as Address,
     outcomeIndex: index,
@@ -32,8 +30,6 @@ function toSessionOption(child: SessionDetailRow["children"][number], gateway: s
     upToken: asToken(child.upToken),
     downToken: asToken(child.downToken),
     underlyingToken: asToken(child.underlyingToken),
-    underlyingDecimals: underlying?.decimals ?? null,
-    underlyingSymbol: underlying?.symbol ?? null,
     blocks: displayBlocks(child.blocks, gateway),
   };
 }

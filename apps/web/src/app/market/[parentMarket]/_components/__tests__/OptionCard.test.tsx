@@ -20,8 +20,6 @@ const option: SessionOption = {
   upToken: addresses.upToken,
   downToken: addresses.downToken,
   underlyingToken: addresses.underlyingToken,
-  underlyingDecimals: 18,
-  underlyingSymbol: "sDAI",
   blocks: [{ type: "markdown", body: "Directed *Barbie*." }],
 };
 

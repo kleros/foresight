@@ -125,7 +125,7 @@ export const seedMarket = async (indexer: TestIndexer, market: SeededMarket) => 
   await indexer.Token.set({ id: market.up, childMarket_id: market.id, outcomeIndex: 1, decimals: 18, symbol: "DOWN" });
   await indexer.Token.set({
     id: market.underlying,
-    childMarket_id: market.id,
+    childMarket_id: undefined,
     outcomeIndex: undefined,
     decimals: 18,
     symbol: "sDAI",
