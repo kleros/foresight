@@ -4,7 +4,7 @@ import { CHILD_BATCH_SIZE } from "@/features/session-create/flow/params";
 
 import { expect, test } from "../fixtures";
 import { CreateWizard } from "../utils/create-wizard";
-import { childMarketName, childMarketNames, duneDraft, HERO, ICON, noonUtc } from "../utils/drafts";
+import { childMarketName, childMarketNames, duneDraft, HERO, ICON, openingTimeFor } from "../utils/drafts";
 import { readIpfsBytes, readMetadataDocument } from "../utils/ipfs-gateway";
 import { latestSessionId, readSession, readSessionMarkets, submittedDeploy } from "../utils/session-chain";
 
@@ -77,7 +77,7 @@ test("a deployed session says on chain what was typed into the wizard", async ({
   expect(submitted.parent.minBond).toBe(parseEther(draft.minBond!));
   expect(submitted.parent.category).toBe(draft.category);
   expect(submitted.parent.lang).toBe(draft.language);
-  expect(submitted.parent.openingTime).toBe(noonUtc(draft.decisionDate));
+  expect(submitted.parent.openingTime).toBe(openingTimeFor(draft.decisionDate));
 
   expect(children.map((child) => child.marketName)).toEqual(childMarketNames(draft));
   expect(children.map((child) => child.parentOutcome)).toEqual(labels.map((_, index) => BigInt(index)));
@@ -90,7 +90,9 @@ test("a deployed session says on chain what was typed into the wizard", async ({
     ["VILLENEUVE_DOWN", "VILLENEUVE_UP"],
     ["GERWIG_DOWN", "GERWIG_UP"],
   ]);
-  expect(submitted.children.map((child) => child.openingTime)).toEqual(labels.map(() => noonUtc(draft.decisionDate)));
+  expect(submitted.children.map((child) => child.openingTime)).toEqual(
+    labels.map(() => openingTimeFor(draft.decisionDate)),
+  );
   expect(submitted.children.map((child) => child.minBond)).toEqual(labels.map(() => parseEther(draft.minBond!)));
 });
 
@@ -167,7 +169,7 @@ test("a branch given its own question, bounds and closing time keeps them", asyn
     question: "Narnia opening weekend gross if Gerwig walks",
     lower: "10",
     upper: "20",
-    date: "09212099",
+    date: "092120991200",
   };
   const overriddenName = `${override.question} [${draft.unit}]`;
   const inherited = draft.outcomes[0]!.label;
@@ -197,12 +199,12 @@ test("a branch given its own question, bounds and closing time keeps them", asyn
   expect(children[1]?.marketName).toBe(overriddenName);
   expect(children[1]?.lowerBound).toBe(parseEther(override.lower));
   expect(children[1]?.upperBound).toBe(parseEther(override.upper));
-  expect(submitted.children[1]?.openingTime).toBe(noonUtc(override.date));
+  expect(submitted.children[1]?.openingTime).toBe(openingTimeFor(override.date));
 
   expect(children[0]?.marketName).toBe(childMarketName(draft, inherited));
   expect(children[0]?.lowerBound).toBe(parseEther(draft.lower));
   expect(children[0]?.upperBound).toBe(parseEther(draft.upper));
-  expect(submitted.children[0]?.openingTime).toBe(noonUtc(draft.decisionDate));
+  expect(submitted.children[0]?.openingTime).toBe(openingTimeFor(draft.decisionDate));
 });
 
 test("a multi-categorical decision is created through Seer's multi-categorical path", async ({

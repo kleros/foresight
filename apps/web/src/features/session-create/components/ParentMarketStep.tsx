@@ -1,6 +1,5 @@
 import { useState } from "react";
 
-import { parseDate, today, getLocalTimeZone } from "@internationalized/date";
 import { Button, Datepicker, Switch, TextField } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
@@ -10,11 +9,20 @@ import DragAndDropIcon from "@/assets/svg/drag-and-drop.svg";
 import PlusIcon from "@/assets/svg/plus.svg";
 import TrashIcon from "@/assets/svg/trash.svg";
 
+import { formatUtcInstant, utcInstant } from "@/utils/date";
+
 import { AdvancedToggle, FieldLabel, InfoTip } from "./fields";
 import { SectionHeader } from "./SectionHeader";
 import { useDraftStore } from "../stores/draftStore";
 import type { DraftAssessment } from "../types/draft";
 import { LONG_RUN_NOTE } from "../utils/assessDraft";
+import {
+  closeOnFirstPick,
+  firstPickDefault,
+  localNow,
+  splitCalendarValue,
+  toCalendarValue,
+} from "../utils/calendarValue";
 import { CATEGORIES, LANGUAGES } from "../utils/marketOptions";
 import { scaleToWei } from "../utils/scaleToWei";
 import { slugToken } from "../utils/slugToken";
@@ -22,7 +30,18 @@ import { slugToken } from "../utils/slugToken";
 const hasBrackets = (s: string) => /[[\]]/.test(s);
 
 /** Outcome order is the order the branch markets are created in, so it is deployed state, not presentation. */
-export function ParentMarketStep({ assessment, active }: { assessment: DraftAssessment; active: boolean }) {
+export function ParentMarketStep({
+  assessment,
+  active,
+  now,
+  zone,
+}: {
+  assessment: DraftAssessment;
+  active: boolean;
+  now: Date;
+  /** Empty until mounted: the server sits in a zone of its own. */
+  zone: string;
+}) {
   const { draft, setDraftField, patchOutcome, setOutcomeToken, addOutcome, removeOutcome, moveOutcome } =
     useDraftStore();
   const [advanced, setAdvanced] = useState(false);
@@ -47,6 +66,7 @@ export function ParentMarketStep({ assessment, active }: { assessment: DraftAsse
   const bondOk = bond !== null && bond > 0n;
   const longRunning = assessment.warnings.some((w) => w.step === 1 && w.text.includes(LONG_RUN_NOTE));
   const advancedNeedsAttention = !bondOk || dupTokens.size > 0 || namelessTokens;
+  const decisionUtc = formatUtcInstant(utcInstant(draft.decisionDate, draft.decisionTime));
 
   return (
     <section
@@ -168,17 +188,28 @@ export function ParentMarketStep({ assessment, active }: { assessment: DraftAsse
 
         <div>
           <FieldLabel>
-            <span className="type-label text-fs-text-secondary">Trading until</span>
+            <span className="type-label text-fs-text-secondary">Trading until{zone ? ` (${zone})` : ""}</span>
             <InfoTip text="The moment trading closes. After it the choice is public and there is nothing left to predict, so setting this is really choosing how long the market runs. Every branch uses the same moment unless you give one its own." />
           </FieldLabel>
           <div className="w-55">
             <Datepicker
-              aria-label="Decision date"
-              value={draft.decisionDate ? parseDate(draft.decisionDate) : null}
-              onChange={(v) => setDraftField("decisionDate", v ? v.toString() : "")}
-              minValue={today(getLocalTimeZone())}
+              time
+              aria-label="Decision date and time"
+              value={toCalendarValue(draft.decisionDate, draft.decisionTime)}
+              onChange={(v) => {
+                const { day, time } = splitCalendarValue(v);
+                setDraftField("decisionDate", day);
+                setDraftField("decisionTime", time);
+              }}
+              minValue={localNow(now)}
+              validationBehavior="aria"
+              shouldCloseOnSelect={closeOnFirstPick(draft.decisionDate)}
+              defaultValue={firstPickDefault()}
             />
           </div>
+          {draft.decisionDate ? (
+            <div className="type-caption text-fs-text-secondary pt-2">{decisionUtc} on chain</div>
+          ) : null}
           {longRunning ? (
             <div className="type-caption text-fs-tone-warning pt-2 text-pretty">
               This session {LONG_RUN_NOTE}. Traders&apos; money is tied up until it closes.

@@ -6,7 +6,7 @@ import { ForesightIcon } from "@/components/ui/ForesightIcon";
 import { ScrollFade } from "@/components/ui/ScrollFade";
 import { StatusChip } from "@/components/ui/StatusChip";
 
-import { formatUtcInstant, utcInstant } from "@/utils/date";
+import { formatLocalInstant, utcInstant } from "@/utils/date";
 
 import { paths } from "@/config/paths";
 
@@ -44,7 +44,7 @@ export function SessionPreview({
   const heroUrl = useImageUrl("hero");
   const iconUrl = useImageUrl("icon");
   const unit = draft.unit.trim();
-  const decisionHuman = formatUtcInstant(utcInstant(draft.decisionDate, draft.decisionTime));
+  const decisionHuman = formatLocalInstant(utcInstant(draft.decisionDate, draft.decisionTime));
   const itemCount = `${draft.outcomes.length} ${
     (draft.outcomes.length === 1 ? draft.itemName : draft.itemNamePlural) || "outcomes"
   }`;

@@ -40,6 +40,14 @@ describe("rehydrating a draft saved by an older build", () => {
     expect(draft.name).toBe("Old draft");
   });
 
+  it("keeps the UTC day and time a saved draft holds, as they are", async () => {
+    saved({ decisionDate: "2099-09-20", decisionTime: "12:00", outcomes: [] });
+
+    const draft = await rehydrate();
+
+    expect([draft.decisionDate, draft.decisionTime]).toEqual(["2099-09-20", "12:00"]);
+  });
+
   it("defaults an outcome's missing fields, keeping the label it was saved with", async () => {
     saved({
       outcomes: [

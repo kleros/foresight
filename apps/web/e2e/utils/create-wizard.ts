@@ -19,7 +19,7 @@ export type OutcomeSpec = {
 export type DraftSpec = {
   decision: string;
   outcomes: OutcomeSpec[];
-  /** `MMDDYYYY`, typed into the date field. Trading closes at 12:00 UTC that day. */
+  /** `MMDDYYYYHHmm`, typed into the date field. The clock time is read as UTC. */
   decisionDate: string;
   template: string;
   unit: string;
@@ -42,7 +42,7 @@ export type OverrideSpec = {
   question?: string;
   lower?: string;
   upper?: string;
-  /** `MMDDYYYY`. Never earlier than the decision's own date. */
+  /** `MMDDYYYYHHmm`. Never earlier than the decision's own moment. */
   date?: string;
 };
 
@@ -91,9 +91,9 @@ export class CreateWizard {
     throw new Error(`No outcome called ${label} to remove.`);
   }
 
-  /** @param date `MMDDYYYY` */
+  /** @param date `MMDDYYYYHHmm` */
   async setDecisionDate(date: string) {
-    await this.page.getByRole("spinbutton", { name: /month, Decision date/ }).click();
+    await this.page.getByRole("spinbutton", { name: /month, Decision date and time/ }).click();
     await this.page.keyboard.type(date);
   }
 
@@ -178,7 +178,7 @@ export class CreateWizard {
       await this.page.keyboard.press("Tab");
     }
     if (override.date !== undefined) {
-      await this.page.getByRole("spinbutton", { name: new RegExp(`month, Metric date for ${label}`) }).click();
+      await this.page.getByRole("spinbutton", { name: new RegExp(`month, Metric date and time for ${label}`) }).click();
       await this.page.keyboard.type(override.date);
     }
     await card.getByRole("button", { name: `Done ${label}` }).click();

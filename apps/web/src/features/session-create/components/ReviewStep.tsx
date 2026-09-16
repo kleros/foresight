@@ -2,7 +2,7 @@ import clsx from "clsx";
 
 import { ForesightIcon } from "@/components/ui/ForesightIcon";
 
-import { formatUtcInstant, utcInstant } from "@/utils/date";
+import { formatLocalInstant, utcInstant } from "@/utils/date";
 
 import { Chip } from "./fields";
 import { SectionHeader } from "./SectionHeader";
@@ -24,7 +24,7 @@ export function ReviewStep({
   const { draft } = useDraftStore();
   const ready = assessment.issues.length === 0;
   const unit = draft.unit.trim();
-  const decisionHuman = formatUtcInstant(utcInstant(draft.decisionDate, draft.decisionTime));
+  const decisionHuman = formatLocalInstant(utcInstant(draft.decisionDate, draft.decisionTime));
 
   return (
     <section
@@ -127,7 +127,7 @@ export function ReviewStep({
         {draft.outcomes.map((o, i) => {
           // The name the deploy sends, not a second slugging of it.
           const token = branchToken(o) || "OUTCOME";
-          const metricHuman = formatUtcInstant(metricInstant(draft, o));
+          const metricHuman = formatLocalInstant(metricInstant(draft, o));
           const wei = branchBoundsWei(draft, o);
           return (
             <div key={o.id} className="border-fs-border flex gap-4 border-b px-7 py-5">

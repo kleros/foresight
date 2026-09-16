@@ -5,6 +5,19 @@ const UTC_INSTANT = new Intl.DateTimeFormat("en-GB", {
   hourCycle: "h23",
 });
 
+const ZONE_NAME = new Intl.DateTimeFormat("en-GB", { timeZoneName: "short" });
+
+/** Named components rather than a style: `timeZoneName` cannot be combined with `dateStyle`. */
+const LOCAL_INSTANT = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+  timeZoneName: "short",
+});
+
 /**
  * @param isoDay `YYYY-MM-DD`
  * @param time `HH:mm`, empty for midnight.
@@ -17,6 +30,16 @@ export function utcInstant(isoDay: string, time: string): Date | null {
 
 export function formatUtcInstant(instant: Date | null): string {
   return instant ? `${UTC_INSTANT.format(instant)} UTC` : "not set";
+}
+
+/** User's local timezone. `BST`, `GMT+5:30`, `UTC`. */
+export function localZoneName(): string {
+  return ZONE_NAME.formatToParts(new Date()).find((part) => part.type === "timeZoneName")?.value ?? "";
+}
+
+/** User's local timezone version of the Date */
+export function formatLocalInstant(instant: Date | null): string {
+  return instant ? LOCAL_INSTANT.format(instant) : "not set";
 }
 
 /**

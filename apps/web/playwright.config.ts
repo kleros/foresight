@@ -19,6 +19,8 @@ export default defineConfig({
   use: {
     baseURL: "http://localhost:3000",
     trace: "on-first-retry",
+    // The closing-time fields are typed in the browser's time zone;
+    timezoneId: "GMT",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [

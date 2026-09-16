@@ -10,7 +10,7 @@ import { LOCAL_RPC_URL } from "@/config/chains";
 
 import { expect, test, type HardhatClient } from "../fixtures";
 import { CreateWizard } from "../utils/create-wizard";
-import { childMarketName, childMarketNames, duneDraft, noonUtc } from "../utils/drafts";
+import { childMarketName, childMarketNames, duneDraft, openingTimeFor } from "../utils/drafts";
 import {
   latestSessionId,
   readSession,
@@ -661,5 +661,7 @@ test("a phased deploy resumed after a reload finishes the session it already ope
   expect(children.map((child) => child.lowerBound)).toEqual(outcomes.map(() => parseEther(draft.lower)));
   expect(children.map((child) => child.upperBound)).toEqual(outcomes.map(() => parseEther(draft.upper)));
   expect(submitted.children.map((child) => child.minBond)).toEqual(outcomes.map(() => parseEther(draft.minBond!)));
-  expect(submitted.children.map((child) => child.openingTime)).toEqual(outcomes.map(() => noonUtc(draft.decisionDate)));
+  expect(submitted.children.map((child) => child.openingTime)).toEqual(
+    outcomes.map(() => openingTimeFor(draft.decisionDate)),
+  );
 });

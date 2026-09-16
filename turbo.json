@@ -11,7 +11,7 @@
     "lint": { "dependsOn": ["^lint"] },
     "format": {},
     "format:check": {},
-    "test": { "dependsOn": ["^test"] },
+    "test": { "dependsOn": ["^test"], "env": ["TZ"] },
     "check-types": { "dependsOn": ["^check-types"] }
   }
 }

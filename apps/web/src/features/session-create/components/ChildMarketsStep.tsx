@@ -1,6 +1,5 @@
 import { useState } from "react";
 
-import { getLocalTimeZone, parseDate, today } from "@internationalized/date";
 import { AlertMessage, Datepicker, NumberField, TextField } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
@@ -8,7 +7,7 @@ import { ForesightIcon } from "@/components/ui/ForesightIcon";
 import InfoCard from "@/components/ui/InfoCard";
 import { Select } from "@/components/ui/Select";
 
-import { formatUtcInstant, utcInstant } from "@/utils/date";
+import { formatLocalInstant, formatUtcInstant, utcInstant } from "@/utils/date";
 
 import { Chip, FieldLabel, InfoTip } from "./fields";
 import { ScalarRangeTrack } from "./ScalarRangeTrack";
@@ -17,6 +16,13 @@ import { useDraftStore } from "../stores/draftStore";
 import type { DraftAssessment } from "../types/draft";
 import { LONG_RUN_NOTE } from "../utils/assessDraft";
 import { branchBounds, branchMarketName, branchQuestion, parseNumber } from "../utils/branchFields";
+import {
+  closeOnFirstPick,
+  firstPickDefault,
+  localNow,
+  splitCalendarValue,
+  toCalendarValue,
+} from "../utils/calendarValue";
 import { OUTCOME_PLACEHOLDER } from "../utils/composeMarketName";
 import { resolutionExample } from "../utils/resolutionExample";
 import { scaleToWei } from "../utils/scaleToWei";
@@ -29,11 +35,16 @@ export function ChildMarketsStep({
   assessment,
   active,
   activeBranch,
+  now,
+  zone,
 }: {
   assessment: DraftAssessment;
   active: boolean;
   /** The branch picked in the rail, if any. */
   activeBranch: number | null;
+  now: Date;
+  /** Empty until mounted: the server sits in a zone of its own. */
+  zone: string;
 }) {
   const { draft, setDraftField, patchOutcome, toggleOverride } = useDraftStore();
   const [openBranch, setOpenBranch] = useState<string | null>(null);
@@ -51,7 +62,7 @@ export function ChildMarketsStep({
   const sharedPays = resolutionExample({ lower: scaleToWei(draft.lower), upper: scaleToWei(draft.upper) }, draft.unit);
 
   const decision = utcInstant(draft.decisionDate, draft.decisionTime);
-  const decisionHuman = formatUtcInstant(decision);
+  const decisionHuman = formatLocalInstant(decision);
 
   const exampleOutcome = draft.outcomes[Math.min(activeBranch ?? 0, draft.outcomes.length - 1)] ?? draft.outcomes[0];
   const metricError = assessment.issues.some((issue) => issue.text.includes("closes before the decision"));
@@ -313,13 +324,27 @@ export function ChildMarketsStep({
                             </div>
                           </div>
                           <div>
-                            <div className="type-label text-fs-text-secondary pb-1">Trading until, for this branch</div>
+                            <div className="type-label text-fs-text-secondary pb-1">
+                              Trading until for this branch{zone ? ` (${zone})` : ""}
+                            </div>
                             <Datepicker
-                              aria-label={`Metric date for ${o.label}`}
-                              value={o.metricDate ? parseDate(o.metricDate) : null}
-                              onChange={(v) => patchOutcome(o.id, { metricDate: v ? v.toString() : "" })}
-                              minValue={draft.decisionDate ? parseDate(draft.decisionDate) : today(getLocalTimeZone())}
+                              time
+                              aria-label={`Metric date and time for ${o.label}`}
+                              value={toCalendarValue(o.metricDate, o.metricTime)}
+                              onChange={(v) => {
+                                const { day, time } = splitCalendarValue(v);
+                                patchOutcome(o.id, { metricDate: day, metricTime: time });
+                              }}
+                              minValue={toCalendarValue(draft.decisionDate, draft.decisionTime) ?? localNow(now)}
+                              validationBehavior="aria"
+                              shouldCloseOnSelect={closeOnFirstPick(o.metricDate)}
+                              defaultValue={firstPickDefault()}
                             />
+                            {o.metricDate ? (
+                              <div className="type-caption text-fs-text-secondary pt-2">
+                                {formatUtcInstant(utcInstant(o.metricDate, o.metricTime))} on chain
+                              </div>
+                            ) : null}
                             {longRunning(i) ? (
                               <div className="type-caption text-fs-tone-warning pt-2 text-pretty">
                                 This branch {LONG_RUN_NOTE}.

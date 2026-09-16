@@ -18,7 +18,7 @@ const DUNE: DraftSpec = {
     { label: "Villeneuve", color: "#2f6fed", details: "Directed the first two." },
     { label: "Gerwig", color: "#c2185b", details: "Coming off Narnia." },
   ],
-  decisionDate: "09202099",
+  decisionDate: "092020991200",
   template: "Opening weekend gross if {outcome} directs",
   unit: "$M",
   lower: "0.5",
@@ -53,13 +53,15 @@ export function childMarketNames(draft: DraftSpec): string[] {
 }
 
 /**
- * Trading closes at noon UTC on the day picked, which is what the screen says.
+ * The moment the question is answerable on Reality.eth. In UTC
  *
- * @param date `MMDDYYYY`, as typed into the date field.
+ * @param typed `MMDDYYYYHHmm`, as typed into the date field.
  */
-export function noonUtc(date: string): number {
-  const month = Number(date.slice(0, 2));
-  const day = Number(date.slice(2, 4));
-  const year = Number(date.slice(4));
-  return Math.floor(Date.UTC(year, month - 1, day, 12, 0, 0) / 1000);
+export function openingTimeFor(typed: string): number {
+  const month = Number(typed.slice(0, 2));
+  const day = Number(typed.slice(2, 4));
+  const year = Number(typed.slice(4, 8));
+  const hour = Number(typed.slice(8, 10));
+  const minute = Number(typed.slice(10, 12));
+  return Math.floor(Date.UTC(year, month - 1, day, hour, minute, 0) / 1000);
 }

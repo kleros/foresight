@@ -25,6 +25,8 @@ import { interrupted } from "@/features/session-create/utils/deployStages";
 import EnsureAuth from "@/components/auth/EnsureAuth";
 import { ConnectWallet } from "@/components/wallet/ConnectWallet";
 
+import { localZoneName } from "@/utils/date";
+
 import { uploadRestriction } from "@/lib/atlas/uploads";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
@@ -44,6 +46,7 @@ export function CreateSessionWizard() {
   // empty-state HTML before rehydrating.
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
+  const zone = hydrated ? localZoneName() : "";
 
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -194,8 +197,14 @@ export function CreateSessionWizard() {
 
         {interrupted(progress) ? <ResumeBanner progress={progress} onContinue={() => goToStep(5)} /> : null}
 
-        <ParentMarketStep assessment={assessment} active={step === 1} />
-        <ChildMarketsStep assessment={assessment} active={step === 2} activeBranch={activeBranch} />
+        <ParentMarketStep assessment={assessment} active={step === 1} now={now} zone={zone} />
+        <ChildMarketsStep
+          assessment={assessment}
+          active={step === 2}
+          activeBranch={activeBranch}
+          now={now}
+          zone={zone}
+        />
         <DisplayMetadataStep assessment={assessment} active={step === 3} restriction={uploadLimits} />
         <ReviewStep assessment={assessment} active={step === 4} onGoToStep={goToStep} />
         <DeployStep

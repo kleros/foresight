@@ -16,10 +16,13 @@ import { ChildMarketsStep } from "../ChildMarketsStep";
 
 const READY = draftAssessment({ branchOk: [true, true], branchWarn: [false, false] });
 
+/** Fixed, so nothing in the suite turns on the real clock. */
+const NOW = new Date(2026, 7, 20, 12, 0, 0);
+
 const draft = () => useDraftStore.getState().draft;
 
 function renderStep() {
-  return render(<ChildMarketsStep assessment={READY} active activeBranch={0} />);
+  return render(<ChildMarketsStep assessment={READY} active activeBranch={0} now={NOW} zone="UTC" />);
 }
 
 beforeEach(() => {

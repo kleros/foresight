@@ -19,6 +19,7 @@ export type OutcomeDraft = {
   childQuestion: string;
   lower: string;
   upper: string;
+  /** UTC day and `HH:mm` */
   metricDate: string;
   metricTime: string;
 };
@@ -37,7 +38,10 @@ export type SessionDraft = {
   category: string;
   language: string;
   minBond: string;
-  /** The decision date: `parent.openingTime`, the end of the trading period. */
+  /**
+   * The decision date: `parent.openingTime`, the end of the trading period.
+   * A UTC day and `HH:mm`; the picker shows them in the creator's time zone.
+   */
   decisionDate: string;
   decisionTime: string;
   // child markets
