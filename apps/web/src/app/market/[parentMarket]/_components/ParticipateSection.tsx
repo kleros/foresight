@@ -1,5 +1,4 @@
-import { Button } from "@kleros/ui-components-library";
-
+import { EstimateCsvDialog } from "@/features/predict/components/EstimateCsvDialog";
 import type { SessionDetail } from "@/features/sessions/types";
 import { optionNoun } from "@/features/sessions/utils/optionNoun";
 import { TradeWallet } from "@/features/trade-executor/components/TradeWallet/TradeWallet";
@@ -8,7 +7,13 @@ import { SectionCard } from "@/components/ui/SectionCard";
 
 import { toWalletMarket } from "./toWalletMarket";
 
-export function ParticipateSection({ session }: { session: SessionDetail }) {
+interface ParticipateSectionProps {
+  session: SessionDetail;
+  marketEstimates: Record<string, number | undefined>;
+  canEstimate: boolean;
+}
+
+export function ParticipateSection({ session, marketEstimates, canEstimate }: ParticipateSectionProps) {
   const noun = optionNoun(session.itemNamePlural);
   const market = toWalletMarket(session);
 
@@ -27,7 +32,13 @@ export function ParticipateSection({ session }: { session: SessionDetail }) {
       </SectionCard>
 
       <div className="flex w-full justify-end">
-        <Button text="Upload CSV Predictions" variant="secondary" isDisabled />
+        <EstimateCsvDialog
+          parentMarket={session.parentMarket}
+          scales={session.options}
+          marketEstimates={marketEstimates}
+          noun={noun}
+          isDisabled={!canEstimate}
+        />
       </div>
     </section>
   );

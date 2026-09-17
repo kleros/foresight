@@ -6,9 +6,13 @@ import type { ReactNode } from "react";
 
 import { isAddress } from "viem";
 
+import { EstimateActions } from "@/features/predict/components/EstimateActions";
+import { useEstimateHydration } from "@/features/predict/hooks/useEstimateHydration";
+import { snapEstimate } from "@/features/predict/utils/estimates";
 import { useSession } from "@/features/sessions/api/getSession";
 import { useSessionChart } from "@/features/sessions/api/getSessionChart";
 import { useSessionStats } from "@/features/sessions/api/getSessionStats";
+import { latestEstimates } from "@/features/sessions/utils/latestEstimates";
 import { optionNoun } from "@/features/sessions/utils/optionNoun";
 import { sessionStatus } from "@/features/sessions/utils/toSessionDetail";
 
@@ -29,6 +33,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
   const session = useSession(parentMarket);
   const stats = useSessionStats(session.data?.id);
   const chart = useSessionChart(session.data ?? undefined);
+  useEstimateHydration();
 
   if (!isAddress(parentMarket, { strict: false }) || session.data === null) {
     return (
@@ -54,30 +59,51 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
   }
 
   const detail = session.data;
+  const status = sessionStatus(detail, new Date());
+  const noun = optionNoun(detail.itemNamePlural);
+  // the pool's number is an unbounded float; held on each option's grid so "at the market" is exact
+  const latest = chart.data ? latestEstimates(chart.data) : {};
+  const marketEstimates = Object.fromEntries(
+    detail.options.flatMap((option) => {
+      const raw = latest[option.market.toLowerCase()];
+      return raw === undefined ? [] : [[option.market.toLowerCase(), snapEstimate(raw, option)]];
+    }),
+  ) as Record<string, number | undefined>;
 
   return (
     <PageColumn>
-      <SessionHeader
-        session={detail}
-        status={sessionStatus(detail, new Date())}
-        stats={stats.data}
-        statsPending={stats.isPending}
-      />
+      <SessionHeader session={detail} status={status} stats={stats.data} statsPending={stats.isPending} />
       {chart.isPending ? (
         <ChartSkeleton />
+      ) : chart.isError ? (
+        <p className="text-fs-text-secondary mt-6 text-sm">Could not load the price history. Reload in a moment.</p>
       ) : chart.data !== undefined ? (
         <SessionChart
           data={chart.data}
           startTime={Math.floor(detail.openedAt.getTime() / 1000)}
           endTime={detail.closesAt ? Math.floor(detail.closesAt.getTime() / 1000) : null}
-          noun={optionNoun(detail.itemNamePlural)}
+          noun={noun}
         />
       ) : null}
       <div className="mt-12 flex flex-col gap-4">
-        <ParticipateSection session={detail} />
+        <ParticipateSection session={detail} marketEstimates={marketEstimates} canEstimate={status !== "setting-up"} />
         {detail.options.map((option) => (
-          <OptionCard key={option.market} option={option} />
+          <OptionCard
+            key={option.market}
+            option={option}
+            parentMarket={detail.parentMarket}
+            status={status}
+            marketEstimate={marketEstimates[option.market.toLowerCase()]}
+            isMarketPending={chart.isPending}
+            isMarketUnavailable={chart.isError}
+          />
         ))}
+        <EstimateActions
+          parentMarket={detail.parentMarket}
+          scales={detail.options}
+          marketEstimates={marketEstimates}
+          noun={noun}
+        />
         <PredictCard />
         <AdvancedSection parentMarket={detail.parentMarket} />
       </div>

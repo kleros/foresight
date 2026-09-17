@@ -2,10 +2,11 @@ import { useState, type FormEvent } from "react";
 
 import { Button, Form } from "@kleros/ui-components-library";
 
+import { Dialog } from "@/components/ui/Dialog";
+
 import { parseAmount } from "@/utils/amount";
 
 import { AmountField } from "./AmountField";
-import { WalletDialog } from "./WalletDialog";
 
 interface AmountDialogProps {
   isOpen: boolean;
@@ -48,7 +49,7 @@ export function AmountDialog({
   };
 
   return (
-    <WalletDialog isOpen={isOpen} onClose={onClose} title={title} hint={hint}>
+    <Dialog isOpen={isOpen} onClose={onClose} title={title} hint={hint}>
       <Form className="flex flex-col items-center gap-4" onSubmit={submit}>
         <AmountField
           value={input}
@@ -68,6 +69,6 @@ export function AmountDialog({
           isDisabled={amount === null || exceedsAvailable || isPending}
         />
       </Form>
-    </WalletDialog>
+    </Dialog>
   );
 }

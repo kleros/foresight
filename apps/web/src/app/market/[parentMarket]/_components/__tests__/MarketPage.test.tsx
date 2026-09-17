@@ -93,6 +93,14 @@ describe("MarketPage", () => {
 
   /* The chart itself is canvas: rendered states would need the real component under
      jsdom or a stub asserting its own scaffolding, so they are verified live instead. */
+  it("says the price history failed instead of drawing nothing", async () => {
+    answerQueries(Promise.reject(new Error("boom")));
+
+    renderPage();
+
+    expect(await screen.findByText("Could not load the price history. Reload in a moment.")).toBeInTheDocument();
+  });
+
   it("holds the chart's place while the price history loads", async () => {
     answerQueries(new Promise(() => {}));
 

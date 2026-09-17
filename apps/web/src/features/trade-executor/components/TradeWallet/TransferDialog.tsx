@@ -3,12 +3,13 @@ import { useState, type FormEvent } from "react";
 import { Button, Form } from "@kleros/ui-components-library";
 import type { Address } from "viem";
 
+import { Dialog } from "@/components/ui/Dialog";
+
 import { parseAmount } from "@/utils/amount";
 
 import type { Asset } from "@/lib/trade-executor/types";
 
 import { TokenAmountField } from "./TokenAmountField";
-import { WalletDialog } from "./WalletDialog";
 import { useFunds } from "../../api/getFunds";
 
 export interface TokenChoice {
@@ -71,7 +72,7 @@ export function TransferDialog({
   };
 
   return (
-    <WalletDialog isOpen={isOpen} onClose={onClose} title={title} hint={hint}>
+    <Dialog isOpen={isOpen} onClose={onClose} title={title} hint={hint}>
       <Form className="flex flex-col items-center gap-4" onSubmit={submit}>
         <TokenAmountField
           value={input}
@@ -93,6 +94,6 @@ export function TransferDialog({
           isDisabled={amount === null || exceedsAvailable || isPending || !source}
         />
       </Form>
-    </WalletDialog>
+    </Dialog>
   );
 }
