@@ -27,13 +27,13 @@ const sessionResult = { Session: [{ ...sessionDetailColumns, children: [] }] };
 const queryName = (document: DocumentNode) =>
   document.definitions.find((d): d is OperationDefinitionNode => d.kind === "OperationDefinition")?.name?.value;
 
-/** Answers each query by name; the chart's answer (or a promise of it) comes from the caller. */
-function answerQueries(chart: unknown) {
+/** Answers each query by name; the chart's answer is built per call, so a rejection exists only once a query adopts it. */
+function answerQueries(chart: () => unknown) {
   fetchMock.mockImplementation(async (document) => {
     if (queryName(document) === "SessionDetail") {
       return { Session: [{ ...sessionDetailColumns, children: [sessionChildRow()] }] };
     }
-    if (queryName(document) === "SessionChart") return chart;
+    if (queryName(document) === "SessionChart") return chart();
     return { Prediction: [], Pool: [] };
   });
 }
@@ -94,7 +94,7 @@ describe("MarketPage", () => {
   /* The chart itself is canvas: rendered states would need the real component under
      jsdom or a stub asserting its own scaffolding, so they are verified live instead. */
   it("says the price history failed instead of drawing nothing", async () => {
-    answerQueries(Promise.reject(new Error("boom")));
+    answerQueries(() => Promise.reject(new Error("boom")));
 
     renderPage();
 
@@ -102,7 +102,7 @@ describe("MarketPage", () => {
   });
 
   it("holds the chart's place while the price history loads", async () => {
-    answerQueries(new Promise(() => {}));
+    answerQueries(() => new Promise(() => {}));
 
     const { container } = renderPage();
     await screen.findByRole("heading", { level: 1, name: "Dune: Part Three, director" });

@@ -16,7 +16,7 @@ export const sessionColumns = {
   openingTime: dune.closesAtSeconds,
 } satisfies SessionCoreRow;
 
-/** One deployed child with its token rows; a suite overrides what it asserts. */
+/** One deployed child; a suite overrides what it asserts. */
 export function sessionChildRow(overrides: Partial<SessionDetailRow["children"][number]> = {}) {
   return {
     id: addresses.childMarkets[0],
@@ -31,11 +31,6 @@ export function sessionChildRow(overrides: Partial<SessionDetailRow["children"][
     upToken: addresses.upToken,
     downToken: addresses.downToken,
     underlyingToken: addresses.underlyingToken,
-    tokens: [
-      { outcomeIndex: 0, decimals: 18, symbol: "DUNE-DOWN" },
-      { outcomeIndex: 1, decimals: 18, symbol: "DUNE-UP" },
-      { outcomeIndex: null, decimals: 18, symbol: "sDAI" },
-    ],
     ...overrides,
   } satisfies SessionDetailRow["children"][number];
 }

@@ -48,11 +48,6 @@ const SESSION_DETAIL = graphql(`
         upToken
         downToken
         underlyingToken
-        tokens {
-          outcomeIndex
-          decimals
-          symbol
-        }
       }
     }
   }

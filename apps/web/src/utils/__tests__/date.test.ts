@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { fileStamp, formatUtcInstant, utcInstant } from "../date";
+import { fileStamp, formatLocalInstant, formatUtcInstant, utcInstant } from "../date";
 
 describe("utcInstant", () => {
   it("composes an ISO day and HH:mm into a UTC date", () => {
