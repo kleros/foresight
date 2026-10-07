@@ -104,7 +104,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
           marketEstimates={marketEstimates}
           noun={noun}
         />
-        <PredictCard />
+        <PredictCard session={detail} marketEstimates={marketEstimates} />
         <AdvancedSection parentMarket={detail.parentMarket} />
       </div>
     </PageColumn>

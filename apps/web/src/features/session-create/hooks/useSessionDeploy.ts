@@ -2,19 +2,14 @@
 
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 
-import {
-  createFlowRunStore,
-  createMemoryStorage,
-  createViemTxGateway,
-  fromWebStorage,
-  type FlowRunStore,
-} from "@foresight/tx-orchestrator";
+import { createViemTxGateway, type FlowRunStore } from "@foresight/tx-orchestrator";
 import { useAtlasProvider } from "@kleros/kleros-app";
 import { sendTransaction } from "@wagmi/core";
 import { useAccount } from "wagmi";
 
 import { createMetadataUploader } from "@/lib/atlas/ipfs";
 import { DOCUMENT_UPLOAD_ROLE, IMAGE_UPLOAD_ROLE } from "@/lib/atlas/uploads";
+import { createRunStore } from "@/lib/flowRunStore";
 import { fetchGraphql } from "@/lib/graphql/batcher";
 import { publicClient } from "@/lib/web3/public-client";
 import { wagmiConfig } from "@/lib/web3/wagmi";
@@ -30,11 +25,6 @@ import { toDeployInput, toMetadataInput } from "../deploy/toDeployInput";
 import type { SessionDeployDriver, SessionDeployProgress } from "../deploy/types";
 import { useDraftStore } from "../stores/draftStore";
 import { getImageFile, imageSlot } from "../stores/imageStore";
-
-function createRunStore(): FlowRunStore {
-  const storage = typeof window === "undefined" ? createMemoryStorage() : fromWebStorage(window.localStorage);
-  return createFlowRunStore({ storage });
-}
 
 export function useSessionDeploy(outcomeCount: number): {
   driver: SessionDeployDriver;

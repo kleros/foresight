@@ -28,6 +28,8 @@ export interface SessionOption extends OptionScale {
   question: string;
   upToken: Address | null;
   downToken: Address | null;
+  /** Burnt with UP and DOWN when a set is merged back; the router takes the whole partition. */
+  invalidToken: Address | null;
   underlyingToken: Address | null;
   /** Display blocks with image uris already resolved against the gateway. */
   blocks: DisplayBlock[];

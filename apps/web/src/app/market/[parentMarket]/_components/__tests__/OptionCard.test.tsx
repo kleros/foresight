@@ -20,6 +20,7 @@ const option: SessionOption = {
   lowerBound: 0,
   upperBound: 500,
   upToken: addresses.upToken,
+  invalidToken: addresses.childInvalidToken,
   downToken: addresses.downToken,
   underlyingToken: addresses.underlyingToken,
   blocks: [{ type: "markdown", body: "Directed *Barbie*." }],

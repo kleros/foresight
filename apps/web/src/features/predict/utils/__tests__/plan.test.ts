@@ -1,0 +1,160 @@
+import { describe, expect, it } from "vitest";
+
+import type { PoolLiquidity } from "@/types/pool";
+
+import { BUY_BUDGET_SHARE, MIN_LEG_WEI, planBuys, planSells, type OptionTarget } from "../plan";
+
+const WAD = 10n ** 18n;
+
+/** Sqrt prices exact at X96, so a volume to target is a round number. */
+const AT = { "0.0625": 2n ** 94n, "0.25": 2n ** 95n, "1": 2n ** 96n } as const;
+
+const pool = (sqrtPriceX96: bigint, liquidity = WAD): PoolLiquidity => ({
+  sqrtPriceX96,
+  liquidity,
+  outcomeIsToken0: true,
+});
+
+/** Deep enough that a leg is never capped by the pool, only by the budget. */
+const DEEP = 10n ** 30n;
+
+const option = (overrides: Partial<OptionTarget> = {}): OptionTarget => ({
+  pools: { up: pool(AT["1"]), down: pool(AT["0.25"], DEEP) },
+  targetPriceWad: WAD / 4n,
+  held: { up: 0n, down: 0n, invalid: 0n },
+  splitAmount: WAD,
+  ...overrides,
+});
+
+describe("planSells", () => {
+  it("sells the side the market holds above the estimate", () => {
+    // UP sits at 1 and the estimate puts it at 0.25, so UP sells and DOWN does not
+    const legs = planSells(option());
+
+    expect(legs).toEqual([{ side: "up", amountIn: 1000000000000000000n }]);
+  });
+
+  it("sells no more than the executor will hold", () => {
+    const legs = planSells(option({ splitAmount: WAD / 4n }));
+
+    expect(legs).toEqual([{ side: "up", amountIn: 250000000000000000n }]);
+  });
+
+  it("counts what the executor already holds alongside the split", () => {
+    const legs = planSells(option({ held: { up: WAD / 4n, down: 0n, invalid: 0n }, splitAmount: WAD / 4n }));
+
+    expect(legs).toEqual([{ side: "up", amountIn: 500000000000000000n }]);
+  });
+
+  it("drops a leg too small to be worth its gas", () => {
+    expect(planSells(option({ splitAmount: MIN_LEG_WEI - 1n }))).toEqual([]);
+    expect(planSells(option({ splitAmount: MIN_LEG_WEI }))).toEqual([{ side: "up", amountIn: MIN_LEG_WEI }]);
+  });
+
+  it("sells both sides when the two pools disagree with the estimate the same way", () => {
+    const legs = planSells(option({ pools: { up: pool(AT["1"]), down: pool(AT["1"]) }, targetPriceWad: WAD / 4n }));
+
+    expect(legs.map((leg) => leg.side)).toEqual(["up", "down"]);
+  });
+
+  it("leaves a pool that never priced alone, whichever side of it the outcome is", () => {
+    const asToken1 = { sqrtPriceX96: 0n, liquidity: WAD, outcomeIsToken0: false };
+
+    expect(planSells(option({ pools: { up: asToken1, down: pool(AT["1"]) } })).map((leg) => leg.side)).toEqual([
+      "down",
+    ]);
+  });
+
+  it("leaves a pool that never priced alone", () => {
+    const legs = planSells(option({ pools: { up: pool(0n), down: pool(AT["1"]) } }));
+
+    expect(legs.map((leg) => leg.side)).toEqual(["down"]);
+  });
+});
+
+describe("planBuys", () => {
+  it("spends the sells' proceeds on the side being bought", () => {
+    const plan = planBuys(option(), [{ side: "up", amountIn: WAD, underlyingOut: (WAD * 4n) / 10n }]);
+
+    // the whole UP balance went, so nothing pairs off: 0.4 proceeds at 98 of 100
+    expect(plan.mergeAmount).toBe(0n);
+    expect(plan.legs).toEqual([{ side: "down", amountIn: (((WAD * 4n) / 10n) * BUY_BUDGET_SHARE) / 100n }]);
+  });
+
+  it("merges the pairs left over and spends those too", () => {
+    const plan = planBuys(option(), [{ side: "up", amountIn: WAD / 2n, underlyingOut: WAD / 5n }]);
+
+    // 0.5 UP and 1 DOWN remain, so 0.5 merges back; 0.2 + 0.5 at 98 of 100
+    expect(plan.mergeAmount).toBe(WAD / 2n);
+    expect(plan.legs).toEqual([{ side: "down", amountIn: ((WAD / 5n + WAD / 2n) * BUY_BUDGET_SHARE) / 100n }]);
+  });
+
+  it("merges no more sets than it holds INVALID for", () => {
+    const bought = option({
+      pools: { up: pool(AT["1"]), down: pool(AT["0.25"], DEEP) },
+      held: { up: WAD, down: WAD, invalid: WAD / 4n },
+      splitAmount: 0n,
+    });
+
+    const plan = planBuys(bought, []);
+
+    expect(plan.mergeAmount).toBe(WAD / 4n);
+  });
+
+  it("splits the budget between two buys by how far each has to travel", () => {
+    // the estimate puts UP at 0.75 and so DOWN at 0.25: UP climbs 0.5 from 0.25, DOWN climbs
+    // 0.1875 from 0.0625, and 11 of collateral merges to a budget of 10.78
+    const both = option({
+      pools: { up: pool(AT["0.25"], DEEP), down: pool(AT["0.0625"], DEEP) },
+      targetPriceWad: (WAD * 75n) / 100n,
+      held: { up: WAD * 11n, down: WAD * 11n, invalid: WAD * 11n },
+      splitAmount: 0n,
+    });
+
+    const plan = planBuys(both, []);
+
+    // 0.5 and 0.1875 of 0.6875 are 8 and 3 elevenths of the budget
+    const budget = (WAD * 11n * BUY_BUDGET_SHARE) / 100n;
+    expect(plan.legs).toEqual([
+      { side: "up", amountIn: (budget * 8n) / 11n },
+      { side: "down", amountIn: (budget * 3n) / 11n },
+    ]);
+  });
+
+  it("keeps the pool's own limit when it is the smaller of the two", () => {
+    const shallow = option({
+      pools: { up: pool(AT["1"]), down: pool(AT["0.25"], WAD) },
+      targetPriceWad: WAD / 4n,
+    });
+
+    const plan = planBuys(shallow, [{ side: "up", amountIn: WAD, underlyingOut: WAD * 100n }]);
+
+    // the budget dwarfs what moving DOWN from 0.25 to 0.75 actually takes
+    expect(plan.legs[0]!.amountIn).toBeLessThan((WAD * 100n * BUY_BUDGET_SHARE) / 100n);
+  });
+
+  it("does nothing for an option the market already agrees with", () => {
+    const agreed = option({
+      pools: { up: pool(AT["0.25"], DEEP), down: pool(0n) },
+      targetPriceWad: WAD / 4n,
+      held: { up: WAD, down: WAD, invalid: WAD },
+      splitAmount: 0n,
+    });
+
+    const plan = planBuys(agreed, []);
+
+    // nothing was sold and nothing will be bought, so its pairs are left where they are
+    expect(plan.legs).toEqual([]);
+    expect(plan.mergeAmount).toBe(0n);
+  });
+
+  it("merges the pairs a sell leaves behind even when there is nothing to buy", () => {
+    const bothSelling = option({ pools: { up: pool(AT["1"]), down: pool(AT["1"]) } });
+
+    const plan = planBuys(bothSelling, [{ side: "up", amountIn: WAD / 2n, underlyingOut: WAD / 5n }]);
+
+    // half the UP went, so half of what was split is still paired and comes back as underlying
+    expect(plan.legs).toEqual([]);
+    expect(plan.mergeAmount).toBe(WAD / 2n);
+  });
+});

@@ -1,14 +1,11 @@
-import { fromWad } from "@/utils/amount";
+import { priceWadToEstimate } from "@/utils/optionPrice";
 
 import type { SessionChartQuery } from "@/lib/graphql/generated/graphql";
 
 import type { SessionChartData, SessionChartPoint, SessionOption } from "../types";
 
-const toEstimate = (underlyingPerOutcome: string | null | undefined, option: SessionOption): number | undefined => {
-  if (underlyingPerOutcome == null) return undefined;
-
-  return option.lowerBound + fromWad(underlyingPerOutcome) * (option.upperBound - option.lowerBound);
-};
+const toEstimate = (underlyingPerOutcome: string | null | undefined, option: SessionOption): number | undefined =>
+  underlyingPerOutcome == null ? undefined : priceWadToEstimate(BigInt(underlyingPerOutcome), option);
 
 export function toSessionChart(result: SessionChartQuery, options: SessionOption[]): SessionChartData {
   // Indexer ids are lowercase; only the caller's option addresses need normalising.

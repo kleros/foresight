@@ -15,7 +15,8 @@
     "codegen": "graphql-codegen",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:fork": "FORK_RPC_URL=${FORK_RPC_URL:-http://127.0.0.1:8545} node --env-file-if-exists=.env.local --env-file=.env.gnosis-fork \"$(yarn bin vitest)\" run predict.fork"
   },
   "dependencies": {
     "@foresight/contracts": "workspace:*",
@@ -28,6 +29,7 @@
     "@kleros/ui-components-library": "^3.8.0",
     "@reown/appkit": "^1.8.22",
     "@reown/appkit-adapter-wagmi": "^1.8.22",
+    "@seer-pm/lens": "1.5.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@tanstack/react-query": "^5.101.3",
     "@wagmi/core": "^3.6.3",

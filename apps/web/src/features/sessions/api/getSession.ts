@@ -47,6 +47,7 @@ const SESSION_DETAIL = graphql(`
         blocks
         upToken
         downToken
+        invalidToken
         underlyingToken
       }
     }

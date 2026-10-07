@@ -80,6 +80,10 @@ type ChildMarket {
 
   downToken: String! @index
   upToken: String! @index
+
+  "burnt alongside DOWN and UP when a set is merged back; the router takes the whole partition"
+  invalidToken: String!
+
   underlyingToken: String! @index
 
   keyword: String!

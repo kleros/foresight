@@ -30,6 +30,7 @@ export function sessionChildRow(overrides: Partial<SessionDetailRow["children"][
     blocks: [],
     upToken: addresses.upToken,
     downToken: addresses.downToken,
+    invalidToken: addresses.childInvalidToken,
     underlyingToken: addresses.underlyingToken,
     ...overrides,
   } satisfies SessionDetailRow["children"][number];

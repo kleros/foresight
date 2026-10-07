@@ -1,6 +1,8 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "globalEnv": ["CI", "NODE_ENV", "MOCK_ATLAS_PORT", "MOCK_ATLAS_STORE_DIR", "MOCK_ATLAS_UPSTREAM_GATEWAYS"],
+  "//": "FORK_* configure the gnosis-fork integration test, which skips when FORK_RPC_URL is unset.",
+  "globalPassThroughEnv": ["FORK_RPC_URL", "FORK_HASURA_URL", "FORK_HASURA_SECRET", "FORK_UPSTREAM_RPC_URL"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

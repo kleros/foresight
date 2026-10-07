@@ -42,7 +42,8 @@
     "simulate:liquidity:gnosis-fork": "yarn workspace @foresight/contracts simulate:liquidity:gnosis-fork",
     "-----": "-----------------------------------------------------------------------------------------",
     "changelog": "conventional-changelog --infile CHANGELOG.md --same-file --release-count 0 && prettier --write CHANGELOG.md",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:fork": "yarn workspace web test:fork"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.8.1",
