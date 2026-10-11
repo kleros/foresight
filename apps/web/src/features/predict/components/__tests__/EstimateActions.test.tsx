@@ -22,7 +22,7 @@ const scales: OptionScale[] = [
 const marketEstimates = { [FIRST]: 312, [SECOND]: 280 };
 
 const renderActions = () =>
-  render(<EstimateActions parentMarket={PARENT} scales={scales} marketEstimates={marketEstimates} noun="directors" />);
+  render(<EstimateActions parentMarket={PARENT} scales={scales} marketEstimates={marketEstimates} />);
 
 beforeEach(() => {
   useEstimateStore.setState({ estimates: {} });
@@ -38,25 +38,22 @@ describe("EstimateActions", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("counts the set estimates against the options that can take one", () => {
-    useEstimateStore.getState().setEstimate(PARENT, FIRST, 250);
-
-    render(
-      <EstimateActions parentMarket={PARENT} scales={scales} marketEstimates={{ [FIRST]: 312 }} noun="directors" />,
-    );
-
-    expect(screen.getByText("1 of 1 directors set")).toBeInTheDocument();
-  });
-
   it("resets this session's estimates and leaves other sessions alone", async () => {
     useEstimateStore.getState().setEstimate(PARENT, FIRST, 250);
     useEstimateStore.getState().setEstimate(addresses.deployer, FIRST, 250);
     renderActions();
 
-    await userEvent.click(screen.getByRole("button", { name: "Reset estimates" }));
+    await userEvent.click(screen.getByRole("button", { name: "Reset predictions" }));
 
     expect(useEstimateStore.getState().estimates).toEqual({ [addresses.deployer]: { [FIRST]: 250 } });
-    expect(screen.queryByText(/directors set/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reset predictions" })).toBeNull();
+  });
+
+  it("cannot reset once the session has stopped trading", () => {
+    useEstimateStore.getState().setEstimate(PARENT, FIRST, 250);
+    render(<EstimateActions parentMarket={PARENT} scales={scales} marketEstimates={marketEstimates} isDisabled />);
+
+    expect(screen.getByRole("button", { name: "Reset predictions" })).toBeDisabled();
   });
 
   it("exports the set estimates as a CSV stamped with the local date and time", async () => {
@@ -64,7 +61,7 @@ describe("EstimateActions", () => {
     useEstimateStore.getState().setEstimate(PARENT, FIRST, 250);
     renderActions();
 
-    await userEvent.click(screen.getByRole("button", { name: "Export estimates" }));
+    await userEvent.click(screen.getByRole("button", { name: "Export predictions" }));
 
     expect(downloadTextFile).toHaveBeenCalledWith(
       expect.stringMatching(/^estimates-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}\.csv$/),

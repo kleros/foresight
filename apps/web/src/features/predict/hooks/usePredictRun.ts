@@ -34,9 +34,13 @@ export interface PredictRunInput {
   sDaiAdapter: Address | null;
   /** What the visitor set, already turned into target prices. */
   options: () => PredictOption[];
-  /** In the token the visitor chose. */
+  /** What has to be added to the trade wallet, in the token the visitor chose. */
   deposit: () => bigint;
   depositNative: () => boolean;
+  /** Collateral the prediction splits: what the trade wallet holds plus what is added. */
+  collateralIn: () => bigint;
+  /** What the trade wallet held when the visitor pressed predict. */
+  collateralBefore: () => bigint;
   onComplete?: () => void;
 }
 
@@ -95,13 +99,13 @@ export function usePredictRun(input: PredictRunInput | null): {
       snapshot: (): PredictSnapshot => {
         const now = latest.current;
         if (!now) throw new Error("This session is no longer open for predictions.");
-        const deposit = now.deposit();
         return {
           options: now.options(),
-          deposit,
+          deposit: now.deposit(),
           depositNative: now.depositNative(),
-          // An xDAI deposit is read back once it lands; the adapter's output is not known now.
-          collateralIn: now.depositNative() ? 0n : deposit,
+          // An xDAI deposit's collateral is read back once it lands; this is the estimate until then.
+          collateralIn: now.collateralIn(),
+          collateralBefore: now.collateralBefore(),
           startedAt: Math.floor(Date.now() / 1000),
         };
       },

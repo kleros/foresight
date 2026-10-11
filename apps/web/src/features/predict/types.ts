@@ -7,3 +7,6 @@ export interface SelectedEstimate {
   marketEstimate: number;
   direction: "higher" | "lower";
 }
+
+/** The token the visitor pays in: the session's collateral, or xDAI where it can be turned into it. */
+export type PayToken = "collateral" | "native";

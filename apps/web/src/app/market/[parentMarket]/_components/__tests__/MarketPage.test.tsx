@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen } from "@testing-library/react";
 import type { DocumentNode, OperationDefinitionNode } from "graphql";
@@ -19,6 +21,7 @@ vi.mock("@/config/ipfs", () => ({ IPFS_GATEWAY: "https://cdn.example.link/ipfs" 
 vi.mock("@/features/trade-executor/components/TradeWallet/TradeWallet", () => ({
   TradeWallet: () => null,
 }));
+vi.mock("@/components/wallet/EnsureChain", () => ({ default: ({ children }: { children: ReactNode }) => children }));
 
 const fetchMock = vi.mocked(fetchGraphql);
 

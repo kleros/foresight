@@ -249,6 +249,35 @@ describe("the deposit step", () => {
   });
 });
 
+describe("skipping a deposit that has already landed", () => {
+  const canSkip = (collateral: bigint, snap: Parameters<typeof snapshot>[0]) => {
+    const step = planPredict(snapshot(snap), deps({ reader: fakeReader({ collateral }) })).find(
+      (each) => each.id === STEP_ID.deposit,
+    )!;
+    return step.canSkip!(ctx(), snapshot(snap));
+  };
+
+  it("does not mistake funds already in the trade wallet for the deposit", async () => {
+    await expect(canSkip(WAD * 6n, { deposit: WAD * 4n, collateralBefore: WAD * 6n })).resolves.toBe(false);
+  });
+
+  it("skips once the trade wallet holds what it had plus the deposit", async () => {
+    await expect(canSkip(WAD * 10n, { deposit: WAD * 4n, collateralBefore: WAD * 6n })).resolves.toBe(true);
+  });
+
+  it("takes any rise over the starting balance as an xDAI deposit landing", async () => {
+    const snap = { deposit: WAD * 5n, depositNative: true, collateralBefore: WAD * 6n };
+
+    await expect(canSkip(WAD * 6n, snap)).resolves.toBe(false);
+    await expect(canSkip(WAD * 6n + 1n, snap)).resolves.toBe(true);
+  });
+
+  it("compares against the deposit alone for a run persisted without a starting balance", async () => {
+    await expect(canSkip(WAD, { deposit: WAD })).resolves.toBe(true);
+    await expect(canSkip(WAD - 1n, { deposit: WAD })).resolves.toBe(false);
+  });
+});
+
 describe("createPredictHooks", () => {
   const deposited = {
     stepId: STEP_ID.deposit,

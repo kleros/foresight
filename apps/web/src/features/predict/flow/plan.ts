@@ -142,6 +142,15 @@ async function predictCalls(args: {
   return calls;
 }
 
+/**
+ * The executor balance that shows the deposit has landed. An xDAI deposit mints an amount only
+ * the chain knows, so any rise over the starting balance counts.
+ */
+export function depositLandedAt(snap: PredictSnapshot): bigint {
+  if (snap.collateralBefore === undefined) return snap.deposit;
+  return snap.collateralBefore + (snap.depositNative ? 1n : snap.deposit);
+}
+
 export function planPredict(snapshot: PredictSnapshot, deps: PredictDeps): Step[] {
   if (snapshot.options.length === 0) {
     throw new Error("There are no estimates to predict.");
@@ -163,7 +172,7 @@ export function planPredict(snapshot: PredictSnapshot, deps: PredictDeps): Step[
       // A tab that died with the wallet open leaves no hash to reconcile, so the balance is the
       // only witness that the money already moved. It cannot tell this deposit from an earlier
       // one, which is the safe way round: a skipped deposit spends nothing twice.
-      canSkip: async (ctx, snap) => (await deps.reader.collateralBalance(ctx.executor)) >= snap.deposit,
+      canSkip: async (ctx, snap) => (await deps.reader.collateralBalance(ctx.executor)) >= depositLandedAt(snap),
       build: (ctx, snap) => {
         if (!snap.depositNative) {
           return depositTx({ executor: ctx.executor, asset: { token: ctx.collateral, amount: snap.deposit } });

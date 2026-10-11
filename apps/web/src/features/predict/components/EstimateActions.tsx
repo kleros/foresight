@@ -1,4 +1,9 @@
+import { Button } from "@kleros/ui-components-library";
+import clsx from "clsx";
+
 import LightButton from "@/components/ui/LightButton";
+
+import DownloadIcon from "@/assets/svg/download.svg";
 
 import { fileStamp } from "@/utils/date";
 import { downloadTextFile } from "@/utils/download";
@@ -13,18 +18,16 @@ interface EstimateActionsProps {
   parentMarket: string;
   scales: OptionScale[];
   marketEstimates: Record<string, number | undefined>;
-  /** The creator's plural noun, already lowercased. */
-  noun: string;
+  isDisabled?: boolean;
 }
 
 /** Reset and export, for the estimates that would become predictions. Nothing until one is set. */
-export function EstimateActions({ parentMarket, scales, marketEstimates, noun }: EstimateActionsProps) {
+export function EstimateActions({ parentMarket, scales, marketEstimates, isDisabled }: EstimateActionsProps) {
   const estimates = useSessionEstimates(parentMarket);
   const resetEstimates = useEstimateStore((state) => state.resetEstimates);
 
   const selected = selectedEstimates(scales, estimates, marketEstimates);
   if (selected.length === 0) return null;
-  const settable = scales.filter((scale) => marketEstimates[scale.market.toLowerCase()] !== undefined).length;
 
   const exportCsv = () =>
     downloadTextFile(
@@ -34,14 +37,30 @@ export function EstimateActions({ parentMarket, scales, marketEstimates, noun }:
     );
 
   return (
-    <div className="flex w-full flex-wrap items-center justify-between gap-2">
-      <p className="text-fs-text-secondary text-sm">
-        {selected.length} of {settable} {noun} set
-      </p>
-      <div className="flex items-center gap-2">
-        <LightButton small text="Reset estimates" onPress={() => resetEstimates(parentMarket)} />
-        <LightButton small text="Export estimates" onPress={exportCsv} />
-      </div>
+    <div
+      className={clsx(
+        "flex w-full flex-wrap justify-between gap-4",
+        "flex-col-reverse items-start sm:flex-row sm:items-center",
+      )}
+    >
+      <Button
+        variant="secondary"
+        small
+        text="Reset predictions"
+        isDisabled={isDisabled}
+        onPress={() => resetEstimates(parentMarket)}
+      />
+      <LightButton
+        small
+        text="Export predictions"
+        onPress={exportCsv}
+        className={clsx(
+          "flex-row-reverse p-0",
+          "[&_.button-text]:text-fs-accent [&_.button-text]:text-sm [&_.button-text]:font-normal",
+          "hover:bg-transparent",
+        )}
+        icon={<DownloadIcon className="[&_path]:fill-fs-accent! ml-2" />}
+      />
     </div>
   );
 }

@@ -49,6 +49,8 @@ export interface PredictSnapshot {
    * once an xDAI deposit lands, since the adapter's output is not known in advance.
    */
   collateralIn: bigint;
+  /** The executor's collateral when the run was planned. Absent on runs persisted before it existed. */
+  collateralBefore?: bigint;
   startedAt: number;
 }
 
