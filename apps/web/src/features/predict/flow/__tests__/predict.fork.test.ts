@@ -87,18 +87,18 @@ interface ForkSession {
   }>;
 }
 
-async function newestSession(): Promise<ForkSession> {
+async function newestSessionWithPools(): Promise<ForkSession> {
   const response = await fetch(HASURA_URL, {
     method: "POST",
     headers: { "content-type": "application/json", "x-hasura-admin-secret": HASURA_SECRET },
     body: JSON.stringify({
-      query: `{ Session(order_by: {openedAt: desc}, limit: 1) { id parentMarket collateralToken
+      query: `{ Session(where: {children: {pools: {id: {_is_null: false}}}}, order_by: {openedAt: desc}, limit: 1) { id parentMarket collateralToken
         children { id upToken downToken invalidToken underlyingToken lowerBound upperBound } } }`,
     }),
   });
   const body = (await response.json()) as { data: { Session: ForkSession[] } };
   const session = body.data.Session[0];
-  if (!session) throw new Error("No session indexed. Run `yarn simulate:session:gnosis-fork --liquidity` first.");
+  if (!session) throw new Error("No session with pools indexed. Run `yarn simulate:session:gnosis-fork --liquidity` first.");
   return session;
 }
 
@@ -114,7 +114,7 @@ describe("the predict flow, against a gnosis fork", () => {
     client = createPublicClient({ chain: gnosis, transport }) as PublicClient;
     wallet = createWalletClient({ account, chain: gnosis, transport });
     await grantLensQuoter(FORK_RPC_URL!);
-    session = await newestSession();
+    session = await newestSessionWithPools();
   }, 120_000);
 
   it.skipIf(!FORK_RPC_URL)(
