@@ -41,7 +41,7 @@ export function createPredictRun(args: {
   gateway: TxGateway;
   reader: PredictReader;
   quoter: SwapQuoter;
-  /** Keyed per session, so two sessions' runs cannot collide in storage. */
+  /** Keyed per chain, owner and session, so no two runs share a stored record. */
   flowId: string;
   ctx: () => PredictCtx;
   snapshot: () => PredictSnapshot;
