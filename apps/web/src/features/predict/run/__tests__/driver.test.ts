@@ -15,7 +15,7 @@ import {
   WAD,
 } from "../../flow/__tests__/support/fakes";
 import { STEP_ID } from "../../flow/plan";
-import type { OptionChainState, PredictSnapshot } from "../../flow/types";
+import type { OptionChainState, PredictReader, PredictSnapshot } from "../../flow/types";
 import { MIN_LEG_WEI } from "../../utils/plan";
 import { sqrtPriceX96FromPrice } from "../../utils/poolMath";
 import { predictSteps } from "../../utils/predictSteps";
@@ -49,10 +49,14 @@ afterEach(() => {
 });
 
 async function runToEnd(snap: PredictSnapshot, state: () => OptionChainState) {
+  return runToEndWith(snap, fakeReader({ deployed: true, state }));
+}
+
+async function runToEndWith(snap: PredictSnapshot, reader: PredictReader) {
   const gateway = fakeGateway();
   const driver = createPredictRun({
     gateway,
-    reader: fakeReader({ deployed: true, state }),
+    reader,
     quoter: fakeQuoter(),
     flowId: `predict-test-${drivers.length}`,
     ctx: () => ctx(),
@@ -189,6 +193,15 @@ describe("createPredictRun and the trade wallet's balance", () => {
       tx.to === addresses.executor ? (parentSplit(tx.data!) ?? []) : [],
     );
     expect(splits).toEqual([WAD * 6n + WAD * 3n]);
+  });
+
+  it("goes ahead when the cache is high but the trade wallet still covers the amount", async () => {
+    const result = await runToEndWith(
+      snapshot({ deposit: 0n, collateralIn: WAD * 4n, collateralBefore: WAD * 6n }),
+      fakeReader({ deployed: true, collateral: WAD * 5n }),
+    );
+
+    expect(result.progress.stage).toBe("complete");
   });
 
   it("resumes a recovered run whose deposit already landed without asking for it again", async () => {
