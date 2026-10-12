@@ -11,13 +11,16 @@ import { formatEstimate } from "@/utils/formatEstimate";
 
 import type { SelectedEstimate } from "../types";
 
+/** An estimate as the list shows it; a stored run's has no market estimate to compare against. */
+export type ListedEstimate = Pick<SelectedEstimate, "scale" | "value"> & Partial<Pick<SelectedEstimate, "direction">>;
+
 /** The popup's title and the estimates going into it, each removable while more than one is left. */
 export function PredictList({
   selected,
   onRemove,
   isReadOnly,
 }: {
-  selected: SelectedEstimate[];
+  selected: ListedEstimate[];
   onRemove: (market: string) => void;
   isReadOnly: boolean;
 }) {
@@ -55,10 +58,12 @@ export function PredictList({
                     </span>
                   </div>
                 </div>
-                <span className={clsx("text-xs sm:text-sm", higher ? "text-fs-tone-success" : "text-fs-tone-error")}>
-                  <Arrow className="mr-1 inline size-3 [&_path]:fill-current" aria-hidden />
-                  {higher ? "Higher" : "Lower"} than the market
-                </span>
+                {estimate.direction ? (
+                  <span className={clsx("text-xs sm:text-sm", higher ? "text-fs-tone-success" : "text-fs-tone-error")}>
+                    <Arrow className="mr-1 inline size-3 [&_path]:fill-current" aria-hidden />
+                    {higher ? "Higher" : "Lower"} than the market
+                  </span>
+                ) : null}
                 {selected.length > 1 ? (
                   <LightButton
                     className="absolute top-1/2 right-2 -translate-y-1/2 p-1"

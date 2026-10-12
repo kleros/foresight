@@ -292,10 +292,11 @@ function seedSubmittedDeposit(chain: Chain, store: FlowRunStore): Hash {
   return hash;
 }
 
-/** Reopens and presses predict, then waits until the run either reuses `hash` or signs a fresh deposit. */
+/** Reopens, resumes once the stored run is up for review, then waits until it reuses `hash` or signs a fresh deposit. */
 async function reopenAndPredict(chain: Chain, store: FlowRunStore, hash: Hash, depositsBefore: number) {
   const waitedBefore = chain.waitedOn.length;
   const popup = open(chain, store);
+  await vi.waitFor(() => expect(running()).toBe(false));
   popup.predict();
   await vi.waitFor(() => {
     const reused = chain.waitedOn.slice(waitedBefore).includes(hash) || popup.onSuccess.mock.calls.length > 0;

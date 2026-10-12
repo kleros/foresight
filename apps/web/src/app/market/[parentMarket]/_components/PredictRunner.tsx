@@ -14,6 +14,7 @@ import { useExecutor } from "@/features/trade-executor/api/getExecutor";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
+import { toSavedEstimates } from "./toPredictOptions";
 import { useHasPredicted } from "./useHasPredicted";
 import { usePredictExecution } from "./usePredictExecution";
 import { usePredictFunding } from "./usePredictFunding";
@@ -68,8 +69,13 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
     native: token.id === "native",
   });
   const stage = progress?.stage ?? "idle";
+  const recovered = progress?.recovered;
   const isRunning = stage === "quoting" || stage === "signing" || stage === "confirming";
   const retryable = stage === "halted" && Boolean(progress?.failure?.retryable);
+
+  useEffect(() => {
+    driver?.recover();
+  }, [driver]);
 
   useEffect(() => {
     if (stage !== "complete") return;
@@ -80,7 +86,9 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
   // a transaction that may still mine stays stored, so the next popup recovers it instead of signing again
   const pendingHash = progress?.pendingHash;
   // a reverted batch is rebuilt from the snapshot the run started with; a pending hash is only checked
-  const canRetry = retryable && !pendingHash && progress?.failure?.reason === "reverted";
+  const canRetry = recovered
+    ? stage === "review" || retryable
+    : retryable && !pendingHash && progress?.failure?.reason === "reverted";
 
   const close = () => {
     if (stage === "halted" && !pendingHash) driver?.reset();
@@ -92,16 +100,23 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
       driver?.retry();
       return;
     }
+    if (stage === "review") {
+      driver?.resume();
+      return;
+    }
+    // a stored run is resumed or closed, never replaced by the form behind it
+    if (recovered) return;
     if (stage === "halted" && !pendingHash) driver?.reset();
     setFrozenToAdd(funding?.toAdd);
     driver?.start();
   };
 
+  const runToken = recovered?.depositNative ? NATIVE : collateral;
   const steps = predictSteps({
     wallet: predicted ? { address: predicted, deployed: Boolean(executor.data?.deployed) } : null,
-    toAdd: (stage === "idle" ? undefined : frozenToAdd) ?? funding?.toAdd ?? 0n,
-    symbol: collateral.symbol,
-    decimals: collateral.decimals,
+    toAdd: recovered?.deposit ?? (stage === "idle" ? undefined : frozenToAdd) ?? funding?.toAdd ?? 0n,
+    symbol: runToken.symbol,
+    decimals: runToken.decimals,
     progress,
   });
 
@@ -109,7 +124,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
     <PredictDialog
       isOpen
       onClose={close}
-      selected={selected}
+      selected={recovered ? toSavedEstimates(session, recovered.options) : selected}
       onRemove={(market) => clearEstimate(session.parentMarket, market)}
       amount={amount}
       onAmountChange={setAmount}
@@ -126,6 +141,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
       skipped={progress?.skipped.length ?? 0}
       isRunning={isRunning}
       canRetry={canRetry}
+      recovered={recovered && { deposit: recovered.deposit, symbol: runToken.symbol, decimals: runToken.decimals }}
       notice={
         // once a run is going its own state is the story, not what the wallet is doing now
         isRunning ? undefined : notice({ owner, onRightChain: chainId === DEFAULT_CHAIN_ID, ready })

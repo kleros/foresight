@@ -55,6 +55,10 @@ export function createPredictRun(args: {
   let noRoute = false;
   /** Set while a sent transaction's outcome is read from the chain; the run itself stays stopped meanwhile. */
   let reconciling = false;
+  /** Set once a stored run is restored, until it is thrown away: the popup shows its snapshot, not the form. */
+  let recovered = false;
+  /** A restored run, reconciled, waiting for the visitor to resume it. */
+  let reviewing = false;
   let cached: PredictProgress;
 
   const deps: PredictDeps = {
@@ -106,6 +110,7 @@ export function createPredictRun(args: {
     const run = orchestrator.getRun();
     if (!run) return failure ? "halted" : checking ? "quoting" : "idle";
     if (reconciling && !failure) return "confirming";
+    if (reviewing && !failure) return "review";
 
     switch (run.status) {
       case "completed":
@@ -147,6 +152,7 @@ export function createPredictRun(args: {
       batches: batchRows.length,
       failure,
       ...(pendingHash ? { pendingHash } : {}),
+      ...(recovered && run ? { recovered: run.snapshot } : {}),
     };
   }
 
@@ -201,8 +207,8 @@ export function createPredictRun(args: {
   });
 
   /**
-   * A run left behind by a closed tab. Its transactions may be on chain, so it is reconciled and
-   * continued rather than thrown away — starting over would sign the deposit a second time.
+   * A run left behind by a closed tab. Its transactions may be on chain, so it is restored and
+   * reconciled rather than thrown away, then held for review: nothing is signed until `resume`.
    */
   const recoverRun = detached(async () => {
     const stored = args.store?.load<PredictSnapshot, PredictCtx>(args.flowId);
@@ -213,7 +219,12 @@ export function createPredictRun(args: {
     if (!restored) return;
 
     planned = [];
-    const found = await orchestrator.reconcileInFlight();
+    recovered = true;
+    reconciling = true;
+    notify();
+    const found = await orchestrator.reconcileInFlight().finally(() => {
+      reconciling = false;
+    });
     if (found.outcome === "reverted") return;
     // A deposit signed as the tab died left no hash, and the balance cannot show it until it mines.
     if (found.outcome === "unknown" && found.stepId === STEP_ID.deposit) {
@@ -223,7 +234,8 @@ export function createPredictRun(args: {
         return;
       }
     }
-    await orchestrator.resume();
+    reviewing = true;
+    notify();
   });
 
   /** Pins the trade wallet's balance before anything is signed, and checks a route exists. */
@@ -269,6 +281,18 @@ export function createPredictRun(args: {
       startRun();
     },
 
+    recover() {
+      if (checking || orchestrator.getStatus() !== "idle") return;
+      recoverRun();
+    },
+
+    resume() {
+      if (!reviewing) return;
+      reviewing = false;
+      // The chain is read again: a transaction pending at review may have mined or dropped since.
+      reconcileRun();
+    },
+
     retry() {
       const again = retryFailed;
       // An option that would not route last time gets another go, so last time's list is dropped.
@@ -280,6 +304,8 @@ export function createPredictRun(args: {
     reset() {
       checking = undefined;
       orchestrator.trash(args.flowId);
+      recovered = false;
+      reviewing = false;
       skipped.length = 0;
       planned = [];
       report(undefined);

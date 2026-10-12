@@ -2,13 +2,14 @@
 
 import { Button, Modal } from "@kleros/ui-components-library";
 import clsx from "clsx";
+import { formatUnits } from "viem";
 
 import InfoCard from "@/components/ui/InfoCard";
 import { ScrollFade } from "@/components/ui/ScrollFade";
 
-import type { PayToken, SelectedEstimate } from "../types";
+import type { PayToken } from "../types";
 import { PredictAmountSection, type PayTokenChoice } from "./PredictAmountSection";
-import { PredictList } from "./PredictList";
+import { PredictList, type ListedEstimate } from "./PredictList";
 import { PredictStepsTimeline } from "./PredictStepsTimeline";
 import type { Funding } from "../utils/funding";
 import type { PredictSteps } from "../utils/predictSteps";
@@ -16,7 +17,7 @@ import type { PredictSteps } from "../utils/predictSteps";
 interface PredictDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  selected: SelectedEstimate[];
+  selected: ListedEstimate[];
   onRemove: (market: string) => void;
   amount: bigint | undefined;
   onAmountChange: (amount: bigint | undefined) => void;
@@ -34,6 +35,8 @@ interface PredictDialogProps {
   isRunning: boolean;
   /** A stopped run can pick up where it stopped, with the amount and estimates it was started with. */
   canRetry: boolean;
+  /** A stored run under review: its own deposit replaces the amount form, and Resume replaces Predict. */
+  recovered?: { deposit: bigint; symbol: string; decimals: number };
   /** What the visitor has to do before this prediction can be made, if anything. */
   notice?: string;
   /** Starts a run, or picks a stopped one up again. */
@@ -58,10 +61,11 @@ export function PredictDialog({
   skipped,
   isRunning,
   canRetry,
+  recovered,
   notice,
   onPredict,
 }: PredictDialogProps) {
-  const isLocked = isRunning || canRetry;
+  const isLocked = isRunning || canRetry || recovered !== undefined;
   const tooMuch = funding !== null && amount !== undefined && amount > funding.available;
   // with nothing held, an empty amount has nothing to trade with
   const nothingToTrade = isFirstPrediction && (funding?.collateralIn ?? 0n) === 0n;
@@ -82,17 +86,28 @@ export function PredictDialog({
       <div className="flex min-h-0 w-full flex-col items-center">
         <PredictList selected={selected} onRemove={onRemove} isReadOnly={isLocked} />
         <ScrollFade className="min-h-32 w-full">
-          <PredictAmountSection
-            amount={amount}
-            onAmountChange={onAmountChange}
-            tokens={tokens}
-            token={token}
-            onTokenChange={onTokenChange}
-            funding={funding}
-            collateral={collateral}
-            isFirstPrediction={isFirstPrediction}
-            isReadOnly={isLocked}
-          />
+          {recovered ? (
+            <div className="mb-4 flex flex-col items-center gap-1 text-center">
+              <p className="text-fs-text-secondary text-sm">
+                This prediction did not finish. Resuming it uses the amount and estimates it started with.
+              </p>
+              <p className="text-fs-text-primary text-base font-semibold">
+                Deposit: {formatUnits(recovered.deposit, recovered.decimals)} {recovered.symbol}
+              </p>
+            </div>
+          ) : (
+            <PredictAmountSection
+              amount={amount}
+              onAmountChange={onAmountChange}
+              tokens={tokens}
+              token={token}
+              onTokenChange={onTokenChange}
+              funding={funding}
+              collateral={collateral}
+              isFirstPrediction={isFirstPrediction}
+              isReadOnly={isLocked}
+            />
+          )}
           <PredictStepsTimeline steps={steps} />
           {skipped > 0 ? (
             <p className="text-fs-text-secondary text-center text-sm">
@@ -106,12 +121,13 @@ export function PredictDialog({
           <div className="flex flex-wrap gap-3.5">
             <Button text="Cancel" variant="secondary" onPress={onClose} isDisabled={isRunning} />
             <Button
-              text={canRetry ? "Try the rest" : "Predict"}
+              text={recovered ? "Resume" : canRetry ? "Try the rest" : "Predict"}
               onPress={onPredict}
               isDisabled={
                 isRunning ||
                 notice !== undefined ||
-                (!canRetry && (selected.length === 0 || funding === null || tooMuch || nothingToTrade))
+                (!canRetry &&
+                  (recovered !== undefined || selected.length === 0 || funding === null || tooMuch || nothingToTrade))
               }
               isLoading={isRunning}
             />

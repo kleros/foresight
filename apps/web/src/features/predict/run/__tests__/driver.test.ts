@@ -237,7 +237,9 @@ describe("createPredictRun and the trade wallet's balance", () => {
     drivers.push(driver);
 
     driver.start();
-    // a restored run reads as halted until it resumes, so only a reason counts as stopping
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("review"));
+    expect(gateway.signRequests).toEqual([]);
+    driver.resume();
     await vi.waitFor(() => {
       const progress = driver.getProgress();
       expect(progress.stage === "complete" || progress.failure !== undefined).toBe(true);

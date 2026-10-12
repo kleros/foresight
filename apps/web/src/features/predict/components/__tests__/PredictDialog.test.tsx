@@ -235,6 +235,32 @@ describe("predicting", () => {
     expect(screen.getByRole("button", { name: "Try the rest" })).toBeDisabled();
   });
 
+  it("shows a stored run's own deposit in place of the amount form, and offers only Resume", async () => {
+    const onPredict = vi.fn();
+    render(
+      <PredictDialog
+        {...props()}
+        selected={[{ scale: scale(GERWIG, "Greta Gerwig"), value: 410 }]}
+        recovered={{ deposit: 7_250_000_000_000_000_001n, symbol: "sDAI", decimals: 18 }}
+        canRetry
+        onPredict={onPredict}
+      />,
+    );
+
+    expect(screen.getByText("Deposit: 7.250000000000000001 sDAI")).toBeInTheDocument();
+    expect(screen.getByText("410 $M")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Max" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Predict" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Resume" }));
+    expect(onPredict).toHaveBeenCalled();
+  });
+
+  it("will not resume a stored run that cannot be picked up", () => {
+    render(<PredictDialog {...props()} recovered={{ deposit: WAD, symbol: "sDAI", decimals: 18 }} canRetry={false} />);
+
+    expect(screen.getByRole("button", { name: "Resume" })).toBeDisabled();
+  });
+
   it("says which estimates were left out", () => {
     render(<PredictDialog {...props()} skipped={1} />);
 

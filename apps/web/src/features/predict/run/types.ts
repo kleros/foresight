@@ -1,6 +1,8 @@
 import type { TxErrorCause } from "@foresight/tx-orchestrator";
 import type { Address, Hash } from "viem";
 
+import type { PredictSnapshot } from "../flow/types";
+
 /**
  * `no-route`: no option can be moved toward its estimate with what the run has to spend.
  * `balance`: the trade wallet holds less than the popup counted on.
@@ -18,6 +20,8 @@ export type PredictStage =
   | "signing"
   /** Broadcast, waiting for the chain. */
   | "confirming"
+  /** A stored run, reconciled with the chain, waiting for the visitor to resume it. */
+  | "review"
   /** Stopped with something the visitor can act on. */
   | "halted"
   | "complete";
@@ -42,10 +46,17 @@ export interface PredictProgress {
   failure?: { reason: PredictFailureReason; retryable: boolean };
   /** A stopped run's broadcast transaction whose receipt has not been seen: it may still mine. */
   pendingHash?: Hash;
+  /** The snapshot of a run restored from storage. It, not the popup's form, is what the run signs. */
+  recovered?: PredictSnapshot;
 }
 
 export interface PredictDriver {
+  /** Starts a run from the form, or loads a stored one for review instead. */
   start(): void;
+  /** Loads a stored run for review, reconciled with the chain. Signs nothing. */
+  recover(): void;
+  /** Continues a run under review. */
+  resume(): void;
   retry(): void;
   /** Throws the run away, including anything persisted. Not for a run with a `pendingHash`. */
   reset(): void;

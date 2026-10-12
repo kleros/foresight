@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAccount } from "wagmi";
 
 import type { PredictDialog } from "@/features/predict/components/PredictDialog";
+import { snapshot } from "@/features/predict/flow/__tests__/support/fakes";
 import { usePredictRun, type PredictRunInput } from "@/features/predict/hooks/usePredictRun";
 import type { PredictDriver, PredictProgress, PredictStage } from "@/features/predict/run/types";
 import type { SelectedEstimate } from "@/features/predict/types";
@@ -86,6 +87,8 @@ const progressAt = (stage: PredictStage, retryable = false): PredictProgress => 
 
 const driver = {
   start: vi.fn<PredictDriver["start"]>(),
+  recover: vi.fn<PredictDriver["recover"]>(),
+  resume: vi.fn<PredictDriver["resume"]>(),
   retry: vi.fn<PredictDriver["retry"]>(),
   reset: vi.fn<PredictDriver["reset"]>(),
   dispose: vi.fn<PredictDriver["dispose"]>(),
@@ -272,6 +275,42 @@ describe("PredictRunner, the dialog's controls", () => {
     fireEvent.click(screen.getByText("close"));
 
     expect(driver.reset).toHaveBeenCalled();
+    expect(view.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks the run for a stored prediction as the popup opens", () => {
+    mount();
+
+    expect(driver.recover).toHaveBeenCalledTimes(1);
+    expect(driver.start).not.toHaveBeenCalled();
+  });
+
+  it("resumes a stored run under review instead of starting one from the form", () => {
+    progress = { ...progressAt("review"), recovered: { ...snapshot(), deposit: 7n } };
+    mount();
+    fireEvent.click(screen.getByText("predict"));
+
+    expect(driver.resume).toHaveBeenCalledTimes(1);
+    expect(driver.start).not.toHaveBeenCalled();
+    expect(driver.reset).not.toHaveBeenCalled();
+  });
+
+  it("neither starts nor clears a stored run that stopped and cannot be retried", () => {
+    progress = { ...progressAt("halted", false), recovered: snapshot() };
+    mount();
+    fireEvent.click(screen.getByText("predict"));
+
+    expect(driver.start).not.toHaveBeenCalled();
+    expect(driver.reset).not.toHaveBeenCalled();
+    expect(driver.resume).not.toHaveBeenCalled();
+  });
+
+  it("keeps a stored run under review when closed", () => {
+    progress = { ...progressAt("review"), recovered: snapshot() };
+    const view = mount();
+    fireEvent.click(screen.getByText("close"));
+
+    expect(driver.reset).not.toHaveBeenCalled();
     expect(view.onClose).toHaveBeenCalledTimes(1);
   });
 
