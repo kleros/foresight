@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { PoolLiquidity } from "@/types/pool";
 
-import { BUY_BUDGET_SHARE, MIN_LEG_WEI, planBuys, planSells, type OptionTarget, type SwapLeg } from "../plan";
+import { MIN_LEG_WEI, planBuys, planSells, type OptionTarget, type SwapLeg } from "../plan";
 
 const WAD = 10n ** 18n;
 
@@ -23,6 +23,9 @@ const sized = (legs: SwapLeg[]) => legs.map(({ side, amountIn }) => ({ side, amo
 
 /** Deep enough that a leg is never capped by the pool, only by the budget. */
 const DEEP = 10n ** 30n;
+
+/** Hundredths of a percent, as the app quotes; the buys then get 98 of every 100. */
+const SLIPPAGE_BPS = 100;
 
 const option = (overrides: Partial<OptionTarget> = {}): OptionTarget => ({
   pools: { up: pool(AT["1"]), down: pool(AT["0.25"], DEEP) },
@@ -94,7 +97,7 @@ describe("the limit on each leg", () => {
   it("stops a buy at the target and expects what buying up to it returns", () => {
     const rising = option({ pools: { up: pool(AT["0.0625"]), down: pool(AT["1"]) }, targetPriceWad: WAD / 4n });
 
-    const { legs } = planBuys(rising, [{ side: "down", amountIn: WAD, underlyingOut: WAD * 10n }]);
+    const { legs } = planBuys(rising, [{ side: "down", amountIn: WAD, underlyingOut: WAD * 10n }], SLIPPAGE_BPS);
 
     // UP climbs 0.0625 to 0.25, so sqrtP 0.25 to 0.5: x falls 4e18 to 2e18, y rises 0.25e18 to 0.5e18
     expect(legs).toEqual([
@@ -126,19 +129,55 @@ describe("the limit on each leg", () => {
 
 describe("planBuys", () => {
   it("spends the sells' proceeds on the side being bought", () => {
-    const plan = planBuys(option(), [{ side: "up", amountIn: WAD, underlyingOut: (WAD * 4n) / 10n }]);
+    const plan = planBuys(option(), [{ side: "up", amountIn: WAD, underlyingOut: (WAD * 4n) / 10n }], SLIPPAGE_BPS);
 
     // the whole UP balance went, so nothing pairs off: 0.4 proceeds at 98 of 100
     expect(plan.mergeAmount).toBe(0n);
-    expect(sized(plan.legs)).toEqual([{ side: "down", amountIn: (((WAD * 4n) / 10n) * BUY_BUDGET_SHARE) / 100n }]);
+    expect(sized(plan.legs)).toEqual([{ side: "down", amountIn: (((WAD * 4n) / 10n) * 98n) / 100n }]);
   });
 
   it("merges the pairs left over and spends those too", () => {
-    const plan = planBuys(option(), [{ side: "up", amountIn: WAD / 2n, underlyingOut: WAD / 5n }]);
+    const plan = planBuys(option(), [{ side: "up", amountIn: WAD / 2n, underlyingOut: WAD / 5n }], SLIPPAGE_BPS);
 
     // 0.5 UP and 1 DOWN remain, so 0.5 merges back; 0.2 + 0.5 at 98 of 100
     expect(plan.mergeAmount).toBe(WAD / 2n);
-    expect(sized(plan.legs)).toEqual([{ side: "down", amountIn: ((WAD / 5n + WAD / 2n) * BUY_BUDGET_SHARE) / 100n }]);
+    expect(sized(plan.legs)).toEqual([{ side: "down", amountIn: ((WAD / 5n + WAD / 2n) * 98n) / 100n }]);
+  });
+
+  it("keeps back more of the budget when the slippage setting is wider", () => {
+    const plan = planBuys(option(), [{ side: "up", amountIn: WAD, underlyingOut: (WAD * 4n) / 10n }], 300);
+
+    // 0.4 proceeds, less 3% a sell may lose and the 1% margin: 96 of 100
+    expect(sized(plan.legs)).toEqual([{ side: "down", amountIn: (((WAD * 4n) / 10n) * 96n) / 100n }]);
+  });
+
+  it("never buys with more than the sells pay when each fills at its minimum", () => {
+    const both = option({
+      pools: { up: pool(AT["0.25"], DEEP), down: pool(AT["0.0625"], DEEP) },
+      targetPriceWad: (WAD * 75n) / 100n,
+      held: { up: WAD * 3n, down: WAD, invalid: WAD },
+    });
+
+    for (const slippageBps of [0, 1, 50, 100, 300, 999, 2500]) {
+      for (const sells of [
+        [{ side: "up" as const, amountIn: WAD * 3n, underlyingOut: WAD + 7n }],
+        [{ side: "up" as const, amountIn: WAD, underlyingOut: 333_333_333_333_333_333n }],
+        [
+          { side: "up" as const, amountIn: WAD, underlyingOut: (WAD * 2n) / 3n },
+          { side: "up" as const, amountIn: WAD / 3n, underlyingOut: WAD / 7n },
+        ],
+      ]) {
+        const plan = planBuys(both, sells, slippageBps);
+
+        const worstProceeds = sells.reduce(
+          (sum, leg) => sum + (leg.underlyingOut * BigInt(10_000 - slippageBps)) / 10_000n,
+          0n,
+        );
+        const spent = plan.legs.reduce((sum, leg) => sum + leg.amountIn, 0n);
+        expect(plan.legs.length).toBeGreaterThan(0);
+        expect(spent).toBeLessThan(worstProceeds + plan.mergeAmount);
+      }
+    }
   });
 
   it("merges no more sets than it holds INVALID for", () => {
@@ -148,7 +187,7 @@ describe("planBuys", () => {
       splitAmount: 0n,
     });
 
-    const plan = planBuys(bought, []);
+    const plan = planBuys(bought, [], SLIPPAGE_BPS);
 
     expect(plan.mergeAmount).toBe(WAD / 4n);
   });
@@ -163,10 +202,10 @@ describe("planBuys", () => {
       splitAmount: 0n,
     });
 
-    const plan = planBuys(both, []);
+    const plan = planBuys(both, [], SLIPPAGE_BPS);
 
     // 0.5 and 0.1875 of 0.6875 are 8 and 3 elevenths of the budget
-    const budget = (WAD * 11n * BUY_BUDGET_SHARE) / 100n;
+    const budget = (WAD * 11n * 98n) / 100n;
     expect(sized(plan.legs)).toEqual([
       { side: "up", amountIn: (budget * 8n) / 11n },
       { side: "down", amountIn: (budget * 3n) / 11n },
@@ -179,10 +218,10 @@ describe("planBuys", () => {
       targetPriceWad: WAD / 4n,
     });
 
-    const plan = planBuys(shallow, [{ side: "up", amountIn: WAD, underlyingOut: WAD * 100n }]);
+    const plan = planBuys(shallow, [{ side: "up", amountIn: WAD, underlyingOut: WAD * 100n }], SLIPPAGE_BPS);
 
     // the budget dwarfs what moving DOWN from 0.25 to 0.75 actually takes
-    expect(plan.legs[0]!.amountIn).toBeLessThan((WAD * 100n * BUY_BUDGET_SHARE) / 100n);
+    expect(plan.legs[0]!.amountIn).toBeLessThan((WAD * 100n * 98n) / 100n);
   });
 
   it("does nothing for an option the market already agrees with", () => {
@@ -193,7 +232,7 @@ describe("planBuys", () => {
       splitAmount: 0n,
     });
 
-    const plan = planBuys(agreed, []);
+    const plan = planBuys(agreed, [], SLIPPAGE_BPS);
 
     // nothing was sold and nothing will be bought, so its pairs are left where they are
     expect(plan.legs).toEqual([]);
@@ -203,7 +242,7 @@ describe("planBuys", () => {
   it("merges the pairs a sell leaves behind even when there is nothing to buy", () => {
     const bothSelling = option({ pools: { up: pool(AT["1"]), down: pool(AT["1"]) } });
 
-    const plan = planBuys(bothSelling, [{ side: "up", amountIn: WAD / 2n, underlyingOut: WAD / 5n }]);
+    const plan = planBuys(bothSelling, [{ side: "up", amountIn: WAD / 2n, underlyingOut: WAD / 5n }], SLIPPAGE_BPS);
 
     // half the UP went, so half of what was split is still paired and comes back as underlying
     expect(plan.legs).toEqual([]);

@@ -13,8 +13,8 @@ const WAD = 10n ** 18n;
 /** Below a hundredth of a token a leg costs more gas than its price move is worth. */
 export const MIN_LEG_WEI = 10n ** 16n;
 
-/** Of a hundred. The sells are quoted before the buys run and the pools move in between. */
-export const BUY_BUDGET_SHARE = 98n;
+/** Of ten thousand, held back from the buys beyond what slippage lets a sell fall short by. */
+export const BUY_BUDGET_MARGIN_BPS = 100n;
 
 /**
  * Of ten thousand, added to what a leg is sized to need. Algebra re-derives its fee from volatility
@@ -115,9 +115,9 @@ export function planSells(option: OptionTarget): SwapLeg[] {
 /**
  * What the sells paid for, once they are quoted: the pairs left over merge back to underlying,
  * and the total buys the sides the market holds below the estimate, each weighted by how far it
- * has to travel.
+ * has to travel. `slippageBps` is how far, in hundredths of a percent, a sell may pay under its quote.
  */
-export function planBuys(option: OptionTarget, sold: readonly SoldLeg[]): BuyPlan {
+export function planBuys(option: OptionTarget, sold: readonly SoldLeg[], slippageBps: number): BuyPlan {
   let proceeds = 0n;
   const soldBySide: Record<OptionSide, bigint> = { up: 0n, down: 0n };
   for (const leg of sold) {
@@ -130,7 +130,7 @@ export function planBuys(option: OptionTarget, sold: readonly SoldLeg[]): BuyPla
     down: option.held.down + option.splitAmount - soldBySide.down,
   };
   const mergeAmount = min(min(remaining.up, remaining.down), option.held.invalid + option.splitAmount);
-  const budget = ((proceeds + mergeAmount) * BUY_BUDGET_SHARE) / 100n;
+  const budget = ((proceeds + mergeAmount) * (10_000n - BigInt(slippageBps) - BUY_BUDGET_MARGIN_BPS)) / 10_000n;
 
   const buying = SIDES.map((side) => ({ side, state: sideState(option, side) })).filter(
     (entry): entry is { side: OptionSide; state: SideState } => entry.state !== null && entry.state.gap > 0n,

@@ -27,6 +27,9 @@ export const STEP_ID = {
 /** Options per transaction. Movies-r3's default, and like it, unmeasured against real Seer gas. */
 export const PREDICT_BATCH_SIZE = 10;
 
+/** Hundredths of a percent; the quotes and the buy budget must use the same figure. */
+const DEFAULT_SLIPPAGE_BPS = 100;
+
 export interface PredictDeps {
   reader: PredictReader;
   quoter: SwapQuoter;
@@ -56,7 +59,7 @@ function batched<T>(items: T[], size: number): T[][] {
 
 /**
  * One option's trades. The sells are quoted before the buys are sized, because what a sell pays
- * is what the buys have to spend; `BUY_BUDGET_SHARE` covers the quote moving in between.
+ * is what the buys have to spend, less what the slippage setting lets a sell fall short by.
  */
 async function optionCalls(
   ctx: PredictCtx,
@@ -66,6 +69,7 @@ async function optionCalls(
   deps: PredictDeps,
 ): Promise<ExecutorCall[]> {
   const splitAmount = state.underlying + mint;
+  const slippageBps = deps.slippageBps ?? DEFAULT_SLIPPAGE_BPS;
   const target = { pools: state.pools, targetPriceWad: option.targetPriceWad, held: state.held, splitAmount };
 
   const sells: QuotedSwap[] = [];
@@ -77,7 +81,7 @@ async function optionCalls(
       tokenOut: option.underlying,
       amount: leg.amountIn,
       recipient: ctx.executor,
-      slippageBps: deps.slippageBps,
+      slippageBps,
       limitSqrtPrice: leg.limitSqrtPrice,
       amountOutAtLimit: leg.amountOutAtLimit,
     });
@@ -85,7 +89,7 @@ async function optionCalls(
     sold.push({ ...leg, underlyingOut: quote.amountOut });
   }
 
-  const { mergeAmount, legs } = planBuys(target, sold);
+  const { mergeAmount, legs } = planBuys(target, sold, slippageBps);
 
   const buys: QuotedSwap[] = [];
   for (const leg of legs) {
@@ -94,7 +98,7 @@ async function optionCalls(
       tokenOut: outcomeToken(option, leg.side),
       amount: leg.amountIn,
       recipient: ctx.executor,
-      slippageBps: deps.slippageBps,
+      slippageBps,
       limitSqrtPrice: leg.limitSqrtPrice,
       amountOutAtLimit: leg.amountOutAtLimit,
     });
