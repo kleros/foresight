@@ -22,6 +22,10 @@ vi.mock("@/features/trade-executor/components/TradeWallet/TradeWallet", () => ({
   TradeWallet: () => null,
 }));
 vi.mock("@/components/wallet/EnsureChain", () => ({ default: ({ children }: { children: ReactNode }) => children }));
+vi.mock("wagmi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("wagmi")>()),
+  useAccount: () => ({ address: undefined }),
+}));
 
 const fetchMock = vi.mocked(fetchGraphql);
 

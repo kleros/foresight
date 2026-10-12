@@ -1,11 +1,15 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@kleros/ui-components-library";
 import clsx from "clsx";
+import { formatUnits } from "viem";
+import { useAccount } from "wagmi";
 
+import type { PredictSnapshot } from "@/features/predict/flow/types";
+import { findInterruptedRun, predictFlowId } from "@/features/predict/run/interrupted";
 import { useSessionEstimates } from "@/features/predict/stores/estimateStore";
 import { selectedEstimates } from "@/features/predict/utils/estimates";
 import type { SessionDetail, SessionStatus } from "@/features/sessions/types";
@@ -14,6 +18,8 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import EnsureChain from "@/components/wallet/EnsureChain";
 
 import CheckOutline from "@/assets/svg/check-outline-button.svg";
+
+import { createRunStore } from "@/lib/flowRunStore";
 
 // The run pulls in the orchestrator, the quoter and a chain client; none of that belongs on the
 // page until someone asks to predict.
@@ -33,6 +39,18 @@ interface PredictCardProps {
 export function PredictCard({ session, status, marketEstimates }: PredictCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
+  const { address } = useAccount();
+  const [interrupted, setInterrupted] = useState<PredictSnapshot | null>(null);
+
+  // read after mount: the stored run lives in this browser, and the popup may have finished or discarded it
+  useEffect(() => {
+    setInterrupted(address && !isOpen ? findInterruptedRun(createRunStore(), session.id, address) : null);
+  }, [address, isOpen, session.id]);
+
+  const discard = () => {
+    createRunStore().clear(predictFlowId(session.id));
+    setInterrupted(null);
+  };
 
   const estimates = useSessionEstimates(session.parentMarket);
   const selected = selectedEstimates(session.options, estimates, marketEstimates);
@@ -64,6 +82,20 @@ export function PredictCard({ session, status, marketEstimates }: PredictCardPro
           onPress={() => setIsOpen(true)}
         />
       </EnsureChain>
+
+      {interrupted ? (
+        <div className="flex w-full flex-wrap items-center justify-between gap-3">
+          <p className="text-fs-text-secondary text-sm">
+            Your last prediction did not finish. Deposit:{" "}
+            {formatUnits(interrupted.deposit, interrupted.depositNative ? 18 : (session.collateralDecimals ?? 18))}{" "}
+            {interrupted.depositNative ? "xDAI" : (session.collateralSymbol ?? "sDAI")}
+          </p>
+          <div className="flex gap-3">
+            <Button small variant="secondary" text="Discard" onPress={discard} />
+            <Button small text="Resume" onPress={() => setIsOpen(true)} />
+          </div>
+        </div>
+      ) : null}
 
       {/* outside the chain gate, so a wallet switching away mid-run does not unmount the run */}
       {isOpen ? (

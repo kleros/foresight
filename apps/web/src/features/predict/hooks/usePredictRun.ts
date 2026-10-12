@@ -15,6 +15,7 @@ import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
 import type { PredictCtx, PredictOption, PredictSnapshot } from "../flow/types";
 import { createPredictRun } from "../run/driver";
+import { predictFlowId } from "../run/interrupted";
 import { createPredictReader } from "../run/reader";
 import type { PredictDriver, PredictProgress } from "../run/types";
 
@@ -81,7 +82,7 @@ export function usePredictRun(input: PredictRunInput | null): {
       quoter: createLensQuoter(publicClient, DEFAULT_CHAIN_ID as 100),
       store: storeRef.current,
       slippageBps: SLIPPAGE_BPS,
-      flowId: `predict-${input.sessionId}`,
+      flowId: predictFlowId(input.sessionId),
       ctx: (): PredictCtx => {
         const now = latest.current;
         if (!now) throw new Error("This session is no longer open for predictions.");
