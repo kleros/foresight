@@ -67,6 +67,7 @@ vi.mock("@/features/predict/components/PredictDialog", () => ({
     <div>
       <p data-testid="notice">{props.notice ?? ""}</p>
       <p data-testid="running">{String(props.isRunning)}</p>
+      <p data-testid="funds">{props.steps.rows.find((row) => row.key === "funds")?.subtitle}</p>
       <button onClick={props.onClose}>close</button>
       <button onClick={props.onPredict}>predict</button>
     </div>
@@ -283,6 +284,13 @@ describe("PredictRunner, the dialog's controls", () => {
 
     expect(driver.recover).toHaveBeenCalledTimes(1);
     expect(driver.start).not.toHaveBeenCalled();
+  });
+
+  it("shows the stored run's deposit in the steps, not the form's", () => {
+    progress = { ...progressAt("review"), recovered: { ...snapshot(), deposit: 7_250_000_000_000_000_000n } };
+    mount();
+
+    expect(screen.getByTestId("funds")).toHaveTextContent("Adding 7.25");
   });
 
   it("resumes a stored run under review instead of starting one from the form", () => {

@@ -28,8 +28,10 @@ function fakeGateway(): TxGateway & { readonly signRequests: FlowTx[] } {
   };
 }
 
-/** A run whose deposit the visitor turned down before the tab closed. */
-function storedRejectedDeposit() {
+/** A run whose deposit the visitor turned down before the tab closed, or one already broadcast. */
+function storedRejectedDeposit(
+  deposit: { status: "pending" } | { status: "submitted"; hash: Hash } = { status: "pending" },
+) {
   const store = createFlowRunStore({ storage: createMemoryStorage() });
   store.save<PredictSnapshot, PredictCtx>({
     flowId: FLOW_ID,
@@ -41,7 +43,7 @@ function storedRejectedDeposit() {
     snapshot: SAVED,
     steps: [
       { stepId: STEP_ID.createExecutor, label: "Set up your trade wallet", outcome: { status: "skipped" } },
-      { stepId: STEP_ID.deposit, label: "Add money to your trade wallet", outcome: { status: "pending" } },
+      { stepId: STEP_ID.deposit, label: "Add money to your trade wallet", outcome: deposit },
       { stepId: STEP_ID.predict(1), label: "Making your prediction", outcome: { status: "pending" } },
     ],
   });
@@ -53,9 +55,9 @@ afterEach(() => {
   for (const driver of drivers.splice(0)) driver.dispose();
 });
 
-function setup() {
-  const store = storedRejectedDeposit();
-  const gateway = fakeGateway();
+function setup(opts: { store?: ReturnType<typeof storedRejectedDeposit>; gateway?: TxGateway } = {}) {
+  const store = opts.store ?? storedRejectedDeposit();
+  const gateway = { ...fakeGateway(), ...opts.gateway };
   const driver = createPredictRun({
     gateway,
     reader: fakeReader({ deployed: true, collateral: 0n }),
@@ -123,7 +125,7 @@ describe("createPredictRun with a stored run", () => {
     expect(gateway.signRequests).toEqual([]);
   });
 
-  it("forgets the stored snapshot once the run is thrown away", async () => {
+  it("forgets the stored snapshot once the run is thrown away, and a fresh run shows none", async () => {
     const { driver, store } = setup();
     driver.recover();
     await vi.waitFor(() => expect(driver.getProgress().stage).toBe("review"));
@@ -132,5 +134,30 @@ describe("createPredictRun with a stored run", () => {
 
     expect(driver.getProgress().recovered).toBeUndefined();
     expect(store.load(FLOW_ID)).toBeNull();
+
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("complete"));
+    expect(driver.getProgress().recovered).toBeUndefined();
+  });
+
+  it("checks the chain again on resume, and stops on a deposit dropped during the review", async () => {
+    const hash = `0x${"d".repeat(64)}` as Hash;
+    let known = true;
+    const gateway: TxGateway = {
+      ...fakeGateway(),
+      isKnown: () => Promise.resolve(known),
+      waitForReceipt: () => new Promise(() => {}),
+    };
+    const { driver } = setup({ store: storedRejectedDeposit({ status: "submitted", hash }), gateway });
+    driver.recover();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("review"));
+    expect(driver.getProgress().pendingHash).toBe(hash);
+
+    known = false;
+    driver.resume();
+
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("halted"));
+    expect(driver.getProgress().failure?.retryable).toBe(true);
+    expect(driver.getProgress().pendingHash).toBeUndefined();
   });
 });
