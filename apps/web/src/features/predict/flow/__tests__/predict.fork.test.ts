@@ -1,17 +1,21 @@
 import {
   createPublicClient,
   createWalletClient,
+  decodeFunctionData,
   encodeFunctionData,
   erc20Abi,
   http,
+  parseAbi,
   parseEther,
   type Address,
+  type Hex,
+  type PrivateKeyAccount,
   type PublicClient,
   type WalletClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { gnosis } from "viem/chains";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { PredictCtx, PredictOption, PredictSnapshot } from "../types";
 
@@ -238,6 +242,427 @@ describe("the predict flow, against a gnosis fork", () => {
         args: [predicted],
       });
       expect(held).toBeGreaterThan(0n);
+    },
+    600_000,
+  );
+});
+
+/** Hardhat's second and third accounts: one trades against the visitor, one provides liquidity. */
+const RIVAL_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d" as const;
+const LP_KEY = "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a" as const;
+
+/** Swapr's Algebra periphery on Gnosis: the router Lens routes every swap through, and its position manager. */
+const SWAPR_ROUTER = "0xfFB643E73f280B97809A8b41f7232AB401a04ee1" as const;
+const POSITION_MANAGER = "0x91fD594c46D8B01E62dBDeBed2401dde01817834" as const;
+
+const SWAPR_ROUTER_ABI = parseAbi([
+  "function exactInputSingle((address tokenIn, address tokenOut, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 limitSqrtPrice) params) payable returns (uint256 amountOut)",
+]);
+const POSITION_MANAGER_ABI = parseAbi([
+  "function mint((address token0, address token1, int24 tickLower, int24 tickUpper, uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, address recipient, uint256 deadline) params) payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)",
+]);
+const TICK_SPACING_ABI = parseAbi(["function tickSpacing() view returns (int24)"]);
+
+const WAD = 10n ** 18n;
+const Q96 = 2n ** 96n;
+/** How far each estimate sits from the pool it is placed against. */
+const MOVE = (WAD * 8n) / 100n;
+/** A concentrated position this many times the pool's own liquidity. */
+const LP_MULTIPLE = 4n;
+/** A rival's price move between quote and execution, in hundredths of a percent: inside the 1% slippage. */
+const RIVAL_MOVE_BPS = 40n;
+
+async function rpc<T>(method: string, params: unknown[] = []): Promise<T> {
+  const response = await fetch(FORK_RPC_URL!, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  const body = (await response.json()) as { result: T; error?: { message: string } };
+  if (body.error) throw new Error(`${method}: ${body.error.message}`);
+  return body.result;
+}
+
+/** Algebra's tick for a raw token1-per-token0 sqrt price. Floats are fine for a fixture's range. */
+const tickAt = (sqrtPriceX96: bigint): number => Math.log((Number(sqrtPriceX96) / 2 ** 96) ** 2) / Math.log(1.0001);
+const sqrtAtTick = (tick: number): bigint => BigInt(Math.round(Math.sqrt(1.0001 ** tick) * 2 ** 96));
+
+describe("price limits on every swap leg, against a gnosis fork", () => {
+  const owner = privateKeyToAccount(OWNER_KEY);
+  let client: PublicClient;
+  let wallet: WalletClient;
+  let session: ForkSession;
+  let snapshotId: string;
+  let app: Awaited<ReturnType<typeof load>>;
+  let tolerances: typeof import("../../oracle/tolerances");
+
+  beforeAll(async () => {
+    if (!FORK_RPC_URL) return;
+    const transport = http(FORK_RPC_URL);
+    client = createPublicClient({ chain: gnosis, transport }) as PublicClient;
+    wallet = createWalletClient({ chain: gnosis, transport });
+    await grantLensQuoter(FORK_RPC_URL);
+    session = await newestSession();
+    app = await load();
+    tolerances = await import("../../oracle/tolerances");
+  }, 120_000);
+
+  beforeEach(async () => {
+    if (!FORK_RPC_URL) return;
+    snapshotId = await rpc<string>("evm_snapshot");
+  });
+
+  afterEach(async () => {
+    if (!FORK_RPC_URL) return;
+    await rpc("evm_revert", [snapshotId]);
+  });
+
+  type Side = "up" | "down";
+
+  const send = async (from: PrivateKeyAccount, to: Address, data: Hex = "0x", value = 0n) => {
+    const hash = await wallet.sendTransaction({ account: from, chain: gnosis, to, data, value });
+    const receipt = await client.waitForTransactionReceipt({ hash });
+    if (receipt.status !== "success") throw new Error(`${to} reverted`);
+  };
+
+  const deadline = async () => (await client.getBlock()).timestamp + 3600n;
+
+  /** Mints `xdai` worth of the session's collateral to `to`, and returns what landed. */
+  async function fundCollateral(to: PrivateKeyAccount, xdai: bigint): Promise<bigint> {
+    const route = app.sDaiDepositRoute(session.collateralToken, CHAIN_ID)!;
+    const before = await balance(session.collateralToken, to.address);
+    await send(
+      to,
+      route.sDaiAdapter,
+      encodeFunctionData({ abi: app.sDaiAdapterAbi, functionName: "depositXDAI", args: [to.address] }),
+      xdai,
+    );
+    return (await balance(session.collateralToken, to.address)) - before;
+  }
+
+  const balance = (token: Address, holder: Address) =>
+    client.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [holder] });
+
+  async function approve(from: PrivateKeyAccount, token: Address, spender: Address, amount: bigint) {
+    await send(from, token, encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [spender, amount] }));
+  }
+
+  /** Splits `amount` of `deposited` at `market`, the way the app does. */
+  async function split(from: PrivateKeyAccount, deposited: Address, market: Address, amount: bigint) {
+    const router = app.gnosisRouterAddress(CHAIN_ID)!;
+    await approve(from, deposited, router, amount);
+    await send(
+      from,
+      router,
+      encodeFunctionData({
+        abi: app.gnosisRouterAbi,
+        functionName: "splitPosition",
+        args: [session.collateralToken, market, amount],
+      }),
+    );
+  }
+
+  /** An account holding `amount` of every child's underlying, and of `child`'s outcome tokens when asked. */
+  async function fundOutcomes(from: PrivateKeyAccount, child: ForkSession["children"][number], outcomes: boolean) {
+    const collateral = await fundCollateral(from, parseEther("400"));
+    await split(from, session.collateralToken, session.parentMarket, collateral);
+    if (outcomes) await split(from, child.underlyingToken, child.id, collateral / 2n);
+  }
+
+  const optionFor = (child: ForkSession["children"][number], targetPriceWad: bigint): PredictOption => ({
+    childMarket: child.id,
+    underlying: child.underlyingToken,
+    upToken: child.upToken,
+    downToken: child.downToken,
+    invalidToken: child.invalidToken,
+    targetPriceWad,
+  });
+
+  const poolRef = async (child: ForkSession["children"][number], side: Side) => {
+    const ref = app.optionPoolRefs(await app.fetchSessionPools(session.id), child.id)[side];
+    if (!ref) throw new Error(`${child.id} has no ${side} pool.`);
+    return ref;
+  };
+
+  const poolPrice = async (child: ForkSession["children"][number], side: Side) => {
+    const pool = await app.readPoolLiquidity(client, await poolRef(child, side));
+    return app.priceFromSqrtPriceX96(pool.sqrtPriceX96, pool.outcomeIsToken0);
+  };
+
+  /** A child both of whose pools sit far enough from 0 and 1 for an estimate MOVE away either way. */
+  async function tradeableChild() {
+    for (const child of session.children) {
+      const [up, down] = await Promise.all([poolPrice(child, "up"), poolPrice(child, "down")]);
+      const roomy = (price: bigint) => price > (WAD * 3n) / 10n && price < (WAD * 7n) / 10n;
+      if (roomy(up) && roomy(down)) return { child, up, down };
+    }
+    throw new Error("No child pool sits near 0.5. Run `yarn simulate:session:gnosis-fork --liquidity` first.");
+  }
+
+  /** `price` is within PRICE_TOLERANCE_TICKS of `target`, either way. */
+  function expectAtTarget(price: bigint, target: bigint, what: string) {
+    const ticks = BigInt(tolerances.PRICE_TOLERANCE_TICKS);
+    const [up, down] = [10_001n ** ticks, 10_000n ** ticks];
+    expect(price, `${what} ended past its target ${target}`).toBeLessThanOrEqual((target * up) / down);
+    expect(price, `${what} ended short of its target ${target}`).toBeGreaterThanOrEqual((target * down) / up);
+  }
+
+  /**
+   * A position `LP_MULTIPLE` times as deep as the pool, from just behind the price to halfway
+   * to `target`, so the pool thins out again between there and the target.
+   */
+  async function concentrate(child: ForkSession["children"][number], side: Side, target: bigint) {
+    const lp = privateKeyToAccount(LP_KEY);
+    await fundOutcomes(lp, child, true);
+
+    const ref = await poolRef(child, side);
+    const pool = await app.readPoolLiquidity(client, ref);
+    const spacing = await client.readContract({
+      address: ref.address,
+      abi: TICK_SPACING_ABI,
+      functionName: "tickSpacing",
+    });
+    const sqrtTarget = app.sqrtPriceX96FromPrice(target, ref.outcomeIsToken0);
+    const current = tickAt(pool.sqrtPriceX96);
+    const halfway = (current + tickAt(sqrtTarget)) / 2;
+    const behind = current - Math.sign(halfway - current) * 2 * spacing;
+
+    const tickLower = Math.floor(Math.min(behind, halfway) / spacing) * spacing;
+    const tickUpper = Math.ceil(Math.max(behind, halfway) / spacing) * spacing;
+    const [sa, sb, sc] = [sqrtAtTick(tickLower), sqrtAtTick(tickUpper), pool.sqrtPriceX96];
+    const liquidity = pool.liquidity * LP_MULTIPLE;
+    const amount0 = (((liquidity * Q96 * (sb - sc)) / (sb * sc)) * 102n) / 100n;
+    const amount1 = (((liquidity * (sc - sa)) / Q96) * 102n) / 100n;
+
+    const outcome = side === "up" ? child.upToken : child.downToken;
+    const [token0, token1] = ref.outcomeIsToken0 ? [outcome, child.underlyingToken] : [child.underlyingToken, outcome];
+    await approve(lp, token0, POSITION_MANAGER, amount0);
+    await approve(lp, token1, POSITION_MANAGER, amount1);
+    await send(
+      lp,
+      POSITION_MANAGER,
+      encodeFunctionData({
+        abi: POSITION_MANAGER_ABI,
+        functionName: "mint",
+        args: [
+          {
+            token0,
+            token1,
+            tickLower,
+            tickUpper,
+            amount0Desired: amount0,
+            amount1Desired: amount1,
+            amount0Min: 0n,
+            amount1Min: 0n,
+            recipient: lp.address,
+            deadline: await deadline(),
+          },
+        ],
+      }),
+    );
+
+    const deeper = await app.readPoolLiquidity(client, ref);
+    expect(deeper.liquidity, "the position covers the price").toBeGreaterThan(pool.liquidity * 3n);
+  }
+
+  /** Another account buys `side` until its pool has moved RIVAL_MOVE_BPS further. */
+  async function rivalBuy(child: ForkSession["children"][number], side: Side) {
+    const rival = privateKeyToAccount(RIVAL_KEY);
+    await fundOutcomes(rival, child, false);
+
+    const ref = await poolRef(child, side);
+    const pool = await app.readPoolLiquidity(client, ref);
+    const price = app.priceFromSqrtPriceX96(pool.sqrtPriceX96, ref.outcomeIsToken0);
+    const limit = app.sqrtPriceX96FromPrice((price * (10_000n + RIVAL_MOVE_BPS)) / 10_000n, ref.outcomeIsToken0);
+    const amountIn = await balance(child.underlyingToken, rival.address);
+
+    await approve(rival, child.underlyingToken, SWAPR_ROUTER, amountIn);
+    await send(
+      rival,
+      SWAPR_ROUTER,
+      encodeFunctionData({
+        abi: SWAPR_ROUTER_ABI,
+        functionName: "exactInputSingle",
+        args: [
+          {
+            tokenIn: child.underlyingToken,
+            tokenOut: side === "up" ? child.upToken : child.downToken,
+            recipient: rival.address,
+            deadline: await deadline(),
+            amountIn,
+            amountOutMinimum: 0n,
+            limitSqrtPrice: limit,
+          },
+        ],
+      }),
+    );
+
+    expect(await poolPrice(child, side), "the rival moved the pool").toBeGreaterThan(price);
+  }
+
+  /** Runs the app's own steps for one estimate; `beforeSend` runs between quoting a batch and sending it. */
+  async function predict(option: PredictOption, deposit: bigint, beforeSend?: () => Promise<void>) {
+    const funded = await fundCollateral(owner, deposit * 2n);
+    expect(funded).toBeGreaterThanOrEqual(deposit);
+
+    const router = app.gnosisRouterAddress(CHAIN_ID)!;
+    const factory = app.tradeExecutorFactoryAddress(CHAIN_ID)!;
+    const route = app.sDaiDepositRoute(session.collateralToken, CHAIN_ID)!;
+    const { predicted } = await app.fetchExecutorState(client, { factory, owner: owner.address });
+    const ctx: PredictCtx = {
+      chainId: CHAIN_ID,
+      owner: owner.address,
+      executor: predicted,
+      factory,
+      router,
+      collateral: session.collateralToken,
+      parentMarket: session.parentMarket,
+      sDaiAdapter: route.sDaiAdapter,
+    };
+    const snapshot: PredictSnapshot = {
+      options: [option],
+      deposit,
+      depositNative: false,
+      collateralIn: deposit,
+      startedAt: Math.floor(Date.now() / 1000),
+    };
+    const deps = {
+      reader: app.createPredictReader({ client, sessionId: session.id, collateral: session.collateralToken }),
+      quoter: app.createLensQuoter(client, CHAIN_ID),
+      slippageBps: tolerances.SLIPPAGE_BPS,
+    };
+
+    const sent: Array<{ id: string; status: string; data: Hex }> = [];
+    for (const step of app.planPredict(snapshot, deps)) {
+      if (await step.canSkip?.(ctx, snapshot)) continue;
+      const tx = await step.build(ctx, snapshot);
+      if (step.id.startsWith("predict-")) await beforeSend?.();
+
+      let status = "success";
+      try {
+        await send(owner, tx.to, tx.data, tx.value ?? 0n);
+      } catch (reason) {
+        status = `reverted: ${String(reason).split("\n")[0]}`;
+      }
+      sent.push({ id: step.id, status, data: tx.data ?? "0x" });
+    }
+    return sent;
+  }
+
+  it.skipIf(!FORK_RPC_URL)(
+    "puts a limit at the target on every buy and sell leg it signs",
+    async () => {
+      const { child, up } = await tradeableChild();
+
+      for (const target of [up + MOVE, up - MOVE]) {
+        const option = optionFor(child, target);
+        const sideOf = (token: Address): Side | null =>
+          token.toLowerCase() === child.upToken.toLowerCase()
+            ? "up"
+            : token.toLowerCase() === child.downToken.toLowerCase()
+              ? "down"
+              : null;
+
+        const sent = await predict(option, parseEther("100"));
+        const batch = sent.find((each) => each.id.startsWith("predict-"))!;
+        const inner = decodeFunctionData({ abi: app.tradeExecutorAbi, data: batch.data });
+        if (inner.functionName !== "batchExecute") throw new Error(`Expected batchExecute, got ${inner.functionName}`);
+
+        const legs = inner.args[0]
+          .filter((call) => call.to.toLowerCase() === SWAPR_ROUTER.toLowerCase())
+          .map((call) => decodeFunctionData({ abi: SWAPR_ROUTER_ABI, data: call.data }).args[0]);
+        const sides = legs.map((leg) => sideOf(leg.tokenOut) ?? sideOf(leg.tokenIn));
+        expect([...sides].sort(), "one buy and one sell").toEqual(["down", "up"]);
+
+        for (const [index, leg] of legs.entries()) {
+          const side = sides[index]!;
+          const ref = await poolRef(child, side);
+          const sideTarget = side === "up" ? target : WAD - target;
+          expect(leg.limitSqrtPrice, `the ${side} leg carries a limit`).not.toBe(0n);
+          expectAtTarget(
+            app.priceFromSqrtPriceX96(leg.limitSqrtPrice, ref.outcomeIsToken0),
+            sideTarget,
+            `the ${side} limit`,
+          );
+        }
+
+        await rpc("evm_revert", [snapshotId]);
+        snapshotId = await rpc<string>("evm_snapshot");
+      }
+    },
+    600_000,
+  );
+
+  it.skipIf(!FORK_RPC_URL)(
+    "stops an UP buy and a DOWN sell at the target through a concentrated position",
+    async () => {
+      const { child, up } = await tradeableChild();
+      const target = up + MOVE;
+      await concentrate(child, "up", target);
+      await concentrate(child, "down", WAD - target);
+
+      const sent = await predict(optionFor(child, target), parseEther("300"));
+
+      expect(
+        sent.map((each) => each.status),
+        "every step executes",
+      ).toEqual(sent.map(() => "success"));
+      expectAtTarget(await poolPrice(child, "up"), target, "the UP pool");
+      expectAtTarget(await poolPrice(child, "down"), WAD - target, "the DOWN pool");
+    },
+    600_000,
+  );
+
+  it.skipIf(!FORK_RPC_URL)(
+    "stops a DOWN buy and an UP sell at the target through a concentrated position",
+    async () => {
+      const { child, up } = await tradeableChild();
+      const target = up - MOVE;
+      await concentrate(child, "down", WAD - target);
+      await concentrate(child, "up", target);
+
+      const sent = await predict(optionFor(child, target), parseEther("300"));
+
+      expect(
+        sent.map((each) => each.status),
+        "every step executes",
+      ).toEqual(sent.map(() => "success"));
+      expectAtTarget(await poolPrice(child, "down"), WAD - target, "the DOWN pool");
+      expectAtTarget(await poolPrice(child, "up"), target, "the UP pool");
+    },
+    600_000,
+  );
+
+  it.skipIf(!FORK_RPC_URL)(
+    "keeps an UP buy at or below the target when a rival buys first",
+    async () => {
+      const { child, up } = await tradeableChild();
+      const target = up + MOVE;
+
+      const sent = await predict(optionFor(child, target), parseEther("100"), () => rivalBuy(child, "up"));
+
+      const end = await poolPrice(child, "up");
+      expect(
+        end,
+        `UP ended past ${target}; steps: ${JSON.stringify(sent.map((each) => each.status))}`,
+      ).toBeLessThanOrEqual(target);
+    },
+    600_000,
+  );
+
+  it.skipIf(!FORK_RPC_URL)(
+    "keeps a DOWN buy at or below the target when a rival buys first",
+    async () => {
+      const { child, up } = await tradeableChild();
+      const target = up - MOVE;
+
+      const sent = await predict(optionFor(child, target), parseEther("100"), () => rivalBuy(child, "down"));
+
+      const end = await poolPrice(child, "down");
+      expect(
+        end,
+        `DOWN ended past ${WAD - target}; steps: ${JSON.stringify(sent.map((each) => each.status))}`,
+      ).toBeLessThanOrEqual(WAD - target);
     },
     600_000,
   );
