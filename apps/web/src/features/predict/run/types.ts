@@ -1,8 +1,12 @@
 import type { TxErrorCause } from "@foresight/tx-orchestrator";
 import type { Address } from "viem";
 
-/** `no-route`: no option can be moved toward its estimate with what the run has to spend. */
-export type PredictFailureReason = TxErrorCause | "no-route";
+/**
+ * `no-route`: no option can be moved toward its estimate with what the run has to spend.
+ * `balance`: the trade wallet holds less than the popup counted on.
+ * `deposit-unconfirmed`: a recovered run's deposit may have been signed with no hash kept.
+ */
+export type PredictFailureReason = TxErrorCause | "no-route" | "balance" | "deposit-unconfirmed";
 
 /** What the popup shows while a prediction runs. */
 export type PredictStage =

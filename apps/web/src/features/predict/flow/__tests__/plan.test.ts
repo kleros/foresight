@@ -285,6 +285,19 @@ describe("skipping a deposit that has already landed", () => {
     await expect(canSkip(WAD * 6n + 1n, snap)).resolves.toBe(true);
   });
 
+  it("witnesses the deposit against the balance read on chain, not the one the popup cached", async () => {
+    const snap = { deposit: WAD * 4n, collateralBefore: WAD * 3n, collateralAtStart: WAD * 5n };
+
+    await expect(canSkip(WAD * 8n, snap)).resolves.toBe(false);
+    await expect(canSkip(WAD * 9n, snap)).resolves.toBe(true);
+  });
+
+  it("does not take a stale low cache for an xDAI deposit that landed", async () => {
+    const snap = { deposit: WAD * 5n, depositNative: true, collateralBefore: WAD * 3n, collateralAtStart: WAD * 5n };
+
+    await expect(canSkip(WAD * 5n, snap)).resolves.toBe(false);
+  });
+
   it("compares against the deposit alone for a run persisted without a starting balance", async () => {
     await expect(canSkip(WAD, { deposit: WAD })).resolves.toBe(true);
     await expect(canSkip(WAD - 1n, { deposit: WAD })).resolves.toBe(false);
@@ -311,6 +324,33 @@ describe("createPredictHooks", () => {
 
     expect(result).toEqual({ snapshotPatch: { collateralIn: WAD * 7n } });
   });
+
+  it.each([
+    ["the cache 2 below the chain", WAD * 3n, WAD * 5n, WAD * 9n, WAD * 6n, WAD * 9n],
+    ["the cache at 0", 0n, WAD * 15n, WAD * 10n, WAD * 10n, WAD * 10n],
+    ["a run persisted before the chain read", WAD * 6n, undefined, WAD * 9n, (WAD * 7n) / 2n, (WAD * 19n) / 2n],
+  ])(
+    "splits what an xDAI deposit minted plus the trade-wallet share shown (%s)",
+    async (_, shown, atStart, estimate, minted, expected) => {
+      const start = atStart ?? shown;
+      const hooks = createPredictHooks({ reader: fakeReader({ collateral: start + minted }) });
+
+      const result = await hooks.afterStep!({
+        ctx: ctx(),
+        snapshot: snapshot({
+          depositNative: true,
+          collateralIn: estimate,
+          collateralBefore: shown,
+          collateralAtStart: atStart,
+        }),
+        completed: deposited,
+        receipt: null,
+        pending: [],
+      });
+
+      expect(result).toEqual({ snapshotPatch: { collateralIn: expected } });
+    },
+  );
 
   it("takes a collateral deposit at the amount that was asked for", async () => {
     const hooks = createPredictHooks({ reader: fakeReader({ collateral: WAD * 7n }) });

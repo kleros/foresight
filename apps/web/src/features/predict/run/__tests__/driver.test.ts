@@ -1,6 +1,8 @@
-import type { FlowTx, TxGateway } from "@foresight/tx-orchestrator";
-import type { Hash, TransactionReceipt } from "viem";
+import { createFlowRunStore, createMemoryStorage, type FlowTx, type TxGateway } from "@foresight/tx-orchestrator";
+import { decodeFunctionData, type Hash, type Hex, type TransactionReceipt } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
 
 import {
   addresses,
@@ -12,6 +14,7 @@ import {
   snapshot,
   WAD,
 } from "../../flow/__tests__/support/fakes";
+import { STEP_ID } from "../../flow/plan";
 import type { OptionChainState, PredictSnapshot } from "../../flow/types";
 import { MIN_LEG_WEI } from "../../utils/plan";
 import { sqrtPriceX96FromPrice } from "../../utils/poolMath";
@@ -141,5 +144,93 @@ describe("createPredictRun when no route moves the market", () => {
     expect(returning.progress.failure?.reason).not.toBe("rpc");
     expect(message(returning.progress)).not.toBe(message(withReason(returning.progress, "rpc")));
     expect(message(returning.progress)).toBe(message(dust.progress));
+  });
+});
+
+/** The collateral a predict transaction splits at the session's parent. */
+function parentSplit(data: Hex): bigint | undefined {
+  const decoded = decodeFunctionData({ abi: tradeExecutorAbi, data });
+  if (decoded.functionName !== "batchExecute") return undefined;
+  for (const call of decoded.args[0]) {
+    if (call.to !== addresses.router) continue;
+    const inner = decodeFunctionData({ abi: gnosisRouterAbi, data: call.data });
+    if (inner.functionName === "splitPosition") return inner.args[2];
+  }
+  return undefined;
+}
+
+describe("createPredictRun and the trade wallet's balance", () => {
+  it("splits what an xDAI deposit minted plus the share shown, when the cached balance was low", async () => {
+    // the adapter mints 1 collateral per 2 xDAI here, so the minted amount is not the deposit
+    let balance = WAD * 5n;
+    const gateway = fakeGateway();
+    const send = gateway.sendTransaction;
+    gateway.sendTransaction = (tx) => {
+      if (tx.to === addresses.sDaiAdapter) balance += (tx.value ?? 0n) / 2n;
+      return send(tx);
+    };
+    const driver = createPredictRun({
+      gateway,
+      reader: { ...fakeReader({ deployed: true }), collateralBalance: () => Promise.resolve(balance) },
+      quoter: fakeQuoter(),
+      flowId: "predict-xdai-low-cache",
+      ctx: () => ctx(),
+      snapshot: () =>
+        snapshot({ deposit: WAD * 12n, depositNative: true, collateralIn: WAD * 9n, collateralBefore: WAD * 3n }),
+    });
+    drivers.push(driver);
+
+    driver.start();
+    await vi.waitFor(() => expect(["halted", "complete"]).toContain(driver.getProgress().stage));
+
+    expect(driver.getProgress().stage).toBe("complete");
+    expect(gateway.signRequests.filter(isDeposit)).toHaveLength(1);
+    const splits = gateway.signRequests.flatMap((tx) =>
+      tx.to === addresses.executor ? (parentSplit(tx.data!) ?? []) : [],
+    );
+    expect(splits).toEqual([WAD * 6n + WAD * 3n]);
+  });
+
+  it("resumes a recovered run whose deposit already landed without asking for it again", async () => {
+    const snap = snapshot({ deposit: WAD * 3n, collateralIn: WAD * 5n, collateralBefore: WAD * 2n });
+    const store = createFlowRunStore({ storage: createMemoryStorage() });
+    const flowId = "predict-recovered-landed";
+    store.save<PredictSnapshot, ReturnType<typeof ctx>>({
+      flowId,
+      adapterId: "predict-flow",
+      snapshot: snap,
+      ctx: ctx(),
+      status: "running",
+      steps: [
+        {
+          stepId: STEP_ID.createExecutor,
+          label: "Set up your trade wallet",
+          outcome: { status: "confirmed", hash: `0x${"a".repeat(64)}`, blockNumber: 1n },
+        },
+        { stepId: STEP_ID.deposit, label: "Add money to your trade wallet", outcome: { status: "awaiting-signature" } },
+        { stepId: STEP_ID.predict(1), label: "Making your prediction", outcome: { status: "pending" } },
+      ],
+    });
+    const gateway = fakeGateway();
+    const driver = createPredictRun({
+      gateway,
+      reader: fakeReader({ deployed: true, collateral: WAD * 5n }),
+      quoter: fakeQuoter(),
+      flowId,
+      store,
+      ctx: () => ctx(),
+      snapshot: () => snap,
+    });
+    drivers.push(driver);
+
+    driver.start();
+    // a restored run reads as halted until it resumes, so only a reason counts as stopping
+    await vi.waitFor(() => {
+      const progress = driver.getProgress();
+      expect(progress.stage === "complete" || progress.failure !== undefined).toBe(true);
+    });
+
+    expect(driver.getProgress().stage).toBe("complete");
+    expect(gateway.signRequests.filter(isDeposit)).toEqual([]);
   });
 });

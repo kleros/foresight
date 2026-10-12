@@ -15,8 +15,19 @@ import type { Address } from "viem";
 import type { SwapQuoter } from "@/lib/swap/types";
 
 import type { PredictDriver, PredictFailureReason, PredictProgress, PredictStepRow } from "./types";
-import { assertRoutes, createPredictHooks, NoRouteError, planPredict, type PredictDeps } from "../flow/plan";
+import {
+  assertRoutes,
+  createPredictHooks,
+  NoRouteError,
+  planPredict,
+  STEP_ID,
+  tradeWalletShare,
+  type PredictDeps,
+} from "../flow/plan";
 import type { PredictCtx, PredictReader, PredictSnapshot } from "../flow/types";
+
+/** The trade wallet holds less than the share of the prediction it was shown to cover. */
+class TradeWalletShortError extends Error {}
 
 /** Drives one prediction: the orchestrator's run, flattened into what the popup reads. */
 export function createPredictRun(args: {
@@ -146,9 +157,11 @@ export function createPredictRun(args: {
 
   function detached(work: () => Promise<void>): () => void {
     const action = () =>
-      void work().catch((error: unknown) =>
-        error instanceof NoRouteError ? report("no-route") : report(classifyTxError(error), action),
-      );
+      void work().catch((error: unknown) => {
+        if (error instanceof NoRouteError) report("no-route");
+        else if (error instanceof TradeWalletShortError) report("balance");
+        else report(classifyTxError(error), action);
+      });
     return action;
   }
 
@@ -162,35 +175,53 @@ export function createPredictRun(args: {
     const stored = args.store?.load<PredictSnapshot, PredictCtx>(args.flowId);
     if (!stored) return;
 
-    const restored = orchestrator.restore({ flowId: args.flowId, steps: planPredict(stored.snapshot, deps) });
+    const steps = planPredict(stored.snapshot, deps);
+    const restored = orchestrator.restore({ flowId: args.flowId, steps });
     if (!restored) return;
 
     planned = [];
-    await orchestrator.reconcileInFlight();
+    const found = await orchestrator.reconcileInFlight();
+    // A deposit signed as the tab died left no hash, and the balance cannot show it until it mines.
+    if (found.outcome === "unknown" && found.stepId === STEP_ID.deposit) {
+      const deposit = steps.find((step) => step.id === STEP_ID.deposit);
+      if (!(await deposit?.canSkip?.(stored.ctx, stored.snapshot))) {
+        report("deposit-unconfirmed", resumeRun);
+        return;
+      }
+    }
     await orchestrator.resume();
   });
+
+  /** Pins the trade wallet's balance before anything is signed, and checks a route exists. */
+  async function prepare(ctx: PredictCtx, requested: PredictSnapshot): Promise<PredictSnapshot> {
+    const collateralAtStart = await args.reader.collateralBalance(ctx.executor);
+    if (collateralAtStart < tradeWalletShare(requested)) throw new TradeWalletShortError();
+    const snapshot = { ...requested, collateralAtStart };
+    await assertRoutes(ctx, snapshot, deps);
+    return snapshot;
+  }
 
   const startRun = detached(async () => {
     report(undefined);
     skipped.length = 0;
 
-    const snapshot = args.snapshot();
+    const requested = args.snapshot();
     const ctx = args.ctx();
-    const steps = planPredict(snapshot, deps);
+    const steps = planPredict(requested, deps);
     // The rows exist before the run does, so the popup opens on the list rather than on nothing.
     planned = steps.map((step) => ({ id: step.id, label: step.label, state: "pending" }));
     const check = {};
     checking = check;
     notify();
 
-    const failed = await assertRoutes(ctx, snapshot, deps).then(
-      () => undefined,
+    const checked = await prepare(ctx, requested).then(
+      (snapshot) => ({ snapshot }),
       (error: unknown) => ({ error }),
     );
     if (checking !== check) return;
     checking = undefined;
-    if (failed) throw failed.error;
-    await orchestrator.start({ flowId: args.flowId, snapshot, ctx, steps });
+    if ("error" in checked) throw checked.error;
+    await orchestrator.start({ flowId: args.flowId, snapshot: checked.snapshot, ctx, steps });
   });
 
   return {

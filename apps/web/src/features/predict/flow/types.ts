@@ -49,8 +49,13 @@ export interface PredictSnapshot {
    * once an xDAI deposit lands, since the adapter's output is not known in advance.
    */
   collateralIn: bigint;
-  /** The executor's collateral when the run was planned. Absent on runs persisted before it existed. */
+  /**
+   * The trade-wallet collateral the visitor was shown, which the split draws on up to
+   * `collateralIn`. Absent on runs persisted before it existed.
+   */
   collateralBefore?: bigint;
+  /** The executor's collateral read from the chain as the run started, before any deposit. */
+  collateralAtStart?: bigint;
   startedAt: number;
 }
 
