@@ -133,6 +133,8 @@ describe("the predict flow, against a gnosis fork", () => {
         priceFromSqrtPriceX96,
         createPredictReader,
         planPredict,
+        assertRoutes,
+        NoRouteError,
       } = await load();
 
       const collateral = session.collateralToken;
@@ -187,12 +189,19 @@ describe("the predict flow, against a gnosis fork", () => {
 
       const reader = createPredictReader({ client, sessionId: session.id, collateral });
       const skipped: string[] = [];
-      const steps = planPredict(snapshot, {
+      const deps = {
         reader,
         quoter: createLensQuoter(client, CHAIN_ID),
         slippageBps: 300,
-        onSkip: (each, reason) => skipped.push(`${each.childMarket}: ${String(reason)}`),
-      });
+        onSkip: (each: PredictOption, reason: unknown) => skipped.push(`${each.childMarket}: ${String(reason)}`),
+      };
+      const steps = planPredict(snapshot, deps);
+
+      // the route check passes what the run will trade, and refuses dust for a wallet holding nothing
+      await assertRoutes(ctx, snapshot, deps);
+      const empty = { ...ctx, executor: "0x000000000000000000000000000000000000dEaD" as Address };
+      const dust = { ...snapshot, deposit: 10n ** 15n, collateralIn: 10n ** 15n };
+      await expect(assertRoutes(empty, dust, deps)).rejects.toBeInstanceOf(NoRouteError);
 
       for (const step of steps) {
         if (await step.canSkip?.(ctx, snapshot)) continue;

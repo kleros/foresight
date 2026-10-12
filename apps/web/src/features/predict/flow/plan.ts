@@ -40,6 +40,14 @@ export interface PredictDeps {
 const outcomeToken = (option: PredictOption, side: OptionSide): Address =>
   side === "up" ? option.upToken : option.downToken;
 
+/** Nothing in the batch can move a pool toward its estimate; trying again with the same input will not help. */
+export class NoRouteError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "NoRouteError";
+  }
+}
+
 function batched<T>(items: T[], size: number): T[][] {
   const batches: T[][] = [];
   for (let index = 0; index < items.length; index += size) batches.push(items.slice(index, index + size));
@@ -136,7 +144,7 @@ async function predictCalls(args: {
   }
 
   if (traded === 0) {
-    throw new Error("No route was found for any of these estimates. Try again in a moment, or a larger amount.");
+    throw new NoRouteError("No route was found for any of these estimates. Try again in a moment, or a larger amount.");
   }
 
   return calls;
@@ -211,6 +219,17 @@ export function planPredict(snapshot: PredictSnapshot, deps: PredictDeps): Step[
   );
 
   return steps;
+}
+
+/**
+ * Quotes every batch without signing, so a run no route can follow stops before it adds money.
+ * Each batch is priced as if the split had already handed every option its underlying.
+ */
+export async function assertRoutes(ctx: PredictCtx, snapshot: PredictSnapshot, deps: PredictDeps): Promise<void> {
+  const quiet = { ...deps, onSkip: undefined };
+  for (const options of batched(snapshot.options, deps.optionsPerBatch ?? PREDICT_BATCH_SIZE)) {
+    await predictCalls({ ctx, options, mint: snapshot.collateralIn, deps: quiet });
+  }
 }
 
 export function createPredictHooks(deps: Pick<PredictDeps, "reader">): FlowHooks<PredictSnapshot, PredictCtx> {

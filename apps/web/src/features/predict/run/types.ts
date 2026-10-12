@@ -1,6 +1,9 @@
 import type { TxErrorCause } from "@foresight/tx-orchestrator";
 import type { Address } from "viem";
 
+/** `no-route`: no option can be moved toward its estimate with what the run has to spend. */
+export type PredictFailureReason = TxErrorCause | "no-route";
+
 /** What the popup shows while a prediction runs. */
 export type PredictStage =
   /** Nothing started. */
@@ -32,7 +35,7 @@ export interface PredictProgress {
   batchesDone: number;
   batches: number;
   /** Why it stopped, classified. The chain's own wording names gas and contracts, so it stays out. */
-  failure?: { reason: TxErrorCause; retryable: boolean };
+  failure?: { reason: PredictFailureReason; retryable: boolean };
 }
 
 export interface PredictDriver {

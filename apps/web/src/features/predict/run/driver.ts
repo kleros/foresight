@@ -8,15 +8,14 @@ import {
   type FlowError,
   type FlowRunStore,
   type OrchestratorRun,
-  type TxErrorCause,
   type TxGateway,
 } from "@foresight/tx-orchestrator";
 import type { Address } from "viem";
 
 import type { SwapQuoter } from "@/lib/swap/types";
 
-import type { PredictDriver, PredictProgress, PredictStepRow } from "./types";
-import { createPredictHooks, planPredict, type PredictDeps } from "../flow/plan";
+import type { PredictDriver, PredictFailureReason, PredictProgress, PredictStepRow } from "./types";
+import { assertRoutes, createPredictHooks, NoRouteError, planPredict, type PredictDeps } from "../flow/plan";
 import type { PredictCtx, PredictReader, PredictSnapshot } from "../flow/types";
 
 /** Drives one prediction: the orchestrator's run, flattened into what the popup reads. */
@@ -39,6 +38,9 @@ export function createPredictRun(args: {
   let failure: PredictProgress["failure"];
   let retryFailed: (() => void) | undefined;
   let planned: PredictStepRow[] = [];
+  /** True while the routes are checked, before the orchestrator has a run. */
+  let checking = false;
+  let noRoute = false;
   let cached: PredictProgress;
 
   const deps: PredictDeps = {
@@ -59,7 +61,12 @@ export function createPredictRun(args: {
     now: args.now,
     // A build reads the chain and the indexer before it signs anything. Those failures are
     // transient and leave nothing behind, so they pause for a retry rather than ending the run.
-    classifyError: (error) => (error instanceof Error && !("cause" in error) ? "rpc" : classifyTxError(error)),
+    // A missing route is fatal to the orchestrator; `noRoute` keeps the reason it cannot carry.
+    classifyError: (error) => {
+      noRoute = error instanceof NoRouteError;
+      if (noRoute) return "unknown";
+      return error instanceof Error && !("cause" in error) ? "rpc" : classifyTxError(error);
+    },
   });
 
   const notify = () => {
@@ -67,7 +74,7 @@ export function createPredictRun(args: {
     for (const listener of listeners) listener();
   };
 
-  function report(reason: TxErrorCause | undefined, retry?: () => void) {
+  function report(reason: PredictFailureReason | undefined, retry?: () => void) {
     failure = reason === undefined ? undefined : { reason, retryable: Boolean(retry) };
     retryFailed = reason === undefined ? undefined : retry;
     notify();
@@ -78,7 +85,7 @@ export function createPredictRun(args: {
 
   function stage(): PredictProgress["stage"] {
     const run = orchestrator.getRun();
-    if (!run) return "idle";
+    if (!run) return failure ? "halted" : checking ? "quoting" : "idle";
 
     switch (run.status) {
       case "completed":
@@ -127,14 +134,21 @@ export function createPredictRun(args: {
   orchestrator.on("flow:paused", () => {
     report(errorOf(orchestrator.getRun())?.cause, resumeRun);
   });
-  orchestrator.on("flow:failed", (event) => report(event.error.cause));
+  orchestrator.on("flow:failed", (event) => {
+    const reason = noRoute ? "no-route" : event.error.cause;
+    noRoute = false;
+    report(reason);
+  });
   orchestrator.on("flow:completed", () => {
     args.onComplete?.();
     notify();
   });
 
   function detached(work: () => Promise<void>): () => void {
-    const action = () => void work().catch((error: unknown) => report(classifyTxError(error), action));
+    const action = () =>
+      void work().catch((error: unknown) =>
+        error instanceof NoRouteError ? report("no-route") : report(classifyTxError(error), action),
+      );
     return action;
   }
 
@@ -165,14 +179,20 @@ export function createPredictRun(args: {
     const steps = planPredict(snapshot, deps);
     // The rows exist before the run does, so the popup opens on the list rather than on nothing.
     planned = steps.map((step) => ({ id: step.id, label: step.label, state: "pending" }));
+    checking = true;
     notify();
 
+    try {
+      await assertRoutes(ctx, snapshot, deps);
+    } finally {
+      checking = false;
+    }
     await orchestrator.start({ flowId: args.flowId, snapshot, ctx, steps });
   });
 
   return {
     start() {
-      if (orchestrator.getStatus() !== "idle") return;
+      if (checking || orchestrator.getStatus() !== "idle") return;
       // A stored run has steps that may already be on chain, and `start` would refuse anyway.
       if (args.store?.load(args.flowId)) {
         recoverRun();

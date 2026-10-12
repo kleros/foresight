@@ -28,6 +28,7 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
   reverted: "The trade could not go through at these prices.",
   rpc: "The network did not answer in time.",
   unknown: "Something went wrong.",
+  "no-route": "No trade moves these markets toward your estimates. Try a larger amount or a different estimate.",
 };
 
 const STAGE_COPY: Partial<Record<PredictProgress["stage"], string>> = {
