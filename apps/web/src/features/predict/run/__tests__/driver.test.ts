@@ -247,3 +247,37 @@ describe("createPredictRun and the trade wallet's balance", () => {
     expect(gateway.signRequests.filter(isDeposit)).toEqual([]);
   });
 });
+
+describe("createPredictRun holding another wallet's saved run", () => {
+  it("keeps the run in storage when the halted popup is reset", async () => {
+    const store = createFlowRunStore({ storage: createMemoryStorage() });
+    const flowId = "predict-other-owner";
+    store.save<PredictSnapshot, ReturnType<typeof ctx>>({
+      flowId,
+      adapterId: "predict-flow",
+      snapshot: snapshot(),
+      ctx: ctx(),
+      status: "paused",
+      reason: "rejected",
+      steps: [{ stepId: STEP_ID.predict(1), label: "Making your prediction", outcome: { status: "pending" } }],
+    });
+    const gateway = fakeGateway();
+    const driver = createPredictRun({
+      gateway,
+      reader: fakeReader({ deployed: true }),
+      quoter: fakeQuoter(),
+      flowId,
+      store,
+      ctx: () => ctx({ owner: `0x${"b".repeat(40)}` }),
+      snapshot: () => snapshot(),
+    });
+    drivers.push(driver);
+
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().failure?.reason).toBe("wrong-wallet"));
+    driver.reset();
+
+    expect(store.load(flowId)?.ctx).toEqual(ctx());
+    expect(gateway.signRequests).toEqual([]);
+  });
+});

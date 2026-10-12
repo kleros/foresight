@@ -31,6 +31,8 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
   "no-route": "No trade moves these markets toward your estimates. Try a larger amount or a different estimate.",
   balance: "Your trade wallet balance is lower than shown. Check the amount and try again.",
   "deposit-unconfirmed": "Your last deposit may still be confirming. Check your wallet's activity, then try again.",
+  "wrong-wallet": "This prediction was started from another wallet. Connect that wallet to finish it.",
+  "wrong-chain": "This prediction was started on another network. Switch to that network to finish it.",
 };
 
 const STAGE_COPY: Partial<Record<PredictProgress["stage"], string>> = {
