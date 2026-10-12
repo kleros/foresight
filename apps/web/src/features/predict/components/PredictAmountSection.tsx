@@ -9,6 +9,7 @@ import DaiIcon from "@/assets/svg/dai.svg";
 
 import { formatAmount } from "@/utils/amount";
 
+import { AMOUNT_DISPLAY_DECIMALS } from "../oracle/tolerances";
 import type { PayToken } from "../types";
 import { percentOf, shareOf, type Funding } from "../utils/funding";
 
@@ -45,6 +46,9 @@ export function PredictAmountSection({
   const available = funding?.available;
   const notEnough = amount !== undefined && available !== undefined && amount > available;
   const isNative = token.id === "native";
+  const step = 10n ** BigInt(Math.max(token.decimals - AMOUNT_DISPLAY_DECIMALS, 0));
+  const roundDown = (value: bigint) => value - (value % step);
+  const max = available === undefined ? undefined : roundDown(available);
 
   return (
     <div className="flex flex-col items-center gap-1.5">
@@ -74,7 +78,7 @@ export function PredictAmountSection({
                 small
                 text="Max"
                 isDisabled={isReadOnly || available === undefined}
-                onPress={() => available !== undefined && onAmountChange(available)}
+                onPress={() => max !== undefined && onAmountChange(max)}
                 className={clsx(
                   "p-0 hover:bg-transparent!",
                   "[&_.button-text]:text-fs-accent [&_.button-text]:text-xs [&_.button-text]:font-semibold",
@@ -128,9 +132,9 @@ export function PredictAmountSection({
         </div>
 
         <AmountSlider
-          percent={percentOf(amount ?? 0n, available ?? 0n)}
-          isDisabled={isReadOnly || !available}
-          onChange={(percent) => available !== undefined && onAmountChange(shareOf(available, percent))}
+          percent={percentOf(amount ?? 0n, max ?? 0n)}
+          isDisabled={isReadOnly || !max}
+          onChange={(percent) => max !== undefined && onAmountChange(roundDown(shareOf(max, percent)))}
         />
 
         <hr className="border-fs-border my-4 w-full" />

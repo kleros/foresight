@@ -1,8 +1,10 @@
+import { GAS_RESERVE_WEI } from "../oracle/tolerances";
+
 const WAD = 10n ** 18n;
 
 /** Where the money for one prediction comes from, worked out as futarchy's popup does. */
 export interface Funding {
-  /** What the visitor can put in, in the token they chose: their wallet plus the trade wallet. */
+  /** What the visitor can put in, in the token they chose: their wallet less any gas reserve, plus the trade wallet. */
   available: bigint;
   /** Collateral the prediction splits. */
   collateralIn: bigint;
@@ -25,7 +27,7 @@ export interface FundingArgs {
   tradeWallet: bigint;
   /**
    * Units of the chosen token one collateral unit is worth, as a wad. Absent when the chosen
-   * token is the collateral itself.
+   * token is the collateral itself; present means native xDAI, which keeps `GAS_RESERVE_WEI` back.
    */
   tokenPerCollateralWad?: bigint;
 }
@@ -34,6 +36,8 @@ export function planFunding({ amount, ownWallet, tradeWallet, tokenPerCollateral
   const rate = tokenPerCollateralWad ?? WAD;
   const toToken = (collateral: bigint) => (collateral * rate) / WAD;
   const toCollateral = (token: bigint) => (rate > 0n ? (token * WAD) / rate : 0n);
+  const reserve = tokenPerCollateralWad === undefined ? 0n : GAS_RESERVE_WEI;
+  const spendable = ownWallet > reserve ? ownWallet - reserve : 0n;
 
   const collateralIn = toCollateral(amount);
   const toAdd = collateralIn > tradeWallet ? collateralIn - tradeWallet : 0n;
@@ -41,12 +45,12 @@ export function planFunding({ amount, ownWallet, tradeWallet, tokenPerCollateral
   const depositNeeded = rate === WAD ? toAdd : (toAdd * rate + WAD - 1n) / WAD;
 
   return {
-    available: ownWallet + toToken(tradeWallet),
+    available: spendable + toToken(tradeWallet),
     collateralIn,
     tradeWallet,
     fromTradeWallet: collateralIn - toAdd,
     toAdd,
-    deposit: depositNeeded > ownWallet ? ownWallet : depositNeeded,
+    deposit: depositNeeded > spendable ? spendable : depositNeeded,
   };
 }
 
