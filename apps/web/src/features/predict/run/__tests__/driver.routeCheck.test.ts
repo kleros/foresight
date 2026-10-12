@@ -1,4 +1,4 @@
-import type { FlowTx, TxGateway } from "@foresight/tx-orchestrator";
+import { createFlowRunStore, createMemoryStorage, type FlowTx, type TxGateway } from "@foresight/tx-orchestrator";
 import type { Hash, TransactionReceipt } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -23,6 +23,9 @@ function fakeGateway(): TxGateway & { readonly signRequests: FlowTx[] } {
     isKnown: () => Promise.resolve(true),
   };
 }
+
+const reverted = (hash: Hash): TransactionReceipt =>
+  ({ transactionHash: hash, status: "reverted", blockNumber: 19_000_000n }) as TransactionReceipt;
 
 const isDeposit = (tx: FlowTx) => tx.to === addresses.collateral;
 
@@ -101,5 +104,40 @@ describe("createPredictRun route check", () => {
     expect(gateway.signRequests.filter(isDeposit)).toHaveLength(1);
     expect(driver.getProgress().stage).toBe("halted");
     expect(driver.getProgress().failure).toEqual({ reason: "no-route", retryable: false });
+  });
+
+  it("reports a stored batch that reverted as reverted after an earlier no-route halt", async () => {
+    const store = createFlowRunStore({ storage: createMemoryStorage() });
+    const flowId = "predict-route-check-recovered";
+    const quoter = fakeQuoter({ refuse: () => quoter.requests.length > 2 });
+    const gateway = { ...fakeGateway(), getReceipt: (hash: Hash) => Promise.resolve(reverted(hash)) };
+    const make = (gw: TxGateway, q: FakeQuoter) =>
+      createPredictRun({
+        gateway: gw,
+        reader: fakeReader({ deployed: true }),
+        quoter: q,
+        flowId,
+        store,
+        ctx: () => ctx(),
+        snapshot: () => snapshot(),
+      });
+
+    const driver = make(gateway, quoter);
+    drivers.push(driver);
+    driver.start();
+    await settled(driver);
+    expect(driver.getProgress().failure).toEqual({ reason: "no-route", retryable: false });
+    driver.reset();
+
+    // Another tab leaves the deposit in flight in the shared store.
+    const other = make({ ...fakeGateway(), waitForReceipt: () => new Promise(() => {}) }, fakeQuoter());
+    other.start();
+    await vi.waitFor(() => expect(other.getProgress().stage).toBe("confirming"));
+    other.dispose();
+
+    driver.start();
+    await settled(driver);
+
+    expect(driver.getProgress().failure).toEqual({ reason: "reverted", retryable: false });
   });
 });
