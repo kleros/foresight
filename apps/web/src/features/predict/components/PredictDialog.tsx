@@ -90,6 +90,10 @@ export function PredictDialog({
             isReadOnly={isRunning}
           />
           <PredictStepsTimeline steps={steps} />
+          <p className="text-fs-text-secondary text-center text-sm">
+            Trading stops at your estimate, so no market moves past it. The average price you pay or receive includes
+            the pool fee.
+          </p>
           {skipped > 0 ? (
             <p className="text-fs-text-secondary text-center text-sm">
               {skipped} of your estimates could not be traded right now and were left out.
