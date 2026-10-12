@@ -1,3 +1,4 @@
+import { createViemTxGateway, type FlowTx } from "@foresight/tx-orchestrator";
 import {
   createPublicClient,
   createWalletClient,
@@ -8,6 +9,7 @@ import {
   parseAbi,
   parseEther,
   type Address,
+  type Hash,
   type Hex,
   type PrivateKeyAccount,
   type PublicClient,
@@ -15,8 +17,9 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { gnosis } from "viem/chains";
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { planFunding } from "../../utils/funding";
 import type { PredictCtx, PredictOption, PredictSnapshot } from "../types";
 
 /**
@@ -32,6 +35,7 @@ const load = async () => ({
   ...(await import("../../utils/poolMath")),
   ...(await import("../../run/reader")),
   ...(await import("../plan")),
+  ...(await import("../../run/driver")),
 });
 
 /**
@@ -666,4 +670,222 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
     },
     600_000,
   );
+});
+
+/** Hardhat's fourth account, whose trade wallet no other fork test touches. */
+const STALE_OWNER_KEY = "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6" as const;
+
+describe("the split amount when the cached trade-wallet balance is stale, against a gnosis fork", () => {
+  const owner = privateKeyToAccount(STALE_OWNER_KEY);
+  let client: PublicClient;
+  let wallet: WalletClient;
+  let session: ForkSession;
+  let snapshotId: string;
+  let app: Awaited<ReturnType<typeof load>>;
+
+  beforeAll(async () => {
+    if (!FORK_RPC_URL) return;
+    const transport = http(FORK_RPC_URL);
+    client = createPublicClient({ chain: gnosis, transport }) as PublicClient;
+    wallet = createWalletClient({ chain: gnosis, transport });
+    await grantLensQuoter(FORK_RPC_URL);
+    session = await newestSession();
+    app = await load();
+  }, 120_000);
+
+  beforeEach(async () => {
+    if (!FORK_RPC_URL) return;
+    snapshotId = await rpc<string>("evm_snapshot");
+  });
+
+  afterEach(async () => {
+    if (!FORK_RPC_URL) return;
+    await rpc("evm_revert", [snapshotId]);
+  });
+
+  const send = async (to: Address, data: Hex = "0x", value = 0n) => {
+    const hash = await wallet.sendTransaction({ account: owner, chain: gnosis, to, data, value });
+    const receipt = await client.waitForTransactionReceipt({ hash });
+    if (receipt.status !== "success") throw new Error(`${to} reverted`);
+    return hash;
+  };
+
+  const collateralOf = (holder: Address, blockNumber?: bigint) =>
+    client.readContract({
+      address: session.collateralToken,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [holder],
+      ...(blockNumber === undefined ? {} : { blockNumber }),
+    });
+
+  /** The collateral a predict transaction splits at the session's parent. */
+  function parentSplit(data: Hex): bigint {
+    const decoded = decodeFunctionData({ abi: app.tradeExecutorAbi, data });
+    if (decoded.functionName !== "batchExecute") throw new Error(`Expected batchExecute, got ${decoded.functionName}`);
+    for (const call of decoded.args[0]) {
+      if (call.to.toLowerCase() !== app.gnosisRouterAddress(CHAIN_ID)!.toLowerCase()) continue;
+      const inner = decodeFunctionData({ abi: app.gnosisRouterAbi, data: call.data });
+      if (
+        inner.functionName === "splitPosition" &&
+        inner.args[1].toLowerCase() === session.parentMarket.toLowerCase()
+      ) {
+        return inner.args[2];
+      }
+    }
+    throw new Error("The predict transaction splits nothing at the parent.");
+  }
+
+  /** An option one MOVE above a child's UP pool, which sits far enough from 0 and 1 to take it. */
+  async function roomyOption(): Promise<PredictOption> {
+    for (const child of session.children) {
+      const ref = app.optionPoolRefs(await app.fetchSessionPools(session.id), child.id).up;
+      if (!ref) continue;
+      const pool = await app.readPoolLiquidity(client, ref);
+      const up = app.priceFromSqrtPriceX96(pool.sqrtPriceX96, pool.outcomeIsToken0);
+      if (up > (WAD * 3n) / 10n && up < (WAD * 7n) / 10n) {
+        return {
+          childMarket: child.id,
+          underlying: child.underlyingToken,
+          upToken: child.upToken,
+          downToken: child.downToken,
+          invalidToken: child.invalidToken,
+          targetPriceWad: up + MOVE,
+        };
+      }
+    }
+    throw new Error("No child pool sits near 0.5. Run `yarn simulate:session:gnosis-fork --liquidity` first.");
+  }
+
+  /**
+   * Puts `topUp` collateral in the owner's trade wallet, then runs the app's driver as the popup
+   * would with the trade wallet cached at `cached(real)` and `asked(real)` collateral asked for.
+   */
+  async function predictWithCache(args: {
+    native: boolean;
+    topUp: bigint;
+    cached: (real: bigint) => bigint;
+    asked: (real: bigint) => bigint;
+  }) {
+    const route = app.sDaiDepositRoute(session.collateralToken, CHAIN_ID)!;
+    const router = app.gnosisRouterAddress(CHAIN_ID)!;
+    const factory = app.tradeExecutorFactoryAddress(CHAIN_ID)!;
+    const { predicted } = await app.fetchExecutorState(client, { factory, owner: owner.address });
+
+    await send(
+      route.sDaiAdapter,
+      encodeFunctionData({ abi: app.sDaiAdapterAbi, functionName: "depositXDAI", args: [owner.address] }),
+      parseEther("100"),
+    );
+    await send(
+      session.collateralToken,
+      encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [predicted, args.topUp] }),
+    );
+
+    const real = await collateralOf(predicted);
+    const rate = await client.readContract({
+      address: route.sDai,
+      abi: parseAbi(["function convertToAssets(uint256) view returns (uint256)"]),
+      functionName: "convertToAssets",
+      args: [WAD],
+    });
+    const tokenPerCollateralWad = args.native ? rate : undefined;
+    const amount = args.native ? (args.asked(real) * rate) / WAD : args.asked(real);
+    const ownWallet = args.native
+      ? await client.getBalance({ address: owner.address })
+      : await collateralOf(owner.address);
+
+    // what the popup shows, worked out from the cached balance as usePredictFunding does
+    const funding = planFunding({ amount, ownWallet, tradeWallet: args.cached(real), tokenPerCollateralWad });
+    const snapshot: PredictSnapshot = {
+      options: [await roomyOption()],
+      deposit: funding.deposit,
+      depositNative: args.native,
+      collateralIn: funding.collateralIn,
+      collateralBefore: args.cached(real),
+      startedAt: Math.floor(Date.now() / 1000),
+    };
+    const ctx: PredictCtx = {
+      chainId: CHAIN_ID,
+      owner: owner.address,
+      executor: predicted,
+      factory,
+      router,
+      collateral: session.collateralToken,
+      parentMarket: session.parentMarket,
+      sDaiAdapter: route.sDaiAdapter,
+    };
+
+    const sent: Array<{ tx: FlowTx; hash: Hash }> = [];
+    const driver = app.createPredictRun({
+      gateway: createViemTxGateway({
+        client,
+        sendTransaction: async (tx) => {
+          const hash = await wallet.sendTransaction({
+            account: owner,
+            chain: gnosis,
+            to: tx.to,
+            data: tx.data,
+            value: tx.value,
+          });
+          sent.push({ tx, hash });
+          return hash;
+        },
+      }),
+      reader: app.createPredictReader({ client, sessionId: session.id, collateral: session.collateralToken }),
+      quoter: app.createLensQuoter(client, CHAIN_ID),
+      slippageBps: 300,
+      flowId: `predict-stale-cache-${Date.now()}`,
+      ctx: () => ctx,
+      snapshot: () => snapshot,
+    });
+
+    try {
+      driver.start();
+      await vi.waitFor(() => expect(["halted", "complete"]).toContain(driver.getProgress().stage), {
+        timeout: 300_000,
+        interval: 250,
+      });
+      expect(driver.getProgress().stage, JSON.stringify(driver.getProgress().failure)).toBe("complete");
+    } finally {
+      driver.dispose();
+    }
+
+    // what each deposit put in the trade wallet, read from the chain either side of its block
+    let added = 0n;
+    for (const { tx, hash } of sent) {
+      const to = tx.to.toLowerCase();
+      if (to !== session.collateralToken.toLowerCase() && to !== route.sDaiAdapter.toLowerCase()) continue;
+      const { blockNumber } = await client.getTransactionReceipt({ hash });
+      added += (await collateralOf(predicted, blockNumber)) - (await collateralOf(predicted, blockNumber - 1n));
+    }
+
+    const predict = sent.find(({ tx }) => tx.to.toLowerCase() === predicted.toLowerCase());
+    if (!predict) throw new Error("No predict transaction was sent.");
+
+    return { split: parentSplit(predict.tx.data!), added, shown: funding.fromTradeWallet };
+  }
+
+  const cases = [
+    ["an xDAI deposit, cache 2 below the real balance", true, parseEther("5"), (real: bigint) => real - WAD * 2n],
+    ["an xDAI deposit, cache at 0", true, parseEther("15"), () => 0n],
+    ["an sDAI deposit, cache 2 below the real balance", false, parseEther("5"), (real: bigint) => real - WAD * 2n],
+    ["an sDAI deposit, cache at 0", false, parseEther("15"), () => 0n],
+  ] as const;
+
+  for (const [name, native, topUp, cached] of cases) {
+    it.skipIf(!FORK_RPC_URL)(
+      `splits what the deposit added plus the trade-wallet share shown (${name})`,
+      async () => {
+        // the low cache asks for more than the wallet holds, the zero cache for less, as the verifier did
+        const asked =
+          topUp === parseEther("5") ? (real: bigint) => real + parseEther("4.5698") : (real: bigint) => real - WAD * 5n;
+
+        const { split, added, shown } = await predictWithCache({ native, topUp, cached, asked });
+
+        expect(split, `added ${added}, shown from the trade wallet ${shown}`).toBe(added + shown);
+      },
+      600_000,
+    );
+  }
 });
