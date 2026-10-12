@@ -7,8 +7,10 @@ import {
   http,
   parseAbi,
   parseEther,
+  parseEventLogs,
   type Address,
   type Hex,
+  type Log,
   type PrivateKeyAccount,
   type PublicClient,
   type WalletClient,
@@ -262,11 +264,20 @@ const POSITION_MANAGER_ABI = parseAbi([
   "function mint((address token0, address token1, int24 tickLower, int24 tickUpper, uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, address recipient, uint256 deadline) params) payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)",
 ]);
 const TICK_SPACING_ABI = parseAbi(["function tickSpacing() view returns (int24)"]);
+/** Algebra's pool event; amounts are the pool's deltas, so the input side includes the fee. */
+const ALGEBRA_EVENTS_ABI = parseAbi([
+  "event Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 price, uint128 liquidity, int24 tick)",
+  "function globalState() view returns (uint160 price, int24 tick, uint16 fee, uint16 timepointIndex, uint8 communityFeeToken0, uint8 communityFeeToken1, bool unlocked)",
+]);
+/** Algebra quotes its fee in millionths of the input. */
+const FEE_DENOMINATOR = 1_000_000n;
 
 const WAD = 10n ** 18n;
 const Q96 = 2n ** 96n;
 /** How far each estimate sits from the pool it is placed against. */
 const MOVE = (WAD * 8n) / 100n;
+/** An estimate this close to its pool fills almost entirely at the cap, so the fee decides the average. */
+const NEAR = (WAD * 5n) / 10_000n;
 /** A concentrated position this many times the pool's own liquidity. */
 const LP_MULTIPLE = 4n;
 /** A rival's price move between quote and execution, in hundredths of a percent: inside the 1% slippage. */
@@ -323,6 +334,7 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
     const hash = await wallet.sendTransaction({ account: from, chain: gnosis, to, data, value });
     const receipt = await client.waitForTransactionReceipt({ hash });
     if (receipt.status !== "success") throw new Error(`${to} reverted`);
+    return receipt;
   };
 
   const deadline = async () => (await client.getBlock()).timestamp + 3600n;
@@ -532,19 +544,20 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
       slippageBps: tolerances.SLIPPAGE_BPS,
     };
 
-    const sent: Array<{ id: string; status: string; data: Hex }> = [];
+    const sent: Array<{ id: string; status: string; data: Hex; logs: Log[] }> = [];
     for (const step of app.planPredict(snapshot, deps)) {
       if (await step.canSkip?.(ctx, snapshot)) continue;
       const tx = await step.build(ctx, snapshot);
       if (step.id.startsWith("predict-")) await beforeSend?.();
 
       let status = "success";
+      let logs: Log[] = [];
       try {
-        await send(owner, tx.to, tx.data, tx.value ?? 0n);
+        logs = (await send(owner, tx.to, tx.data, tx.value ?? 0n)).logs;
       } catch (reason) {
         status = `reverted: ${String(reason).split("\n")[0]}`;
       }
-      sent.push({ id: step.id, status, data: tx.data ?? "0x" });
+      sent.push({ id: step.id, status, data: tx.data ?? "0x", logs });
     }
     return sent;
   }
@@ -629,6 +642,88 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
       ).toEqual(sent.map(() => "success"));
       expectAtTarget(await poolPrice(child, "down"), WAD - target, "the DOWN pool");
       expectAtTarget(await poolPrice(child, "up"), target, "the UP pool");
+    },
+    600_000,
+  );
+
+  /** The pool's current dynamic fee, in millionths. */
+  const poolFee = async (child: ForkSession["children"][number], side: Side) => {
+    const [, , fee] = await client.readContract({
+      address: (await poolRef(child, side)).address,
+      abi: ALGEBRA_EVENTS_ABI,
+      functionName: "globalState",
+    });
+    return BigInt(fee);
+  };
+
+  /** One leg's fill from its pool's Swap events: collateral per outcome token, fee included, in WAD. */
+  async function legFill(child: ForkSession["children"][number], side: Side, logs: Log[]) {
+    const ref = await poolRef(child, side);
+    const swaps = parseEventLogs({ abi: ALGEBRA_EVENTS_ABI, eventName: "Swap", logs }).filter(
+      (each) => each.address.toLowerCase() === ref.address.toLowerCase(),
+    );
+    expect(swaps.length, `the ${side} leg swapped`).toBeGreaterThan(0);
+    const amount0 = swaps.reduce((sum, each) => sum + each.args.amount0, 0n);
+    const amount1 = swaps.reduce((sum, each) => sum + each.args.amount1, 0n);
+    const [outcome, underlying] = ref.outcomeIsToken0 ? [amount0, amount1] : [amount1, amount0];
+    // pool deltas: positive flows into the pool, so a buy takes outcome tokens out
+    const isBuy = outcome < 0n;
+    const outcomeMoved = isBuy ? -outcome : outcome;
+    const underlyingMoved = isBuy ? underlying : -underlying;
+    return { isBuy, average: (underlyingMoved * WAD) / outcomeMoved };
+  }
+
+  it.skipIf(!FORK_RPC_URL)(
+    "keeps the fee-inclusive average of a buy and a sell leg within the target by no more than the pool fee",
+    async () => {
+      const { child, up, down } = await tradeableChild();
+      const ticks = BigInt(tolerances.PRICE_TOLERANCE_TICKS);
+      const [tickUp, tickDown] = [10_001n ** ticks, 10_000n ** ticks];
+      const scenarios = [
+        { what: "an UP buy", near: "up" as Side, isBuy: true, target: up + NEAR },
+        { what: "a DOWN sell", near: "down" as Side, isBuy: false, target: WAD - (down - NEAR) },
+      ];
+
+      for (const { what, near, isBuy, target } of scenarios) {
+        const capOf = (side: Side) => (side === "up" ? target : WAD - target);
+        await concentrate(child, "up", capOf("up"));
+        await concentrate(child, "down", capOf("down"));
+
+        const fees = { up: 0n, down: 0n };
+        const recordFees = async () => {
+          for (const side of ["up", "down"] as const) {
+            const fee = await poolFee(child, side);
+            if (fee > fees[side]) fees[side] = fee;
+          }
+        };
+        const sent = await predict(optionFor(child, target), parseEther("300"), recordFees);
+        await recordFees();
+
+        expect(
+          sent.map((each) => each.status),
+          `${what}: every step executes`,
+        ).toEqual(sent.map(() => "success"));
+        const logs = sent.filter((each) => each.id.startsWith("predict-")).flatMap((each) => each.logs);
+
+        const fill = await legFill(child, near, logs);
+        expect(fill.isBuy, `${what} is the leg the scenario places next to its cap`).toBe(isBuy);
+
+        const cap = capOf(near);
+        const fee = fees[near];
+        const detail = `${what} averaged ${fill.average} against cap ${cap} with fee ${fee}`;
+        if (isBuy) {
+          // a buy pays at most the cap before the fee, so at most cap / (1 - fee) with it
+          const bound = (cap * tickUp * FEE_DENOMINATOR) / (tickDown * (FEE_DENOMINATOR - fee));
+          expect(fill.average, detail).toBeLessThanOrEqual(bound);
+        } else {
+          // a sell receives at least the cap before the fee, so at least cap * (1 - fee) with it
+          const bound = (cap * tickDown * (FEE_DENOMINATOR - fee)) / (tickUp * FEE_DENOMINATOR);
+          expect(fill.average, detail).toBeGreaterThanOrEqual(bound);
+        }
+
+        await rpc("evm_revert", [snapshotId]);
+        snapshotId = await rpc<string>("evm_snapshot");
+      }
     },
     600_000,
   );

@@ -215,3 +215,36 @@ describe("predicting", () => {
     expect(screen.getByText(/1 of your estimates could not be traded/)).toBeInTheDocument();
   });
 });
+
+describe("what the estimate caps", () => {
+  // Product policy: the estimate bounds where the market ends, and the average fill includes the pool fee.
+  const endsAtEstimate = /\b(ends?|stops?|settles?|lands?|finish(es)?)\b[^.]*\bat (your|the|each) estimates?\b/i;
+  const averageIncludesFee = /\baverage\b[^.]*\b(includes?|including)\b[^.]*\bpool fees?\b/i;
+
+  const dialogText = () => screen.getByRole("dialog").textContent?.replace(/\s+/g, " ") ?? "";
+
+  it.each([
+    ["an estimate above the market", selected.slice(0, 1)],
+    ["an estimate below the market", selected.slice(1)],
+    ["estimates both ways at once", selected],
+  ])("says the market ends at the estimate and the average includes the pool fee, for %s", (_, estimates) => {
+    render(<PredictDialog {...props()} selected={estimates} />);
+
+    expect(dialogText()).toMatch(endsAtEstimate);
+    expect(dialogText()).toMatch(averageIncludesFee);
+  });
+
+  it("says it to a returning visitor moving an existing prediction", () => {
+    render(
+      <PredictDialog
+        {...props()}
+        isFirstPrediction={false}
+        amount={undefined}
+        funding={funding({ collateralIn: 0n })}
+      />,
+    );
+
+    expect(dialogText()).toMatch(endsAtEstimate);
+    expect(dialogText()).toMatch(averageIncludesFee);
+  });
+});
