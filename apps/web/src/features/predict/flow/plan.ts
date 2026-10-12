@@ -51,6 +51,14 @@ export class NoRouteError extends Error {
   }
 }
 
+/** The run is set up so that it cannot succeed; trying again with the same input fails the same way. */
+export class PredictConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PredictConfigError";
+  }
+}
+
 function batched<T>(items: T[], size: number): T[][] {
   const batches: T[][] = [];
   for (let index = 0; index < items.length; index += size) batches.push(items.slice(index, index + size));
@@ -178,7 +186,7 @@ export function depositLandedAt(snap: PredictSnapshot): bigint {
 
 export function planPredict(snapshot: PredictSnapshot, deps: PredictDeps): Step[] {
   if (snapshot.options.length === 0) {
-    throw new Error("There are no estimates to predict.");
+    throw new PredictConfigError("There are no estimates to predict.");
   }
 
   const steps: Step[] = [
@@ -203,7 +211,7 @@ export function planPredict(snapshot: PredictSnapshot, deps: PredictDeps): Step[
           return depositTx({ executor: ctx.executor, asset: { token: ctx.collateral, amount: snap.deposit } });
         }
         if (ctx.sDaiAdapter === null) {
-          throw new Error("This network has no xDAI route into the trade wallet.");
+          throw new PredictConfigError("This network has no xDAI route into the trade wallet.");
         }
         return depositNativeTx({ executor: ctx.executor, sDaiAdapter: ctx.sDaiAdapter, amount: snap.deposit });
       },

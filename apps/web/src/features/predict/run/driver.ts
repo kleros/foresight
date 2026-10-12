@@ -20,6 +20,7 @@ import {
   createPredictHooks,
   NoRouteError,
   planPredict,
+  PredictConfigError,
   STEP_ID,
   tradeWalletShare,
   type PredictDeps,
@@ -52,6 +53,8 @@ export function createPredictRun(args: {
   /** Set while the routes are checked, before the orchestrator has a run; reset and dispose clear it. */
   let checking: object | undefined;
   let noRoute = false;
+  /** Set while a sent transaction's outcome is read from the chain; the run itself stays stopped meanwhile. */
+  let reconciling = false;
   let cached: PredictProgress;
 
   const deps: PredictDeps = {
@@ -75,7 +78,7 @@ export function createPredictRun(args: {
     // A missing route is fatal to the orchestrator; `noRoute` keeps the reason it cannot carry.
     classifyError: (error) => {
       noRoute = error instanceof NoRouteError;
-      if (noRoute) return "unknown";
+      if (noRoute || error instanceof PredictConfigError) return "unknown";
       return error instanceof Error && !("cause" in error) ? "rpc" : classifyTxError(error);
     },
   });
@@ -102,6 +105,7 @@ export function createPredictRun(args: {
   function stage(): PredictProgress["stage"] {
     const run = orchestrator.getRun();
     if (!run) return failure ? "halted" : checking ? "quoting" : "idle";
+    if (reconciling && !failure) return "confirming";
 
     switch (run.status) {
       case "completed":
@@ -150,13 +154,17 @@ export function createPredictRun(args: {
 
   orchestrator.subscribe(notify);
   orchestrator.on("flow:paused", () => {
-    report(errorOf(orchestrator.getRun())?.cause, resumeRun);
+    const run = orchestrator.getRun();
+    report(errorOf(run)?.cause, pendingHashOf(run) ? reconcileRun : resumeRun);
   });
   orchestrator.on("flow:failed", (event) => {
     const reason = noRoute ? "no-route" : event.error.cause;
     noRoute = false;
-    // A failed wait keeps its hash; resuming waits on that transaction rather than signing again.
-    report(reason, pendingHashOf(orchestrator.getRun()) ? resumeRun : undefined);
+    // A failed wait keeps its hash, so the chain is asked how it ended before anything is signed again.
+    if (pendingHashOf(orchestrator.getRun())) report(reason, reconcileRun);
+    // A reverted batch is rebuilt from fresh quotes; the steps before it stay settled.
+    else if (reason === "reverted" && event.error.stepId.startsWith("predict-")) report(reason, resumeRun);
+    else report(reason);
   });
   orchestrator.on("flow:completed", () => {
     args.onComplete?.();
@@ -168,12 +176,29 @@ export function createPredictRun(args: {
       void work().catch((error: unknown) => {
         if (error instanceof NoRouteError) report("no-route");
         else if (error instanceof TradeWalletShortError) report("balance");
+        else if (error instanceof PredictConfigError) report("unknown");
         else report(classifyTxError(error), action);
       });
     return action;
   }
 
   const resumeRun = detached(() => orchestrator.resume());
+
+  /** Settles a sent transaction whose receipt was never seen, then carries on only if it mined or may still. */
+  const reconcileRun = detached(async () => {
+    reconciling = true;
+    notify();
+    const found = await orchestrator.reconcileInFlight().finally(() => {
+      reconciling = false;
+    });
+    // A revert is reported through `flow:failed`; a dropped transaction is rebuilt only on the next press.
+    if (found.outcome === "reverted") return;
+    if (found.outcome === "dropped") {
+      report(errorOf(orchestrator.getRun())?.cause ?? "unknown", resumeRun);
+      return;
+    }
+    await orchestrator.resume();
+  });
 
   /**
    * A run left behind by a closed tab. Its transactions may be on chain, so it is reconciled and
@@ -189,6 +214,7 @@ export function createPredictRun(args: {
 
     planned = [];
     const found = await orchestrator.reconcileInFlight();
+    if (found.outcome === "reverted") return;
     // A deposit signed as the tab died left no hash, and the balance cannot show it until it mines.
     if (found.outcome === "unknown" && found.stepId === STEP_ID.deposit) {
       const deposit = steps.find((step) => step.id === STEP_ID.deposit);

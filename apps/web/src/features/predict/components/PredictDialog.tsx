@@ -32,6 +32,8 @@ interface PredictDialogProps {
   skipped: number;
   /** A run is between its first signature and its end. */
   isRunning: boolean;
+  /** A stopped run can pick up where it stopped, with the amount and estimates it was started with. */
+  canRetry: boolean;
   /** What the visitor has to do before this prediction can be made, if anything. */
   notice?: string;
   /** Starts a run, or picks a stopped one up again. */
@@ -55,9 +57,11 @@ export function PredictDialog({
   steps,
   skipped,
   isRunning,
+  canRetry,
   notice,
   onPredict,
 }: PredictDialogProps) {
+  const isLocked = isRunning || canRetry;
   const tooMuch = funding !== null && amount !== undefined && amount > funding.available;
   // with nothing held, an empty amount has nothing to trade with
   const nothingToTrade = isFirstPrediction && (funding?.collateralIn ?? 0n) === 0n;
@@ -76,7 +80,7 @@ export function PredictDialog({
       )}
     >
       <div className="flex min-h-0 w-full flex-col items-center">
-        <PredictList selected={selected} onRemove={onRemove} isReadOnly={isRunning} />
+        <PredictList selected={selected} onRemove={onRemove} isReadOnly={isLocked} />
         <ScrollFade className="min-h-32 w-full">
           <PredictAmountSection
             amount={amount}
@@ -87,7 +91,7 @@ export function PredictDialog({
             funding={funding}
             collateral={collateral}
             isFirstPrediction={isFirstPrediction}
-            isReadOnly={isRunning}
+            isReadOnly={isLocked}
           />
           <PredictStepsTimeline steps={steps} />
           {skipped > 0 ? (
@@ -102,15 +106,12 @@ export function PredictDialog({
           <div className="flex flex-wrap gap-3.5">
             <Button text="Cancel" variant="secondary" onPress={onClose} isDisabled={isRunning} />
             <Button
-              text="Predict"
+              text={canRetry ? "Try the rest" : "Predict"}
               onPress={onPredict}
               isDisabled={
                 isRunning ||
                 notice !== undefined ||
-                selected.length === 0 ||
-                funding === null ||
-                tooMuch ||
-                nothingToTrade
+                (!canRetry && (selected.length === 0 || funding === null || tooMuch || nothingToTrade))
               }
               isLoading={isRunning}
             />

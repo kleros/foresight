@@ -69,6 +69,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
   });
   const stage = progress?.stage ?? "idle";
   const isRunning = stage === "quoting" || stage === "signing" || stage === "confirming";
+  const retryable = stage === "halted" && Boolean(progress?.failure?.retryable);
 
   useEffect(() => {
     if (stage !== "complete") return;
@@ -78,6 +79,8 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
 
   // a transaction that may still mine stays stored, so the next popup recovers it instead of signing again
   const pendingHash = progress?.pendingHash;
+  // a reverted batch is rebuilt from the snapshot the run started with; a pending hash is only checked
+  const canRetry = retryable && !pendingHash && progress?.failure?.reason === "reverted";
 
   const close = () => {
     if (stage === "halted" && !pendingHash) driver?.reset();
@@ -85,7 +88,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
   };
 
   const predict = () => {
-    if (stage === "halted" && progress?.failure?.retryable) {
+    if (retryable) {
       driver?.retry();
       return;
     }
@@ -122,6 +125,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
       steps={steps}
       skipped={progress?.skipped.length ?? 0}
       isRunning={isRunning}
+      canRetry={canRetry}
       notice={
         // once a run is going its own state is the story, not what the wallet is doing now
         isRunning ? undefined : notice({ owner, onRightChain: chainId === DEFAULT_CHAIN_ID, ready })

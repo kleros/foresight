@@ -63,6 +63,7 @@ const props = () => ({
   steps,
   skipped: 0,
   isRunning: false,
+  canRetry: false,
   onPredict: vi.fn(),
 });
 
@@ -207,6 +208,31 @@ describe("predicting", () => {
     expect(screen.getByText("You turned the request down.")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Predict" }));
     expect(onPredict).toHaveBeenCalled();
+  });
+
+  it("offers the rest of a stopped run on the amount and estimates it started with", async () => {
+    const onPredict = vi.fn();
+    render(
+      <PredictDialog
+        {...props()}
+        amount={100n * WAD}
+        canRetry
+        steps={{ ...steps, failure: "1 of 2 predictions went through. The trade could not go through at these prices." }}
+        onPredict={onPredict}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Predict" })).not.toBeInTheDocument();
+    for (const remove of screen.getAllByRole("button", { name: /Remove/ })) expect(remove).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Max" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Try the rest" }));
+    expect(onPredict).toHaveBeenCalled();
+  });
+
+  it("does not offer the rest while the wallet is on the wrong network", () => {
+    render(<PredictDialog {...props()} canRetry notice="Switch to Gnosis to make this prediction." />);
+
+    expect(screen.getByRole("button", { name: "Try the rest" })).toBeDisabled();
   });
 
   it("says which estimates were left out", () => {
