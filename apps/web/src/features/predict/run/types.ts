@@ -1,5 +1,5 @@
 import type { TxErrorCause } from "@foresight/tx-orchestrator";
-import type { Address } from "viem";
+import type { Address, Hash } from "viem";
 
 /**
  * `no-route`: no option can be moved toward its estimate with what the run has to spend.
@@ -40,12 +40,14 @@ export interface PredictProgress {
   batches: number;
   /** Why it stopped, classified. The chain's own wording names gas and contracts, so it stays out. */
   failure?: { reason: PredictFailureReason; retryable: boolean };
+  /** A stopped run's broadcast transaction whose receipt has not been seen: it may still mine. */
+  pendingHash?: Hash;
 }
 
 export interface PredictDriver {
   start(): void;
   retry(): void;
-  /** Throws the run away, including anything persisted. */
+  /** Throws the run away, including anything persisted. Not for a run with a `pendingHash`. */
   reset(): void;
   dispose(): void;
   getProgress(): PredictProgress;

@@ -10,7 +10,7 @@ import {
   type OrchestratorRun,
   type TxGateway,
 } from "@foresight/tx-orchestrator";
-import type { Address } from "viem";
+import type { Address, Hash } from "viem";
 
 import type { SwapQuoter } from "@/lib/swap/types";
 
@@ -94,6 +94,11 @@ export function createPredictRun(args: {
   const errorOf = (run: OrchestratorRun<PredictSnapshot, PredictCtx> | null): FlowError | undefined =>
     run?.status === "paused" || run?.status === "failed" ? run.error : undefined;
 
+  function pendingHashOf(run: OrchestratorRun<PredictSnapshot, PredictCtx> | null): Hash | undefined {
+    const outcome = run && run.status !== "running" ? currentEntry(run.steps)?.outcome : undefined;
+    return outcome?.status === "submitted" ? outcome.hash : undefined;
+  }
+
   function stage(): PredictProgress["stage"] {
     const run = orchestrator.getRun();
     if (!run) return failure ? "halted" : checking ? "quoting" : "idle";
@@ -126,6 +131,7 @@ export function createPredictRun(args: {
       return { id: entry.stepId, label: entry.label, state: "pending" };
     });
 
+    const pendingHash = pendingHashOf(run);
     const rows = steps.length > 0 ? steps : planned;
     const batchRows = rows.filter((row) => row.id.startsWith("predict-"));
 
@@ -136,6 +142,7 @@ export function createPredictRun(args: {
       batchesDone: batchRows.filter((row) => row.state === "success").length,
       batches: batchRows.length,
       failure,
+      ...(pendingHash ? { pendingHash } : {}),
     };
   }
 
@@ -148,7 +155,8 @@ export function createPredictRun(args: {
   orchestrator.on("flow:failed", (event) => {
     const reason = noRoute ? "no-route" : event.error.cause;
     noRoute = false;
-    report(reason);
+    // A failed wait keeps its hash; resuming waits on that transaction rather than signing again.
+    report(reason, pendingHashOf(orchestrator.getRun()) ? resumeRun : undefined);
   });
   orchestrator.on("flow:completed", () => {
     args.onComplete?.();

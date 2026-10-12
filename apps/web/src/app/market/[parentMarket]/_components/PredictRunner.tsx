@@ -76,8 +76,11 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
     onSuccess();
   }, [stage, driver, onSuccess]);
 
+  // a transaction that may still mine stays stored, so the next popup recovers it instead of signing again
+  const pendingHash = progress?.pendingHash;
+
   const close = () => {
-    if (stage === "halted") driver?.reset();
+    if (stage === "halted" && !pendingHash) driver?.reset();
     onClose();
   };
 
@@ -86,7 +89,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
       driver?.retry();
       return;
     }
-    if (stage === "halted") driver?.reset();
+    if (stage === "halted" && !pendingHash) driver?.reset();
     setFrozenToAdd(funding?.toAdd);
     driver?.start();
   };

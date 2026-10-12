@@ -33,6 +33,10 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
   "deposit-unconfirmed": "Your last deposit may still be confirming. Check your wallet's activity, then try again.",
 };
 
+/** A transaction is out there and nothing has said how it ended, so it is neither a success nor a failure. */
+const PENDING_COPY =
+  "Your transaction was sent but has not confirmed yet. It may still go through. Press Predict to check again.";
+
 const STAGE_COPY: Partial<Record<PredictProgress["stage"], string>> = {
   quoting: "Finding the best prices…",
   signing: "Waiting for your signature…",
@@ -107,6 +111,10 @@ export function predictSteps(args: {
 
   const partial =
     progress.batchesDone > 0 ? `${progress.batchesDone} of ${progress.batches} predictions went through. ` : "";
-  const reason = progress.failure ? FAILURE_COPY[progress.failure.reason] : FAILURE_COPY.unknown;
+  const reason = progress.pendingHash
+    ? PENDING_COPY
+    : progress.failure
+      ? FAILURE_COPY[progress.failure.reason]
+      : FAILURE_COPY.unknown;
   return { rows, failure: `${partial}${reason}` };
 }
