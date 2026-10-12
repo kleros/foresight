@@ -74,6 +74,22 @@ describe("createPredictRun route check", () => {
     expect(quoter.requests).toHaveLength(4);
   });
 
+  it.each([
+    ["reset", (driver: PredictDriver) => driver.reset()],
+    ["disposed", (driver: PredictDriver) => driver.dispose()],
+  ])("signs nothing when %s while the routes are checked", async (_, stop) => {
+    const quoter = fakeQuoter();
+    const { gateway, driver } = setup(quoter);
+
+    driver.start();
+    stop(driver);
+    await vi.waitFor(() => expect(quoter.requests).toHaveLength(2));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(gateway.signRequests).toEqual([]);
+    expect(driver.getProgress()).toMatchObject({ stage: "idle", failure: undefined });
+  });
+
   it("halts as no-route, not retryable, when the route is gone by the time the trade is built", async () => {
     // The default option quotes one sell and one buy; the check spends those two.
     const quoter = fakeQuoter({ refuse: () => quoter.requests.length > 2 });

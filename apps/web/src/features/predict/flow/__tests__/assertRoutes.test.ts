@@ -1,0 +1,38 @@
+import { describe, expect, it, vi } from "vitest";
+
+import { sqrtPriceX96FromPrice } from "../../utils/poolMath";
+import { assertRoutes, NoRouteError } from "../plan";
+import type { OptionChainState, PredictOption } from "../types";
+import { chainState, ctx, fakeQuoter, fakeReader, option, snapshot, WAD } from "./support/fakes";
+
+const TARGET = WAD / 4n;
+
+/** Both pools already at the estimate, so the option has nothing to trade. */
+const atTarget: OptionChainState = chainState({
+  pools: {
+    up: { sqrtPriceX96: sqrtPriceX96FromPrice(TARGET, true), liquidity: WAD, outcomeIsToken0: true },
+    down: { sqrtPriceX96: sqrtPriceX96FromPrice(WAD - TARGET, true), liquidity: WAD, outcomeIsToken0: true },
+  },
+});
+
+const routable = option(1, TARGET);
+const stuck = option(2, TARGET);
+const state = (each: PredictOption) => (each.childMarket === stuck.childMarket ? atTarget : chainState());
+
+describe("assertRoutes", () => {
+  it("refuses when any one batch has nothing to trade", async () => {
+    const deps = { reader: fakeReader({ state }), quoter: fakeQuoter(), optionsPerBatch: 1 };
+
+    await expect(assertRoutes(ctx(), snapshot({ options: [routable, stuck] }), deps)).rejects.toBeInstanceOf(
+      NoRouteError,
+    );
+  });
+
+  it("passes a batch where one option routes, without reporting the other as skipped", async () => {
+    const onSkip = vi.fn();
+    const deps = { reader: fakeReader({ state }), quoter: fakeQuoter(), onSkip };
+
+    await expect(assertRoutes(ctx(), snapshot({ options: [routable, stuck] }), deps)).resolves.toBeUndefined();
+    expect(onSkip).not.toHaveBeenCalled();
+  });
+});

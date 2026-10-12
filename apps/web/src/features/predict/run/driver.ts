@@ -38,8 +38,8 @@ export function createPredictRun(args: {
   let failure: PredictProgress["failure"];
   let retryFailed: (() => void) | undefined;
   let planned: PredictStepRow[] = [];
-  /** True while the routes are checked, before the orchestrator has a run. */
-  let checking = false;
+  /** Set while the routes are checked, before the orchestrator has a run; reset and dispose clear it. */
+  let checking: object | undefined;
   let noRoute = false;
   let cached: PredictProgress;
 
@@ -179,14 +179,17 @@ export function createPredictRun(args: {
     const steps = planPredict(snapshot, deps);
     // The rows exist before the run does, so the popup opens on the list rather than on nothing.
     planned = steps.map((step) => ({ id: step.id, label: step.label, state: "pending" }));
-    checking = true;
+    const check = {};
+    checking = check;
     notify();
 
-    try {
-      await assertRoutes(ctx, snapshot, deps);
-    } finally {
-      checking = false;
-    }
+    const failed = await assertRoutes(ctx, snapshot, deps).then(
+      () => undefined,
+      (error: unknown) => ({ error }),
+    );
+    if (checking !== check) return;
+    checking = undefined;
+    if (failed) throw failed.error;
     await orchestrator.start({ flowId: args.flowId, snapshot, ctx, steps });
   });
 
@@ -210,6 +213,7 @@ export function createPredictRun(args: {
     },
 
     reset() {
+      checking = undefined;
       orchestrator.trash(args.flowId);
       skipped.length = 0;
       planned = [];
@@ -217,6 +221,7 @@ export function createPredictRun(args: {
     },
 
     dispose() {
+      checking = undefined;
       orchestrator.dispose();
     },
 
