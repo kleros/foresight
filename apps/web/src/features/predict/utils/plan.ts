@@ -1,6 +1,6 @@
 import type { PoolLiquidity } from "@/types/pool";
 
-import { priceFromSqrtPriceX96, volumeUntilPrice, type PoolVolumes } from "./poolMath";
+import { limitSqrtPriceX96, priceFromSqrtPriceX96, volumeUntilPrice, type PoolVolumes } from "./poolMath";
 
 /**
  * Turning one option's estimate into trades. Splitting the underlying gives an equal amount of
@@ -15,6 +15,15 @@ export const MIN_LEG_WEI = 10n ** 16n;
 
 /** Of a hundred. The sells are quoted before the buys run and the pools move in between. */
 export const BUY_BUDGET_SHARE = 98n;
+
+/**
+ * Of ten thousand, added to what a leg is sized to need. Algebra re-derives its fee from volatility
+ * on a block's first swap, so it can rise between the read and the swap; the price limit stops
+ * the leg at the target and the excess stays in the trade wallet.
+ */
+export const LEG_HEADROOM_BPS = 100n;
+
+const withHeadroom = (amount: bigint): bigint => (amount * (10_000n + LEG_HEADROOM_BPS)) / 10_000n;
 
 export type OptionSide = "up" | "down";
 
@@ -42,9 +51,13 @@ export interface SwapLeg {
   side: OptionSide;
   /** Outcome tokens for a sell, underlying for a buy. */
   amountIn: bigint;
+  /** The pool's sqrt price at this side's target, which the swap may not pass. */
+  limitSqrtPrice: bigint;
+  /** What the swap returns if it runs all the way to the limit. */
+  amountOutAtLimit: bigint;
 }
 
-export interface SoldLeg extends SwapLeg {
+export interface SoldLeg extends Pick<SwapLeg, "side" | "amountIn"> {
   /** What selling `amountIn` was quoted to return. */
   underlyingOut: bigint;
 }
@@ -59,6 +72,7 @@ interface SideState {
   /** How far the market has to move to meet the estimate. Positive is a rise, which is a buy. */
   gap: bigint;
   volumes: PoolVolumes;
+  limitSqrtPrice: bigint;
   /** The outcome tokens this side will hold once the split lands. */
   held: bigint;
 }
@@ -76,6 +90,7 @@ function sideState(option: OptionTarget, side: OptionSide): SideState | null {
   return {
     gap: target - current,
     volumes: volumeUntilPrice(pool, target),
+    limitSqrtPrice: limitSqrtPriceX96(target, pool.outcomeIsToken0, target > current),
     held: option.held[side] + option.splitAmount,
   };
 }
@@ -88,8 +103,10 @@ export function planSells(option: OptionTarget): SwapLeg[] {
     const state = sideState(option, side);
     if (state === null || state.gap >= 0n) continue;
 
-    const amountIn = min(state.volumes.outcome, state.held);
-    if (amountIn >= MIN_LEG_WEI) legs.push({ side, amountIn });
+    const amountIn = min(withHeadroom(state.volumes.outcome), state.held);
+    if (amountIn >= MIN_LEG_WEI) {
+      legs.push({ side, amountIn, limitSqrtPrice: state.limitSqrtPrice, amountOutAtLimit: state.volumes.underlying });
+    }
   }
 
   return legs;
@@ -123,8 +140,10 @@ export function planBuys(option: OptionTarget, sold: readonly SoldLeg[]): BuyPla
   const legs: SwapLeg[] = [];
   for (const { side, state } of buying) {
     const share = (budget * state.gap) / totalGap;
-    const amountIn = min(state.volumes.underlying, share);
-    if (amountIn >= MIN_LEG_WEI) legs.push({ side, amountIn });
+    const amountIn = min(withHeadroom(state.volumes.underlying), share);
+    if (amountIn >= MIN_LEG_WEI) {
+      legs.push({ side, amountIn, limitSqrtPrice: state.limitSqrtPrice, amountOutAtLimit: state.volumes.outcome });
+    }
   }
 
   // A sell leaves pairs behind, and a pair left unmerged is money sitting in two halves. An

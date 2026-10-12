@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
 
-import { BUY_BUDGET_SHARE } from "../../utils/plan";
+import { BUY_BUDGET_SHARE, LEG_HEADROOM_BPS } from "../../utils/plan";
 import { createPredictHooks, PREDICT_BATCH_SIZE, planPredict, STEP_ID, type PredictDeps } from "../plan";
 import type { PredictOption } from "../types";
 import { addresses, AT, chainState, ctx, DEEP, fakeQuoter, fakeReader, option, snapshot, WAD } from "./support/fakes";
@@ -102,12 +102,14 @@ describe("the predict step", () => {
       `${addresses.router}:splitPosition`,
       `${one.upToken}:approve`,
       `${addresses.swapRouter}:swap`,
+      `${one.upToken}:approve`,
       `${one.downToken}:approve`,
       `${one.upToken}:approve`,
       `${one.invalidToken}:approve`,
       `${addresses.router}:mergePositions`,
       `${one.underlying}:approve`,
       `${addresses.swapRouter}:swap`,
+      `${one.underlying}:approve`,
     ]);
   });
 
@@ -180,8 +182,9 @@ describe("the predict step", () => {
     const { deps: used } = await buildPredict();
     const quoter = used.quoter as ReturnType<typeof fakeQuoter>;
 
-    // selling 0.5 of UP is quoted at 0.25, and 0.5 of pairs merge back
-    expect(quoter.requests[1]!.amount).toBe(((WAD / 4n + WAD / 2n) * BUY_BUDGET_SHARE) / 100n);
+    // the sell offers 0.5 of UP plus headroom, quoted at half that, and the rest of the pairs merge back
+    const sold = ((WAD / 2n) * (10_000n + LEG_HEADROOM_BPS)) / 10_000n;
+    expect(quoter.requests[1]!.amount).toBe(((sold / 2n + WAD - sold) * BUY_BUDGET_SHARE) / 100n);
   });
 
   it("leaves out an option the market already agrees with", async () => {
@@ -191,8 +194,8 @@ describe("the predict step", () => {
       state: () =>
         chainState({
           pools: {
-            up: { sqrtPriceX96: AT["0.25"], liquidity: DEEP, outcomeIsToken0: true },
-            down: { sqrtPriceX96: 0n, liquidity: 0n, outcomeIsToken0: true },
+            up: { sqrtPriceX96: AT["0.25"], liquidity: DEEP, tick: 0, fee: 0n, ticks: [], outcomeIsToken0: true },
+            down: { sqrtPriceX96: 0n, liquidity: 0n, tick: 0, fee: 0n, ticks: [], outcomeIsToken0: true },
           },
         }),
     });

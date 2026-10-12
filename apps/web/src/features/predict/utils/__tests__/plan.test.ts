@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { PoolLiquidity } from "@/types/pool";
 
-import { BUY_BUDGET_SHARE, MIN_LEG_WEI, planBuys, planSells, type OptionTarget } from "../plan";
+import { BUY_BUDGET_SHARE, MIN_LEG_WEI, planBuys, planSells, type OptionTarget, type SwapLeg } from "../plan";
 
 const WAD = 10n ** 18n;
 
@@ -11,9 +11,15 @@ const AT = { "0.0625": 2n ** 94n, "0.25": 2n ** 95n, "1": 2n ** 96n } as const;
 
 const pool = (sqrtPriceX96: bigint, liquidity = WAD): PoolLiquidity => ({
   sqrtPriceX96,
+  tick: 0,
   liquidity,
+  fee: 0n,
+  ticks: [],
   outcomeIsToken0: true,
 });
+
+/** Each leg's side and size, leaving its limit to the tests about limits. */
+const sized = (legs: SwapLeg[]) => legs.map(({ side, amountIn }) => ({ side, amountIn }));
 
 /** Deep enough that a leg is never capped by the pool, only by the budget. */
 const DEEP = 10n ** 30n;
@@ -31,24 +37,24 @@ describe("planSells", () => {
     // UP sits at 1 and the estimate puts it at 0.25, so UP sells and DOWN does not
     const legs = planSells(option());
 
-    expect(legs).toEqual([{ side: "up", amountIn: 1000000000000000000n }]);
+    expect(sized(legs)).toEqual([{ side: "up", amountIn: 1000000000000000000n }]);
   });
 
   it("sells no more than the executor will hold", () => {
     const legs = planSells(option({ splitAmount: WAD / 4n }));
 
-    expect(legs).toEqual([{ side: "up", amountIn: 250000000000000000n }]);
+    expect(sized(legs)).toEqual([{ side: "up", amountIn: 250000000000000000n }]);
   });
 
   it("counts what the executor already holds alongside the split", () => {
     const legs = planSells(option({ held: { up: WAD / 4n, down: 0n, invalid: 0n }, splitAmount: WAD / 4n }));
 
-    expect(legs).toEqual([{ side: "up", amountIn: 500000000000000000n }]);
+    expect(sized(legs)).toEqual([{ side: "up", amountIn: 500000000000000000n }]);
   });
 
   it("drops a leg too small to be worth its gas", () => {
     expect(planSells(option({ splitAmount: MIN_LEG_WEI - 1n }))).toEqual([]);
-    expect(planSells(option({ splitAmount: MIN_LEG_WEI }))).toEqual([{ side: "up", amountIn: MIN_LEG_WEI }]);
+    expect(sized(planSells(option({ splitAmount: MIN_LEG_WEI })))).toEqual([{ side: "up", amountIn: MIN_LEG_WEI }]);
   });
 
   it("sells both sides when the two pools disagree with the estimate the same way", () => {
@@ -58,7 +64,7 @@ describe("planSells", () => {
   });
 
   it("leaves a pool that never priced alone, whichever side of it the outcome is", () => {
-    const asToken1 = { sqrtPriceX96: 0n, liquidity: WAD, outcomeIsToken0: false };
+    const asToken1 = { sqrtPriceX96: 0n, liquidity: WAD, tick: 0, fee: 0n, ticks: [], outcomeIsToken0: false };
 
     expect(planSells(option({ pools: { up: asToken1, down: pool(AT["1"]) } })).map((leg) => leg.side)).toEqual([
       "down",
@@ -72,13 +78,59 @@ describe("planSells", () => {
   });
 });
 
+describe("the limit on each leg", () => {
+  it("stops a sell at the target and expects what selling down to it pays", () => {
+    const [leg] = planSells(option());
+
+    // UP falls from 1 to the 0.25 target, so sqrtP 1 to 0.5: y falls 1e18 to 0.5e18
+    expect(leg).toEqual({
+      side: "up",
+      amountIn: WAD,
+      limitSqrtPrice: AT["0.25"],
+      amountOutAtLimit: WAD / 2n,
+    });
+  });
+
+  it("stops a buy at the target and expects what buying up to it returns", () => {
+    const rising = option({ pools: { up: pool(AT["0.0625"]), down: pool(AT["1"]) }, targetPriceWad: WAD / 4n });
+
+    const { legs } = planBuys(rising, [{ side: "down", amountIn: WAD, underlyingOut: WAD * 10n }]);
+
+    // UP climbs 0.0625 to 0.25, so sqrtP 0.25 to 0.5: x falls 4e18 to 2e18, y rises 0.25e18 to 0.5e18
+    expect(legs).toEqual([
+      {
+        side: "up",
+        // a hundredth of headroom on top of the 0.25 the pool needs
+        amountIn: ((WAD / 4n) * 101n) / 100n,
+        limitSqrtPrice: AT["0.25"],
+        amountOutAtLimit: WAD * 2n,
+      },
+    ]);
+  });
+
+  it("stops a sell at the target's own sqrt price, never short of it", () => {
+    // 0.3 has no exact sqrt price, so a sell has to round its limit up to stay at or above it
+    const target = (WAD * 3n) / 10n;
+    const [leg] = planSells(option({ targetPriceWad: target }));
+
+    expect(leg!.limitSqrtPrice * leg!.limitSqrtPrice * WAD).toBeGreaterThanOrEqual(target * AT["1"] * AT["1"]);
+    expect((leg!.limitSqrtPrice - 1n) * (leg!.limitSqrtPrice - 1n) * WAD).toBeLessThan(target * AT["1"] * AT["1"]);
+  });
+
+  it("offers the headroom on a sell the balance covers", () => {
+    const [leg] = planSells(option({ splitAmount: WAD * 2n }));
+
+    expect(leg!.amountIn).toBe((WAD * 101n) / 100n);
+  });
+});
+
 describe("planBuys", () => {
   it("spends the sells' proceeds on the side being bought", () => {
     const plan = planBuys(option(), [{ side: "up", amountIn: WAD, underlyingOut: (WAD * 4n) / 10n }]);
 
     // the whole UP balance went, so nothing pairs off: 0.4 proceeds at 98 of 100
     expect(plan.mergeAmount).toBe(0n);
-    expect(plan.legs).toEqual([{ side: "down", amountIn: (((WAD * 4n) / 10n) * BUY_BUDGET_SHARE) / 100n }]);
+    expect(sized(plan.legs)).toEqual([{ side: "down", amountIn: (((WAD * 4n) / 10n) * BUY_BUDGET_SHARE) / 100n }]);
   });
 
   it("merges the pairs left over and spends those too", () => {
@@ -86,7 +138,7 @@ describe("planBuys", () => {
 
     // 0.5 UP and 1 DOWN remain, so 0.5 merges back; 0.2 + 0.5 at 98 of 100
     expect(plan.mergeAmount).toBe(WAD / 2n);
-    expect(plan.legs).toEqual([{ side: "down", amountIn: ((WAD / 5n + WAD / 2n) * BUY_BUDGET_SHARE) / 100n }]);
+    expect(sized(plan.legs)).toEqual([{ side: "down", amountIn: ((WAD / 5n + WAD / 2n) * BUY_BUDGET_SHARE) / 100n }]);
   });
 
   it("merges no more sets than it holds INVALID for", () => {
@@ -115,7 +167,7 @@ describe("planBuys", () => {
 
     // 0.5 and 0.1875 of 0.6875 are 8 and 3 elevenths of the budget
     const budget = (WAD * 11n * BUY_BUDGET_SHARE) / 100n;
-    expect(plan.legs).toEqual([
+    expect(sized(plan.legs)).toEqual([
       { side: "up", amountIn: (budget * 8n) / 11n },
       { side: "down", amountIn: (budget * 3n) / 11n },
     ]);

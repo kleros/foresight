@@ -76,8 +76,22 @@ const withReason = (progress: PredictProgress, reason: "rpc" | "unknown"): Predi
 const atTarget = (targetPriceWad: bigint) => (): OptionChainState =>
   chainState({
     pools: {
-      up: { sqrtPriceX96: sqrtPriceX96FromPrice(targetPriceWad, true), liquidity: WAD, outcomeIsToken0: true },
-      down: { sqrtPriceX96: sqrtPriceX96FromPrice(WAD - targetPriceWad, true), liquidity: WAD, outcomeIsToken0: true },
+      up: {
+        sqrtPriceX96: sqrtPriceX96FromPrice(targetPriceWad, true),
+        liquidity: WAD,
+        tick: 0,
+        fee: 0n,
+        ticks: [],
+        outcomeIsToken0: true,
+      },
+      down: {
+        sqrtPriceX96: sqrtPriceX96FromPrice(WAD - targetPriceWad, true),
+        liquidity: WAD,
+        tick: 0,
+        fee: 0n,
+        ticks: [],
+        outcomeIsToken0: true,
+      },
     },
   });
 

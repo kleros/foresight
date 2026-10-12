@@ -1,5 +1,13 @@
 import { Lens, type ChainId } from "@seer-pm/lens/client";
-import type { Address, Hex, PublicClient } from "viem";
+import {
+  decodeFunctionData,
+  encodeFunctionData,
+  parseAbi,
+  toFunctionSelector,
+  type Address,
+  type Hex,
+  type PublicClient,
+} from "viem";
 
 import type { SwapQuoter } from "./types";
 
@@ -15,6 +23,12 @@ import type { SwapQuoter } from "./types";
  */
 const QUOTE_DEADLINE_SECONDS = 30n * 60n;
 
+/** Swapr's Algebra router, which Lens returns for a single-pool route. Lens leaves the limit at zero. */
+const ALGEBRA_ROUTER_ABI = parseAbi([
+  "function exactInputSingle((address tokenIn, address tokenOut, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 limitSqrtPrice) params) payable returns (uint256 amountOut)",
+]);
+const EXACT_INPUT_SINGLE = toFunctionSelector(ALGEBRA_ROUTER_ABI[0]);
+
 export function createLensQuoter(client: PublicClient, chainId: ChainId, now: () => number = Date.now): SwapQuoter {
   const lens = new Lens(client, chainId);
 
@@ -25,16 +39,30 @@ export function createLensQuoter(client: PublicClient, chainId: ChainId, now: ()
         tokenOut: request.tokenOut,
         amount: request.amount,
         recipient: request.recipient,
-        exactOut: request.exactOut,
         slippageBps: request.slippageBps,
         deadline: BigInt(Math.floor(now() / 1000)) + QUOTE_DEADLINE_SECONDS,
       });
 
+      if (!result.data.startsWith(EXACT_INPUT_SINGLE)) {
+        throw new Error(
+          `Lens routed ${request.tokenIn} to ${request.tokenOut} through a call that takes no price limit.`,
+        );
+      }
+      const [params] = decodeFunctionData({ abi: ALGEBRA_ROUTER_ABI, data: result.data as Hex }).args;
+
+      // Lens quotes the whole amount past the target; the limit stops it at `amountOutAtLimit`
+      const amountOut = result.amountOut < request.amountOutAtLimit ? result.amountOut : request.amountOutAtLimit;
+      const amountOutMinimum = result.amountOut === 0n ? 0n : (params.amountOutMinimum * amountOut) / result.amountOut;
+
       return {
         amountIn: result.amountIn,
-        amountOut: result.amountOut,
+        amountOut,
         router: result.target as Address,
-        data: result.data as Hex,
+        data: encodeFunctionData({
+          abi: ALGEBRA_ROUTER_ABI,
+          functionName: "exactInputSingle",
+          args: [{ ...params, amountOutMinimum, limitSqrtPrice: request.limitSqrtPrice }],
+        }),
         value: result.msgValue,
       };
     },

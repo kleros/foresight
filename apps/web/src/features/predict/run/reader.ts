@@ -9,9 +9,12 @@ import type { PoolLiquidity } from "@/types/pool";
 
 import { fetchSessionPools, optionPoolRefs } from "../api/getOptionPools";
 import type { OptionChainState, PredictReader } from "../flow/types";
+import { sqrtPriceX96FromPrice } from "../utils/poolMath";
+
+const WAD = 10n ** 18n;
 
 /** A side with no pool, which `volumeUntilPrice` sizes to nothing. */
-const UNPRICED: PoolLiquidity = { sqrtPriceX96: 0n, liquidity: 0n, outcomeIsToken0: true };
+const UNPRICED: PoolLiquidity = { sqrtPriceX96: 0n, tick: 0, liquidity: 0n, fee: 0n, ticks: [], outcomeIsToken0: true };
 
 /**
  * What the plan reads before it builds. Everything that decides an amount comes from the chain:
@@ -22,8 +25,10 @@ export function createPredictReader(args: {
   sessionId: string;
   collateral: Address;
 }): PredictReader {
-  const poolState = async (ref: PoolRef | undefined): Promise<PoolLiquidity> =>
-    ref === undefined ? UNPRICED : readPoolLiquidity(args.client, ref);
+  const poolState = async (ref: PoolRef | undefined, targetPriceWad: bigint): Promise<PoolLiquidity> =>
+    ref === undefined
+      ? UNPRICED
+      : readPoolLiquidity(args.client, ref, sqrtPriceX96FromPrice(targetPriceWad, ref.outcomeIsToken0));
 
   return {
     async isExecutorDeployed(executor) {
@@ -57,7 +62,10 @@ export function createPredictReader(args: {
       return Promise.all(
         options.map(async (option, index): Promise<OptionChainState> => {
           const sides = optionPoolRefs(refs, option.childMarket);
-          const [up, down] = await Promise.all([poolState(sides.up), poolState(sides.down)]);
+          const [up, down] = await Promise.all([
+            poolState(sides.up, option.targetPriceWad),
+            poolState(sides.down, WAD - option.targetPriceWad),
+          ]);
           const at = index * 4;
 
           return {

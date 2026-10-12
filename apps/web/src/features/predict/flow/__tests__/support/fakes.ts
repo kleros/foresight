@@ -51,8 +51,8 @@ export function option(index: number, targetPriceWad = WAD / 4n): PredictOption 
 export const chainState = (overrides: Partial<OptionChainState> = {}): OptionChainState => ({
   pools: {
     // shallow, so the sell stops at the target with pairs still in hand for the merge
-    up: { sqrtPriceX96: AT["1"], liquidity: WAD / 2n, outcomeIsToken0: true },
-    down: { sqrtPriceX96: AT["0.25"], liquidity: DEEP, outcomeIsToken0: true },
+    up: { sqrtPriceX96: AT["1"], liquidity: WAD / 2n, tick: 0, fee: 0n, ticks: [], outcomeIsToken0: true },
+    down: { sqrtPriceX96: AT["0.25"], liquidity: DEEP, tick: 0, fee: 0n, ticks: [], outcomeIsToken0: true },
   },
   held: { up: 0n, down: 0n, invalid: 0n },
   underlying: 0n,

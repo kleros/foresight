@@ -29,13 +29,21 @@ export interface OptionTrade {
   buys: QuotedSwap[];
 }
 
-/** An approve sits with its own swap: two legs spending one token would otherwise overwrite one another's allowance instead of adding to it. */
+/**
+ * An approve sits with its own swap: two legs spending one token would otherwise overwrite one
+ * another's allowance instead of adding to it. A swap its price limit stops early leaves the rest
+ * of the allowance standing, so it goes back to zero after.
+ */
 function swapCalls({ tokenIn, quote }: QuotedSwap): ExecutorCall[] {
   if (quote.value > 0n) {
     throw new Error("A swap between outcome tokens cannot carry native currency.");
   }
 
-  return [approveCall(tokenIn, quote.router, quote.amountIn), { to: quote.router, data: quote.data }];
+  return [
+    approveCall(tokenIn, quote.router, quote.amountIn),
+    { to: quote.router, data: quote.data },
+    approveCall(tokenIn, quote.router, 0n),
+  ];
 }
 
 /** One option's prediction as executor calls: split, sell, merge, buy, each step funding the next. */

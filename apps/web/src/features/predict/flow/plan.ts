@@ -78,6 +78,8 @@ async function optionCalls(
       amount: leg.amountIn,
       recipient: ctx.executor,
       slippageBps: deps.slippageBps,
+      limitSqrtPrice: leg.limitSqrtPrice,
+      amountOutAtLimit: leg.amountOutAtLimit,
     });
     sells.push({ tokenIn, quote });
     sold.push({ ...leg, underlyingOut: quote.amountOut });
@@ -93,6 +95,8 @@ async function optionCalls(
       amount: leg.amountIn,
       recipient: ctx.executor,
       slippageBps: deps.slippageBps,
+      limitSqrtPrice: leg.limitSqrtPrice,
+      amountOutAtLimit: leg.amountOutAtLimit,
     });
     buys.push({ tokenIn: option.underlying, quote });
   }

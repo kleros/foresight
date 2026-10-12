@@ -10,8 +10,22 @@ const TARGET = WAD / 4n;
 /** Both pools already at the estimate, so the option has nothing to trade. */
 const atTarget: OptionChainState = chainState({
   pools: {
-    up: { sqrtPriceX96: sqrtPriceX96FromPrice(TARGET, true), liquidity: WAD, outcomeIsToken0: true },
-    down: { sqrtPriceX96: sqrtPriceX96FromPrice(WAD - TARGET, true), liquidity: WAD, outcomeIsToken0: true },
+    up: {
+      sqrtPriceX96: sqrtPriceX96FromPrice(TARGET, true),
+      liquidity: WAD,
+      tick: 0,
+      fee: 0n,
+      ticks: [],
+      outcomeIsToken0: true,
+    },
+    down: {
+      sqrtPriceX96: sqrtPriceX96FromPrice(WAD - TARGET, true),
+      liquidity: WAD,
+      tick: 0,
+      fee: 0n,
+      ticks: [],
+      outcomeIsToken0: true,
+    },
   },
 });
 

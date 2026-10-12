@@ -65,12 +65,14 @@ describe("optionTradeCalls", () => {
       `${ROUTER}:splitPosition`,
       `${UP}:approve`,
       `${SWAP_ROUTER}:swap`,
+      `${UP}:approve`,
       `${DOWN}:approve`,
       `${UP}:approve`,
       `${INVALID}:approve`,
       `${ROUTER}:mergePositions`,
       `${UNDERLYING}:approve`,
       `${SWAP_ROUTER}:swap`,
+      `${UNDERLYING}:approve`,
     ]);
   });
 
@@ -97,22 +99,40 @@ describe("optionTradeCalls", () => {
       `${UNDERLYING}:approve`,
       `${SWAP_ROUTER}:swap`,
       `${UNDERLYING}:approve`,
+      `${UNDERLYING}:approve`,
       `${SWAP_ROUTER}:swap`,
+      `${UNDERLYING}:approve`,
     ]);
-    expect(calls[2]).toEqual({
+    expect(calls[3]).toEqual({
       to: UNDERLYING,
       data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [SWAP_ROUTER, 25n] }),
     });
   });
 
+  it("takes the router's allowance back to zero after each swap, since a limited swap may spend less", () => {
+    const calls = optionTradeCalls(
+      trade({
+        sells: [{ tokenIn: UP, quote: quote(40n) }],
+        buys: [{ tokenIn: UNDERLYING, quote: quote(25n) }],
+      }),
+    );
+    const reset = (token: Address) => ({
+      to: token,
+      data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [SWAP_ROUTER, 0n] }),
+    });
+
+    expect(calls[2]).toEqual(reset(UP));
+    expect(calls[5]).toEqual(reset(UNDERLYING));
+  });
+
   it("leaves out a split it was given nothing for", () => {
-    expect(optionTradeCalls(trade({ sells: [{ tokenIn: UP, quote: quote(40n) }] }))).toHaveLength(2);
+    expect(optionTradeCalls(trade({ sells: [{ tokenIn: UP, quote: quote(40n) }] }))).toHaveLength(3);
   });
 
   it("leaves out a merge it was given nothing for", () => {
     expect(
       optionTradeCalls(trade({ mergeAmount: 0n, buys: [{ tokenIn: UNDERLYING, quote: quote(9n) }] })),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
   });
 
   it("splits on the child market, not on the session's parent", () => {

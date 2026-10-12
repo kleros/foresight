@@ -9,13 +9,16 @@ import type { Address, Hex } from "viem";
 export interface SwapQuoteRequest {
   tokenIn: Address;
   tokenOut: Address;
-  /** Exactly what goes in, or exactly what must come out when `exactOut` is set. */
+  /** Exactly what goes in. */
   amount: bigint;
   /** Holds `tokenIn` and receives `tokenOut`. */
   recipient: Address;
-  exactOut?: boolean;
   /** Hundredths of a percent the quote may move against the recipient before it reverts. */
   slippageBps?: number;
+  /** The pool's sqrt price the swap stops at, leaving the rest of `amount` with the recipient. */
+  limitSqrtPrice: bigint;
+  /** What the swap returns if it stops at the limit, which caps the quoted output. */
+  amountOutAtLimit: bigint;
 }
 
 export interface SwapQuote {
