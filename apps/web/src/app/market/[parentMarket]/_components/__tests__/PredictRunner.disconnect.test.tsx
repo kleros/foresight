@@ -130,8 +130,7 @@ function renderPage() {
 
 async function openPopup() {
   await userEvent.click(screen.getByRole("button", { name: "Predict selected" }));
-  // the runner is loaded on demand
-  return within(await screen.findByRole("dialog", {}, { timeout: 5000 }));
+  return within(await screen.findByRole("dialog"));
 }
 
 beforeEach(() => {

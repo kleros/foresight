@@ -130,12 +130,11 @@ async function predictAndComplete(skipped: Address[]) {
     </QueryClientProvider>,
   );
   await userEvent.click(screen.getByRole("button", { name: "Predict selected" }));
-  // the runner and both dialogs are loaded on demand
-  await screen.findByRole("dialog", {}, { timeout: 5000 });
+  await screen.findByRole("dialog");
   act(() => run.set(progressAt("signing")));
   act(() => run.set(progressAt("complete", skipped)));
 
-  await screen.findByText(/Prediction placed/, {}, { timeout: 5000 });
+  await screen.findByText(/Prediction placed/);
   expect(driver.reset).toHaveBeenCalled();
   return within(screen.getByRole("dialog"));
 }
