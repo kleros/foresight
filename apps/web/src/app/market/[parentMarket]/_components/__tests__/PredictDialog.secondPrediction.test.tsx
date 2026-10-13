@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Address } from "viem";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PredictDriver, PredictProgress } from "@/features/predict/run/types";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
@@ -157,13 +157,12 @@ async function openSecondPrediction(changed: (typeof OPTIONS)[number]) {
 
   const view = render(card(marketAt(MARKET_BEFORE)));
   await userEvent.click(screen.getByRole("button", { name: "Predict selected" }));
-  // the runner and both dialogs are loaded on demand
-  const first = within(await screen.findByRole("dialog", {}, { timeout: 5000 }));
+  const first = within(await screen.findByRole("dialog"));
   for (const option of OPTIONS) expect(first.getByText(option.name)).toBeInTheDocument();
   act(() => run.set(progressAt("signing")));
   act(() => run.set(progressAt("complete")));
 
-  await userEvent.click(await screen.findByRole("button", { name: "Close" }, { timeout: 5000 }));
+  await userEvent.click(await screen.findByRole("button", { name: "Close" }));
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
   balances.funding = fundingCoveredByTradeWallet();
@@ -171,8 +170,14 @@ async function openSecondPrediction(changed: (typeof OPTIONS)[number]) {
   act(() => useEstimateStore.getState().setEstimate(detail.parentMarket, changed.market, 420));
 
   await userEvent.click(screen.getByRole("button", { name: "Predict selected" }));
-  return within(await screen.findByRole("dialog", {}, { timeout: 5000 }));
+  return within(await screen.findByRole("dialog"));
 }
+
+// PredictCard loads these with next/dynamic on first open; importing them here keeps their
+// first load out of the first test's timeout.
+beforeAll(async () => {
+  await Promise.all([import("../PredictRunner"), import("../PredictSuccessDialog")]);
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
