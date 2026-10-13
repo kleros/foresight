@@ -14,7 +14,7 @@ const WAD = 10n ** 18n;
 export const MIN_LEG_WEI = 10n ** 16n;
 
 /** Of ten thousand, held back from the buys beyond what slippage lets a sell fall short by. */
-export const BUY_BUDGET_MARGIN_BPS = 100n;
+const BUY_BUDGET_MARGIN_BPS = 100n;
 
 /** Of ten thousand, what the buys may spend of the sells' quoted proceeds and the merge. */
 export const buyBudgetShareBps = (slippageBps: number): bigint => 10_000n - BigInt(slippageBps) - BUY_BUDGET_MARGIN_BPS;
