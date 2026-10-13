@@ -3,7 +3,7 @@ import type { ComponentProps, ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { Address } from "viem";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAccount } from "wagmi";
 
 import type { PredictDialog } from "@/features/predict/components/PredictDialog";
@@ -12,11 +12,14 @@ import { usePredictRun, type PredictRunInput } from "@/features/predict/hooks/us
 import type { PredictDriver, PredictProgress, PredictStage } from "@/features/predict/run/types";
 import type { SelectedEstimate } from "@/features/predict/types";
 import { sessionChartKey } from "@/features/sessions/api/getSessionChart";
+import { sessionStatsKey } from "@/features/sessions/api/getSessionStats";
 import type { SessionDetail } from "@/features/sessions/types";
 import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 import { toSessionDetail, type SessionDetailRow } from "@/features/sessions/utils/toSessionDetail";
 import { executorKey } from "@/features/trade-executor/api/getExecutor";
 import { fundsKeyPrefix } from "@/features/trade-executor/api/getFunds";
+
+import { fetchGraphql } from "@/lib/graphql/batcher";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
@@ -120,7 +123,7 @@ function mount(detail: SessionDetail = session()) {
   );
   const view = render(ui(), { wrapper });
   const invalidatedKeys = () => invalidate.mock.calls.map(([filters]) => filters?.queryKey);
-  return { ...view, rerenderAt: () => view.rerender(ui()), invalidatedKeys, onClose, onSuccess };
+  return { ...view, rerenderAt: () => view.rerender(ui()), invalidatedKeys, onClose, onSuccess, queryClient };
 }
 
 // The runner reads only the address and chain off the account.
@@ -232,6 +235,105 @@ describe("PredictRunner, refreshing what a run changed", () => {
     const view = mount();
 
     expect(view.invalidatedKeys()).toEqual([]);
+  });
+});
+
+describe("PredictRunner, refreshing the chart, estimates, Traders and Volume after a prediction", () => {
+  const POOL = addresses.childMarkets[0]!.toLowerCase();
+  const TRADER = "0x5555555555555555555555555555555555555555";
+
+  // An indexer that serves the pre-trade state for its first reads, then the trade.
+  function indexerLagging(staleReads: number) {
+    let reads = 0;
+    vi.mocked(fetchGraphql).mockImplementation(async () => {
+      const traded = reads++ >= staleReads;
+      const swaps = traded ? [{ underlyingPerOutcomeAfter: "624000000000000000", timestamp: "1700000100" }] : [];
+      return {
+        Prediction: traded ? [{ executor_id: TRADER }] : [],
+        Pool: [
+          {
+            id: POOL,
+            childMarket_id: POOL,
+            underlyingPerOutcome: traded ? "624000000000000000" : "500000000000000000",
+            updatedAt: traded ? "1700000100" : "1700000000",
+            volumeUnderlying: traded ? "1000000000000000000" : "0",
+            swaps,
+          },
+        ],
+      };
+    });
+  }
+
+  // Seeds the page's cached chart and stats so the test can read whether each was marked stale.
+  // No observer holds them here, so they are kept from garbage collection across the fake ten minutes.
+  function seedPageQueries(queryClient: QueryClient, sessionId: string) {
+    queryClient.setQueryDefaults(sessionChartKey(sessionId), { gcTime: Infinity });
+    queryClient.setQueryDefaults(sessionStatsKey(sessionId), { gcTime: Infinity });
+    queryClient.setQueryData(sessionChartKey(sessionId), []);
+    queryClient.setQueryData(sessionStatsKey(sessionId), { traders: 0, volumeUnderlying: 0n });
+  }
+
+  const isInvalidated = (queryClient: QueryClient, key: readonly unknown[]) =>
+    queryClient.getQueryState(key)?.isInvalidated ?? false;
+
+  // Ten minutes of timers, stepped so promises between them resolve.
+  async function letRefreshRun() {
+    for (let i = 0; i < 120; i++) await vi.advanceTimersByTimeAsync(5_000);
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    indexerLagging(2);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("marks both the session chart and the session stats stale once a run completes", async () => {
+    const detail = session();
+    const view = mount(detail);
+    seedPageQueries(view.queryClient, detail.id);
+
+    lastInput?.onComplete?.();
+    progress = progressAt("complete");
+    view.rerenderAt();
+    await letRefreshRun();
+
+    expect({
+      chart: isInvalidated(view.queryClient, sessionChartKey(detail.id)),
+      stats: isInvalidated(view.queryClient, sessionStatsKey(detail.id)),
+    }).toEqual({ chart: true, stats: true });
+  });
+
+  it("refreshes Traders and Volume once a run completes", async () => {
+    const detail = session();
+    const view = mount(detail);
+    seedPageQueries(view.queryClient, detail.id);
+
+    lastInput?.onComplete?.();
+    progress = progressAt("complete");
+    view.rerenderAt();
+    await letRefreshRun();
+
+    expect(view.invalidatedKeys()).toContainEqual([...sessionStatsKey(detail.id)]);
+  });
+
+  it("still refreshes the chart and the stats after the popup closes on success", async () => {
+    const detail = session();
+    const view = mount(detail);
+    seedPageQueries(view.queryClient, detail.id);
+
+    lastInput?.onComplete?.();
+    progress = progressAt("complete");
+    view.rerenderAt();
+    view.unmount();
+    await letRefreshRun();
+
+    expect({
+      chart: isInvalidated(view.queryClient, sessionChartKey(detail.id)),
+      stats: isInvalidated(view.queryClient, sessionStatsKey(detail.id)),
+    }).toEqual({ chart: true, stats: true });
   });
 });
 
