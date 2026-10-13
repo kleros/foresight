@@ -14,9 +14,11 @@ export interface SwapQuoteRequest {
   /** Holds `tokenIn` and receives `tokenOut`. */
   recipient: Address;
   /** Hundredths of a percent the quote may move against the recipient before it reverts. */
-  slippageBps?: number;
+  slippageBps: number;
   /** The pool's sqrt price the swap stops at, leaving the rest of `amount` with the recipient. */
   limitSqrtPrice: bigint;
+  /** What the swap spends if it runs all the way to the limit. */
+  amountInAtLimit: bigint;
   /** What the swap returns if it stops at the limit, which caps the quoted output. */
   amountOutAtLimit: bigint;
 }

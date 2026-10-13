@@ -53,6 +53,8 @@ export interface SwapLeg {
   amountIn: bigint;
   /** The pool's sqrt price at this side's target, which the swap may not pass. */
   limitSqrtPrice: bigint;
+  /** What the swap spends if it runs all the way to the limit. */
+  amountInAtLimit: bigint;
   /** What the swap returns if it runs all the way to the limit. */
   amountOutAtLimit: bigint;
 }
@@ -105,7 +107,13 @@ export function planSells(option: OptionTarget): SwapLeg[] {
 
     const amountIn = min(withHeadroom(state.volumes.outcome), state.held);
     if (amountIn >= MIN_LEG_WEI) {
-      legs.push({ side, amountIn, limitSqrtPrice: state.limitSqrtPrice, amountOutAtLimit: state.volumes.underlying });
+      legs.push({
+        side,
+        amountIn,
+        limitSqrtPrice: state.limitSqrtPrice,
+        amountInAtLimit: state.volumes.outcome,
+        amountOutAtLimit: state.volumes.underlying,
+      });
     }
   }
 
@@ -142,7 +150,13 @@ export function planBuys(option: OptionTarget, sold: readonly SoldLeg[], slippag
     const share = (budget * state.gap) / totalGap;
     const amountIn = min(withHeadroom(state.volumes.underlying), share);
     if (amountIn >= MIN_LEG_WEI) {
-      legs.push({ side, amountIn, limitSqrtPrice: state.limitSqrtPrice, amountOutAtLimit: state.volumes.outcome });
+      legs.push({
+        side,
+        amountIn,
+        limitSqrtPrice: state.limitSqrtPrice,
+        amountInAtLimit: state.volumes.underlying,
+        amountOutAtLimit: state.volumes.outcome,
+      });
     }
   }
 

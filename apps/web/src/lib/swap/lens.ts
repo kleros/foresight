@@ -29,6 +29,26 @@ const ALGEBRA_ROUTER_ABI = parseAbi([
 ]);
 const EXACT_INPUT_SINGLE = toFunctionSelector(ALGEBRA_ROUTER_ABI[0]);
 
+const Q192 = 2n ** 192n;
+
+/**
+ * What `amountIn` returns at no worse than the limit price, before the pool fee, less `slippageBps`.
+ * Algebra's token0 is the lower address, and the squared sqrt price is token1 per token0.
+ */
+function minOutAtLimit(
+  tokenIn: Address,
+  tokenOut: Address,
+  amountIn: bigint,
+  limitSqrtPrice: bigint,
+  slippageBps: number,
+) {
+  const priceX192 = limitSqrtPrice * limitSqrtPrice;
+  const kept = 10_000n - BigInt(slippageBps);
+  return BigInt(tokenIn) < BigInt(tokenOut)
+    ? (amountIn * priceX192 * kept) / (Q192 * 10_000n)
+    : (amountIn * Q192 * kept) / (priceX192 * 10_000n);
+}
+
 export function createLensQuoter(client: PublicClient, chainId: ChainId, now: () => number = Date.now): SwapQuoter {
   const lens = new Lens(client, chainId);
 
@@ -52,7 +72,16 @@ export function createLensQuoter(client: PublicClient, chainId: ChainId, now: ()
 
       // Lens quotes the whole amount past the target; the limit stops it at `amountOutAtLimit`
       const amountOut = result.amountOut < request.amountOutAtLimit ? result.amountOut : request.amountOutAtLimit;
-      const amountOutMinimum = result.amountOut === 0n ? 0n : (params.amountOutMinimum * amountOut) / result.amountOut;
+      const scaled = result.amountOut === 0n ? 0n : (params.amountOutMinimum * amountOut) / result.amountOut;
+      const swapped = params.amountIn < request.amountInAtLimit ? params.amountIn : request.amountInAtLimit;
+      const floor = minOutAtLimit(
+        params.tokenIn,
+        params.tokenOut,
+        swapped,
+        request.limitSqrtPrice,
+        request.slippageBps,
+      );
+      const amountOutMinimum = scaled > floor ? scaled : floor;
 
       return {
         amountIn: result.amountIn,
