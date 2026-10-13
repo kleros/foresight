@@ -135,7 +135,7 @@ async function predictAndComplete(skipped: Address[]) {
   act(() => run.set(progressAt("signing")));
   act(() => run.set(progressAt("complete", skipped)));
 
-  await screen.findByText(/Congratulations!/, {}, { timeout: 5000 });
+  await screen.findByText(/Prediction placed/, {}, { timeout: 5000 });
   expect(driver.reset).toHaveBeenCalled();
   return within(screen.getByRole("dialog"));
 }

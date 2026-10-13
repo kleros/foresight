@@ -68,6 +68,13 @@ const props = () => ({
 });
 
 describe("the estimates going in", () => {
+  it("says where each market would move", () => {
+    render(<PredictDialog {...props()} preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 355 } }} />);
+
+    expect(screen.getByText("Market moves from 312 $M to 355 $M")).toBeInTheDocument();
+    expect(screen.getAllByText(/Market moves/)).toHaveLength(1);
+  });
+
   it("lists each estimate with which way it moves the market", () => {
     render(<PredictDialog {...props()} />);
 
@@ -103,9 +110,16 @@ describe("the amount behind them", () => {
   it("says where the total comes from", () => {
     render(<PredictDialog {...props()} />);
 
-    expect(screen.getByText("Total: 10 sDAI =")).toBeInTheDocument();
-    expect(screen.getByText(/6 \(sDAI in Trade\s+Wallet\)/)).toBeInTheDocument();
-    expect(screen.getByText(/4 \(Your Wallet\)/)).toBeInTheDocument();
+    expect(screen.getByText("Total: 10 sDAI")).toBeInTheDocument();
+    expect(screen.getByText("(6 from your trade wallet + 4 from your wallet)")).toBeInTheDocument();
+  });
+
+  it("names only the source the total comes from", () => {
+    render(
+      <PredictDialog {...props()} funding={funding({ tradeWallet: 0n, fromTradeWallet: 0n, toAdd: 10n * WAD })} />,
+    );
+
+    expect(screen.getByText("(10 from your wallet)")).toBeInTheDocument();
   });
 
   it("fills the whole balance on Max", async () => {

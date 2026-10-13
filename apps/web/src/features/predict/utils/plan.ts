@@ -1,6 +1,6 @@
 import type { PoolLiquidity } from "@/types/pool";
 
-import { limitSqrtPriceX96, priceFromSqrtPriceX96, volumeUntilPrice, type PoolVolumes } from "./poolMath";
+import { limitSqrtPriceX96, priceFromSqrtPriceX96, swapToward, volumeUntilPrice, type PoolVolumes } from "./poolMath";
 
 /**
  * Turning one option's estimate into trades. Splitting the underlying gives an equal amount of
@@ -149,4 +149,28 @@ export function planBuys(option: OptionTarget, sold: readonly SoldLeg[], slippag
   // A sell leaves pairs behind, and a pair left unmerged is money sitting in two halves. An
   // option nothing was done to is left alone instead, rather than paying gas to rearrange it.
   return { mergeAmount: legs.length > 0 || sold.length > 0 ? mergeAmount : 0n, legs };
+}
+
+/**
+ * The UP token's price now and once the option's sells and buys have run, from the pool maths alone. The
+ * run quotes against the pools as they are when it signs, so it can land elsewhere.
+ */
+export function previewUpPrice(option: OptionTarget, slippageBps: number): { from: bigint; to: bigint } | null {
+  const up = option.pools.up;
+  if (up.sqrtPriceX96 <= 0n) return null;
+
+  const target = (side: OptionSide) => (side === "up" ? option.targetPriceWad : WAD - option.targetPriceWad);
+  const from = priceFromSqrtPriceX96(up.sqrtPriceX96, up.outcomeIsToken0);
+  let price = from;
+
+  const sold = planSells(option).map((leg): SoldLeg => {
+    const swap = swapToward(option.pools[leg.side], target(leg.side), leg.amountIn);
+    if (leg.side === "up") price = swap.priceWad;
+    return { side: leg.side, amountIn: leg.amountIn, underlyingOut: swap.amountOut };
+  });
+  for (const leg of planBuys(option, sold, slippageBps).legs) {
+    if (leg.side === "up") price = swapToward(up, option.targetPriceWad, leg.amountIn).priceWad;
+  }
+
+  return { from, to: price };
 }

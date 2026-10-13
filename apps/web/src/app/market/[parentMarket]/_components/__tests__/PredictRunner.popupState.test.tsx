@@ -210,18 +210,18 @@ describe("switching the pay token keeps the typed amount, clamped to the new bal
 
     fireEvent.change(popup.getByRole("slider"), { target: { value: "50" } });
     await waitFor(() => expect(amountField(popup)).toHaveValue("5"));
-    expect(popup.getByText("Total: 5 sDAI =")).toBeInTheDocument();
+    expect(popup.getByText("Total: 5 sDAI")).toBeInTheDocument();
 
     // 5 xDAI is 4 sDAI at 1.25 xDAI per sDAI
     await chooseToken(popup, "xDAI");
     await waitFor(() => expect(popup.getByText(/^Balance: 8 xDAI/)).toBeInTheDocument());
     expect(amountField(popup)).toHaveValue("5");
-    expect(popup.getByText("Total: 4 sDAI =")).toBeInTheDocument();
+    expect(popup.getByText("Total: 4 sDAI")).toBeInTheDocument();
 
     await chooseToken(popup, "sDAI");
     await waitFor(() => expect(popup.getByText(/^Balance: 10 sDAI/)).toBeInTheDocument());
     expect(amountField(popup)).toHaveValue("5");
-    expect(popup.getByText("Total: 5 sDAI =")).toBeInTheDocument();
+    expect(popup.getByText("Total: 5 sDAI")).toBeInTheDocument();
   });
 
   it("clamps an amount larger than the new token's balance to that balance", async () => {
@@ -238,7 +238,7 @@ describe("switching the pay token keeps the typed amount, clamped to the new bal
     await waitFor(() => expect(popup.getByText(/^Balance: 5 xDAI/)).toBeInTheDocument());
     expect(amountField(popup)).toHaveValue("5");
     // 5 xDAI is 4 sDAI at 1.25 xDAI per sDAI
-    expect(popup.getByText("Total: 4 sDAI =")).toBeInTheDocument();
+    expect(popup.getByText("Total: 4 sDAI")).toBeInTheDocument();
     expect(popup.queryByText("Not enough balance.")).toBeNull();
   });
 });

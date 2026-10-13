@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { PoolLiquidity } from "@/types/pool";
 
-import { MIN_LEG_WEI, planBuys, planSells, type OptionTarget, type SwapLeg } from "../plan";
+import { MIN_LEG_WEI, planBuys, planSells, previewUpPrice, type OptionTarget, type SwapLeg } from "../plan";
 
 const WAD = 10n ** 18n;
 
@@ -247,5 +247,45 @@ describe("planBuys", () => {
     // half the UP went, so half of what was split is still paired and comes back as underlying
     expect(plan.legs).toEqual([]);
     expect(plan.mergeAmount).toBe(WAD / 2n);
+  });
+});
+
+describe("previewUpPrice", () => {
+  const near = (actual: bigint, expected: bigint) =>
+    expect(actual > expected ? actual - expected : expected - actual).toBeLessThan(10n ** 12n);
+
+  it("moves UP to the estimate when the split covers the sell", () => {
+    // selling 1 UP into a 1-liquidity pool at sqrtP 1 lands on sqrtP 0.5, price 0.25
+    const move = previewUpPrice(option(), SLIPPAGE_BPS);
+
+    expect(move?.from).toBe(WAD);
+    near(move!.to, WAD / 4n);
+  });
+
+  it("stops short of the estimate when the split runs out", () => {
+    // 0.5 UP lands on sqrtP 2/3
+    const move = previewUpPrice(option({ splitAmount: WAD / 2n }), SLIPPAGE_BPS);
+
+    near(move!.to, 444444444444444444n);
+  });
+
+  it("lifts UP toward an estimate above the market with what the DOWN sale pays", () => {
+    const move = previewUpPrice(
+      option({ pools: { up: pool(AT["0.25"]), down: pool(AT["1"]) }, targetPriceWad: WAD / 2n }),
+      SLIPPAGE_BPS,
+    );
+
+    expect(move!.to).toBeGreaterThan(move!.from);
+    expect(move!.to).toBeLessThanOrEqual(WAD / 2n);
+  });
+
+  it("leaves the market where it is with nothing to trade", () => {
+    const move = previewUpPrice(option({ splitAmount: 0n }), SLIPPAGE_BPS);
+
+    expect(move).toEqual({ from: WAD, to: WAD });
+  });
+
+  it("has nothing to show for an UP pool that never priced", () => {
+    expect(previewUpPrice(option({ pools: { up: pool(0n), down: pool(AT["0.25"]) } }), SLIPPAGE_BPS)).toBeNull();
   });
 });

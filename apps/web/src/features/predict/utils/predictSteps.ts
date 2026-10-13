@@ -70,7 +70,9 @@ export function predictSteps(args: {
   const runningBatch = batches.findIndex((step) => step.state === "running");
   const predictRunning = runningBatch >= 0;
   const stageCopy = progress ? (STAGE_COPY[progress.stage] ?? "") : "";
-  const adding = `Adding ${formatAmount(toAdd, decimals)} ${symbol}`;
+  const shown = formatAmount(toAdd, decimals);
+  // an xDAI deposit can leave a shortfall below the shown decimals, which would read as "Adding 0"
+  const adding = toAdd === 0n ? "" : `Adding ${shown === "0" ? "less than 0.000001" : shown} ${symbol}`;
   const fundsWait = progress?.stage === "signing" || progress?.stage === "confirming" ? stageCopy : "";
 
   const rows: PredictStepRow[] = [

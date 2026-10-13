@@ -41,6 +41,8 @@ export function PredictCard({ session, status, marketEstimates }: PredictCardPro
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [leftOut, setLeftOut] = useState<string[]>([]);
   const { address } = useAccount();
+  // what this page last placed, by owner and lower-case market
+  const [placed, setPlaced] = useState<{ owner: Address; values: Record<string, number> }>();
   const [interrupted, setInterrupted] = useState<PredictSnapshot | null>(null);
 
   // read after mount: the stored run lives in this browser, and the popup may have finished or discarded it
@@ -56,6 +58,11 @@ export function PredictCard({ session, status, marketEstimates }: PredictCardPro
   const estimates = useSessionEstimates(session.parentMarket);
   const selected = selectedEstimates(session.options, estimates, marketEstimates);
   const isDisabled = selected.length === 0 || status !== "trading";
+  const changed = selected.filter(
+    (estimate) => placed?.owner !== address || placed?.values[estimate.scale.market.toLowerCase()] !== estimate.value,
+  );
+  // with nothing changed, the same estimates can still be backed with more funds
+  const toPredict = changed.length > 0 ? changed : selected;
 
   return (
     <SectionCard
@@ -102,9 +109,21 @@ export function PredictCard({ session, status, marketEstimates }: PredictCardPro
       {isOpen ? (
         <PredictRunner
           session={session}
-          selected={selected}
+          selected={toPredict}
           onClose={() => setIsOpen(false)}
           onSuccess={(skipped: Address[]) => {
+            if (address) {
+              const traded = toPredict.filter((estimate) => !skipped.includes(estimate.scale.market));
+              setPlaced({
+                owner: address,
+                values: {
+                  ...(placed?.owner === address ? placed.values : {}),
+                  ...Object.fromEntries(
+                    traded.map((estimate) => [estimate.scale.market.toLowerCase(), estimate.value]),
+                  ),
+                },
+              });
+            }
             setLeftOut(
               session.options.filter((option) => skipped.includes(option.market)).map((option) => option.name),
             );

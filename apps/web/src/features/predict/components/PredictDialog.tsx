@@ -9,7 +9,7 @@ import { ScrollFade } from "@/components/ui/ScrollFade";
 
 import type { PayToken } from "../types";
 import { PredictAmountSection, type PayTokenChoice } from "./PredictAmountSection";
-import { PredictList, type ListedEstimate } from "./PredictList";
+import { PredictList, type ListedEstimate, type PriceMove } from "./PredictList";
 import { PredictStepsTimeline } from "./PredictStepsTimeline";
 import type { Funding } from "../utils/funding";
 import type { PredictSteps } from "../utils/predictSteps";
@@ -19,6 +19,8 @@ interface PredictDialogProps {
   onClose: () => void;
   selected: ListedEstimate[];
   onRemove: (market: string) => void;
+  /** Where each listed option's market would move, keyed by lower-case market. */
+  preview?: Record<string, PriceMove>;
   amount: bigint | undefined;
   onAmountChange: (amount: bigint | undefined) => void;
   tokens: PayTokenChoice[];
@@ -50,6 +52,7 @@ export function PredictDialog({
   onClose,
   selected,
   onRemove,
+  preview,
   amount,
   onAmountChange,
   tokens,
@@ -86,7 +89,7 @@ export function PredictDialog({
       )}
     >
       <div className="flex min-h-0 w-full flex-col items-center">
-        <PredictList selected={selected} onRemove={onRemove} isReadOnly={isLocked} />
+        <PredictList selected={selected} onRemove={onRemove} isReadOnly={isLocked} preview={preview} />
         <ScrollFade className="min-h-32 w-full">
           {recovered ? (
             <div className="mb-4 flex flex-col items-center gap-1 text-center">

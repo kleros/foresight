@@ -45,7 +45,11 @@ describe("predictSteps before a run", () => {
   });
 
   it("greys out adding funds when the trade wallet already covers the amount", () => {
-    expect(steps({ toAdd: 0n }).rows[1]?.view).toBe("inactive");
+    expect(steps({ toAdd: 0n }).rows[1]).toMatchObject({ view: "inactive", subtitle: "" });
+  });
+
+  it("never says it is adding 0 when the amount is below the shown decimals", () => {
+    expect(steps({ toAdd: 15n * 10n ** 10n }).rows[1]?.subtitle).toBe("Adding less than 0.000001 sDAI");
   });
 });
 

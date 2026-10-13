@@ -110,3 +110,37 @@ export function volumeUntilPrice(pool: PoolLiquidity, targetPriceWad: bigint): P
 
   return pool.outcomeIsToken0 ? { outcome: amount0, underlying: amount1 } : { outcome: amount1, underlying: amount0 };
 }
+
+export interface SwapResult {
+  /** The outcome token's price the pool ends at. */
+  priceWad: bigint;
+  amountOut: bigint;
+}
+
+/**
+ * Where a swap of `amountIn` (fee included) toward `targetPriceWad` leaves the pool, never past
+ * the target, as a swap limited there would. Searches the price that `volumeUntilPrice` sizes to the amount.
+ */
+export function swapToward(pool: PoolLiquidity, targetPriceWad: bigint, amountIn: bigint): SwapResult {
+  if (pool.sqrtPriceX96 <= 0n) return { priceWad: 0n, amountOut: 0n };
+
+  const current = priceFromSqrtPriceX96(pool.sqrtPriceX96, pool.outcomeIsToken0);
+  const buying = targetPriceWad > current;
+  const legs = (priceWad: bigint) => {
+    const volumes = volumeUntilPrice(pool, priceWad);
+    return buying ? { in: volumes.underlying, out: volumes.outcome } : { in: volumes.outcome, out: volumes.underlying };
+  };
+
+  let reached = current;
+  let beyond = targetPriceWad;
+  if (legs(targetPriceWad).in <= amountIn) reached = targetPriceWad;
+  else {
+    while (beyond - reached > 1n || reached - beyond > 1n) {
+      const middle = (reached + beyond) / 2n;
+      if (legs(middle).in <= amountIn) reached = middle;
+      else beyond = middle;
+    }
+  }
+
+  return { priceWad: reached, amountOut: reached === current ? 0n : legs(reached).out };
+}

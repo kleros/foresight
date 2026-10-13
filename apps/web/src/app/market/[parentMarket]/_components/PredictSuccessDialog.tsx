@@ -35,9 +35,7 @@ export function PredictSuccessDialog({
         "rounded-fs border-fs-border bg-fs-surface border",
       )}
     >
-      <h1 className="text-fs-text-primary text-center text-2xl font-semibold whitespace-pre-line">
-        {"Congratulations! \nYour Prediction was Done!"}
-      </h1>
+      <h1 className="text-fs-text-primary text-center text-2xl font-semibold">Prediction placed</h1>
       <CheckIcon className="size-32" />
       {leftOut.length > 0 ? (
         <p className="text-fs-text-secondary text-center text-sm">

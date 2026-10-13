@@ -19,6 +19,7 @@ import { toSavedEstimates } from "./toPredictOptions";
 import { useHasPredicted } from "./useHasPredicted";
 import { usePredictExecution } from "./usePredictExecution";
 import { usePredictFunding } from "./usePredictFunding";
+import { usePricePreview } from "./usePricePreview";
 
 interface PredictRunnerProps {
   session: SessionDetail;
@@ -70,6 +71,13 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
   const tokens: PayTokenChoice[] = [{ id: "collateral", ...collateral }, ...(canPayNative ? [NATIVE] : [])];
   const token = tokens.find((choice) => choice.id === tokenId) ?? tokens[0]!;
   const kept = selected.filter((estimate) => !removed.includes(estimate.scale.market));
+
+  const preview = usePricePreview({
+    session,
+    selected: kept,
+    tradeWallet: predicted,
+    collateralIn: funding?.collateralIn ?? 0n,
+  });
 
   const { driver, progress, ready } = usePredictExecution({
     session,
@@ -140,6 +148,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
       onClose={close}
       selected={recovered ? toSavedEstimates(session, recovered.options) : kept}
       onRemove={(market) => setRemoved((markets) => [...markets, market])}
+      preview={recovered ? undefined : preview}
       amount={amount}
       onAmountChange={setAmount}
       tokens={tokens}

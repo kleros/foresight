@@ -144,21 +144,20 @@ export function PredictAmountSection({
         <hr className="border-fs-border my-4 w-full" />
 
         {funding && amount !== undefined && amount > 0n ? (
-          <p className="flex flex-row flex-wrap items-center text-xs">
-            <span className="text-fs-text-primary font-semibold">
-              Total: {formatAmount(funding.collateralIn, collateral.decimals)} {collateral.symbol} =
-            </span>
+          <p className="text-fs-text-primary text-xs">
+            <span className="font-semibold">
+              Total: {formatAmount(funding.collateralIn, collateral.decimals)} {collateral.symbol}
+            </span>{" "}
             <span className="text-fs-text-secondary">
-              {funding.fromTradeWallet > 0n ? (
-                <span>
-                  &nbsp;{formatAmount(funding.fromTradeWallet, collateral.decimals)} ({collateral.symbol} in Trade
-                  Wallet)
-                </span>
-              ) : null}
-              {funding.fromTradeWallet > 0n && funding.toAdd > 0n ? <span>&nbsp;+</span> : null}
-              {funding.toAdd > 0n ? (
-                <span>&nbsp;{formatAmount(funding.toAdd, collateral.decimals)} (Your Wallet)</span>
-              ) : null}
+              (
+              {[
+                funding.fromTradeWallet > 0n &&
+                  `${formatAmount(funding.fromTradeWallet, collateral.decimals)} from your trade wallet`,
+                funding.toAdd > 0n && `${formatAmount(funding.toAdd, collateral.decimals)} from your wallet`,
+              ]
+                .filter(Boolean)
+                .join(" + ")}
+              )
             </span>
           </p>
         ) : null}

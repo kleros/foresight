@@ -14,15 +14,24 @@ import type { SelectedEstimate } from "../types";
 /** An estimate as the list shows it; a stored run's has no market estimate to compare against. */
 export type ListedEstimate = Pick<SelectedEstimate, "scale" | "value"> & Partial<Pick<SelectedEstimate, "direction">>;
 
+/** An option's market estimate before and after the prediction, in the option's unit. */
+export interface PriceMove {
+  from: number;
+  to: number;
+}
+
 /** The popup's title and the estimates going into it, each removable while more than one is left. */
 export function PredictList({
   selected,
   onRemove,
   isReadOnly,
+  preview = {},
 }: {
   selected: ListedEstimate[];
   onRemove: (market: string) => void;
   isReadOnly: boolean;
+  /** Keyed by lower-case market; an option without an entry shows no move. */
+  preview?: Record<string, PriceMove>;
 }) {
   return (
     <div className="mb-4 flex min-h-28 w-full shrink grow-0 flex-col items-center gap-4">
@@ -32,6 +41,7 @@ export function PredictList({
           {selected.map((estimate) => {
             const higher = estimate.direction === "higher";
             const Arrow = higher ? ArrowUp : ArrowDown;
+            const move = preview[estimate.scale.market.toLowerCase()];
             return (
               <li
                 key={estimate.scale.market}
@@ -62,6 +72,12 @@ export function PredictList({
                   <span className={clsx("text-xs sm:text-sm", higher ? "text-fs-tone-success" : "text-fs-tone-error")}>
                     <Arrow className="mr-1 inline size-3 [&_path]:fill-current" aria-hidden />
                     {higher ? "Higher" : "Lower"} than the market
+                  </span>
+                ) : null}
+                {move ? (
+                  <span className="text-fs-text-secondary text-xs sm:text-sm">
+                    Market moves from {formatEstimate(move.from, estimate.scale.unit)} to{" "}
+                    {formatEstimate(move.to, estimate.scale.unit)}
                   </span>
                 ) : null}
                 {selected.length > 1 ? (

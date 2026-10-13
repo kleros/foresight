@@ -4,7 +4,14 @@ import { sqrtPriceAtTick, tickAtSqrtPrice } from "@/lib/swap/tickMath";
 
 import type { PoolLiquidity } from "@/types/pool";
 
-import { isqrt, limitSqrtPriceX96, priceFromSqrtPriceX96, sqrtPriceX96FromPrice, volumeUntilPrice } from "../poolMath";
+import {
+  isqrt,
+  limitSqrtPriceX96,
+  priceFromSqrtPriceX96,
+  sqrtPriceX96FromPrice,
+  swapToward,
+  volumeUntilPrice,
+} from "../poolMath";
 
 const WAD = 10n ** 18n;
 const Q96 = 2n ** 96n;
@@ -303,5 +310,74 @@ describe("volumeUntilPrice across initialised ticks", () => {
     const netSell = volumeUntilPrice(flat({ sqrtPriceX96: SQRT["1"], tick: 0 }), WAD / 4n);
     expect(selling.underlying).toBe(netSell.underlying);
     expect(selling.outcome).toBeGreaterThan(netSell.outcome);
+  });
+});
+
+/* Expectations from the same virtual reserves: buying adds y = L * dSqrtP, selling adds x = L * d(1 / sqrtP). */
+describe("swapToward", () => {
+  const pool = (sqrtPriceX96: bigint, fee = 0n): PoolLiquidity => ({
+    sqrtPriceX96,
+    liquidity: WAD,
+    tick: 0,
+    fee,
+    ticks: [],
+    outcomeIsToken0: true,
+  });
+  /** Within a millionth of a token: the search stops a wei of price apart, and sqrt prices round. */
+  const near = (actual: bigint, expected: bigint) =>
+    expect(actual > expected ? actual - expected : expected - actual).toBeLessThan(10n ** 12n);
+
+  it("stops at the target when the amount is more than enough", () => {
+    const swap = swapToward(pool(SQRT["0.25"]), WAD, 10n * WAD);
+
+    expect(swap.priceWad).toBe(WAD);
+    near(swap.amountOut, WAD);
+  });
+
+  it("buys part of the way: 0.25 underlying lifts sqrtP 0.5 to 0.75", () => {
+    const swap = swapToward(pool(SQRT["0.25"]), WAD, WAD / 4n);
+
+    near(swap.priceWad, 562500000000000000n);
+    // x falls from 1 / 0.5 to 1 / 0.75
+    near(swap.amountOut, 666666666666666666n);
+  });
+
+  it("sells part of the way: 0.5 outcome drops sqrtP 1 to 2/3", () => {
+    const swap = swapToward(pool(SQRT["1"]), WAD / 4n, WAD / 2n);
+
+    near(swap.priceWad, 444444444444444444n);
+    near(swap.amountOut, 333333333333333333n);
+  });
+
+  it("moves less far once the fee is taken from the amount in", () => {
+    const free = swapToward(pool(SQRT["0.25"]), WAD, WAD / 4n);
+    const charged = swapToward(pool(SQRT["0.25"], 3000n), WAD, WAD / 4n);
+
+    expect(charged.priceWad).toBeLessThan(free.priceWad);
+    expect(charged.amountOut).toBeLessThan(free.amountOut);
+  });
+
+  it("goes further with every larger amount, never past the target, and never costs more than the amount", () => {
+    for (const [start, target] of [
+      [SQRT["0.25"], WAD],
+      [SQRT["1"], WAD / 4n],
+    ] as const) {
+      const buying = target > priceFromSqrtPriceX96(start, true);
+      let previous = priceFromSqrtPriceX96(start, true);
+      for (let step = 1n; step <= 40n; step += 1n) {
+        const amountIn = (step * WAD) / 20n;
+        const swap = swapToward(pool(start, 3000n), target, amountIn);
+        const volumes = volumeUntilPrice(pool(start, 3000n), swap.priceWad);
+
+        expect(buying ? swap.priceWad >= previous : swap.priceWad <= previous).toBe(true);
+        expect(buying ? swap.priceWad <= target : swap.priceWad >= target).toBe(true);
+        expect(buying ? volumes.underlying : volumes.outcome).toBeLessThanOrEqual(amountIn);
+        previous = swap.priceWad;
+      }
+    }
+  });
+
+  it("does nothing on a pool that never priced", () => {
+    expect(swapToward(pool(0n), WAD, WAD)).toEqual({ priceWad: 0n, amountOut: 0n });
   });
 });
