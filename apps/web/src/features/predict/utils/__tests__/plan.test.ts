@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { PoolLiquidity } from "@/types/pool";
 
-import * as tolerances from "../../oracle/tolerances";
+import { MAX_BUY_BUDGET_SHARE_BPS, SLIPPAGE_BPS } from "../../oracle/tolerances";
 import {
   buyBudgetShareBps,
   LEG_HEADROOM_BPS,
@@ -33,9 +33,6 @@ const sized = (legs: SwapLeg[]) => legs.map(({ side, amountIn }) => ({ side, amo
 
 /** Deep enough that a leg is never capped by the pool, only by the budget. */
 const DEEP = 10n ** 30n;
-
-/** Hundredths of a percent, as the app quotes; the buys then get 98 of every 100. */
-const SLIPPAGE_BPS = 100;
 
 const option = (overrides: Partial<OptionTarget> = {}): OptionTarget => ({
   pools: { up: pool(AT["1"]), down: pool(AT["0.25"], DEEP) },
@@ -289,12 +286,24 @@ describe("planBuys", () => {
 
 describe("the buy budget's share of what the sells and merge return", () => {
   it("stays below what the oracle's slippage leaves", () => {
-    expect(buyBudgetShareBps(tolerances.SLIPPAGE_BPS)).toBeLessThan(BigInt(tolerances.MAX_BUY_BUDGET_SHARE_BPS));
+    expect(buyBudgetShareBps(SLIPPAGE_BPS)).toBeLessThan(BigInt(MAX_BUY_BUDGET_SHARE_BPS));
   });
 
   it("stays below what 3% slippage leaves", () => {
     expect(buyBudgetShareBps(300)).toBeLessThan(10_000n - 300n);
   });
+
+  for (const slippageBps of [SLIPPAGE_BPS, 300]) {
+    it(`is what planBuys spends of the proceeds and the merge, at ${slippageBps / 100}% slippage`, () => {
+      // 0.5 UP and 1 DOWN remain after the sell, so 0.5 merges; the DOWN pool is deep enough not to cap the leg
+      const plan = planBuys(option(), [{ side: "up", amountIn: WAD / 2n, underlyingOut: WAD / 5n }], slippageBps);
+
+      expect(plan.mergeAmount).toBe(WAD / 2n);
+      expect(sized(plan.legs)).toEqual([
+        { side: "down", amountIn: ((WAD / 5n + WAD / 2n) * buyBudgetShareBps(slippageBps)) / 10_000n },
+      ]);
+    });
+  }
 });
 
 describe("previewUpPrice", () => {
