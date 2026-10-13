@@ -2,7 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import type { PoolLiquidity } from "@/types/pool";
 
-import { MIN_LEG_WEI, planBuys, planSells, previewUpPrice, type OptionTarget, type SwapLeg } from "../plan";
+import * as tolerances from "../../oracle/tolerances";
+import {
+  buyBudgetShareBps,
+  MIN_LEG_WEI,
+  planBuys,
+  planSells,
+  previewUpPrice,
+  type OptionTarget,
+  type SwapLeg,
+} from "../plan";
 
 const WAD = 10n ** 18n;
 
@@ -249,6 +258,16 @@ describe("planBuys", () => {
     // half the UP went, so half of what was split is still paired and comes back as underlying
     expect(plan.legs).toEqual([]);
     expect(plan.mergeAmount).toBe(WAD / 2n);
+  });
+});
+
+describe("the buy budget's share of what the sells and merge return", () => {
+  it("stays below what the oracle's slippage leaves", () => {
+    expect(buyBudgetShareBps(tolerances.SLIPPAGE_BPS)).toBeLessThan(BigInt(tolerances.MAX_BUY_BUDGET_SHARE_BPS));
+  });
+
+  it("stays below what 3% slippage leaves", () => {
+    expect(buyBudgetShareBps(300)).toBeLessThan(10_000n - 300n);
   });
 });
 
