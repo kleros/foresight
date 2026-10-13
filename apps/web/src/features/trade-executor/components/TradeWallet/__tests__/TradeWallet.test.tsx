@@ -20,13 +20,24 @@ const BERLIN = { underlying: token("d"), up: token("e"), down: token("f") };
 const COLLATERAL = token("9");
 const INVALID = token("8");
 
-/** balanceOf on chain, per token, in the 18 decimals every Seer outcome token carries */
+/** The trade wallet's balanceOf on chain, per token, in the 18 decimals every Seer outcome token carries */
 let held: Map<Address, bigint>;
+/** The owner's own balanceOf, per token */
+let ownerHeld: Map<Address, bigint>;
+/** What a balanceOf of a position token does instead of answering; undefined answers it */
+let positionRead: "pending" | "fail" | undefined;
+
+const balanceOf = (holder: Address) => (holder === EXECUTOR ? held : holder === OWNER ? ownerHeld : new Map());
 
 vi.mock("@/lib/web3/public-client", () => ({
   publicClient: {
     getBalance: async () => 0n,
-    readContract: async ({ address }: { address: Address }) => held.get(address) ?? 0n,
+    readContract: ({ address, args: [holder] }: { address: Address; args: [Address] }) => {
+      const isPosition = [LISBON.up, LISBON.down, BERLIN.up, BERLIN.down].includes(address);
+      if (isPosition && positionRead === "pending") return new Promise(() => {});
+      if (isPosition && positionRead === "fail") return Promise.reject(new Error("balanceOf reverted"));
+      return Promise.resolve(balanceOf(holder).get(address) ?? 0n);
+    },
   },
 }));
 vi.mock("@/lib/web3/wagmi", () => ({ wagmiConfig: {} }));
@@ -68,9 +79,11 @@ const market: TradeWalletMarket = {
   invalidToken: INVALID,
 };
 
+let queryClient: QueryClient;
+
 const renderWallet = (shown: TradeWalletMarket = market) =>
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={queryClient}>
       <TradeWallet market={shown} noun="city" />
     </QueryClientProvider>,
   );
@@ -85,6 +98,9 @@ const positionsOf = (option: string) =>
 
 beforeEach(() => {
   held = new Map();
+  ownerHeld = new Map();
+  positionRead = undefined;
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 });
 
 describe("TradeWallet positions", () => {
@@ -95,11 +111,47 @@ describe("TradeWallet positions", () => {
       [BERLIN.up, units("2.25")],
       [BERLIN.down, units("30.44")],
     ]);
+    ownerHeld = new Map([
+      [LISBON.up, units("900")],
+      [LISBON.down, units("901")],
+      [BERLIN.up, units("902")],
+      [BERLIN.down, units("903")],
+    ]);
 
     renderWallet();
 
     await waitFor(() => expect(positionsOf("Lisbon")).toEqual(["UP 30.43", "DOWN 1.5"]));
     expect(positionsOf("Berlin")).toEqual(["UP 2.25", "DOWN 30.44"]);
+  });
+
+  it("shows a dash for each position while its balance is loading", async () => {
+    held = new Map([[LISBON.underlying, units("4")]]);
+    positionRead = "pending";
+
+    renderWallet();
+    await screen.findByTitle("4");
+
+    expect(positionsOf("Lisbon")).toEqual(["UP —", "DOWN —"]);
+    expect(positionsOf("Berlin")).toEqual(["UP —", "DOWN —"]);
+  });
+
+  it("shows a dash for each position whose balance could not be read", async () => {
+    held = new Map([[LISBON.underlying, units("4")]]);
+    positionRead = "fail";
+
+    renderWallet();
+    await screen.findByTitle("4");
+    await waitFor(() =>
+      expect(
+        queryClient
+          .getQueryCache()
+          .getAll()
+          .some((query) => query.state.status === "error"),
+      ).toBe(true),
+    );
+
+    expect(positionsOf("Lisbon")).toEqual(["UP —", "DOWN —"]);
+    expect(positionsOf("Berlin")).toEqual(["UP —", "DOWN —"]);
   });
 
   it("shows the underlying balance of each option, and not INVALID's", async () => {
