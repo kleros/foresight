@@ -34,25 +34,31 @@ const POLL_MS = 5_000;
 const POLL_ATTEMPTS = 12;
 
 /**
- * The indexer lags the confirmed transaction, so an immediate refetch can return the old series.
- * Polls until the stats differ from what the page showed (or the attempts run out), then marks
- * the chart and stats stale. Runs on the query client, so it outlives the popup that started it.
+ * The indexer lags the confirmed transaction, and cached stats cannot say whether a change is this
+ * prediction or someone else's. So it polls the whole window, marking the chart and stats stale each
+ * time what the indexer serves moves, and once more at the end. Runs on the query client, so it
+ * outlives the popup that started it.
  */
 export async function refreshSessionAfterTrade(queryClient: QueryClient, sessionId: string) {
-  const before = queryClient.getQueryData<SessionStats>(sessionStatsKey(sessionId));
+  const refresh = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: sessionChartKey(sessionId) }),
+      queryClient.invalidateQueries({ queryKey: sessionStatsKey(sessionId) }),
+    ]);
+  let seen = queryClient.getQueryData<SessionStats>(sessionStatsKey(sessionId));
   for (let attempt = 0; attempt < POLL_ATTEMPTS; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, POLL_MS));
     try {
       const now = await fetchSessionStats(sessionId);
-      if (!before || now.traders !== before.traders || now.volumeUnderlying !== before.volumeUnderlying) break;
+      if (!seen || now.traders !== seen.traders || now.volumeUnderlying !== seen.volumeUnderlying) {
+        seen = now;
+        await refresh();
+      }
     } catch {
       // keep polling; the final invalidation still refetches
     }
   }
-  await Promise.all([
-    queryClient.invalidateQueries({ queryKey: sessionChartKey(sessionId) }),
-    queryClient.invalidateQueries({ queryKey: sessionStatsKey(sessionId) }),
-  ]);
+  await refresh();
 }
 
 export function useSessionStats(sessionId: string | undefined) {
