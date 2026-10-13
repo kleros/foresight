@@ -28,6 +28,7 @@ interface PredictDialogProps {
   funding: Funding | null;
   collateral: { symbol: string; decimals: number };
   isFirstPrediction: boolean;
+  isDisconnected?: boolean;
   steps: PredictSteps;
   /** Estimates the run could not find a route for and left out. */
   skipped: number;
@@ -57,6 +58,7 @@ export function PredictDialog({
   funding,
   collateral,
   isFirstPrediction,
+  isDisconnected,
   steps,
   skipped,
   isRunning,
@@ -106,6 +108,7 @@ export function PredictDialog({
               collateral={collateral}
               isFirstPrediction={isFirstPrediction}
               isReadOnly={isLocked}
+              isDisconnected={isDisconnected}
             />
           )}
           <PredictStepsTimeline steps={steps} />

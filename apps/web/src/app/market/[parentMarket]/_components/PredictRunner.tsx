@@ -154,6 +154,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
       funding={funding}
       collateral={collateral}
       isFirstPrediction={isFirstPrediction}
+      isDisconnected={owner === undefined}
       steps={steps}
       skipped={progress?.skipped.length ?? 0}
       isRunning={isRunning}

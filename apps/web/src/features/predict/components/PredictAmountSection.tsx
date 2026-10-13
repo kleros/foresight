@@ -30,6 +30,8 @@ interface PredictAmountSectionProps {
   collateral: { symbol: string; decimals: number };
   isFirstPrediction: boolean;
   isReadOnly: boolean;
+  /** No wallet is connected, so no balance is being read. */
+  isDisconnected?: boolean;
 }
 
 export function PredictAmountSection({
@@ -42,6 +44,7 @@ export function PredictAmountSection({
   collateral,
   isFirstPrediction,
   isReadOnly,
+  isDisconnected = false,
 }: PredictAmountSectionProps) {
   const available = funding?.available;
   const notEnough = amount !== undefined && available !== undefined && amount > available;
@@ -69,9 +72,11 @@ export function PredictAmountSection({
             <span className="text-fs-text-secondary mb-1 text-sm">{isFirstPrediction ? "You pay" : "Extra funds"}</span>
             <div className="flex items-center gap-2">
               <span className="text-fs-text-secondary text-xs">
-                {available === undefined
-                  ? "Checking your balance…"
-                  : `Balance: ${formatAmount(available, token.decimals)} ${token.symbol}`}
+                {isDisconnected
+                  ? "Connect a wallet to see your balance"
+                  : available === undefined
+                    ? "Checking your balance…"
+                    : `Balance: ${formatAmount(available, token.decimals)} ${token.symbol}`}
               </span>
               <LightButton
                 small

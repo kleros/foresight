@@ -70,6 +70,8 @@ export function predictSteps(args: {
   const runningBatch = batches.findIndex((step) => step.state === "running");
   const predictRunning = runningBatch >= 0;
   const stageCopy = progress ? (STAGE_COPY[progress.stage] ?? "") : "";
+  const adding = `Adding ${formatAmount(toAdd, decimals)} ${symbol}`;
+  const fundsWait = progress?.stage === "signing" || progress?.stage === "confirming" ? stageCopy : "";
 
   const rows: PredictStepRow[] = [
     walletReady && wallet
@@ -83,7 +85,7 @@ export function predictSteps(args: {
     {
       key: "funds",
       title: "Add funds to your trade wallet",
-      subtitle: `Adding ${formatAmount(toAdd, decimals)} ${symbol}`,
+      subtitle: fundsRow?.state === "running" && fundsWait ? `${adding}. ${fundsWait}` : adding,
       view:
         fundsRow?.state === "running"
           ? "running"
