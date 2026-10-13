@@ -118,3 +118,33 @@ describe("Max and 50% on a wallet of 1.234567890123456789 xDAI", () => {
     expect(lastAmount(onAmountChange)).toBe(612_200_000_000_000_000n);
   });
 });
+
+describe("75% on a wallet of 1.234567890123456789 xDAI", () => {
+  it("fills 0.9183 xDAI, three quarters of what Max fills cut to 4 decimals", () => {
+    const onAmountChange = renderSection(xDai, 1_234_567_890_123_456_789n);
+
+    fireEvent.change(screen.getByRole("slider"), { target: { value: "75" } });
+
+    expect(lastAmount(onAmountChange)).toBe(918_300_000_000_000_000n);
+  });
+});
+
+describe("Max and 50% on a wallet of 1.234567 of a 6-decimal token", () => {
+  const usdc: PayTokenChoice = { id: "collateral", symbol: "USDC", decimals: 6 };
+
+  it("Max fills 1.2345, cut to 4 of the token's 6 decimals", async () => {
+    const onAmountChange = renderSection(usdc, 1_234_567n);
+
+    await userEvent.click(screen.getByRole("button", { name: "Max" }));
+
+    expect(lastAmount(onAmountChange)).toBe(1_234_500n);
+  });
+
+  it("50% fills 0.6172, half of 1.2345 cut to 4 decimals", () => {
+    const onAmountChange = renderSection(usdc, 1_234_567n);
+
+    fireEvent.change(screen.getByRole("slider"), { target: { value: "50" } });
+
+    expect(lastAmount(onAmountChange)).toBe(617_200n);
+  });
+});
