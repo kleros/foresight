@@ -5,6 +5,7 @@ import type { PoolLiquidity } from "@/types/pool";
 import * as tolerances from "../../oracle/tolerances";
 import {
   buyBudgetShareBps,
+  LEG_HEADROOM_BPS,
   MIN_LEG_WEI,
   planBuys,
   planSells,
@@ -129,6 +130,31 @@ describe("the limit on each leg", () => {
 
     expect(leg!.limitSqrtPrice * leg!.limitSqrtPrice * WAD).toBeGreaterThanOrEqual(target * AT["1"] * AT["1"]);
     expect((leg!.limitSqrtPrice - 1n) * (leg!.limitSqrtPrice - 1n) * WAD).toBeLessThan(target * AT["1"] * AT["1"]);
+  });
+
+  it("expects a sell offered headroom to spend only what reaching the target takes", () => {
+    // 2 UP held covers the 1 UP the pool takes to fall to 0.25, plus the headroom
+    const [leg] = planSells(option({ splitAmount: WAD * 2n }));
+
+    expect(leg).toEqual({
+      side: "up",
+      amountIn: (WAD * (10_000n + LEG_HEADROOM_BPS)) / 10_000n,
+      limitSqrtPrice: AT["0.25"],
+      amountInAtLimit: WAD,
+      amountOutAtLimit: WAD / 2n,
+    });
+  });
+
+  it("expects a sell its balance cuts short to still need the whole way to the target", () => {
+    const [leg] = planSells(option({ splitAmount: WAD / 4n }));
+
+    expect(leg).toEqual({
+      side: "up",
+      amountIn: WAD / 4n,
+      limitSqrtPrice: AT["0.25"],
+      amountInAtLimit: WAD,
+      amountOutAtLimit: WAD / 2n,
+    });
   });
 
   it("offers the headroom on a sell the balance covers", () => {
