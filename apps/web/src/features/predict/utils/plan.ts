@@ -16,6 +16,9 @@ export const MIN_LEG_WEI = 10n ** 16n;
 /** Of ten thousand, held back from the buys beyond what slippage lets a sell fall short by. */
 export const BUY_BUDGET_MARGIN_BPS = 100n;
 
+/** Of ten thousand, what the buys may spend of the sells' quoted proceeds and the merge. */
+export const buyBudgetShareBps = (slippageBps: number): bigint => 10_000n - BigInt(slippageBps) - BUY_BUDGET_MARGIN_BPS;
+
 /**
  * Of ten thousand, added to what a leg is sized to need. Algebra re-derives its fee from volatility
  * on a block's first swap, so it can rise between the read and the swap; the price limit stops
@@ -138,7 +141,7 @@ export function planBuys(option: OptionTarget, sold: readonly SoldLeg[], slippag
     down: option.held.down + option.splitAmount - soldBySide.down,
   };
   const mergeAmount = min(min(remaining.up, remaining.down), option.held.invalid + option.splitAmount);
-  const budget = ((proceeds + mergeAmount) * (10_000n - BigInt(slippageBps) - BUY_BUDGET_MARGIN_BPS)) / 10_000n;
+  const budget = ((proceeds + mergeAmount) * buyBudgetShareBps(slippageBps)) / 10_000n;
 
   const buying = SIDES.map((side) => ({ side, state: sideState(option, side) })).filter(
     (entry): entry is { side: OptionSide; state: SideState } => entry.state !== null && entry.state.gap > 0n,
