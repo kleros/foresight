@@ -9,6 +9,7 @@ import { usePredictRun, type PredictRunInput } from "@/features/predict/hooks/us
 import type { SelectedEstimate } from "@/features/predict/types";
 import type { Funding } from "@/features/predict/utils/funding";
 import { sessionChartKey } from "@/features/sessions/api/getSessionChart";
+import { refreshSessionAfterTrade } from "@/features/sessions/api/getSessionStats";
 import type { SessionDetail } from "@/features/sessions/types";
 import { executorKey } from "@/features/trade-executor/api/getExecutor";
 import { fundsKeyPrefix } from "@/features/trade-executor/api/getFunds";
@@ -65,6 +66,7 @@ export function usePredictExecution(args: {
             void queryClient.invalidateQueries({ queryKey: fundsKeyPrefix });
             void queryClient.invalidateQueries({ queryKey: executorKey(owner) });
             void queryClient.invalidateQueries({ queryKey: sessionChartKey(session.id) });
+            void refreshSessionAfterTrade(queryClient, session.id);
           },
         }
       : null;
