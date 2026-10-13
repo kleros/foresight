@@ -69,6 +69,12 @@ test.describe("a session seeded on the gnosis fork", () => {
       await expect(predict).toBeVisible();
       await expect(predict).toBeDisabled();
 
+      // each option is a collapsed card whose slider renders once it is opened
+      await page
+        .getByRole("button")
+        .filter({ has: page.getByRole("heading", { level: 3 }) })
+        .first()
+        .click();
       const slider = page.getByRole("slider").first();
       await expect(slider).toBeEnabled({ timeout: 30_000 });
       await slider.focus();
