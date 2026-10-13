@@ -111,3 +111,33 @@ describe("predictSteps during a run", () => {
     expect(steps({ progress: progress() }).failure).toBeUndefined();
   });
 });
+
+describe("predictSteps while adding funds", () => {
+  const depositing = (stage: PredictProgress["stage"]) =>
+    progress({
+      stage,
+      steps: [
+        { id: "create-wallet", label: "", state: "success" },
+        { id: "deposit", label: "", state: "running" },
+        { id: "predict-1", label: "", state: "pending" },
+      ],
+    });
+
+  it.each([
+    ["signing", "Waiting for your signature…"],
+    ["confirming", "Confirming…"],
+  ] as const)("shows Add funds running and says what it waits on while %s", (stage, copy) => {
+    const funds = steps({ progress: depositing(stage) }).rows[1];
+
+    expect(funds?.view).toBe("running");
+    expect(funds?.subtitle).toContain(copy);
+  });
+
+  it("stops asking for a signature once the deposit's hash is known", () => {
+    const signed = steps({ progress: depositing("signing") }).rows[1];
+    const sent = steps({ progress: depositing("confirming") }).rows[1];
+
+    expect(signed?.subtitle).not.toBe(sent?.subtitle);
+    expect(sent?.subtitle).not.toContain("Waiting for your signature…");
+  });
+});
