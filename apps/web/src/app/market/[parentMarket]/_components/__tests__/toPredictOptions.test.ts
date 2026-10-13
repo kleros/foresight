@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { PredictOption } from "@/features/predict/flow/types";
 import type { SelectedEstimate } from "@/features/predict/types";
 import type { SessionDetail } from "@/features/sessions/types";
 import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
@@ -9,7 +10,7 @@ import { MAX_PRICE_WAD, MIN_PRICE_WAD } from "@/utils/optionPrice";
 
 import { addresses, GATEWAY } from "@/testing/fixtures";
 
-import { toPredictOptions } from "../toPredictOptions";
+import { toPredictOptions, toSavedEstimates } from "../toPredictOptions";
 
 type ChildRow = SessionDetailRow["children"][number];
 
@@ -170,5 +171,35 @@ describe("toPredictOptions, converting estimates to prices", () => {
       expect(price).toBeGreaterThanOrEqual(previous);
       previous = price;
     }
+  });
+});
+
+describe("toSavedEstimates, a stored run's options as estimates", () => {
+  const LOWER = "0xcccccccccccccccccccccccccccccccccccccccc";
+  const UPPER = "0xCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
+
+  const storedOn = (childMarket: string): PredictOption => ({
+    childMarket: childMarket as PredictOption["childMarket"],
+    underlying: addresses.underlyingToken,
+    upToken: addresses.upToken,
+    downToken: addresses.downToken,
+    invalidToken: addresses.childInvalidToken,
+    targetPriceWad: 5n * 10n ** 17n,
+  });
+
+  it.each([
+    { stored: UPPER, listed: LOWER },
+    { stored: LOWER, listed: UPPER },
+  ])("finds the option stored as $stored on the session's $listed", ({ stored, listed }) => {
+    const detail = session([sessionChildRow({ id: listed })]);
+
+    // the director scale runs 0 to 500, so a 0.5 price is 250
+    expect(toSavedEstimates(detail, [storedOn(stored)])).toEqual([{ scale: detail.options[0], value: 250 }]);
+  });
+
+  it("drops a stored option on a market the session does not list", () => {
+    const detail = session([sessionChildRow()]);
+
+    expect(toSavedEstimates(detail, [storedOn(addresses.deployer)])).toEqual([]);
   });
 });
