@@ -54,6 +54,10 @@ export function TradeWallet({ market, noun }: { market: TradeWalletMarket; noun:
   // INVALID rides along because a merge burns it too, so it bounds the amount like the rest
   const outcomeTokens = [...options.map((option) => option.token), invalidToken];
   const balances = useTokenBalances(deployed ?? undefined, outcomeTokens);
+  const positionTokens = options.flatMap((option) => option.positions.map((position) => position.token));
+  const positionBalances = useTokenBalances(deployed ?? undefined, positionTokens);
+  const held = positionBalances.data;
+  const heldByToken = held && new Map(positionTokens.map((token, index) => [token, held[index]]));
 
   const deposit = useDepositToExecutor(close);
   const withdraw = useWithdrawFromExecutor(close);
@@ -142,6 +146,7 @@ export function TradeWallet({ market, noun }: { market: TradeWalletMarket; noun:
         <OptionBalances
           options={options}
           balances={balances.data?.slice(0, options.length)}
+          positions={heldByToken}
           noun={noun}
           decimals={collateral.decimals}
         />

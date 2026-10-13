@@ -33,7 +33,7 @@ const session = (overrides: Partial<SessionDetailRow> = {}) =>
   );
 
 describe("toWalletMarket", () => {
-  it("carries the collateral, the parent market and one token per outcome", () => {
+  it("carries the collateral, the parent market, and each outcome's token with its UP and DOWN", () => {
     expect(toWalletMarket(session())).toEqual({
       parentMarket: addresses.parentMarket,
       collateral: { address: addresses.collateralToken, decimals: 18, symbol: "sDAI" },
