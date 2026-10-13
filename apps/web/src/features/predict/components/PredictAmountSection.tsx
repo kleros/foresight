@@ -54,7 +54,7 @@ export function PredictAmountSection({
 
   return (
     <div className="flex flex-col items-center gap-1.5">
-      <div className="mb-2 flex w-full flex-col">
+      <div className="mb-1 flex w-full flex-col md:mb-2">
         {isFirstPrediction ? null : (
           <AlertMessage
             title="Note"
@@ -67,7 +67,7 @@ export function PredictAmountSection({
           />
         )}
 
-        <div className="relative mb-5 w-full md:min-w-lg">
+        <div className="relative mb-4 w-full md:mb-5 md:min-w-lg">
           <div className="flex items-center justify-between gap-2">
             <span className="text-fs-text-secondary mb-1 text-sm">{isFirstPrediction ? "You pay" : "Extra funds"}</span>
             <div className="flex items-center gap-2">
@@ -141,7 +141,7 @@ export function PredictAmountSection({
           onChange={(percent) => max !== undefined && onAmountChange(roundDown(shareOf(max, percent)))}
         />
 
-        <hr className="border-fs-border my-4 w-full" />
+        <hr className="border-fs-border my-2 w-full md:my-4" />
 
         {funding && amount !== undefined && amount > 0n ? (
           <p className="text-fs-text-primary text-xs">
@@ -191,7 +191,7 @@ function AmountSlider({
   onChange: (percent: number) => void;
 }) {
   return (
-    <div className="relative mt-4 w-[calc(100%-32px)] self-center">
+    <div className="relative mt-2 w-[calc(100%-32px)] md:mt-4 self-center">
       <Slider
         className={clsx(
           "relative z-1",

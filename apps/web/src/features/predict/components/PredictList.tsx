@@ -34,9 +34,9 @@ export function PredictList({
   preview?: Record<string, PriceMove>;
 }) {
   return (
-    <div className="mb-4 flex min-h-28 w-full shrink grow-0 flex-col items-center gap-4">
-      <h2 className="text-fs-text-primary shrink-0 text-2xl font-semibold">Predict</h2>
-      <ScrollFade className="rounded-fs max-h-40 min-h-18 w-full shrink">
+    <div className="mb-1 flex min-h-28 w-full shrink grow-0 flex-col items-center gap-2 md:mb-4 md:gap-4">
+      <h2 className="text-fs-text-primary shrink-0 text-xl font-semibold md:text-2xl">Predict</h2>
+      <ScrollFade className="rounded-fs max-h-35 min-h-18 md:max-h-40 w-full shrink">
         <ul className="flex w-full flex-col gap-0.25">
           {selected.map((estimate) => {
             const higher = estimate.direction === "higher";
@@ -47,10 +47,10 @@ export function PredictList({
                 key={estimate.scale.market}
                 className={clsx(
                   "bg-fs-surface-tint rounded-fs relative w-full",
-                  "flex flex-col items-center justify-center p-3",
+                  "flex flex-col items-center justify-center py-1.5 md:p-3",
                 )}
               >
-                <div className="flex flex-col items-center gap-2 sm:flex-row">
+                <div className="flex items-center gap-2">
                   <div className="flex items-center gap-2">
                     <span
                       className="size-2 flex-none rounded-full"

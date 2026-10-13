@@ -54,11 +54,11 @@ export function PredictStepsTimeline({ steps }: { steps: PredictSteps }) {
   if (!first) return null;
 
   return (
-    <div className="mt-5 flex flex-col items-center" role="status" aria-live="polite">
+    <div className="mt-2 flex flex-col items-center md:mt-5" role="status" aria-live="polite">
       <CustomTimeline
         items={[first, ...rest]}
         className={clsx(
-          "[&_li>div:nth-child(1)]:min-h-14",
+          "[&_li>div:nth-child(1)]:min-h-8 md:[&_li>div:nth-child(1)]:min-h-14",
           "[&_li>div:nth-child(2)]:ml-2 [&_li>div:nth-child(2)]:pt-0.5",
           "[&_li>div:nth-child(1)>div]:border-l-fs-accent [&_li>div:nth-child(1)>div]:my-2",
         )}

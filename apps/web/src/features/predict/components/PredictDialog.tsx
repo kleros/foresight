@@ -82,9 +82,10 @@ export function PredictDialog({
       isDismissable={!isRunning}
       onOpenChange={(open) => (open || isRunning ? undefined : onClose())}
       className={clsx(
-        "fixed top-[5vh] left-1/2 -translate-x-1/2 transform",
-        "h-auto max-h-[90vh] w-max max-md:w-full max-md:max-w-sm",
-        "flex p-4 pb-0! md:px-10 md:py-8",
+        "fixed top-18 left-1/2 -translate-x-1/2 transform md:top-20",
+        "h-auto max-h-[calc(100dvh-5rem)] w-max md:max-h-[calc(100dvh-7rem)]",
+        "max-md:w-[calc(100vw-2rem)] max-md:max-w-sm",
+        "flex p-3 pb-0! md:px-10 md:py-8",
         "rounded-fs border-fs-border bg-fs-surface border",
       )}
     >
@@ -122,7 +123,7 @@ export function PredictDialog({
           ) : null}
         </ScrollFade>
 
-        <div className="bg-fs-surface sticky bottom-0 flex flex-col items-center gap-3 py-4">
+        <div className="bg-fs-surface sticky bottom-0 flex flex-col items-center gap-3 py-2 md:py-4">
           {notice !== undefined ? <InfoCard className="text-sm" msg={notice} /> : null}
           <div className="flex flex-wrap gap-3.5">
             <Button text="Cancel" variant="secondary" onPress={onClose} isDisabled={isRunning} />
