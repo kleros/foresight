@@ -28,7 +28,7 @@ const session = () => toSessionDetail({ ...sessionDetailColumns, id: "7", childr
 beforeEach(() => {
   window.localStorage.clear();
   createRunStore().save({
-    flowId: predictFlowId("7"),
+    flowId: predictFlowId("7", OWNER),
     adapterId: "predict-flow",
     snapshot: snapshot({ deposit: WAD * 3n }),
     ctx: ctx({ owner: OWNER }),
@@ -42,6 +42,6 @@ it("forgets the interrupted run when it is discarded", async () => {
 
   await userEvent.click(await screen.findByRole("button", { name: "Discard" }));
 
-  expect(createRunStore().load(predictFlowId("7"))).toBeNull();
+  expect(createRunStore().load(predictFlowId("7", OWNER))).toBeNull();
   expect(screen.queryByRole("button", { name: "Resume" })).toBeNull();
 });

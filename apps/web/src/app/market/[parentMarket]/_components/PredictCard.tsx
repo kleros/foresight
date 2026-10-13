@@ -9,7 +9,7 @@ import { formatUnits, type Address } from "viem";
 import { useAccount } from "wagmi";
 
 import type { PredictSnapshot } from "@/features/predict/flow/types";
-import { findInterruptedRun, predictFlowId } from "@/features/predict/run/interrupted";
+import { discardRun, findInterruptedRun } from "@/features/predict/run/interrupted";
 import { useSessionEstimates } from "@/features/predict/stores/estimateStore";
 import { selectedEstimates } from "@/features/predict/utils/estimates";
 import type { SessionDetail, SessionStatus } from "@/features/sessions/types";
@@ -51,7 +51,7 @@ export function PredictCard({ session, status, marketEstimates }: PredictCardPro
   }, [address, isOpen, session.id]);
 
   const discard = () => {
-    createRunStore().clear(predictFlowId(session.id));
+    if (address) discardRun(createRunStore(), session.id, address);
     setInterrupted(null);
   };
 

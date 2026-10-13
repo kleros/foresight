@@ -30,12 +30,19 @@ import type { PredictCtx, PredictReader, PredictSnapshot } from "../flow/types";
 /** The trade wallet holds less than the share of the prediction it was shown to cover. */
 class TradeWalletShortError extends Error {}
 
+/** Why a saved run cannot be continued from the connected wallet, if it cannot. */
+function foreign(saved: PredictCtx, current: PredictCtx): "wrong-wallet" | "wrong-chain" | undefined {
+  if (String(saved.owner).toLowerCase() !== current.owner.toLowerCase()) return "wrong-wallet";
+  if (saved.chainId !== current.chainId) return "wrong-chain";
+  return undefined;
+}
+
 /** Drives one prediction: the orchestrator's run, flattened into what the popup reads. */
 export function createPredictRun(args: {
   gateway: TxGateway;
   reader: PredictReader;
   quoter: SwapQuoter;
-  /** Keyed per session, so two sessions' runs cannot collide in storage. */
+  /** Keyed per chain, owner and session, so no two runs share a stored record. */
   flowId: string;
   ctx: () => PredictCtx;
   snapshot: () => PredictSnapshot;
@@ -213,6 +220,12 @@ export function createPredictRun(args: {
   const recoverRun = detached(async () => {
     const stored = args.store?.load<PredictSnapshot, PredictCtx>(args.flowId);
     if (!stored) return;
+    // Only the owner who saved a run, on the chain it was saved on, may sign the rest of it.
+    const mismatch = foreign(stored.ctx, args.ctx());
+    if (mismatch) {
+      report(mismatch);
+      return;
+    }
 
     const steps = planPredict(stored.snapshot, deps);
     const restored = orchestrator.restore({ flowId: args.flowId, steps });
@@ -303,7 +316,8 @@ export function createPredictRun(args: {
 
     reset() {
       checking = undefined;
-      orchestrator.trash(args.flowId);
+      const stored = args.store?.load<PredictSnapshot, PredictCtx>(args.flowId);
+      if (!stored || !foreign(stored.ctx, args.ctx())) orchestrator.trash(args.flowId);
       recovered = false;
       reviewing = false;
       skipped.length = 0;

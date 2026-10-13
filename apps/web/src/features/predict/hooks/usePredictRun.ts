@@ -15,7 +15,7 @@ import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
 import type { PredictCtx, PredictOption, PredictSnapshot } from "../flow/types";
 import { createPredictRun } from "../run/driver";
-import { predictFlowId } from "../run/interrupted";
+import { legacyPredictFlowId, predictFlowId } from "../run/interrupted";
 import { createPredictReader } from "../run/reader";
 import type { PredictDriver, PredictProgress } from "../run/types";
 
@@ -58,7 +58,7 @@ export function usePredictRun(input: PredictRunInput | null): {
   if (input) latest.current = input;
 
   const storeRef = useRef<FlowRunStore | undefined>(undefined);
-  storeRef.current ??= createRunStore();
+  const store = (storeRef.current ??= createRunStore());
 
   // Only a different session or a different owner is a different run. Everything else is read
   // through the ref when the button is pressed.
@@ -68,11 +68,21 @@ export function usePredictRun(input: PredictRunInput | null): {
   const driver = useMemo<PredictDriver | null>(() => {
     if (!identity || !held) return null;
     const input = held;
+    const flowId = predictFlowId(input.sessionId, input.owner);
+    adoptLegacyRun(store, legacyPredictFlowId(input.sessionId), flowId, input.owner);
 
     return createPredictRun({
       gateway: createViemTxGateway({
         client: publicClient,
-        sendTransaction: (tx) => sendTransaction(wagmiConfig, { to: tx.to, data: tx.data, value: tx.value }),
+        // wagmi refuses to send when the connected account or chain differs from these.
+        sendTransaction: (tx) =>
+          sendTransaction(wagmiConfig, {
+            account: input.owner,
+            chainId: DEFAULT_CHAIN_ID,
+            to: tx.to,
+            data: tx.data,
+            value: tx.value,
+          }),
       }),
       reader: createPredictReader({
         client: publicClient,
@@ -80,9 +90,9 @@ export function usePredictRun(input: PredictRunInput | null): {
         collateral: input.collateral,
       }),
       quoter: createLensQuoter(publicClient, DEFAULT_CHAIN_ID as 100),
-      store: storeRef.current,
+      store,
       slippageBps: SLIPPAGE_BPS,
-      flowId: predictFlowId(input.sessionId),
+      flowId,
       ctx: (): PredictCtx => {
         const now = latest.current;
         if (!now) throw new Error("This session is no longer open for predictions.");
@@ -124,4 +134,13 @@ export function usePredictRun(input: PredictRunInput | null): {
   );
 
   return { driver, progress };
+}
+
+/** Moves a run saved under the session-only key to the scoped one, if it is this owner's on this chain. */
+function adoptLegacyRun(store: FlowRunStore, legacyId: string, flowId: string, owner: Address) {
+  const legacy = store.load<PredictSnapshot, PredictCtx>(legacyId);
+  if (!legacy) return;
+  if (String(legacy.ctx.owner).toLowerCase() !== owner.toLowerCase() || legacy.ctx.chainId !== DEFAULT_CHAIN_ID) return;
+  store.save({ ...legacy, flowId });
+  store.clear(legacyId);
 }
