@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { AMOUNT_DISPLAY_DECIMALS, GAS_RESERVE_WEI } from "../../oracle/tolerances";
-import { percentOf, planFunding, shareOf } from "../funding";
+import { percentOf, planFunding, roundToDisplay, shareOf } from "../funding";
 
 const WAD = 10n ** 18n;
 
@@ -181,6 +181,43 @@ describe("planFunding, the xDAI gas reserve", () => {
         expect((funding.deposit * WAD) / tokenPerCollateralWad + 1n, seen).toBeGreaterThanOrEqual(funding.toAdd);
       }
     }
+  });
+});
+
+describe("planFunding, the decided 0.01 xDAI reserve", () => {
+  // 1.25 xDAI per sDAI
+  const rate = (5n * WAD) / 4n;
+
+  it("Max on a 10 xDAI wallet offers 9.99 xDAI", () => {
+    const funding = planFunding({ amount: 0n, ownWallet: 10n * WAD, tradeWallet: 0n, tokenPerCollateralWad: rate });
+
+    expect(funding.available).toBe(9_990_000_000_000_000_000n);
+  });
+
+  it("an amount of the whole 10 xDAI deposits 9.99 xDAI", () => {
+    const funding = planFunding({
+      amount: 10n * WAD,
+      ownWallet: 10n * WAD,
+      tradeWallet: 0n,
+      tokenPerCollateralWad: rate,
+    });
+
+    expect(funding.deposit).toBe(9_990_000_000_000_000_000n);
+  });
+});
+
+describe("rounding an amount to the 4 decimals the popup shows", () => {
+  it("cuts an 18-decimal amount down to 4 decimals", () => {
+    expect(roundToDisplay(1_234_567_890_123_456_789n, 18)).toBe(1_234_500_000_000_000_000n);
+  });
+
+  it("cuts a 6-decimal amount down to 4 decimals", () => {
+    expect(roundToDisplay(1_234_567n, 6)).toBe(1_234_500n);
+  });
+
+  it("leaves an amount with no more than 4 decimals as it is", () => {
+    expect(roundToDisplay(1_234_500_000_000_000_000n, 18)).toBe(1_234_500_000_000_000_000n);
+    expect(roundToDisplay(123n, 2)).toBe(123n);
   });
 });
 

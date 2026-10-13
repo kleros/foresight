@@ -100,3 +100,21 @@ describe("Max on an xDAI wallet holding no more than the gas reserve", () => {
     for (const [amount] of onAmountChange.mock.calls) expect(amount ?? 0n).toBe(0n);
   });
 });
+
+describe("Max and 50% on a wallet of 1.234567890123456789 xDAI", () => {
+  it("Max fills 1.2245 xDAI: 0.01 kept for gas, the rest cut to 4 decimals", async () => {
+    const onAmountChange = renderSection(xDai, 1_234_567_890_123_456_789n);
+
+    await userEvent.click(screen.getByRole("button", { name: "Max" }));
+
+    expect(lastAmount(onAmountChange)).toBe(1_224_500_000_000_000_000n);
+  });
+
+  it("50% fills 0.6122 xDAI, half of 1.2245 cut to 4 decimals", () => {
+    const onAmountChange = renderSection(xDai, 1_234_567_890_123_456_789n);
+
+    fireEvent.change(screen.getByRole("slider"), { target: { value: "50" } });
+
+    expect(lastAmount(onAmountChange)).toBe(612_200_000_000_000_000n);
+  });
+});
