@@ -85,11 +85,12 @@ describe("the limit on each leg", () => {
   it("stops a sell at the target and expects what selling down to it pays", () => {
     const [leg] = planSells(option());
 
-    // UP falls from 1 to the 0.25 target, so sqrtP 1 to 0.5: y falls 1e18 to 0.5e18
+    // UP falls from 1 to the 0.25 target, so sqrtP 1 to 0.5: x rises 1e18 to 2e18, y falls 1e18 to 0.5e18
     expect(leg).toEqual({
       side: "up",
       amountIn: WAD,
       limitSqrtPrice: AT["0.25"],
+      amountInAtLimit: WAD,
       amountOutAtLimit: WAD / 2n,
     });
   });
@@ -106,6 +107,7 @@ describe("the limit on each leg", () => {
         // a hundredth of headroom on top of the 0.25 the pool needs
         amountIn: ((WAD / 4n) * 101n) / 100n,
         limitSqrtPrice: AT["0.25"],
+        amountInAtLimit: WAD / 4n,
         amountOutAtLimit: WAD * 2n,
       },
     ]);

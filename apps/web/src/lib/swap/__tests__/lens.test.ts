@@ -24,17 +24,17 @@ vi.mock("@seer-pm/lens/client", () => ({
   },
 }));
 
-const singleCall = (amountOutMinimum: bigint) =>
+const singleCall = (amountOutMinimum: bigint, tokenIn = TOKEN_IN, tokenOut = TOKEN_OUT, amountIn = 1000n) =>
   encodeFunctionData({
     abi: ROUTER_ABI,
     functionName: "exactInputSingle",
     args: [
       {
-        tokenIn: TOKEN_IN,
-        tokenOut: TOKEN_OUT,
+        tokenIn,
+        tokenOut,
         recipient: EXECUTOR,
         deadline: 1_800n,
-        amountIn: 1000n,
+        amountIn,
         amountOutMinimum,
         limitSqrtPrice: 0n,
       },
@@ -48,6 +48,7 @@ const request = (overrides: Partial<SwapQuoteRequest> = {}): SwapQuoteRequest =>
   recipient: EXECUTOR,
   slippageBps: 100,
   limitSqrtPrice: 2n ** 95n,
+  amountInAtLimit: 1000n,
   amountOutAtLimit: 400n,
   ...overrides,
 });
@@ -105,5 +106,104 @@ describe("createLensQuoter", () => {
     quote.mockResolvedValue({ ...lensResult, data: multiHop });
 
     await expect(quoter().quote(request())).rejects.toThrow(/price limit/);
+  });
+});
+
+/** Algebra orders a pool's two tokens by address, so the lower one is token0. */
+const TOKEN0 = TOKEN_IN;
+const TOKEN1 = TOKEN_OUT;
+const SLIPPAGE_BPS = 100n;
+
+describe("createLensQuoter's min-out floor at the limit price", () => {
+  beforeEach(() => quote.mockReset());
+
+  /** Lens's quote for the whole amount, with a tick walk that put the limit's output far too low. */
+  function understated(args: {
+    tokenIn: Address;
+    tokenOut: Address;
+    amount: bigint;
+    lensOut: bigint;
+    limitSqrtPrice: bigint;
+    amountInAtLimit: bigint;
+    amountOutAtLimit: bigint;
+  }) {
+    quote.mockResolvedValue({
+      amountIn: args.amount,
+      amountOut: args.lensOut,
+      target: ROUTER,
+      data: singleCall((args.lensOut * 99n) / 100n, args.tokenIn, args.tokenOut, args.amount),
+      msgValue: 0n,
+    });
+    return quoter().quote(
+      request({
+        tokenIn: args.tokenIn,
+        tokenOut: args.tokenOut,
+        amount: args.amount,
+        slippageBps: Number(SLIPPAGE_BPS),
+        limitSqrtPrice: args.limitSqrtPrice,
+        amountInAtLimit: args.amountInAtLimit,
+        amountOutAtLimit: args.amountOutAtLimit,
+      }),
+    );
+  }
+
+  it("holds a buy of an outcome that is token0 to its limit price", async () => {
+    // underlying (token1) in; the limit 2^95 prices token0 at 1/4 token1, so 1000 in buys at least 4000
+    const result = await understated({
+      tokenIn: TOKEN1,
+      tokenOut: TOKEN0,
+      amount: 1010n,
+      lensOut: 5000n,
+      limitSqrtPrice: 2n ** 95n,
+      amountInAtLimit: 1000n,
+      amountOutAtLimit: 100n,
+    });
+
+    expect(params(result.data).amountOutMinimum).toBe((1000n * 4n * (10_000n - SLIPPAGE_BPS)) / 10_000n);
+  });
+
+  it("holds a buy of an outcome that is token1 to its limit price", async () => {
+    // underlying (token0) in; the limit 2^97 prices token0 at 4 token1, so 1000 in buys at least 4000
+    const result = await understated({
+      tokenIn: TOKEN0,
+      tokenOut: TOKEN1,
+      amount: 1010n,
+      lensOut: 5000n,
+      limitSqrtPrice: 2n ** 97n,
+      amountInAtLimit: 1000n,
+      amountOutAtLimit: 100n,
+    });
+
+    expect(params(result.data).amountOutMinimum).toBe((1000n * 4n * (10_000n - SLIPPAGE_BPS)) / 10_000n);
+  });
+
+  it("holds a sell of an outcome that is token0 to its limit price", async () => {
+    // outcome (token0) in; the limit 2^95 prices it at 1/4 token1, so all 1000 sold pay at least 250
+    const result = await understated({
+      tokenIn: TOKEN0,
+      tokenOut: TOKEN1,
+      amount: 1000n,
+      lensOut: 500n,
+      limitSqrtPrice: 2n ** 95n,
+      amountInAtLimit: 5000n,
+      amountOutAtLimit: 2n,
+    });
+
+    expect(params(result.data).amountOutMinimum).toBe((1000n * (10_000n - SLIPPAGE_BPS)) / (4n * 10_000n));
+  });
+
+  it("holds a sell of an outcome that is token1 to its limit price", async () => {
+    // outcome (token1) in; the limit 2^97 prices token0 at 4 token1, so all 1000 sold pay at least 250
+    const result = await understated({
+      tokenIn: TOKEN1,
+      tokenOut: TOKEN0,
+      amount: 1000n,
+      lensOut: 500n,
+      limitSqrtPrice: 2n ** 97n,
+      amountInAtLimit: 5000n,
+      amountOutAtLimit: 2n,
+    });
+
+    expect(params(result.data).amountOutMinimum).toBe((1000n * (10_000n - SLIPPAGE_BPS)) / (4n * 10_000n));
   });
 });
