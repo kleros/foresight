@@ -1,4 +1,4 @@
-import type { FlowRunStore } from "@foresight/tx-orchestrator";
+import type { FlowRunStore, PersistedFlowRun } from "@foresight/tx-orchestrator";
 import type { Address } from "viem";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
@@ -17,15 +17,27 @@ const ownRun = (store: FlowRunStore, flowId: string, owner: Address) => {
   return run && run.ctx.owner.toLowerCase() === owner.toLowerCase() ? run : null;
 };
 
+const sessionRun = (store: FlowRunStore, sessionId: string, owner: Address) =>
+  ownRun(store, predictFlowId(sessionId, owner), owner) ?? ownRun(store, legacyPredictFlowId(sessionId), owner);
+
 /** The snapshot of `owner`'s unfinished stored run for this session, if there is one. */
 export function findInterruptedRun(store: FlowRunStore, sessionId: string, owner: Address): PredictSnapshot | null {
-  const run =
-    ownRun(store, predictFlowId(sessionId, owner), owner) ?? ownRun(store, legacyPredictFlowId(sessionId), owner);
-  return run?.snapshot ?? null;
+  return sessionRun(store, sessionId, owner)?.snapshot ?? null;
 }
 
-/** Forgets `owner`'s stored run for this session; another owner's run is left alone. */
+const awaitsReceipt = (run: PersistedFlowRun<PredictSnapshot, PredictCtx>) =>
+  run.steps.some((step) => step.outcome.status === "submitted");
+
+/** True while `owner`'s stored run holds a broadcast hash with no receipt; only resuming reconciles it. */
+export function hasPendingTransaction(store: FlowRunStore, sessionId: string, owner: Address): boolean {
+  const run = sessionRun(store, sessionId, owner);
+  return Boolean(run && awaitsReceipt(run));
+}
+
+/** Forgets `owner`'s stored run for this session unless it awaits a receipt; another owner's run is left alone. */
 export function discardRun(store: FlowRunStore, sessionId: string, owner: Address) {
-  store.clear(predictFlowId(sessionId, owner));
-  if (ownRun(store, legacyPredictFlowId(sessionId), owner)) store.clear(legacyPredictFlowId(sessionId));
+  for (const flowId of [predictFlowId(sessionId, owner), legacyPredictFlowId(sessionId)]) {
+    const run = ownRun(store, flowId, owner);
+    if (run && !awaitsReceipt(run)) store.clear(flowId);
+  }
 }

@@ -9,7 +9,7 @@ import { formatUnits, type Address } from "viem";
 import { useAccount } from "wagmi";
 
 import type { PredictSnapshot } from "@/features/predict/flow/types";
-import { discardRun, findInterruptedRun } from "@/features/predict/run/interrupted";
+import { discardRun, findInterruptedRun, hasPendingTransaction } from "@/features/predict/run/interrupted";
 import { useSessionEstimates } from "@/features/predict/stores/estimateStore";
 import { selectedEstimates } from "@/features/predict/utils/estimates";
 import type { SessionDetail, SessionStatus } from "@/features/sessions/types";
@@ -54,10 +54,13 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
   // what this page last placed, by owner and lower-case market
   const [placed, setPlaced] = useState<{ owner: Address; values: Record<string, number> }>();
   const [interrupted, setInterrupted] = useState<PredictSnapshot | null>(null);
+  const [isPending, setIsPending] = useState(false);
 
   // read after mount: the stored run lives in this browser, and the popup may have finished or discarded it
   useEffect(() => {
-    setInterrupted(address && !isOpen ? findInterruptedRun(createRunStore(), session.id, address) : null);
+    const store = createRunStore();
+    setInterrupted(address && !isOpen ? findInterruptedRun(store, session.id, address) : null);
+    setIsPending(address && !isOpen ? hasPendingTransaction(store, session.id, address) : false);
   }, [address, isOpen, session.id]);
 
   const discard = () => {
@@ -115,9 +118,10 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
             Your last prediction did not finish. Deposit:{" "}
             {formatUnits(interrupted.deposit, interrupted.depositNative ? 18 : (session.collateralDecimals ?? 18))}{" "}
             {interrupted.depositNative ? "xDAI" : (session.collateralSymbol ?? "sDAI")}
+            {isPending ? ". A transaction from it may still be pending; resume to check it." : null}
           </p>
           <div className="flex gap-3">
-            <Button small variant="secondary" text="Discard" onPress={discard} />
+            {isPending ? null : <Button small variant="secondary" text="Discard" onPress={discard} />}
             <Button small text="Resume" onPress={() => setIsOpen(true)} />
           </div>
         </div>
