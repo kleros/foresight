@@ -19,7 +19,7 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { gnosis } from "viem/chains";
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { planFunding } from "../../utils/funding";
 import type { PredictCtx, PredictOption, PredictSnapshot } from "../types";
@@ -48,6 +48,8 @@ const load = async () => ({
  * meant; only this proves Seer's router and Swapr's pools accept it.
  */
 const FORK_RPC_URL = process.env.FORK_RPC_URL;
+/** A cold fork pulls state from upstream Gnosis on first touch; a large multicall can take tens of seconds. */
+const FORK_RPC_TIMEOUT_MS = 60_000;
 const HASURA_URL = process.env.FORK_HASURA_URL ?? "http://localhost:8080/v1/graphql";
 const HASURA_SECRET = process.env.FORK_HASURA_SECRET ?? "testing";
 /** Hardhat's first account, which a fork funds. */
@@ -121,7 +123,7 @@ describe("the predict flow, against a gnosis fork", () => {
 
   beforeAll(async () => {
     if (!FORK_RPC_URL) return;
-    const transport = http(FORK_RPC_URL);
+    const transport = http(FORK_RPC_URL, { timeout: FORK_RPC_TIMEOUT_MS });
     client = createPublicClient({ chain: gnosis, transport }) as PublicClient;
     wallet = createWalletClient({ account, chain: gnosis, transport });
     await grantLensQuoter(FORK_RPC_URL!);
@@ -299,6 +301,23 @@ async function rpc<T>(method: string, params: unknown[] = []): Promise<T> {
   return body.result;
 }
 
+/** The highest block any test reached before rewinding; a rewound height is re-mined with a new hash. */
+let highestBlock = 0n;
+
+async function revertTo(snapshotId: string) {
+  const head = BigInt(await rpc<string>("eth_blockNumber"));
+  if (head > highestBlock) highestBlock = head;
+  await rpc("evm_revert", [snapshotId]);
+}
+
+// The indexer reads a rewound height as a reorg; mining past every height reached lets it settle
+// on empty blocks before anything else is seeded on the fork.
+afterAll(async () => {
+  if (!FORK_RPC_URL || highestBlock === 0n) return;
+  const head = BigInt(await rpc<string>("eth_blockNumber"));
+  if (head <= highestBlock) await rpc("hardhat_mine", [`0x${(highestBlock - head + 1n).toString(16)}`]);
+});
+
 /** Algebra's tick for a raw token1-per-token0 sqrt price. Floats are fine for a fixture's range. */
 const tickAt = (sqrtPriceX96: bigint): number => Math.log((Number(sqrtPriceX96) / 2 ** 96) ** 2) / Math.log(1.0001);
 const sqrtAtTick = (tick: number): bigint => BigInt(Math.round(Math.sqrt(1.0001 ** tick) * 2 ** 96));
@@ -314,7 +333,7 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
 
   beforeAll(async () => {
     if (!FORK_RPC_URL) return;
-    const transport = http(FORK_RPC_URL);
+    const transport = http(FORK_RPC_URL, { timeout: FORK_RPC_TIMEOUT_MS });
     client = createPublicClient({ chain: gnosis, transport }) as PublicClient;
     wallet = createWalletClient({ chain: gnosis, transport });
     await grantLensQuoter(FORK_RPC_URL);
@@ -334,7 +353,7 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
 
   afterEach(async () => {
     if (!FORK_RPC_URL) return;
-    await rpc("evm_revert", [snapshotId]);
+    await revertTo(snapshotId);
   });
 
   type Side = "up" | "down";
@@ -608,7 +627,7 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
           );
         }
 
-        await rpc("evm_revert", [snapshotId]);
+        await revertTo(snapshotId);
         snapshotId = await rpc<string>("evm_snapshot");
       }
     },
@@ -730,7 +749,7 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
           expect(fill.average, detail).toBeGreaterThanOrEqual(bound);
         }
 
-        await rpc("evm_revert", [snapshotId]);
+        await revertTo(snapshotId);
         snapshotId = await rpc<string>("evm_snapshot");
       }
     },
@@ -785,7 +804,7 @@ describe("the split amount when the cached trade-wallet balance is stale, agains
 
   beforeAll(async () => {
     if (!FORK_RPC_URL) return;
-    const transport = http(FORK_RPC_URL);
+    const transport = http(FORK_RPC_URL, { timeout: FORK_RPC_TIMEOUT_MS });
     client = createPublicClient({ chain: gnosis, transport }) as PublicClient;
     wallet = createWalletClient({ chain: gnosis, transport });
     await grantLensQuoter(FORK_RPC_URL);
@@ -800,7 +819,7 @@ describe("the split amount when the cached trade-wallet balance is stale, agains
 
   afterEach(async () => {
     if (!FORK_RPC_URL) return;
-    await rpc("evm_revert", [snapshotId]);
+    await revertTo(snapshotId);
   });
 
   const send = async (to: Address, data: Hex = "0x", value = 0n) => {
