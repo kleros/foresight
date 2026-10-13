@@ -57,7 +57,11 @@ export function EstimateSlider({
     <div className="flex w-full flex-col gap-2">
       <div className="relative w-full">
         <Slider
-          className={clsx("w-full", "[&_#slider-label]:text-fs-text-primary! [&_#slider-label]:font-semibold")}
+          className={clsx(
+            "w-full",
+            "[&_#slider-label]:text-fs-text-primary! [&_#slider-label]:font-semibold",
+            isDisabled && "opacity-50",
+          )}
           aria-label={`Your estimate for ${scale.name}`}
           minValue={scale.lowerBound}
           maxValue={scale.upperBound}
@@ -100,7 +104,7 @@ export function EstimateSlider({
           formatOptions={{ maximumFractionDigits: estimateDigits(scale) }}
           onChange={(typed) => (Number.isNaN(typed) ? onClear() : commit(typed))}
           isDisabled={isDisabled}
-          className="w-44"
+          className={clsx("w-44", isDisabled && "opacity-50")}
         />
         <p className="type-caption text-fs-text-secondary pb-2">
           {reason ??

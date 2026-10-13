@@ -20,10 +20,9 @@ interface OptionCardProps {
   isMarketUnavailable?: boolean;
 }
 
-// REVISIT WHEN: the predict flow lands. A closed session should read "Trading has closed for this
-// session." here; it is left open for now so past-date sessions on the fork can be worked with.
 const LOCKED: Partial<Record<SessionStatus, string>> = {
   "setting-up": "Estimates open once every option is set up.",
+  closed: "Trading has closed for this session.",
 };
 
 export function OptionCard({
