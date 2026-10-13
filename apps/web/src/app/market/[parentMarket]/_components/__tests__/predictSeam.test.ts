@@ -85,6 +85,10 @@ describe("the runner is still loaded on demand", () => {
     'export { PredictRunner } from "./PredictRunner";',
     "export {\n  PredictRunner as Runner,\n} from './PredictRunner';",
     'export * from "@/app/market/[parentMarket]/_components/PredictRunner";',
+    'import "./PredictRunner";',
+    "import '../_components/PredictRunner.tsx';",
+    'import { PredictRunner } from "./PredictRunner.tsx";',
+    'export { PredictRunner } from "./PredictRunner.js";',
   ])("counts %j as a static load", (text) => {
     expect(loadsRunnerStatically(text)).toBe(true);
   });
@@ -93,6 +97,10 @@ describe("the runner is still loaded on demand", () => {
     expect(loadsRunnerStatically('const Runner = dynamic(() => import("./PredictRunner"), { ssr: false });')).toBe(
       false,
     );
+  });
+
+  it("does not count an import of a module whose name only starts with PredictRunner", () => {
+    expect(loadsRunnerStatically('import { RunnerCopy } from "./PredictRunnerCopy";')).toBe(false);
   });
 });
 

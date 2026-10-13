@@ -22,12 +22,18 @@ const OWNER = "0x9999999999999999999999999999999999999999" as Address;
 const TRADE_WALLET = "0x8888888888888888888888888888888888888888" as Address;
 const WAD = 10n ** 18n;
 
-const chain = vi.hoisted(() => ({
-  router: "0x7777777777777777777777777777777777777777",
-  factory: "0x6666666666666666666666666666666666666666",
-  sDai: "0x5555555555555555555555555555555555555555",
-  sDaiAdapter: "0x4444444444444444444444444444444444444444",
-}));
+const ROUTER = "0x7777777777777777777777777777777777777777" as Address;
+const FACTORY = "0x6666666666666666666666666666666666666666" as Address;
+
+const chain = vi.hoisted(() => {
+  const deployed: { router: Address | null; factory: Address | null; sDai: Address; sDaiAdapter: Address } = {
+    router: null,
+    factory: null,
+    sDai: "0x5555555555555555555555555555555555555555",
+    sDaiAdapter: "0x4444444444444444444444444444444444444444",
+  };
+  return deployed;
+});
 
 // The cache keys import the indexer and RPC clients, which read env this suite does not supply.
 vi.mock("@/lib/graphql/batcher", () => ({ fetchGraphql: vi.fn() }));
@@ -90,6 +96,8 @@ function mount(overrides: Partial<Args> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  chain.router = ROUTER;
+  chain.factory = FACTORY;
   inputs = [];
   runMock.mockImplementation((input) => {
     inputs.push(input);
@@ -110,15 +118,22 @@ describe("usePredictExecution, how the visitor pays", () => {
     expect(lastInput()?.depositNative()).toBe(false);
   });
 
-  it("hands the run the deposit, the collateral split and the trade wallet's balance from the funding", () => {
+  it("hands the run the deposit from the funding", () => {
     mount();
-    const input = lastInput();
 
-    expect({
-      deposit: input?.deposit(),
-      collateralIn: input?.collateralIn(),
-      collateralBefore: input?.collateralBefore(),
-    }).toEqual({ deposit: 2n * WAD, collateralIn: 7n * WAD, collateralBefore: 5n * WAD });
+    expect(lastInput()?.deposit()).toBe(FUNDING.deposit);
+  });
+
+  it("hands the run the collateral going into the trade from the funding", () => {
+    mount();
+
+    expect(lastInput()?.collateralIn()).toBe(FUNDING.collateralIn);
+  });
+
+  it("hands the run the trade wallet's balance from the funding", () => {
+    mount();
+
+    expect(lastInput()?.collateralBefore()).toBe(FUNDING.tradeWallet);
   });
 
   it("hands the run zero for every amount while the funding is unknown", () => {
@@ -132,30 +147,41 @@ describe("usePredictExecution, how the visitor pays", () => {
     }).toEqual({ deposit: 0n, collateralIn: 0n, collateralBefore: 0n });
   });
 
-  it("reads the amounts and the pay token as they stand when the run asks, not when it was built", () => {
-    const view = mount({ funding: FUNDING, native: false });
+  it("reads the amounts as they stand when the run asks, not when it was built", () => {
+    const view = mount({ funding: FUNDING });
     const built = lastInput();
     const later: Funding = { ...FUNDING, deposit: 9n * WAD, collateralIn: 13n * WAD, tradeWallet: 6n * WAD };
 
-    view.rerender({ ...view.args, funding: later, native: true });
+    view.rerender({ ...view.args, funding: later });
 
     expect({
       deposit: built?.deposit(),
-      depositNative: built?.depositNative(),
       collateralIn: built?.collateralIn(),
       collateralBefore: built?.collateralBefore(),
-    }).toEqual({ deposit: 9n * WAD, depositNative: true, collateralIn: 13n * WAD, collateralBefore: 6n * WAD });
+    }).toEqual({ deposit: 9n * WAD, collateralIn: 13n * WAD, collateralBefore: 6n * WAD });
+  });
+
+  it("reads the pay token as it stands when the run asks, not when it was built", () => {
+    const view = mount({ native: false });
+    const built = lastInput();
+
+    view.rerender({ ...view.args, native: true });
+
+    expect(built?.depositNative()).toBe(true);
   });
 });
 
 describe("usePredictExecution, the contracts it names", () => {
-  it("names Seer's router and the trade-wallet factory", () => {
+  it("names Seer's router", () => {
     mount();
 
-    expect({ router: lastInput()?.router, factory: lastInput()?.factory }).toEqual({
-      router: chain.router,
-      factory: chain.factory,
-    });
+    expect(lastInput()?.router).toBe(ROUTER);
+  });
+
+  it("names the trade-wallet factory", () => {
+    mount();
+
+    expect(lastInput()?.factory).toBe(FACTORY);
   });
 
   it("names the savings adapter when the collateral is sDAI", () => {
@@ -187,6 +213,18 @@ describe("usePredictExecution, when a run can be built", () => {
     { case: "the collateral did not read", overrides: { session: session({ collateralToken: null }) } },
   ] satisfies { case: string; overrides: Partial<Args> }[])("is not ready when $case", ({ overrides }) => {
     const view = mount(overrides);
+
+    expect(view.result.current.ready).toBe(false);
+    expect(lastInput()).toBeNull();
+  });
+
+  it.each([
+    { case: "no Seer router is deployed", contract: "router" },
+    { case: "no trade-wallet factory is deployed", contract: "factory" },
+  ] as const)("is not ready when $case", ({ contract }) => {
+    chain[contract] = null;
+
+    const view = mount();
 
     expect(view.result.current.ready).toBe(false);
     expect(lastInput()).toBeNull();
