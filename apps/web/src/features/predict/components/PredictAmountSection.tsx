@@ -9,9 +9,8 @@ import DaiIcon from "@/assets/svg/dai.svg";
 
 import { formatAmount } from "@/utils/amount";
 
-import { AMOUNT_DISPLAY_DECIMALS } from "../oracle/tolerances";
 import type { PayToken } from "../types";
-import { percentOf, shareOf, type Funding } from "../utils/funding";
+import { percentOf, roundToDisplay, shareOf, type Funding } from "../utils/funding";
 
 export interface PayTokenChoice {
   id: PayToken;
@@ -164,12 +163,6 @@ export function PredictAmountSection({
       </div>
     </div>
   );
-}
-
-/** Rounded down to the decimals the popup shows, so the signed amount is the shown amount. */
-export function roundToDisplay(value: bigint, decimals: number): bigint {
-  const step = 10n ** BigInt(Math.max(decimals - AMOUNT_DISPLAY_DECIMALS, 0));
-  return value - (value % step);
 }
 
 function toUnits(entered: string, decimals: number): bigint | undefined {

@@ -5,10 +5,11 @@ import { useEffect, useState } from "react";
 import type { Address } from "viem";
 import { useAccount } from "wagmi";
 
-import { roundToDisplay, type PayTokenChoice } from "@/features/predict/components/PredictAmountSection";
+import type { PayTokenChoice } from "@/features/predict/components/PredictAmountSection";
 import { PredictDialog } from "@/features/predict/components/PredictDialog";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import type { PayToken, SelectedEstimate } from "@/features/predict/types";
+import { roundToDisplay } from "@/features/predict/utils/funding";
 import { predictSteps } from "@/features/predict/utils/predictSteps";
 import type { SessionDetail } from "@/features/sessions/types";
 import { useExecutor } from "@/features/trade-executor/api/getExecutor";

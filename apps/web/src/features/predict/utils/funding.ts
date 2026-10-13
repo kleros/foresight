@@ -1,4 +1,4 @@
-import { GAS_RESERVE_WEI } from "../oracle/tolerances";
+import { AMOUNT_DISPLAY_DECIMALS, GAS_RESERVE_WEI } from "../oracle/tolerances";
 
 const WAD = 10n ** 18n;
 
@@ -52,6 +52,12 @@ export function planFunding({ amount, ownWallet, tradeWallet, tokenPerCollateral
     toAdd,
     deposit: depositNeeded > spendable ? spendable : depositNeeded,
   };
+}
+
+/** Rounded down to the decimals the popup shows, so the signed amount is the shown amount. */
+export function roundToDisplay(value: bigint, decimals: number): bigint {
+  const step = 10n ** BigInt(Math.max(decimals - AMOUNT_DISPLAY_DECIMALS, 0));
+  return value - (value % step);
 }
 
 /** A whole percentage of `balance`, rounded down. */
