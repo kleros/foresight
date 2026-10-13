@@ -121,6 +121,8 @@ function reachesExecutorA(tx: SendArgs): boolean {
 async function settle(result: { current: ReturnType<typeof usePredictRun> }) {
   await vi.waitFor(() => {
     const progress = result.current.progress;
+    // a recovered run waits at review until the owner resumes it, as the popup's Resume does
+    if (progress?.stage === "review") result.current.driver?.resume();
     expect(progress?.stage === "complete" || progress?.failure !== undefined).toBe(true);
   });
 }

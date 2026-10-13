@@ -97,6 +97,8 @@ async function runToEnd(owner: Address, executor: Address) {
   act(() => hook.result.current.driver!.start());
   await vi.waitFor(() => {
     const progress = hook.result.current.progress;
+    // a recovered run waits at review until the owner resumes it, as the popup's Resume does
+    if (progress?.stage === "review") hook.result.current.driver?.resume();
     expect(progress?.stage === "complete" || progress?.failure !== undefined).toBe(true);
   });
   const stage = hook.result.current.progress?.stage;

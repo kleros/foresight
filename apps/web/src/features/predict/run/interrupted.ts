@@ -14,12 +14,13 @@ export const legacyPredictFlowId = (sessionId: string) => `predict-${sessionId}`
 
 const ownRun = (store: FlowRunStore, flowId: string, owner: Address) => {
   const run = store.load<PredictSnapshot, PredictCtx>(flowId);
-  return run && run.ctx.owner.toLowerCase() === owner.toLowerCase() && run.ctx.chainId === DEFAULT_CHAIN_ID ? run : null;
+  return run && run.ctx.owner.toLowerCase() === owner.toLowerCase() ? run : null;
 };
 
 /** The snapshot of `owner`'s unfinished stored run for this session, if there is one. */
 export function findInterruptedRun(store: FlowRunStore, sessionId: string, owner: Address): PredictSnapshot | null {
-  const run = ownRun(store, predictFlowId(sessionId, owner), owner) ?? ownRun(store, legacyPredictFlowId(sessionId), owner);
+  const run =
+    ownRun(store, predictFlowId(sessionId, owner), owner) ?? ownRun(store, legacyPredictFlowId(sessionId), owner);
   return run?.snapshot ?? null;
 }
 

@@ -1,4 +1,3 @@
-
 import { EstimateSlider } from "@/features/predict/components/EstimateSlider";
 import { useEstimate, useEstimateStore } from "@/features/predict/stores/estimateStore";
 import { estimateDirection } from "@/features/predict/utils/estimates";

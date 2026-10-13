@@ -108,7 +108,8 @@ async function newestSessionWithPools(): Promise<ForkSession> {
   });
   const body = (await response.json()) as { data: { Session: ForkSession[] } };
   const session = body.data.Session[0];
-  if (!session) throw new Error("No session with pools indexed. Run `yarn simulate:session:gnosis-fork --liquidity` first.");
+  if (!session)
+    throw new Error("No session with pools indexed. Run `yarn simulate:session:gnosis-fork --liquidity` first.");
   return session;
 }
 
@@ -317,7 +318,7 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
     client = createPublicClient({ chain: gnosis, transport }) as PublicClient;
     wallet = createWalletClient({ chain: gnosis, transport });
     await grantLensQuoter(FORK_RPC_URL);
-    session = await newestSession();
+    session = await newestSessionWithPools();
     app = await load();
     tolerances = await import("../../oracle/tolerances");
   }, 120_000);
@@ -788,7 +789,7 @@ describe("the split amount when the cached trade-wallet balance is stale, agains
     client = createPublicClient({ chain: gnosis, transport }) as PublicClient;
     wallet = createWalletClient({ chain: gnosis, transport });
     await grantLensQuoter(FORK_RPC_URL);
-    session = await newestSession();
+    session = await newestSessionWithPools();
     app = await load();
   }, 120_000);
 

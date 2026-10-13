@@ -195,6 +195,9 @@ describe("createPredictRun recovering a run saved by wallet A on chain 100", () 
     const { gateway, driver } = recover(store, ctx());
 
     driver.start();
+    // a recovered run waits for the owner to review it before anything is signed
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("review"));
+    driver.resume();
     await vi.waitFor(() => {
       const progress = driver.getProgress();
       expect(progress.stage === "complete" || progress.failure !== undefined).toBe(true);
