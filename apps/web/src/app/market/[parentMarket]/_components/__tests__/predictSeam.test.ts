@@ -22,7 +22,8 @@ function sources(dir: string): string[] {
 const runner = () => read(path.join(COMPONENTS, "PredictRunner.tsx"));
 
 /** Whether `text` pulls PredictRunner into its own module graph. */
-const loadsRunnerStatically = (text: string) => /^\s*import\s[^;]*from\s+["'][^"']*\/PredictRunner["']/m.test(text);
+const loadsRunnerStatically = (text: string) =>
+  /^\s*(?:import|export)\s[^;]*from\s+["'][^"']*\/PredictRunner["']/m.test(text);
 
 describe("PredictRunner stays on its side of the seam", () => {
   it.each(["gnosisRouterAddress", "tradeExecutorFactoryAddress", "sDaiDepositRoute", "@/config/contracts"])(
@@ -72,7 +73,7 @@ describe("the runner is still loaded on demand", () => {
     expect(card).toMatch(/ssr:\s*false/);
   });
 
-  it("is never imported statically, which would put it back in the route bundle", () => {
+  it("is never imported or re-exported statically", () => {
     const statics = sources(path.resolve(FEATURES, "..")).filter((file) => loadsRunnerStatically(read(file)));
 
     expect(statics.map((file) => path.basename(file))).toEqual([]);
