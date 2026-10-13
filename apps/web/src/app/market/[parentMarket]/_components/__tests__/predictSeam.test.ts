@@ -23,7 +23,7 @@ const runner = () => read(path.join(COMPONENTS, "PredictRunner.tsx"));
 
 /** Whether `text` pulls PredictRunner into its own module graph. */
 const loadsRunnerStatically = (text: string) =>
-  /^\s*(?:import|export)\s[^;]*from\s+["'][^"']*\/PredictRunner["']/m.test(text);
+  /^\s*(?:import|export)\s(?:[^;]*from\s+)?["'][^"']*\/PredictRunner(?:\.[jt]sx?)?["']/m.test(text);
 
 describe("PredictRunner stays on its side of the seam", () => {
   it.each(["gnosisRouterAddress", "tradeExecutorFactoryAddress", "sDaiDepositRoute", "@/config/contracts"])(
