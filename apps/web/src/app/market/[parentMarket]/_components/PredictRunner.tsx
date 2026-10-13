@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import type { Address } from "viem";
 import { useAccount } from "wagmi";
 
-import type { PayTokenChoice } from "@/features/predict/components/PredictAmountSection";
+import { roundToDisplay, type PayTokenChoice } from "@/features/predict/components/PredictAmountSection";
 import { PredictDialog } from "@/features/predict/components/PredictDialog";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import type { PayToken, SelectedEstimate } from "@/features/predict/types";
@@ -38,7 +38,9 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
   const { address: owner, chainId } = useAccount();
 
   const [amount, setAmount] = useState<bigint>();
-  const [tokenId, setTokenId] = useState<PayToken>("collateral");
+  const [picked, setPicked] = useState<PayToken>();
+  // removed in this popup; cleared from the page only once Predict is pressed
+  const [removed, setRemoved] = useState<string[]>([]);
   // what the steps say is being added, held from the press so a refreshed balance cannot rewrite it
   const [frozenToAdd, setFrozenToAdd] = useState<bigint>();
 
@@ -49,21 +51,29 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
   const { collateralToken } = session;
 
   const collateral = { symbol: session.collateralSymbol ?? "sDAI", decimals: session.collateralDecimals ?? 18 };
-  const { funding, canPayNative } = usePredictFunding({
+  const {
+    funding,
+    token: tokenId,
+    available,
+    canPayNative,
+  } = usePredictFunding({
     owner,
     tradeWallet: predicted,
     collateral: collateralToken,
-    token: tokenId,
+    token: picked,
     amount: amount ?? 0n,
   });
+  // the default is chosen once, so a balance refresh cannot switch the token under a typed amount
+  if (picked === undefined && tokenId !== undefined) setPicked(tokenId);
   const isFirstPrediction = !useHasPredicted(predicted, session);
 
   const tokens: PayTokenChoice[] = [{ id: "collateral", ...collateral }, ...(canPayNative ? [NATIVE] : [])];
   const token = tokens.find((choice) => choice.id === tokenId) ?? tokens[0]!;
+  const kept = selected.filter((estimate) => !removed.includes(estimate.scale.market));
 
   const { driver, progress, ready } = usePredictExecution({
     session,
-    selected,
+    selected: kept,
     owner,
     chainId,
     tradeWallet: predicted,
@@ -110,6 +120,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
     // a stored run is resumed or closed, never replaced by the form behind it
     if (recovered) return;
     if (stage === "halted" && !pendingHash) driver?.reset();
+    for (const market of removed) clearEstimate(session.parentMarket, market);
     setFrozenToAdd(funding?.toAdd);
     driver?.start();
   };
@@ -127,15 +138,18 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
     <PredictDialog
       isOpen
       onClose={close}
-      selected={recovered ? toSavedEstimates(session, recovered.options) : selected}
-      onRemove={(market) => clearEstimate(session.parentMarket, market)}
+      selected={recovered ? toSavedEstimates(session, recovered.options) : kept}
+      onRemove={(market) => setRemoved((markets) => [...markets, market])}
       amount={amount}
       onAmountChange={setAmount}
       tokens={tokens}
       token={token}
       onTokenChange={(next) => {
-        setTokenId(next);
-        setAmount(undefined);
+        // both pay tokens have 18 decimals, so the typed number carries over as is
+        const max = available(next);
+        const cap = max === undefined ? undefined : roundToDisplay(max, token.decimals);
+        setPicked(next);
+        if (amount !== undefined && cap !== undefined && amount > cap) setAmount(cap);
       }}
       funding={funding}
       collateral={collateral}

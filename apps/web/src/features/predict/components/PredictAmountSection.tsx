@@ -46,8 +46,7 @@ export function PredictAmountSection({
   const available = funding?.available;
   const notEnough = amount !== undefined && available !== undefined && amount > available;
   const isNative = token.id === "native";
-  const step = 10n ** BigInt(Math.max(token.decimals - AMOUNT_DISPLAY_DECIMALS, 0));
-  const roundDown = (value: bigint) => value - (value % step);
+  const roundDown = (value: bigint) => roundToDisplay(value, token.decimals);
   const max = available === undefined ? undefined : roundDown(available);
 
   return (
@@ -161,6 +160,12 @@ export function PredictAmountSection({
       </div>
     </div>
   );
+}
+
+/** Rounded down to the decimals the popup shows, so the signed amount is the shown amount. */
+export function roundToDisplay(value: bigint, decimals: number): bigint {
+  const step = 10n ** BigInt(Math.max(decimals - AMOUNT_DISPLAY_DECIMALS, 0));
+  return value - (value % step);
 }
 
 function toUnits(entered: string, decimals: number): bigint | undefined {

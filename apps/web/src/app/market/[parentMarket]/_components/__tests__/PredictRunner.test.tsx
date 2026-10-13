@@ -10,7 +10,8 @@ import type { PredictDialog } from "@/features/predict/components/PredictDialog"
 import { snapshot } from "@/features/predict/flow/__tests__/support/fakes";
 import { usePredictRun, type PredictRunInput } from "@/features/predict/hooks/usePredictRun";
 import type { PredictDriver, PredictProgress, PredictStage } from "@/features/predict/run/types";
-import type { SelectedEstimate } from "@/features/predict/types";
+import { useEstimateStore } from "@/features/predict/stores/estimateStore";
+import type { PayToken, SelectedEstimate } from "@/features/predict/types";
 import { sessionChartKey } from "@/features/sessions/api/getSessionChart";
 import { sessionStatsKey } from "@/features/sessions/api/getSessionStats";
 import type { SessionDetail } from "@/features/sessions/types";
@@ -26,6 +27,7 @@ import { DEFAULT_CHAIN_ID } from "@/config/chains";
 import { addresses, GATEWAY } from "@/testing/fixtures";
 
 import { PredictRunner } from "../PredictRunner";
+import { usePredictFunding } from "../usePredictFunding";
 
 const OWNER = "0x9999999999999999999999999999999999999999" as Address;
 const EXECUTOR = "0x8888888888888888888888888888888888888888" as Address;
@@ -56,9 +58,7 @@ vi.mock("@/features/trade-executor/api/getExecutor", async (importOriginal) => (
   useExecutor: () => ({ data: { predicted: EXECUTOR, deployed: true } }),
 }));
 
-vi.mock("../usePredictFunding", () => ({
-  usePredictFunding: () => ({ funding: null, canPayNative: false, isPending: false }),
-}));
+vi.mock("../usePredictFunding", () => ({ usePredictFunding: vi.fn() }));
 
 vi.mock("../useHasPredicted", () => ({ useHasPredicted: () => false }));
 
@@ -71,6 +71,12 @@ vi.mock("@/features/predict/components/PredictDialog", () => ({
       <p data-testid="notice">{props.notice ?? ""}</p>
       <p data-testid="running">{String(props.isRunning)}</p>
       <p data-testid="funds">{props.steps.rows.find((row) => row.key === "funds")?.subtitle}</p>
+      <p data-testid="token">{props.token.symbol}</p>
+      <p data-testid="listed">{props.selected.length}</p>
+      <button onClick={() => props.onRemove(props.selected[0]!.scale.market)}>remove</button>
+      <p data-testid="amount">{props.amount?.toString()}</p>
+      <button onClick={() => props.onAmountChange(10n * 10n ** 18n)}>pay ten</button>
+      <button onClick={() => props.onTokenChange("native")}>pay in xDAI</button>
       <button onClick={props.onClose}>close</button>
       <button onClick={props.onPredict}>predict</button>
     </div>
@@ -79,6 +85,11 @@ vi.mock("@/features/predict/components/PredictDialog", () => ({
 
 const accountMock = vi.mocked(useAccount);
 const runMock = vi.mocked(usePredictRun);
+const fundingMock = vi.mocked(usePredictFunding);
+
+/** The token the balances would default to when the visitor has not picked one. */
+let heldMore: PayToken | undefined;
+let nativeAvailable: bigint | undefined;
 
 const progressAt = (stage: PredictStage, retryable = false): PredictProgress => ({
   stage,
@@ -136,6 +147,14 @@ beforeEach(() => {
   progress = null;
   lastInput = null;
   connected();
+  heldMore = undefined;
+  nativeAvailable = undefined;
+  fundingMock.mockImplementation(({ token }) => ({
+    funding: null,
+    token: token ?? heldMore,
+    available: (choice) => (choice === "native" ? nativeAvailable : undefined),
+    canPayNative: true,
+  }));
   runMock.mockImplementation((input) => {
     if (input) lastInput = input;
     return { driver, progress };
@@ -430,5 +449,46 @@ describe("PredictRunner, the dialog's controls", () => {
 
     expect(driver.reset).not.toHaveBeenCalled();
     expect(view.onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("PredictRunner, draft removals and the default token", () => {
+  it("clears an estimate removed in the popup only once predict is pressed", () => {
+    const detail = session();
+    const market = detail.options[0]!.market;
+    useEstimateStore.setState({ estimates: {} });
+    useEstimateStore.getState().setEstimate(detail.parentMarket, market, 312);
+    const saved = () => useEstimateStore.getState().estimates[detail.parentMarket.toLowerCase()];
+    mount(detail);
+
+    fireEvent.click(screen.getByText("remove"));
+    expect(screen.getByTestId("listed")).toHaveTextContent("0");
+    expect(saved()).toEqual({ [market.toLowerCase()]: 312 });
+
+    fireEvent.click(screen.getByText("predict"));
+    expect(saved()).toBeUndefined();
+  });
+
+  it("keeps the default token when a balance refresh would now pick the other one", () => {
+    heldMore = "native";
+    const view = mount();
+    expect(screen.getByTestId("token")).toHaveTextContent("xDAI");
+
+    heldMore = "collateral";
+    view.rerenderAt();
+
+    expect(screen.getByTestId("token")).toHaveTextContent("xDAI");
+  });
+
+  it("clamps the amount to the new token's balance rounded down to the shown decimals", () => {
+    heldMore = "collateral";
+    nativeAvailable = 5_000_012_340_000_000_000n;
+    mount();
+
+    fireEvent.click(screen.getByText("pay ten"));
+    fireEvent.click(screen.getByText("pay in xDAI"));
+
+    expect(screen.getByTestId("token")).toHaveTextContent("xDAI");
+    expect(screen.getByTestId("amount")).toHaveTextContent(/^5000000000000000000$/);
   });
 });
