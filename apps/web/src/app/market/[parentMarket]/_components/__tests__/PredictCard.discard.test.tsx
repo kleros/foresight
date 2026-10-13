@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import type { RunPhase, StepOutcome } from "@foresight/tx-orchestrator";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
@@ -25,23 +26,59 @@ vi.mock("@/components/wallet/EnsureChain", () => ({ default: ({ children }: { ch
 
 const session = () => toSessionDetail({ ...sessionDetailColumns, id: "7", children: [] }, GATEWAY);
 
-beforeEach(() => {
-  window.localStorage.clear();
+const HASH = `0x${"ab".repeat(32)}` as const;
+
+function saveRun(deposit: StepOutcome, phase: Exclude<RunPhase, { status: "completed" }>) {
   createRunStore().save({
     flowId: predictFlowId("7", OWNER),
     adapterId: "predict-flow",
     snapshot: snapshot({ deposit: WAD * 3n }),
     ctx: ctx({ owner: OWNER }),
-    steps: [{ stepId: "deposit", label: "Add funds", outcome: { status: "pending" } }],
-    status: "running",
+    steps: [
+      { stepId: "deposit", label: "Add funds", outcome: deposit },
+      { stepId: "predict", label: "Predict", outcome: { status: "pending" } },
+    ],
+    ...phase,
   });
+}
+
+beforeEach(() => {
+  window.localStorage.clear();
 });
 
-it("forgets the interrupted run when it is discarded", async () => {
+it.each([
+  ["nothing was submitted", { status: "pending" }, { status: "running" }],
+  ["the deposit confirmed", { status: "confirmed", hash: HASH, blockNumber: 1n }, { status: "running" }],
+  [
+    "the deposit reverted",
+    { status: "pending" },
+    {
+      status: "failed",
+      error: { stepId: "deposit", message: "The transaction reverted on chain.", cause: "reverted", hash: HASH },
+    },
+  ],
+] as const)("forgets the interrupted run when it is discarded after %s", async (_name, deposit, phase) => {
+  saveRun(deposit, phase);
   render(<PredictCard session={session()} status="trading" marketEstimates={{}} />);
 
   await userEvent.click(await screen.findByRole("button", { name: "Discard" }));
 
   expect(createRunStore().load(predictFlowId("7", OWNER))).toBeNull();
   expect(screen.queryByRole("button", { name: "Resume" })).toBeNull();
+});
+
+it("offers Resume but not Discard while the run's transaction awaits its receipt", async () => {
+  saveRun(
+    { status: "submitted", hash: HASH },
+    {
+      status: "paused",
+      reason: "error",
+      error: { stepId: "deposit", message: "RPC unavailable", cause: "rpc", hash: HASH },
+    },
+  );
+  render(<PredictCard session={session()} status="trading" marketEstimates={{}} />);
+
+  expect(await screen.findByRole("button", { name: "Resume" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
+  expect(createRunStore().load(predictFlowId("7", OWNER))).not.toBeNull();
 });
