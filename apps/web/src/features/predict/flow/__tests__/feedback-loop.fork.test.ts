@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 /**
  * The predict-flow epic's loop, from an agent's side: seed the fork, then `yarn test:fork`.
@@ -94,6 +94,16 @@ function expectForkSuitePassed(result: Run) {
 describe("the predict-flow feedback loop, against a gnosis fork", () => {
   const worktrees: string[] = [];
 
+  // Seeded once, before any suite runs: a fork suite rewinds the chain with evm_revert, and the
+  // indexer can drop a session seeded onto a rewound height. The newest session has no pools.
+  beforeAll(async () => {
+    if (!FORK_RPC_URL) return;
+    const root = await repoRoot();
+    await runOk("yarn", ["workspace", "@foresight/contracts", "build"], root);
+    await seedSession(root, { liquidity: true });
+    await seedSession(root, { liquidity: false });
+  }, 600_000);
+
   afterAll(async () => {
     const root = await repoRoot();
     for (const dir of worktrees) {
@@ -106,9 +116,6 @@ describe("the predict-flow feedback loop, against a gnosis fork", () => {
     "passes `yarn test:fork` in a fresh worktree that has no gitignored files",
     async () => {
       const root = await repoRoot();
-      await runOk("yarn", ["workspace", "@foresight/contracts", "build"], root);
-      await seedSession(root, { liquidity: true });
-
       const dir = mkdtempSync(path.join(tmpdir(), "foresight-loop-"));
       rmSync(dir, { recursive: true, force: true });
       worktrees.push(dir);
@@ -126,12 +133,7 @@ describe("the predict-flow feedback loop, against a gnosis fork", () => {
   it.skipIf(!FORK_RPC_URL)(
     "picks a session with pools when a session without liquidity was opened after it",
     async () => {
-      const root = await repoRoot();
-      await runOk("yarn", ["workspace", "@foresight/contracts", "build"], root);
-      await seedSession(root, { liquidity: true });
-      await seedSession(root, { liquidity: false });
-
-      expectForkSuitePassed(await run("yarn", ["test:fork"], root));
+      expectForkSuitePassed(await run("yarn", ["test:fork"], await repoRoot()));
     },
     900_000,
   );
