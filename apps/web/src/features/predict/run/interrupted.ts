@@ -17,8 +17,14 @@ const ownRun = (store: FlowRunStore, flowId: string, owner: Address) => {
   return run && run.ctx.owner.toLowerCase() === owner.toLowerCase() ? run : null;
 };
 
+/** A session-only run counts only on the default chain, the one usePredictRun adopts it onto. */
+const ownLegacyRun = (store: FlowRunStore, sessionId: string, owner: Address) => {
+  const run = ownRun(store, legacyPredictFlowId(sessionId), owner);
+  return run && run.ctx.chainId === DEFAULT_CHAIN_ID ? run : null;
+};
+
 const sessionRun = (store: FlowRunStore, sessionId: string, owner: Address) =>
-  ownRun(store, predictFlowId(sessionId, owner), owner) ?? ownRun(store, legacyPredictFlowId(sessionId), owner);
+  ownRun(store, predictFlowId(sessionId, owner), owner) ?? ownLegacyRun(store, sessionId, owner);
 
 /** The snapshot of `owner`'s unfinished stored run for this session, if there is one. */
 export function findInterruptedRun(store: FlowRunStore, sessionId: string, owner: Address): PredictSnapshot | null {
@@ -36,8 +42,9 @@ export function hasPendingTransaction(store: FlowRunStore, sessionId: string, ow
 
 /** Forgets `owner`'s stored run for this session unless it awaits a receipt; another owner's run is left alone. */
 export function discardRun(store: FlowRunStore, sessionId: string, owner: Address) {
-  for (const flowId of [predictFlowId(sessionId, owner), legacyPredictFlowId(sessionId)]) {
-    const run = ownRun(store, flowId, owner);
-    if (run && !awaitsReceipt(run)) store.clear(flowId);
-  }
+  const runs = [
+    [predictFlowId(sessionId, owner), ownRun(store, predictFlowId(sessionId, owner), owner)],
+    [legacyPredictFlowId(sessionId), ownLegacyRun(store, sessionId, owner)],
+  ] as const;
+  for (const [flowId, run] of runs) if (run && !awaitsReceipt(run)) store.clear(flowId);
 }

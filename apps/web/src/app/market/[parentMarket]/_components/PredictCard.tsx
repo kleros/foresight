@@ -55,17 +55,19 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
   const [placed, setPlaced] = useState<{ owner: Address; values: Record<string, number> }>();
   const [interrupted, setInterrupted] = useState<PredictSnapshot | null>(null);
   const [isPending, setIsPending] = useState(false);
+  const [discards, setDiscards] = useState(0);
 
   // read after mount: the stored run lives in this browser, and the popup may have finished or discarded it
   useEffect(() => {
     const store = createRunStore();
     setInterrupted(address && !isOpen ? findInterruptedRun(store, session.id, address) : null);
     setIsPending(address && !isOpen ? hasPendingTransaction(store, session.id, address) : false);
-  }, [address, isOpen, session.id]);
+  }, [address, isOpen, session.id, discards]);
 
+  // re-read rather than clear: discardRun keeps a run whose transaction awaits a receipt
   const discard = () => {
     if (address) discardRun(createRunStore(), session.id, address);
-    setInterrupted(null);
+    setDiscards((count) => count + 1);
   };
 
   const estimates = useSessionEstimates(session.parentMarket);
