@@ -21,6 +21,8 @@ import CheckOutline from "@/assets/svg/check-outline-button.svg";
 
 import { createRunStore } from "@/lib/flowRunStore";
 
+import { type PredictBlocker, predictBlocker } from "./predictBlocker";
+
 // The run pulls in the orchestrator, the quoter and a chain client; none of that belongs on the
 // page until someone asks to predict.
 const PredictRunner = dynamic(() => import("./PredictRunner").then((module) => module.PredictRunner), { ssr: false });
@@ -30,13 +32,21 @@ const PredictSuccessDialog = dynamic(
   { ssr: false },
 );
 
+const BLOCKER_TEXT: Record<PredictBlocker, string> = {
+  closed: "Trading has closed for this session.",
+  "no-liquidity": "This option has no liquidity yet, so it can't be predicted.",
+  "no-move": "Move an estimate away from the market estimate to make a prediction.",
+};
+
 interface PredictCardProps {
   session: SessionDetail;
   status: SessionStatus;
   marketEstimates: Record<string, number | undefined>;
+  /** True while the market numbers are loading or failed; an empty `marketEstimates` says nothing then. */
+  isMarketUnknown?: boolean;
 }
 
-export function PredictCard({ session, status, marketEstimates }: PredictCardProps) {
+export function PredictCard({ session, status, marketEstimates, isMarketUnknown = false }: PredictCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [leftOut, setLeftOut] = useState<string[]>([]);
@@ -58,6 +68,13 @@ export function PredictCard({ session, status, marketEstimates }: PredictCardPro
   const estimates = useSessionEstimates(session.parentMarket);
   const selected = selectedEstimates(session.options, estimates, marketEstimates);
   const isDisabled = selected.length === 0 || status !== "trading";
+  const blocker = predictBlocker({
+    status,
+    options: session.options,
+    marketEstimates,
+    isMarketUnknown,
+    selectedCount: selected.length,
+  });
   const changed = selected.filter(
     (estimate) => placed?.owner !== address || placed?.values[estimate.scale.market.toLowerCase()] !== estimate.value,
   );
@@ -90,6 +107,7 @@ export function PredictCard({ session, status, marketEstimates }: PredictCardPro
           onPress={() => setIsOpen(true)}
         />
       </EnsureChain>
+      {blocker ? <p className="text-fs-text-secondary w-full text-sm">{BLOCKER_TEXT[blocker]}</p> : null}
 
       {interrupted ? (
         <div className="flex w-full flex-wrap items-center justify-between gap-3">

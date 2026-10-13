@@ -104,7 +104,12 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
           marketEstimates={marketEstimates}
           isDisabled={status !== "trading"}
         />
-        <PredictCard session={detail} status={status} marketEstimates={marketEstimates} />
+        <PredictCard
+          session={detail}
+          status={status}
+          marketEstimates={marketEstimates}
+          isMarketUnknown={chart.data === undefined}
+        />
         <AdvancedSection parentMarket={detail.parentMarket} />
       </div>
     </PageColumn>
