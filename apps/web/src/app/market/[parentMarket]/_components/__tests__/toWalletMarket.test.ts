@@ -12,6 +12,8 @@ const child = (overrides: Partial<SessionDetailRow["children"][number]> = {}) =>
     displayName: dune.director.displayName,
     color: dune.director.color,
     underlyingToken: addresses.underlyingToken,
+    upToken: addresses.upToken,
+    downToken: addresses.downToken,
     ...overrides,
   });
 
@@ -35,9 +37,27 @@ describe("toWalletMarket", () => {
     expect(toWalletMarket(session())).toEqual({
       parentMarket: addresses.parentMarket,
       collateral: { address: addresses.collateralToken, decimals: 18, symbol: "sDAI" },
-      options: [{ token: addresses.underlyingToken, name: dune.director.displayName, color: dune.director.color }],
+      options: [
+        {
+          token: addresses.underlyingToken,
+          name: dune.director.displayName,
+          color: dune.director.color,
+          positions: [
+            { side: "UP", token: addresses.upToken },
+            { side: "DOWN", token: addresses.downToken },
+          ],
+        },
+      ],
       invalidToken: addresses.invalidToken,
     });
+  });
+
+  it("keeps the wallet for an outcome whose UP and DOWN tokens did not index, listing no positions for it", () => {
+    const market = toWalletMarket(session({ children: [child({ upToken: "", downToken: "" })] }));
+
+    expect(market?.options).toEqual([
+      { token: addresses.underlyingToken, name: dune.director.displayName, color: dune.director.color, positions: [] },
+    ]);
   });
 
   it("refuses a session with no invalid token, which cannot be merged back", () => {
