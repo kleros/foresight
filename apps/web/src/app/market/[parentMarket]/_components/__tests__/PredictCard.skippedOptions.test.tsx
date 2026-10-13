@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Address } from "viem";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PredictDriver, PredictProgress } from "@/features/predict/run/types";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
@@ -138,6 +138,12 @@ async function predictAndComplete(skipped: Address[]) {
   expect(driver.reset).toHaveBeenCalled();
   return within(screen.getByRole("dialog"));
 }
+
+// PredictCard loads these with next/dynamic on first open; importing them here keeps their
+// first load out of the first test's timeout.
+beforeAll(async () => {
+  await Promise.all([import("../PredictRunner"), import("../PredictSuccessDialog")]);
+});
 
 beforeEach(() => {
   vi.clearAllMocks();

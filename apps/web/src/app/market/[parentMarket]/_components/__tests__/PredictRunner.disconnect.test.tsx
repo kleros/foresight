@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Address } from "viem";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PredictDriver, PredictProgress } from "@/features/predict/run/types";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
@@ -132,6 +132,12 @@ async function openPopup() {
   await userEvent.click(screen.getByRole("button", { name: "Predict selected" }));
   return within(await screen.findByRole("dialog"));
 }
+
+// PredictCard loads PredictRunner with next/dynamic on first open; importing it here keeps its
+// first load out of the first test's timeout.
+beforeAll(async () => {
+  await import("../PredictRunner");
+});
 
 beforeEach(() => {
   vi.clearAllMocks();

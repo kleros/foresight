@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Address } from "viem";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PredictRunInput } from "@/features/predict/hooks/usePredictRun";
 import { GAS_RESERVE_WEI } from "@/features/predict/oracle/tolerances";
@@ -149,6 +149,12 @@ async function chooseToken(popup: ReturnType<typeof within>, symbol: "sDAI" | "x
   await userEvent.click(popup.getByRole("button", { name: /Token/ }));
   await userEvent.click(await screen.findByRole("option", { name: symbol }));
 }
+
+// PredictCard loads PredictRunner with next/dynamic on first open; importing it here keeps its
+// first load out of the first test's timeout.
+beforeAll(async () => {
+  await import("../PredictRunner");
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
