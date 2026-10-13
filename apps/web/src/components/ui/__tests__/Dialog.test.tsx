@@ -38,3 +38,11 @@ describe("Dialog", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("Dialog's accessible name", () => {
+  it("is its title", () => {
+    renderDialog();
+
+    expect(screen.getByRole("dialog", { name: "Deposit" })).toBeInTheDocument();
+  });
+});

@@ -82,3 +82,33 @@ describe("DisplayMetadataStep branch galleries", () => {
     expect(screen.queryByText("Required. Shown with the image.")).not.toBeInTheDocument();
   });
 });
+
+describe("DisplayMetadataStep drop zones", () => {
+  /** The buttons each uploader puts in front of its file input: icon, hero, then one per branch. */
+  const uploaderButtons = () =>
+    [...document.querySelectorAll("input[type='file']")].map((input) => {
+      let zone = input.parentElement;
+      while (zone && !zone.querySelector("button, [role='button']")) zone = zone.parentElement;
+      return [...(zone?.querySelectorAll("button, [role='button']") ?? [])];
+    });
+
+  it("names each zone after the image it takes", () => {
+    renderStep();
+
+    expect(screen.getByRole("button", { name: /icon/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /hero image/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /image.*outcome 1/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /image.*outcome 2/i })).toBeInTheDocument();
+  });
+
+  it("leaves the icon text out of every uploader button's name", () => {
+    renderStep();
+
+    const uploaders = uploaderButtons();
+    expect(uploaders).toHaveLength(4);
+    for (const button of uploaders.flat()) {
+      expect(button).toHaveAccessibleName();
+      expect(button).not.toHaveAccessibleName(/DropZone/);
+    }
+  });
+});

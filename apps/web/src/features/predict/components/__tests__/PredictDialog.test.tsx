@@ -310,3 +310,12 @@ describe("a second prediction the trade wallet already covers", () => {
     expect(screen.queryByText(/Adding 0\b/)).toBeNull();
   });
 });
+
+describe("the dialog's accessible name", () => {
+  it("says it is the prediction, not the library's default", () => {
+    render(<PredictDialog {...props()} />);
+
+    expect(screen.getByRole("dialog", { name: /predict/i })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Modal" })).toBeNull();
+  });
+});

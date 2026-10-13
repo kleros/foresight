@@ -116,4 +116,31 @@ describe("MarketPage", () => {
 
     expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
   });
+
+  it("gives no two elements on the session page the same expand-button id", async () => {
+    fetchMock.mockImplementation(async (document) =>
+      queryName(document) === "SessionDetail"
+        ? {
+            Session: [
+              {
+                ...sessionDetailColumns,
+                children: [
+                  sessionChildRow(),
+                  sessionChildRow({
+                    id: addresses.childMarkets[1],
+                    parentOutcomeIndex: "0",
+                    displayName: "Denis Villeneuve",
+                  }),
+                ],
+              },
+            ],
+          }
+        : { Prediction: [], Pool: [] },
+    );
+
+    renderPage();
+    await screen.findByRole("heading", { name: "Denis Villeneuve" });
+
+    expect(document.querySelectorAll("#expand-button").length).toBeLessThanOrEqual(1);
+  });
 });
