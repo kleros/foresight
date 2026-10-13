@@ -144,3 +144,36 @@ describe("MarketPage", () => {
     expect(document.querySelectorAll("#expand-button").length).toBeLessThanOrEqual(1);
   });
 });
+
+describe("MarketPage on a trading session", () => {
+  const NO_LIQUIDITY = "This option has no liquidity yet, so it can't be predicted.";
+
+  /** Closes on 1 January 2100, so the session is trading whatever the wall clock reads. */
+  function answerTrading(chart: () => unknown) {
+    fetchMock.mockImplementation(async (document) => {
+      if (queryName(document) === "SessionDetail") {
+        return { Session: [{ ...sessionDetailColumns, openingTime: "4102444800", children: [sessionChildRow()] }] };
+      }
+      if (queryName(document) === "SessionChart") return chart();
+      return { Prediction: [], Pool: [] };
+    });
+  }
+
+  it("does not call the options illiquid while the price history loads", async () => {
+    answerTrading(() => new Promise(() => {}));
+
+    renderPage();
+    await screen.findByRole("button", { name: "Predict selected" });
+
+    expect(screen.queryByText(NO_LIQUIDITY)).toBeNull();
+  });
+
+  it("does not call the options illiquid when the price history failed", async () => {
+    answerTrading(() => Promise.reject(new Error("boom")));
+
+    renderPage();
+    await screen.findByText("Could not load the price history. Reload in a moment.");
+
+    expect(screen.queryByText(NO_LIQUIDITY)).toBeNull();
+  });
+});
