@@ -12,7 +12,16 @@ import InfoCard from "@/components/ui/InfoCard";
 import CheckIcon from "@/assets/svg/check-circle.svg";
 
 /** Shown once a prediction lands, with the way to hear when the market resolves. */
-export function PredictSuccessDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+export function PredictSuccessDialog({
+  isOpen,
+  leftOut,
+  onClose,
+}: {
+  isOpen: boolean;
+  /** Names of the options the run could not trade and left out. */
+  leftOut: string[];
+  onClose: () => void;
+}) {
   const { user, userExists } = useAtlasProvider();
 
   return (
@@ -30,6 +39,11 @@ export function PredictSuccessDialog({ isOpen, onClose }: { isOpen: boolean; onC
         {"Congratulations! \nYour Prediction was Done!"}
       </h1>
       <CheckIcon className="size-32" />
+      {leftOut.length > 0 ? (
+        <p className="text-fs-text-secondary text-center text-sm">
+          These estimates could not be traded right now and were left out: {leftOut.join(", ")}.
+        </p>
+      ) : null}
 
       <hr className="border-fs-border w-full" />
       {userExists ? (

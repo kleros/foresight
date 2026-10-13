@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import type { Address } from "viem";
 import { useAccount } from "wagmi";
 
 import type { PayTokenChoice } from "@/features/predict/components/PredictAmountSection";
@@ -23,7 +24,8 @@ interface PredictRunnerProps {
   session: SessionDetail;
   selected: SelectedEstimate[];
   onClose: () => void;
-  onSuccess: () => void;
+  /** Options the run left out for lack of a route; the run is reset by the time this is called. */
+  onSuccess: (skipped: Address[]) => void;
 }
 
 const NATIVE: PayTokenChoice = { id: "native", symbol: "xDAI", decimals: 18 };
@@ -79,9 +81,10 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
 
   useEffect(() => {
     if (stage !== "complete") return;
+    const left = progress?.skipped ?? [];
     driver?.reset();
-    onSuccess();
-  }, [stage, driver, onSuccess]);
+    onSuccess(left);
+  }, [stage, driver, onSuccess, progress?.skipped]);
 
   // a transaction that may still mine stays stored, so the next popup recovers it instead of signing again
   const pendingHash = progress?.pendingHash;

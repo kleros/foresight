@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "@kleros/ui-components-library";
 import clsx from "clsx";
-import { formatUnits } from "viem";
+import { formatUnits, type Address } from "viem";
 import { useAccount } from "wagmi";
 
 import type { PredictSnapshot } from "@/features/predict/flow/types";
@@ -39,6 +39,7 @@ interface PredictCardProps {
 export function PredictCard({ session, status, marketEstimates }: PredictCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
+  const [leftOut, setLeftOut] = useState<string[]>([]);
   const { address } = useAccount();
   const [interrupted, setInterrupted] = useState<PredictSnapshot | null>(null);
 
@@ -103,13 +104,16 @@ export function PredictCard({ session, status, marketEstimates }: PredictCardPro
           session={session}
           selected={selected}
           onClose={() => setIsOpen(false)}
-          onSuccess={() => {
+          onSuccess={(skipped: Address[]) => {
+            setLeftOut(
+              session.options.filter((option) => skipped.includes(option.market)).map((option) => option.name),
+            );
             setIsOpen(false);
             setIsSuccessOpen(true);
           }}
         />
       ) : null}
-      {isSuccessOpen ? <PredictSuccessDialog isOpen onClose={() => setIsSuccessOpen(false)} /> : null}
+      {isSuccessOpen ? <PredictSuccessDialog isOpen leftOut={leftOut} onClose={() => setIsSuccessOpen(false)} /> : null}
     </SectionCard>
   );
 }
