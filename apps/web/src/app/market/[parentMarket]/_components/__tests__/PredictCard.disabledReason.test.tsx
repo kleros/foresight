@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { render, screen } from "@testing-library/react";
+import { getAddress } from "viem";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
@@ -22,14 +23,14 @@ const CLOSED = "Trading has closed for this session.";
 const NO_LIQUIDITY = "This option has no liquidity yet, so it can't be predicted.";
 const NO_ESTIMATE_MOVED = "Move an estimate away from the market estimate to make a prediction.";
 
-const session = () =>
+const session = (markets: readonly string[] = addresses.childMarkets) =>
   toSessionDetail(
     {
       ...sessionDetailColumns,
       id: "7",
       children: [
-        sessionChildRow({ id: addresses.childMarkets[0], parentOutcomeIndex: "0" }),
-        sessionChildRow({ id: addresses.childMarkets[1], parentOutcomeIndex: "1" }),
+        sessionChildRow({ id: markets[0], parentOutcomeIndex: "0" }),
+        sessionChildRow({ id: markets[1], parentOutcomeIndex: "1" }),
       ],
     },
     GATEWAY,
@@ -121,6 +122,35 @@ describe("the predict card names one reason Predict selected is disabled", () =>
     expect(screen.queryByText(NO_ESTIMATE_MOVED)).toBeNull();
   });
 
+  it("says to move an estimate when only some options have liquidity", () => {
+    const detail = session();
+    const priced = detail.options[0]!;
+
+    renderCard(detail, "trading", { [priced.market.toLowerCase()]: priced.lowerBound + 1 });
+
+    expect(screen.getByText(NO_ESTIMATE_MOVED)).toBeVisible();
+    expect(screen.queryByText(NO_LIQUIDITY)).toBeNull();
+  });
+
+  it("says to move an estimate on a session whose market addresses are checksummed", () => {
+    const detail = session(addresses.childMarkets.map((market) => getAddress(market)));
+    const market = detail.options[0]!.market;
+    expect(market).not.toBe(market.toLowerCase());
+
+    renderCard(detail, "trading", pricedMarkets(detail));
+
+    expect(screen.getByText(NO_ESTIMATE_MOVED)).toBeVisible();
+    expect(screen.queryByText(NO_LIQUIDITY)).toBeNull();
+  });
+
+  it("says there is no liquidity when the caller does not say whether the market is known", () => {
+    const detail = session();
+
+    render(<PredictCard session={detail} status="trading" marketEstimates={{}} />);
+
+    expect(screen.getByText(NO_LIQUIDITY)).toBeVisible();
+  });
+
   it("says only that there is no liquidity when no estimate has been moved either", () => {
     const detail = session();
 
@@ -137,6 +167,19 @@ describe("the predict card gives no disabled reason", () => {
     moveEveryEstimate(detail);
 
     const button = renderCard(detail, "trading", pricedMarkets(detail));
+
+    expect(button).toBeEnabled();
+    for (const reason of [CLOSED, NO_LIQUIDITY, NO_ESTIMATE_MOVED]) {
+      expect(screen.queryByText(reason)).toBeNull();
+    }
+  });
+
+  it("once an estimate is moved on the one option with liquidity", () => {
+    const detail = session();
+    const priced = detail.options[0]!;
+    useEstimateStore.getState().setEstimate(detail.parentMarket, priced.market, priced.lowerBound + 2);
+
+    const button = renderCard(detail, "trading", { [priced.market.toLowerCase()]: priced.lowerBound + 1 });
 
     expect(button).toBeEnabled();
     for (const reason of [CLOSED, NO_LIQUIDITY, NO_ESTIMATE_MOVED]) {
