@@ -6,11 +6,13 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 
 import { ctx, snapshot, WAD } from "@/features/predict/flow/__tests__/support/fakes";
-import { predictFlowId } from "@/features/predict/run/interrupted";
+import { legacyPredictFlowId, predictFlowId } from "@/features/predict/run/interrupted";
 import { sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 import { toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
 
 import { createRunStore } from "@/lib/flowRunStore";
+
+import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
 import { GATEWAY } from "@/testing/fixtures";
 
@@ -28,12 +30,20 @@ const session = () => toSessionDetail({ ...sessionDetailColumns, id: "7", childr
 
 const HASH = `0x${"ab".repeat(32)}` as const;
 
-function saveRun(deposit: StepOutcome, phase: Exclude<RunPhase, { status: "completed" }>) {
+type PersistedPhase = Exclude<RunPhase, { status: "completed" }>;
+
+const halted: PersistedPhase = {
+  status: "paused",
+  reason: "error",
+  error: { stepId: "deposit", message: "RPC unavailable", cause: "rpc", hash: HASH },
+};
+
+function saveRun(deposit: StepOutcome, phase: PersistedPhase, flowId = predictFlowId("7", OWNER)) {
   createRunStore().save({
-    flowId: predictFlowId("7", OWNER),
+    flowId,
     adapterId: "predict-flow",
     snapshot: snapshot({ deposit: WAD * 3n }),
-    ctx: ctx({ owner: OWNER }),
+    ctx: ctx({ owner: OWNER, chainId: DEFAULT_CHAIN_ID }),
     steps: [
       { stepId: "deposit", label: "Add funds", outcome: deposit },
       { stepId: "predict", label: "Predict", outcome: { status: "pending" } },
@@ -81,4 +91,27 @@ it("offers Resume but not Discard while the run's transaction awaits its receipt
   expect(await screen.findByRole("button", { name: "Resume" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
   expect(createRunStore().load(predictFlowId("7", OWNER))).not.toBeNull();
+});
+
+it("says a transaction may still be pending while the run's transaction awaits its receipt", async () => {
+  saveRun({ status: "submitted", hash: HASH }, halted);
+  render(<PredictCard session={session()} status="trading" marketEstimates={{}} />);
+
+  expect(
+    await screen.findByText(/A transaction from it may still be pending; resume to check it\./),
+  ).toBeInTheDocument();
+});
+
+it("shows the run that Discard kept because its transaction awaits a receipt", async () => {
+  saveRun({ status: "pending" }, { status: "running" });
+  saveRun({ status: "submitted", hash: HASH }, halted, legacyPredictFlowId("7"));
+  render(<PredictCard session={session()} status="trading" marketEstimates={{}} />);
+
+  await userEvent.click(await screen.findByRole("button", { name: "Discard" }));
+
+  expect(
+    await screen.findByText(/A transaction from it may still be pending; resume to check it\./),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
 });
