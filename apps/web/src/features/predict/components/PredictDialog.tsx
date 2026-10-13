@@ -77,6 +77,7 @@ export function PredictDialog({
 
   return (
     <Modal
+      ariaLabel="Predict"
       isOpen={isOpen}
       // leaving part way through would abandon a run whose transactions are already on chain
       isDismissable={!isRunning}

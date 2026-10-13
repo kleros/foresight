@@ -54,6 +54,7 @@ interface IHelp {
 const Help: React.FC<IHelp> = ({ isOpen, toggleIsHelpOpen }) => {
   return (
     <Modal
+      ariaLabel="Help"
       className={clsx(
         "mt-18 h-auto max-h-[80vh] w-65 max-w-111 overflow-y-auto p-3 pr-6",
         "absolute top-0 right-0 left-auto flex flex-col",

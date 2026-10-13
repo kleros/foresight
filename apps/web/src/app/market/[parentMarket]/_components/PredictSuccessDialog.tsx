@@ -26,6 +26,7 @@ export function PredictSuccessDialog({
 
   return (
     <Modal
+      ariaLabel="Prediction placed"
       isOpen={isOpen}
       isDismissable
       onOpenChange={(open) => (open ? undefined : onClose())}

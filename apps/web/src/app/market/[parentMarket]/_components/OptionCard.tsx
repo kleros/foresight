@@ -1,11 +1,11 @@
-import { Accordion, CustomAccordion } from "@kleros/ui-components-library";
-import clsx from "clsx";
 
 import { EstimateSlider } from "@/features/predict/components/EstimateSlider";
 import { useEstimate, useEstimateStore } from "@/features/predict/stores/estimateStore";
 import { estimateDirection } from "@/features/predict/utils/estimates";
 import { DisplayBlocks } from "@/features/sessions/components/DisplayBlocks";
 import type { SessionOption, SessionStatus } from "@/features/sessions/types";
+
+import { Disclosure } from "@/components/ui/Disclosure";
 
 import CheckCircle from "@/assets/svg/check-circle.svg";
 import MinusOutline from "@/assets/svg/minus-outline.svg";
@@ -43,38 +43,29 @@ export function OptionCard({
     value !== undefined && marketEstimate !== undefined && estimateDirection(value, marketEstimate) !== null;
 
   return (
-    <CustomAccordion
-      aria-label={option.name}
-      className={clsx(
-        "bg-fs-surface-sunken flex h-auto w-full max-w-full flex-col gap-4",
-        "hover:shadow-md [&>div]:my-0",
-      )}
-      items={[
-        {
-          title: <TitleRow option={option} isSelected={isSelected} />,
-          body: (
-            <Body option={option}>
-              {option.upperBound > option.lowerBound ? (
-                <EstimateSlider
-                  scale={option}
-                  marketEstimate={marketEstimate}
-                  isMarketPending={isMarketPending}
-                  value={value}
-                  onCommit={(next) => setEstimate(parentMarket, option.market, next)}
-                  onClear={() => clearEstimate(parentMarket, option.market)}
-                  lockedReason={
-                    LOCKED[status] ??
-                    (isMarketUnavailable ? "Market estimates could not be loaded. Reload in a moment." : undefined)
-                  }
-                />
-              ) : (
-                <p className="type-caption text-fs-text-secondary">The scale for this option could not be read.</p>
-              )}
-            </Body>
-          ),
-        },
-      ]}
-    />
+    <Disclosure
+      className="bg-fs-surface-sunken w-full hover:shadow-md"
+      title={<TitleRow option={option} isSelected={isSelected} />}
+    >
+      <Body option={option}>
+        {option.upperBound > option.lowerBound ? (
+          <EstimateSlider
+            scale={option}
+            marketEstimate={marketEstimate}
+            isMarketPending={isMarketPending}
+            value={value}
+            onCommit={(next) => setEstimate(parentMarket, option.market, next)}
+            onClear={() => clearEstimate(parentMarket, option.market)}
+            lockedReason={
+              LOCKED[status] ??
+              (isMarketUnavailable ? "Market estimates could not be loaded. Reload in a moment." : undefined)
+            }
+          />
+        ) : (
+          <p className="type-caption text-fs-text-secondary">The scale for this option could not be read.</p>
+        )}
+      </Body>
+    </Disclosure>
   );
 }
 
@@ -100,23 +91,12 @@ function Body({ option, children }: { option: SessionOption; children: React.Rea
   return (
     <div className="flex w-full flex-col">
       <div className="pt-8 pb-4">{children}</div>
-      <Accordion
-        className={clsx(
-          "w-full max-w-full",
-          "[&_#expand-button]:bg-fs-surface-sunken [&_#expand-button_p]:font-normal",
-        )}
-        items={[
-          {
-            title: "Details",
-            body: (
-              <div className="flex w-full min-w-0 flex-col gap-3">
-                <p className="type-caption text-fs-text-secondary text-pretty">{option.question}</p>
-                <DisplayBlocks blocks={option.blocks} />
-              </div>
-            ),
-          },
-        ]}
-      />
+      <Disclosure buttonClassName="bg-fs-surface-sunken" title={<p className="w-fit text-center text-base">Details</p>}>
+        <div className="flex w-full min-w-0 flex-col gap-3">
+          <p className="type-caption text-fs-text-secondary text-pretty">{option.question}</p>
+          <DisplayBlocks blocks={option.blocks} />
+        </div>
+      </Disclosure>
     </div>
   );
 }

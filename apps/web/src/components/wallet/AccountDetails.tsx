@@ -17,6 +17,7 @@ interface IAccountDetails {
 const AccountDetails: React.FC<IAccountDetails> = ({ isOpen, toggleIsOpen }) => {
   return (
     <Modal
+      ariaLabel="Account"
       isDismissable
       className={clsx(
         "absolute top-0 right-2 left-auto h-auto w-75.5",

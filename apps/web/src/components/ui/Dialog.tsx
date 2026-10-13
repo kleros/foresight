@@ -23,6 +23,7 @@ interface DialogProps {
 export function Dialog({ isOpen, onClose, title, hint, children, className, isDismissable = true }: DialogProps) {
   return (
     <Modal
+      ariaLabel={title}
       isDismissable={isDismissable}
       isOpen={isOpen}
       onOpenChange={(open) => (open || !isDismissable ? undefined : onClose())}

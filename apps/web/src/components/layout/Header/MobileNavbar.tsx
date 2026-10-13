@@ -17,7 +17,7 @@ const MobileNavbar: React.FC<{ walletSlot?: React.ReactNode }> = ({ walletSlot }
     <>
       <div className="fs-page relative flex h-16 items-center justify-between md:hidden!">
         <Logo />
-        <LightButton text="" icon={<HamburgerIcon />} onPress={toggleIsMenuOpen} />
+        <LightButton text="" aria-label="Menu" icon={<HamburgerIcon />} onPress={toggleIsMenuOpen} />
       </div>
       <Modal
         className={clsx(
@@ -26,6 +26,7 @@ const MobileNavbar: React.FC<{ walletSlot?: React.ReactNode }> = ({ walletSlot }
           "shadow-default rounded-base border-klerosUIComponentsStroke bg-klerosUIComponentsWhiteBackground border",
           "animate-slide-in-top",
         )}
+        ariaLabel="Menu"
         isOpen={isMenuOpen}
         onOpenChange={toggleIsMenuOpen}
         isDismissable
