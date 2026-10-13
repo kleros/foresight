@@ -8,6 +8,7 @@ import { splitCalls } from "@/lib/trade-executor/positions";
 import { optionTradeCalls, type QuotedSwap } from "@/lib/trade-executor/predict";
 
 import type { OptionChainState, PredictCtx, PredictOption, PredictReader, PredictSnapshot } from "./types";
+import { SLIPPAGE_BPS } from "../oracle/tolerances";
 import { planBuys, planSells, type OptionSide, type SoldLeg } from "../utils/plan";
 
 /**
@@ -26,9 +27,6 @@ export const STEP_ID = {
 
 /** Options per transaction. Movies-r3's default, and like it, unmeasured against real Seer gas. */
 export const PREDICT_BATCH_SIZE = 10;
-
-/** Hundredths of a percent; the quotes and the buy budget must use the same figure. */
-const DEFAULT_SLIPPAGE_BPS = 100;
 
 export interface PredictDeps {
   reader: PredictReader;
@@ -77,7 +75,7 @@ async function optionCalls(
   deps: PredictDeps,
 ): Promise<ExecutorCall[]> {
   const splitAmount = state.underlying + mint;
-  const slippageBps = deps.slippageBps ?? DEFAULT_SLIPPAGE_BPS;
+  const slippageBps = deps.slippageBps ?? SLIPPAGE_BPS;
   const target = { pools: state.pools, targetPriceWad: option.targetPriceWad, held: state.held, splitAmount };
 
   const sells: QuotedSwap[] = [];

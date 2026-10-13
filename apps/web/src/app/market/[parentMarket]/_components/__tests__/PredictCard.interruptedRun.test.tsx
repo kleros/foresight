@@ -15,7 +15,7 @@ import {
   type Hex,
 } from "viem";
 import { gnosis } from "viem/chains";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PredictOption } from "@/features/predict/flow/types";
 import type { SelectedEstimate } from "@/features/predict/types";
@@ -312,7 +312,13 @@ async function nextVisit(address: Address = A) {
   return { since: () => chain.prompts.slice(before) };
 }
 
-const cardResume = () => screen.findByRole("button", { name: /resume/i }, { timeout: 2000 });
+// PredictCard loads the success dialog with next/dynamic on first open; importing it here keeps
+// its first load out of the first test's timeout.
+beforeAll(async () => {
+  await import("../PredictSuccessDialog");
+});
+
+const cardResume = () => screen.findByRole("button", { name: /resume/i });
 
 /** Opens the run from the card's notice and continues it from wherever that leads. */
 async function resumeFromCard() {
@@ -364,7 +370,7 @@ describe("an interrupted run on the next visit", () => {
 
       await resumeFromCard();
 
-      await waitFor(() => expect(screen.getByText("Prediction done")).toBeInTheDocument(), { timeout: 3000 });
+      await waitFor(() => expect(screen.getByText("Prediction done")).toBeInTheDocument());
       expect(since().length).toBeGreaterThan(0);
       expect(since().filter(isDeposit)).toEqual([]);
       expect(chain.asked.length).toBeGreaterThan(0);

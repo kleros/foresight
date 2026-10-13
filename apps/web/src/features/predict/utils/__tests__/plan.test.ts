@@ -5,7 +5,6 @@ import type { PoolLiquidity } from "@/types/pool";
 import { MAX_BUY_BUDGET_SHARE_BPS, SLIPPAGE_BPS } from "../../oracle/tolerances";
 import {
   buyBudgetShareBps,
-  LEG_HEADROOM_BPS,
   MIN_LEG_WEI,
   planBuys,
   planSells,
@@ -135,7 +134,7 @@ describe("the limit on each leg", () => {
 
     expect(leg).toEqual({
       side: "up",
-      amountIn: (WAD * (10_000n + LEG_HEADROOM_BPS)) / 10_000n,
+      amountIn: (WAD * 101n) / 100n,
       limitSqrtPrice: AT["0.25"],
       amountInAtLimit: WAD,
       amountOutAtLimit: WAD / 2n,

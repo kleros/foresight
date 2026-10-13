@@ -14,13 +14,11 @@ import { wagmiConfig } from "@/lib/web3/wagmi";
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
 import type { PredictCtx, PredictOption, PredictSnapshot } from "../flow/types";
+import { SLIPPAGE_BPS } from "../oracle/tolerances";
 import { createPredictRun } from "../run/driver";
 import { legacyPredictFlowId, predictFlowId } from "../run/interrupted";
 import { createPredictReader } from "../run/reader";
 import type { PredictDriver, PredictProgress } from "../run/types";
-
-/** Hundredths of a percent. Seer's own default, and what a thin outcome pool needs. */
-const SLIPPAGE_BPS = 100;
 
 export interface PredictRunInput {
   sessionId: string;

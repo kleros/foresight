@@ -9,7 +9,6 @@ import { tradeExecutorAbi } from "@/config/contracts";
 import type { PoolLiquidity } from "@/types/pool";
 
 import { SLIPPAGE_BPS } from "../../oracle/tolerances";
-import { LEG_HEADROOM_BPS } from "../../utils/plan";
 import { planPredict, STEP_ID } from "../plan";
 import type { PredictOption } from "../types";
 import { chainState, ctx, fakeReader, snapshot, WAD } from "./support/fakes";
@@ -36,7 +35,7 @@ const OPTION: Omit<PredictOption, "targetPriceWad"> = {
   underlying: "0x0900000000000000000000000000000000000009",
 };
 
-/** UP's sqrt price at each price, exact at X96: 2^95 is 0.25, and 129 * 2^88 is (129/256)^2. */
+/** UP's X96 sqrt price, exact: 2^95 at a price of 0.25, 129 * 2^88 at (129/256)^2. */
 const SQRT = { "0.25": 2n ** 95n, "16641/65536": 129n * 2n ** 88n } as const;
 const PRICE = { "0.25": WAD / 4n, "16641/65536": (WAD * 16_641n) / 65_536n } as const;
 
@@ -128,7 +127,8 @@ async function buildUpLeg(args: { pool: PoolLiquidity; targetPriceWad: bigint })
   return { requests: quoter.requests, minOuts };
 }
 
-const withHeadroom = (amount: bigint) => (amount * (10_000n + LEG_HEADROOM_BPS)) / 10_000n;
+// a leg is offered 1% over what reaching the target takes
+const withHeadroom = (amount: bigint) => (amount * 101n) / 100n;
 const kept = BigInt(10_000 - SLIPPAGE_BPS);
 
 describe("the min-out each predict leg is signed with", () => {
