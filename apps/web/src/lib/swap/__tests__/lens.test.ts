@@ -1,6 +1,9 @@
 import { decodeFunctionData, encodeFunctionData, parseAbi, type Address, type PublicClient } from "viem";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// eslint-disable-next-line import-x/no-restricted-paths -- the predict oracle owns the slippage these legs are signed at
+import { SLIPPAGE_BPS } from "@/features/predict/oracle/tolerances";
+
 import { createLensQuoter } from "../lens";
 import type { SwapQuoteRequest } from "../types";
 
@@ -112,7 +115,6 @@ describe("createLensQuoter", () => {
 /** Algebra orders a pool's two tokens by address, so the lower one is token0. */
 const TOKEN0 = TOKEN_IN;
 const TOKEN1 = TOKEN_OUT;
-const SLIPPAGE_BPS = 100n;
 
 describe("createLensQuoter's min-out floor at the limit price", () => {
   beforeEach(() => quote.mockReset());
@@ -139,7 +141,7 @@ describe("createLensQuoter's min-out floor at the limit price", () => {
         tokenIn: args.tokenIn,
         tokenOut: args.tokenOut,
         amount: args.amount,
-        slippageBps: Number(SLIPPAGE_BPS),
+        slippageBps: SLIPPAGE_BPS,
         limitSqrtPrice: args.limitSqrtPrice,
         amountInAtLimit: args.amountInAtLimit,
         amountOutAtLimit: args.amountOutAtLimit,
@@ -159,7 +161,7 @@ describe("createLensQuoter's min-out floor at the limit price", () => {
       amountOutAtLimit: 100n,
     });
 
-    expect(params(result.data).amountOutMinimum).toBe((1000n * 4n * (10_000n - SLIPPAGE_BPS)) / 10_000n);
+    expect(params(result.data).amountOutMinimum).toBe((1000n * 4n * BigInt(10_000 - SLIPPAGE_BPS)) / 10_000n);
   });
 
   it("holds a buy of an outcome that is token1 to its limit price", async () => {
@@ -174,7 +176,7 @@ describe("createLensQuoter's min-out floor at the limit price", () => {
       amountOutAtLimit: 100n,
     });
 
-    expect(params(result.data).amountOutMinimum).toBe((1000n * 4n * (10_000n - SLIPPAGE_BPS)) / 10_000n);
+    expect(params(result.data).amountOutMinimum).toBe((1000n * 4n * BigInt(10_000 - SLIPPAGE_BPS)) / 10_000n);
   });
 
   it("holds a sell of an outcome that is token0 to its limit price", async () => {
@@ -189,7 +191,7 @@ describe("createLensQuoter's min-out floor at the limit price", () => {
       amountOutAtLimit: 2n,
     });
 
-    expect(params(result.data).amountOutMinimum).toBe((1000n * (10_000n - SLIPPAGE_BPS)) / (4n * 10_000n));
+    expect(params(result.data).amountOutMinimum).toBe((1000n * BigInt(10_000 - SLIPPAGE_BPS)) / (4n * 10_000n));
   });
 
   it("holds a sell of an outcome that is token1 to its limit price", async () => {
@@ -204,6 +206,6 @@ describe("createLensQuoter's min-out floor at the limit price", () => {
       amountOutAtLimit: 2n,
     });
 
-    expect(params(result.data).amountOutMinimum).toBe((1000n * (10_000n - SLIPPAGE_BPS)) / (4n * 10_000n));
+    expect(params(result.data).amountOutMinimum).toBe((1000n * BigInt(10_000 - SLIPPAGE_BPS)) / (4n * 10_000n));
   });
 });
