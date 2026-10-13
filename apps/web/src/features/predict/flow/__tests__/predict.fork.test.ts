@@ -310,6 +310,10 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
   beforeEach(async () => {
     if (!FORK_RPC_URL) return;
     snapshotId = await rpc<string>("evm_snapshot");
+    // other fork runs spend from these accounts outside any snapshot
+    for (const key of [OWNER_KEY, RIVAL_KEY, LP_KEY]) {
+      await rpc("hardhat_setBalance", [privateKeyToAccount(key).address, `0x${parseEther("10000").toString(16)}`]);
+    }
   });
 
   afterEach(async () => {
