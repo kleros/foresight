@@ -144,6 +144,17 @@ describe("the predict card gives no disabled reason", () => {
     }
   });
 
+  it("while the session is setting up", () => {
+    const detail = session();
+
+    const button = renderCard(detail, "setting-up", {});
+
+    expect(button).toBeDisabled();
+    for (const reason of [CLOSED, NO_LIQUIDITY, NO_ESTIMATE_MOVED]) {
+      expect(screen.queryByText(reason)).toBeNull();
+    }
+  });
+
   it("while the market estimates are not known", () => {
     const detail = session();
 
