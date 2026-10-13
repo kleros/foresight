@@ -47,6 +47,18 @@ async function open() {
 
 const saved = () => useEstimateStore.getState().estimates[PARENT]?.[option.market];
 
+// jsdom computes no Tailwind, so the dimmed look is read from the class on each control's root.
+const DIMMED = "opacity-50";
+
+function estimateControls() {
+  return {
+    slider: screen.getByRole("slider"),
+    sliderRoot: screen.getByRole("group", { name: new RegExp(`^Your estimate for ${option.name}`) }),
+    field: screen.getByRole("textbox", { name: /Your estimate/ }),
+    fieldRoot: screen.getByText("Your estimate").parentElement,
+  };
+}
+
 beforeEach(() => {
   useEstimateStore.setState({ estimates: {} });
 });
@@ -157,13 +169,40 @@ describe("OptionCard", () => {
     expect(screen.getByText("Estimates open once every option is set up.")).toBeInTheDocument();
   });
 
-  // REVISIT WHEN: the predict flow lands; a closed session should lock the slider again.
-  it("still takes estimates after trading has closed, for now", async () => {
+  it("refuses estimates after trading has closed", async () => {
     renderCard({ status: "closed" });
 
     await open();
 
-    expect(screen.getByRole("slider")).toBeEnabled();
+    const { slider, field } = estimateControls();
+    expect(slider).toBeDisabled();
+    expect(field).toBeDisabled();
+    expect(screen.getByText("Trading has closed for this session.")).toBeInTheDocument();
+  });
+
+  it.each([
+    { label: "a closed session", overrides: { status: "closed" as const } },
+    { label: "an option with no trading", overrides: { marketEstimate: undefined } },
+  ])("dims the slider and the field on $label", async ({ overrides }) => {
+    renderCard(overrides);
+
+    await open();
+
+    const { slider, sliderRoot, field, fieldRoot } = estimateControls();
+    expect(slider).toBeDisabled();
+    expect(field).toBeDisabled();
+    expect(sliderRoot).toHaveClass(DIMMED);
+    expect(fieldRoot).toHaveClass(DIMMED);
+  });
+
+  it("leaves the slider and the field undimmed while the session trades", async () => {
+    renderCard();
+
+    await open();
+
+    const { sliderRoot, fieldRoot } = estimateControls();
+    expect(sliderRoot).not.toHaveClass(DIMMED);
+    expect(fieldRoot).not.toHaveClass(DIMMED);
   });
 
   it("says the market numbers could not be loaded, rather than that there is no trading", async () => {
