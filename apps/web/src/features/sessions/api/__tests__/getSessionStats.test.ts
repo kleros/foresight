@@ -69,6 +69,38 @@ describe("refreshSessionAfterTrade", () => {
     await done;
   });
 
+  it("invalidates when only the volume moves, as when a returning trader predicts again", async () => {
+    queryClient.setQueryData(sessionStatsKey(SESSION), { traders: 1, volumeUnderlying: 10n });
+    serveInOrder(served(1, 10), served(1, 30));
+
+    const done = refreshSessionAfterTrade(queryClient, SESSION);
+    await settle(POLL_MS);
+    expect(invalidations).toEqual([]);
+    await settle(POLL_MS);
+
+    expect(keysInvalidated()).toEqual(
+      expect.arrayContaining([JSON.stringify(sessionChartKey(SESSION)), JSON.stringify(sessionStatsKey(SESSION))]),
+    );
+    await settle(POLL_MS * 20);
+    await done;
+  });
+
+  it("invalidates when only the trader count moves, as when the volume is not indexed yet", async () => {
+    queryClient.setQueryData(sessionStatsKey(SESSION), { traders: 1, volumeUnderlying: 10n });
+    serveInOrder(served(1, 10), served(2, 10));
+
+    const done = refreshSessionAfterTrade(queryClient, SESSION);
+    await settle(POLL_MS);
+    expect(invalidations).toEqual([]);
+    await settle(POLL_MS);
+
+    expect(keysInvalidated()).toEqual(
+      expect.arrayContaining([JSON.stringify(sessionChartKey(SESSION)), JSON.stringify(sessionStatsKey(SESSION))]),
+    );
+    await settle(POLL_MS * 20);
+    await done;
+  });
+
   it("keeps watching past someone else's trade so this prediction is still refreshed once indexed", async () => {
     queryClient.setQueryData(sessionStatsKey(SESSION), { traders: 1, volumeUnderlying: 10n });
     serveInOrder(served(2, 20), served(2, 20), served(2, 30));
