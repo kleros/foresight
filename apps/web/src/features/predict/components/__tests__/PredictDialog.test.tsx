@@ -6,7 +6,7 @@ import type { OptionScale } from "@/types/optionScale";
 
 import type { SelectedEstimate } from "../../types";
 import type { Funding } from "../../utils/funding";
-import type { PredictSteps } from "../../utils/predictSteps";
+import { predictSteps, type PredictSteps } from "../../utils/predictSteps";
 import { PredictDialog } from "../PredictDialog";
 
 const scale = (market: string, name: string): OptionScale => ({
@@ -217,7 +217,10 @@ describe("predicting", () => {
         {...props()}
         amount={100n * WAD}
         canRetry
-        steps={{ ...steps, failure: "1 of 2 predictions went through. The trade could not go through at these prices." }}
+        steps={{
+          ...steps,
+          failure: "1 of 2 predictions went through. The trade could not go through at these prices.",
+        }}
         onPredict={onPredict}
       />,
     );
@@ -265,5 +268,31 @@ describe("predicting", () => {
     render(<PredictDialog {...props()} skipped={1} />);
 
     expect(screen.getByText(/1 of your estimates could not be traded/)).toBeInTheDocument();
+  });
+});
+
+describe("a second prediction the trade wallet already covers", () => {
+  const nothingToAdd = (symbol: string) =>
+    predictSteps({
+      wallet: { address: "0xdcee0000000000000000000000000000000c664f", deployed: true },
+      toAdd: 0n,
+      symbol,
+      decimals: 18,
+      progress: null,
+    });
+
+  it.each(["sDAI", "xDAI"])("shows no 'Adding 0 %s' step", (symbol) => {
+    render(
+      <PredictDialog
+        {...props()}
+        isFirstPrediction={false}
+        amount={undefined}
+        funding={funding({ collateralIn: 0n, fromTradeWallet: 0n, toAdd: 0n, deposit: 0n })}
+        steps={nothingToAdd(symbol)}
+      />,
+    );
+
+    expect(screen.queryByText(new RegExp(`Adding 0 ${symbol}`))).toBeNull();
+    expect(screen.queryByText(/Adding 0\b/)).toBeNull();
   });
 });
