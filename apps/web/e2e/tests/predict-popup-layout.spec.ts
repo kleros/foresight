@@ -297,3 +297,52 @@ test.describe("the popup under reduced motion", () => {
     expect(animations.every((name) => name === "none")).toBe(true);
   });
 });
+
+test.describe("a disabled Predict", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("keeps its white label at 3:1 or more on its faded fill", async ({ page }) => {
+    const dialog = await openPopup(page, 2, "over");
+    const predict = dialog.getByRole("button", { name: "Predict" });
+    await expect(predict).toBeDisabled();
+
+    const ratio = await predict.evaluate((button) => {
+      const label = button.querySelector(".button-text")!;
+      const numbers = (css: string) => css.match(/[\d.]+/g)!.map(Number);
+      // a color-mix() fill computes to color(srgb r g b / a), channels 0-1
+      const fill = getComputedStyle(button).backgroundColor;
+      const [r = 0, g = 0, b = 0, a = 1] = fill.startsWith("color(") ? numbers(fill) : numbers(fill).map((n, i) => (i < 3 ? n / 255 : n));
+      const opacity = Number(getComputedStyle(button).opacity);
+      // on the dialog's white surface
+      const over = (channel: number) => (channel * a + (1 - a)) * opacity + (1 - opacity);
+      const linear = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+      const luminance = 0.2126 * linear(over(r)) + 0.7152 * linear(over(g)) + 0.0722 * linear(over(b));
+      const text = numbers(getComputedStyle(label).color).map((n) => n / 255);
+      const textLuminance =
+        0.2126 * linear(over(text[0]!)) + 0.7152 * linear(over(text[1]!)) + 0.0722 * linear(over(text[2]!));
+      return (Math.max(luminance, textLuminance) + 0.05) / (Math.min(luminance, textLuminance) + 0.05);
+    });
+
+    expect(ratio).toBeGreaterThanOrEqual(3);
+  });
+});
+
+test.describe("accent text in the dark theme", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("reads at AA on the dialog's surface", async ({ page }) => {
+    await page.goto(`${harness.url}?options=2&state=idle&theme=dark`);
+    const max = page.getByRole("dialog").getByRole("button", { name: "Max" }).locator(".button-text");
+
+    const ratio = await max.evaluate((label) => {
+      const channels = (css: string) => css.match(/[\d.]+/g)!.slice(0, 3).map((n) => Number(n) / 255);
+      const linear = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+      const luminance = ([r = 0, g = 0, b = 0]: number[]) => 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+      const text = luminance(channels(getComputedStyle(label).color));
+      const surface = luminance(channels(getComputedStyle(label.closest("section")!).backgroundColor));
+      return (Math.max(text, surface) + 0.05) / (Math.min(text, surface) + 0.05);
+    });
+
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+  });
+});

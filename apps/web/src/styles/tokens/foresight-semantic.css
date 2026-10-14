@@ -61,7 +61,8 @@
   --fs-surface-raised: var(--klerosUIComponentsWhiteBackground);
   --fs-surface-sunken: var(--klerosUIComponentsLightBackground);
   --fs-text-secondary: var(--klerosUIComponentsSecondaryText);
-  --fs-text-accent: var(--klerosUIComponentsPrimaryBlue);
+  /* a lighter accent for text: #4872ff on #220050 is 4.3:1 */
+  --fs-text-accent: #7b96ff;
   --fs-tone-success-text: var(--klerosUIComponentsSuccess);
   --fs-tone-warning-text: var(--klerosUIComponentsWarning);
   --fs-tone-error-text: var(--klerosUIComponentsError);

@@ -108,7 +108,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
     <SectionCard
       className={clsx(
         "p-4 md:px-8",
-        "flex flex-wrap items-start justify-center gap-x-8 gap-y-4",
+        "flex flex-wrap items-start justify-start gap-x-8 gap-y-4",
         "md:flex-row md:items-center md:justify-between",
       )}
     >
