@@ -10,7 +10,7 @@ export function ExternalLink({ href, children, className }: { href: string; chil
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className={clsx("text-fs-accent inline-flex items-center gap-1 text-sm", className)}
+      className={clsx("text-fs-text-accent inline-flex items-center gap-1 text-sm hover:underline", className)}
     >
       {children}
       <ExternalArrow className="size-4 shrink-0 [&_path]:fill-current" />

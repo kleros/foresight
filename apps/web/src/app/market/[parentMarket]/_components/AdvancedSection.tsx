@@ -1,8 +1,4 @@
-import clsx from "clsx";
-
 import { ExternalLink } from "@/components/ui/ExternalLink";
-import { SectionCard } from "@/components/ui/SectionCard";
-import { SeerLogo } from "@/components/ui/SeerLogo";
 
 import { DEFAULT_CHAIN } from "@/config/chains";
 import { seerMarketUrl } from "@/config/site";
@@ -12,21 +8,8 @@ export function AdvancedSection({ parentMarket }: { parentMarket: string }) {
   if (!url) return null;
 
   return (
-    <SectionCard
-      className={clsx(
-        "mb-42 px-4 py-6 md:px-8",
-        "flex flex-col-reverse items-start justify-center gap-x-8 gap-y-4",
-        "md:flex-row md:items-center md:justify-between",
-      )}
-    >
-      <div className="flex flex-col items-start gap-2">
-        <h3 className="text-fs-text-primary text-base font-semibold">Advanced</h3>
-        <p className="text-fs-text-secondary text-sm">
-          Check the opportunities if you want to LP or Trade specific outcome tokens in Seer.&nbsp;
-          <ExternalLink href={url}>Check it out</ExternalLink>
-        </p>
-      </div>
-      <SeerLogo className="shrink-0" />
-    </SectionCard>
+    <p className="type-label text-fs-text-secondary mt-2 mb-16">
+      Advanced: <ExternalLink href={url}>Trade or provide liquidity for individual outcome tokens on Seer</ExternalLink>
+    </p>
   );
 }

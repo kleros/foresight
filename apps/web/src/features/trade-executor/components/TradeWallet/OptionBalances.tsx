@@ -6,6 +6,9 @@ import { formatAmount } from "@/utils/amount";
 
 import type { TradeWalletOption } from "../../types";
 
+/** Enough to tell holdings apart; the full amount is in each box's title. */
+const SHOWN_DIGITS = 4;
+
 /**
  * What the wallet holds of each outcome's token, and of the UP and DOWN beneath it.
  */
@@ -67,13 +70,13 @@ function OptionBalance({
       <div className="bg-fs-surface-tint flex h-min min-w-0 items-center">
         <span
           className={clsx(
-            "mr-4 w-24 shrink-0 truncate px-3 py-2",
+            "mr-4 w-28 shrink-0 truncate px-3 py-2 tabular-nums",
             "rounded-fs border-fs-border rounded-r-none border border-r-0",
             "bg-fs-surface text-fs-text-secondary text-sm",
           )}
           title={balance === undefined ? undefined : formatAmount(balance, decimals)}
         >
-          {balance === undefined ? "—" : formatAmount(balance, decimals)}
+          {balance === undefined ? "—" : formatAmount(balance, decimals, SHOWN_DIGITS)}
         </span>
         <span className="mr-2 size-2 flex-none rounded-full" style={{ backgroundColor: option.color }} aria-hidden />
         <Tooltip text={option.name} closeDelay={125}>
@@ -81,14 +84,18 @@ function OptionBalance({
         </Tooltip>
       </div>
       {option.positions.length > 0 ? (
-        <ul aria-label={`${option.name} positions`} className="flex flex-wrap gap-x-4 gap-y-1 px-3 text-sm">
+        <ul
+          aria-label={`${option.name} positions`}
+          title="UP gains the higher this option resolves, DOWN the lower"
+          className="flex flex-wrap gap-x-4 gap-y-1 px-3 text-sm"
+        >
           {option.positions.map(({ side, token }) => {
             const held = positions?.get(token);
             return (
               <li key={token} className="flex min-w-0 gap-1.5">
                 <span className="text-fs-text-secondary">{side}</span>{" "}
                 <span className="text-fs-text-primary truncate">
-                  {held === undefined ? "—" : formatAmount(held, decimals)}
+                  {held === undefined ? "—" : formatAmount(held, decimals, SHOWN_DIGITS)}
                 </span>
               </li>
             );

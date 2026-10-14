@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { isAddress } from "viem";
 
 import { EstimateActions } from "@/features/predict/components/EstimateActions";
+import { EstimateCsvDialog } from "@/features/predict/components/EstimateCsvDialog";
 import { useEstimateHydration } from "@/features/predict/hooks/useEstimateHydration";
 import { snapEstimate } from "@/features/predict/utils/estimates";
 import { useSession } from "@/features/sessions/api/getSession";
@@ -15,6 +16,7 @@ import { useSessionStats } from "@/features/sessions/api/getSessionStats";
 import { latestEstimates } from "@/features/sessions/utils/latestEstimates";
 import { optionNoun } from "@/features/sessions/utils/optionNoun";
 import { sessionStatus } from "@/features/sessions/utils/toSessionDetail";
+import { TradeWallet } from "@/features/trade-executor/components/TradeWallet/TradeWallet";
 
 import { paths } from "@/config/paths";
 
@@ -23,6 +25,7 @@ import { OptionCard } from "./OptionCard";
 import { ParticipateSection } from "./ParticipateSection";
 import { PredictCard } from "./PredictCard";
 import { SessionHeader } from "./SessionHeader";
+import { toWalletMarket } from "./toWalletMarket";
 import { useOptionPositions } from "./useOptionPositions";
 
 const SessionChart = dynamic(() => import("@/features/sessions/components/SessionChart").then((m) => m.SessionChart), {
@@ -63,6 +66,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
   const detail = session.data;
   const status = sessionStatus(detail, new Date());
   const noun = optionNoun(detail.itemNamePlural);
+  const walletMarket = toWalletMarket(detail);
   // the pool's number is an unbounded float; held on each option's grid so "at the market" is exact
   const latest = chart.data ? latestEstimates(chart.data) : {};
   const marketEstimates = Object.fromEntries(
@@ -87,8 +91,8 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
           noun={noun}
         />
       ) : null}
-      <div className="mt-12 flex flex-col gap-4">
-        <ParticipateSection session={detail} marketEstimates={marketEstimates} canEstimate={status !== "setting-up"} />
+      <section className="mt-12 flex flex-col gap-4">
+        <ParticipateSection session={detail} />
         {detail.options.map((option) => (
           <OptionCard
             key={option.market}
@@ -102,20 +106,30 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
             collateralDecimals={detail.collateralDecimals ?? undefined}
           />
         ))}
-        <EstimateActions
-          parentMarket={detail.parentMarket}
-          scales={detail.options}
-          marketEstimates={marketEstimates}
-          isDisabled={status !== "trading"}
-        />
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+          <EstimateCsvDialog
+            parentMarket={detail.parentMarket}
+            scales={detail.options}
+            marketEstimates={marketEstimates}
+            noun={noun}
+            isDisabled={status === "setting-up"}
+          />
+          <EstimateActions
+            parentMarket={detail.parentMarket}
+            scales={detail.options}
+            marketEstimates={marketEstimates}
+            isDisabled={status !== "trading"}
+          />
+        </div>
         <PredictCard
           session={detail}
           status={status}
           marketEstimates={marketEstimates}
           isMarketUnknown={chart.data === undefined}
         />
+        {walletMarket ? <TradeWallet market={walletMarket} noun={noun} /> : null}
         <AdvancedSection parentMarket={detail.parentMarket} />
-      </div>
+      </section>
     </PageColumn>
   );
 }
@@ -157,7 +171,7 @@ function PageMessage({ title, hint }: { title: string; hint: string }) {
     <div className="border-fs-border rounded-fs my-20 flex flex-col items-center gap-3 border p-13 text-center">
       <h1 className="text-fs-text-primary text-base font-semibold">{title}</h1>
       <p className="text-fs-text-secondary text-sm">{hint}</p>
-      <Link href={paths.home.getHref()} className="type-label text-fs-accent">
+      <Link href={paths.home.getHref()} className="type-label text-fs-text-accent">
         Browse sessions
       </Link>
     </div>

@@ -4,7 +4,6 @@ import { Button } from "@kleros/ui-components-library";
 import clsx from "clsx";
 import { useAccount } from "wagmi";
 
-import { SectionCard } from "@/components/ui/SectionCard";
 import { Select } from "@/components/ui/Select";
 import WithHelpTooltip from "@/components/ui/WithHelpTooltip";
 
@@ -82,7 +81,7 @@ export function TradeWallet({ market, noun }: { market: TradeWalletMarket; noun:
 
   return (
     <>
-      <SectionCard className="flex flex-col gap-4 px-4 py-6 md:px-8">
+      <section aria-label="Trade wallet" className="fs-card flex flex-col gap-4 px-4 py-5 md:px-8">
         <div className="flex flex-col max-md:gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-1 flex-col gap-4">
             <div className="flex flex-col items-start gap-1.5">
@@ -130,11 +129,11 @@ export function TradeWallet({ market, noun }: { market: TradeWalletMarket; noun:
             )}
           >
             <h4 className="text-fs-text-secondary text-sm">{collateral.symbol} balance</h4>
-            <p className="text-fs-text-primary text-2xl font-semibold">
+            <p className="text-fs-text-primary text-lg font-semibold tabular-nums">
               {funds.isPending ? (
                 <span className="fs-skeleton inline-block h-7 w-20 align-middle" />
               ) : funds.data ? (
-                formatAmount(funds.data.token ?? 0n, collateral.decimals)
+                formatAmount(funds.data.token ?? 0n, collateral.decimals, 4)
               ) : (
                 // a balance we could not read must not read as an empty wallet
                 <span className="text-fs-text-secondary text-base font-normal">Could not read</span>
@@ -150,7 +149,7 @@ export function TradeWallet({ market, noun }: { market: TradeWalletMarket; noun:
           noun={noun}
           decimals={collateral.decimals}
         />
-      </SectionCard>
+      </section>
 
       {dialog === "deposit" ? (
         <TransferDialog
