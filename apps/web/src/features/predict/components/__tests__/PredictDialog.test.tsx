@@ -230,6 +230,13 @@ describe("predicting", () => {
     expect(onPredict).toHaveBeenCalled();
   });
 
+  it("offers to check a sent transaction that has not confirmed, not to try the rest", () => {
+    render(<PredictDialog {...props()} canRetry isPending />);
+
+    expect(screen.getByRole("button", { name: "Check again" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Try the rest" })).not.toBeInTheDocument();
+  });
+
   it("offers the rest of a stopped run on the amount and estimates it started with", async () => {
     const onPredict = vi.fn();
     render(

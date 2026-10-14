@@ -46,7 +46,7 @@ const FEE_SHORT_COPY = "Your wallet does not have enough xDAI for the network fe
 
 /** A transaction is out there and nothing has said how it ended, so it is neither a success nor a failure. */
 const PENDING_COPY =
-  "Your transaction was sent but has not confirmed yet. It may still go through. Press Predict to check again.";
+  "Your transaction was sent but has not confirmed yet. It may still go through, so it is checked before anything else is sent.";
 
 const STAGE_COPY: Partial<Record<PredictProgress["stage"], string>> = {
   quoting: "Finding the best prices…",

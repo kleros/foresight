@@ -38,6 +38,8 @@ interface PredictDialogProps {
   isRunning: boolean;
   /** A stopped run can pick up where it stopped, with the amount and estimates it was started with. */
   canRetry: boolean;
+  /** The stopped run sent a transaction whose outcome is unknown; pressing on checks it first. */
+  isPending?: boolean;
   /** A stored run under review: its own deposit replaces the amount form, and Resume replaces Predict. */
   recovered?: { deposit: bigint; symbol: string; decimals: number };
   /** What the visitor has to do before this prediction can be made, if anything. */
@@ -66,6 +68,7 @@ export function PredictDialog({
   skipped,
   isRunning,
   canRetry,
+  isPending = false,
   recovered,
   notice,
   onPredict,
@@ -133,7 +136,7 @@ export function PredictDialog({
           <div className="flex flex-wrap gap-3.5">
             <Button text="Cancel" variant="secondary" onPress={onClose} isDisabled={isRunning} />
             <Button
-              text={recovered ? "Resume" : canRetry ? "Try the rest" : "Predict"}
+              text={recovered ? "Resume" : isPending ? "Check again" : canRetry ? "Try the rest" : "Predict"}
               onPress={onPredict}
               isDisabled={
                 isRunning ||

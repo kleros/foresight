@@ -169,6 +169,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
       skipped={progress?.skipped.length ?? 0}
       isRunning={isRunning}
       canRetry={canRetry}
+      isPending={Boolean(pendingHash)}
       recovered={recovered && { deposit: recovered.deposit, symbol: runToken.symbol, decimals: runToken.decimals }}
       notice={
         // once a run is going its own state is the story, not what the wallet is doing now
