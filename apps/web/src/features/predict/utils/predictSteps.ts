@@ -125,14 +125,16 @@ export function predictSteps(
   const adding = toAdd === 0n ? "" : `Adding ${shownAmount(toAdd, decimals)} ${symbol}${becomes ?? ""}`;
   const fundsWait = progress?.stage === "signing" || progress?.stage === "confirming" ? stageCopy : "";
 
-  // the row whose step errored is the one that stopped the run; with none, nothing got past pricing
-  const failedKey: PredictStepRow["key"] | undefined = halted
-    ? walletRow?.state === "error"
-      ? "wallet"
-      : fundsRow?.state === "error"
-        ? "funds"
-        : "predict"
-    : undefined;
+  // the row whose step errored stopped the run; with none, nothing got past pricing.
+  // A sent, unconfirmed transaction may still land, so its row is not crossed.
+  const failedKey: PredictStepRow["key"] | undefined =
+    halted && !progress.pendingHash
+      ? walletRow?.state === "error"
+        ? "wallet"
+        : fundsRow?.state === "error"
+          ? "funds"
+          : "predict"
+      : undefined;
   const partial =
     halted && progress.batchesDone > 0 ? `${progress.batchesDone} of ${progress.batches} predictions went through` : "";
 

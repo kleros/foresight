@@ -255,7 +255,7 @@ describe("predicting", () => {
         canRetry
         steps={{
           ...steps,
-          failure: "1 of 2 predictions went through. The trade could not go through at these prices.",
+          failure: "The trade could not go through at these prices.",
         }}
         onPredict={onPredict}
       />,

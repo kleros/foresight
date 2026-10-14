@@ -183,6 +183,23 @@ describe("predictSteps during a run", () => {
     expect(rows.map((row) => row.view)).toEqual(["done", "failed", "inactive"]);
   });
 
+  it("crosses no step whose transaction was sent but has not confirmed", () => {
+    const rows = steps({
+      progress: progress({
+        stage: "halted",
+        steps: [
+          { id: "create-wallet", label: "", state: "success" },
+          { id: "deposit", label: "", state: "running" },
+          { id: "predict-1", label: "", state: "pending" },
+        ],
+        failure: { reason: "rpc", retryable: true },
+        pendingHash: `0x${"ab".repeat(32)}`,
+      }),
+    }).rows;
+
+    expect(rows.map((row) => row.view)).not.toContain("failed");
+  });
+
   it("marks the prediction failed when the run stops before any step", () => {
     const pending = progress().steps.map((step) => ({ ...step, state: "pending" as const }));
     const rows = steps({
