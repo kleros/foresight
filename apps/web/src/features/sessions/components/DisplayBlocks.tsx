@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import type { DisplayBlock } from "@foresight/session-metadata";
 
 import { Markdown } from "@/components/ui/Markdown";
@@ -14,19 +16,29 @@ export function DisplayBlocks({ blocks }: { blocks: DisplayBlock[] }) {
             <Markdown>{block.body}</Markdown>
           </div>
         ) : (
-          <figure key={index} className="flex flex-col gap-1.5">
-            {/* The caption below carries the label, so the image stays silent to a screen reader. */}
-            {/* eslint-disable-next-line @next/next/no-img-element -- the gateway is env-configured, so no static remotePattern can cover it */}
-            <img
-              className="rounded-fs max-h-80 max-w-full self-start object-contain"
-              src={block.url}
-              alt=""
-              loading="lazy"
-            />
-            <figcaption className="type-caption text-fs-text-secondary">{block.label}</figcaption>
-          </figure>
+          <FigureBlock key={index} url={block.url} label={block.label} />
         ),
       )}
     </div>
+  );
+}
+
+/** A captioned image; one that fails to load goes with its caption rather than leaving the caption alone. */
+function FigureBlock({ url, label }: { url: string; label: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    <figure className="flex flex-col gap-1.5">
+      {/* The caption below carries the label, so the image stays silent to a screen reader. */}
+      {/* eslint-disable-next-line @next/next/no-img-element -- the gateway is env-configured, so no static remotePattern can cover it */}
+      <img
+        className="rounded-fs max-h-80 max-w-full self-start object-contain"
+        src={url}
+        alt=""
+        loading="lazy"
+        onError={() => setFailed(true)}
+      />
+      <figcaption className="type-caption text-fs-text-secondary">{label}</figcaption>
+    </figure>
   );
 }

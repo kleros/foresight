@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { parseEther } from "viem";
 import { describe, expect, it } from "vitest";
 
@@ -53,6 +53,24 @@ describe("SessionHeader", () => {
     expect(container.querySelector('[role="presentation"]')).toHaveStyle({
       backgroundImage: `url("${GATEWAY}/QmHero")`,
     });
+  });
+
+  it("falls back to the gradient when the hero image fails to load", () => {
+    const { container } = renderHeader({ overrides: { heroImage: "ipfs://QmHero" } });
+
+    fireEvent.error(screen.getByTestId("hero-probe"));
+
+    expect(container.querySelector('[role="presentation"]')).toHaveStyle({
+      backgroundImage: expect.stringContaining("linear-gradient"),
+    });
+  });
+
+  it("drops the session icon when it fails to load", () => {
+    renderHeader({ overrides: { icon: "ipfs://QmIcon" } });
+
+    fireEvent.error(screen.getByTestId("session-icon"));
+
+    expect(screen.queryByTestId("session-icon")).toBeNull();
   });
 
   it("shows the session icon over the banner edge", () => {

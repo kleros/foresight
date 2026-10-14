@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+
 import { AlertMessage } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
@@ -35,6 +39,9 @@ export function SessionHeader({
   stats: SessionStats | undefined;
   statsPending: boolean;
 }) {
+  // a gateway that cannot serve an image leaves the gradient and no icon, not a broken image
+  const [heroFailed, setHeroFailed] = useState(false);
+  const [iconFailed, setIconFailed] = useState(false);
   const volume = stats ? collateralVolume(session, stats.volumeUnderlying) : null;
   const explorer = explorerAddressUrl(session.parentMarket, DEFAULT_CHAIN);
 
@@ -64,10 +71,14 @@ export function SessionHeader({
       <div className="border-gradient-purple-blue bg-fs-surface relative">
         <div
           className={clsx("border-fs-border mx-px mt-px h-45 border-b", "rounded-t-[11px] bg-cover bg-center")}
-          style={bannerStyle(session.heroUri)}
+          style={bannerStyle(heroFailed ? null : session.heroUri)}
           role="presentation"
         />
-        {session.iconUri ? (
+        {session.heroUri && !heroFailed ? (
+          // eslint-disable-next-line @next/next/no-img-element -- a hidden probe: a CSS background reports no load failure
+          <img data-testid="hero-probe" src={session.heroUri} alt="" hidden onError={() => setHeroFailed(true)} />
+        ) : null}
+        {session.iconUri && !iconFailed ? (
           <span
             className={clsx(
               "rounded-fs border-fs-surface bg-fs-surface absolute top-40 left-5",
@@ -75,7 +86,13 @@ export function SessionHeader({
             )}
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- the gateway is env-configured, so no static remotePattern can cover it */}
-            <img className="h-full w-full object-cover" src={session.iconUri} alt="" />
+            <img
+              data-testid="session-icon"
+              className="h-full w-full object-cover"
+              src={session.iconUri}
+              alt=""
+              onError={() => setIconFailed(true)}
+            />
           </span>
         ) : null}
         <div className="flex flex-col gap-2.5 px-6 pt-8 pb-5">
