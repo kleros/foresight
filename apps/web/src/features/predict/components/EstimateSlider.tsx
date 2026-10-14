@@ -29,8 +29,8 @@ const ESTIMATE_COLOR = { higher: "var(--fs-estimate-up)", lower: "var(--fs-estim
 
 /**
  * An estimate on the option's own scale, drawn as futarchy-ui draws it: the fill and thumb take
- * the direction's colour, and the market's pin drops under the track when the thumb comes near it,
- * or near enough on a narrow track that the pin would cover the thumb's label.
+ * the direction's colour, and once an estimate is set the market's pin drops under the track
+ * while the thumb is near it.
  */
 export function EstimateSlider({
   scale,
@@ -60,19 +60,25 @@ export function EstimateSlider({
   const tone = direction && !isDisabled ? ESTIMATE_COLOR[direction] : undefined;
   const marketAt = marketEstimate === undefined ? undefined : ((marketEstimate - scale.lowerBound) / range) * 100;
   const pin = usePinBand(shown, marketAt === undefined ? undefined : marketAt / 100);
-  const pinDown = marketEstimate !== undefined && isNearMarket(shown, marketEstimate, scale, pin.band);
+  const atRest = value === undefined && marketEstimate !== undefined;
+  const pinDown =
+    value !== undefined && marketEstimate !== undefined && isNearMarket(shown, marketEstimate, scale, pin.band);
 
   return (
     <div className="flex w-full flex-col gap-4">
-      {/* pt-8 holds the thumb's floating label and the raised pin; pb-1 the dropped pin */}
-      <div className="w-full pt-8 pb-1">
+      {/* pt-16 holds the raised pin above the thumb's number; pb-3 the dropped pin's caption */}
+      <div className="w-full pt-16 pb-3">
         <div ref={pin.track} className="relative w-full">
           <Slider
             className={clsx(
               "w-full",
               "[&_#slider-label]:text-fs-text-primary! [&_#slider-label]:font-semibold",
+              // with no estimate set the thumb sits on the market, whose number the pin already shows
+              atRest && "[&_#slider-label]:invisible",
               // the library gives the thumb no id; it is the element holding #slider-label
-              "[&_div:has(>#slider-label)]:before:absolute [&_div:has(>#slider-label)]:before:-inset-2.5",
+              // above the track, with a 44px target: the inset counts from inside its 3px border
+              "[&_div:has(>#slider-label)]:z-10",
+              "[&_div:has(>#slider-label)]:before:absolute [&_div:has(>#slider-label)]:before:-inset-3.25",
               "[&_div:has(>#slider-label)]:before:content-['']",
               "[&_div:has(>#slider-label)[data-focus-visible]]:ring-fs-accent",
               "[&_div:has(>#slider-label)[data-focus-visible]]:ring-2",
@@ -106,22 +112,34 @@ export function EstimateSlider({
               data-testid="market-pin"
               data-placement={pinDown ? "down" : "up"}
               className={clsx(
-                // up: chip and stick end at the track's lower edge (18px); down: the chip starts 4px under the thumb
-                "pointer-events-none absolute -top-6 flex -translate-x-1/2 items-center",
-                "transition-transform duration-(--fs-dur-enter) ease-(--fs-ease-enter)",
-                pinDown ? "translate-y-13.5 flex-col-reverse" : "flex-col",
+                // up: caption, chip and stick end at the track's lower edge, the chip above the thumb's number;
+                // down: the chip sits 2px under the thumb with the caption beneath it
+                "pointer-events-none absolute -top-15.5 w-0",
+                "transition-transform duration-(--fs-dur-enter) ease-(--fs-ease-enter) motion-reduce:transition-none",
+                pinDown && "translate-y-22.5",
               )}
               style={{ left: `${marketAt}%` }}
             >
-              <span
+              <div
                 ref={pin.chip}
-                className="rounded-fs px-2 py-0.75 text-center text-xs whitespace-nowrap"
-                style={{ backgroundColor: scale.color, color: getReadableTextColor(scale.color) }}
+                className={clsx("absolute left-0 flex w-max items-center", pinDown ? "flex-col-reverse" : "flex-col")}
+                style={{ transform: pin.chipShift === undefined ? "translateX(-50%)" : `translateX(${pin.chipShift}px)` }}
               >
-                Market {formatEstimate(marketEstimate!, scale.unit)}
-              </span>
+                <span className="text-fs-text-primary text-xs leading-4">Market</span>
+                <span
+                  data-testid="market-chip"
+                  className="rounded-fs px-2 py-0.5 text-center text-xs leading-4 whitespace-nowrap"
+                  style={{ backgroundColor: scale.color, color: getReadableTextColor(scale.color) }}
+                >
+                  {formatEstimate(marketEstimate!, scale.unit)}
+                </span>
+              </div>
               <span
-                className={clsx("bg-fs-text-primary block h-5 w-0.75 rounded-b-full", pinDown && "hidden")}
+                data-testid="market-stick"
+                className={clsx(
+                  "bg-fs-text-primary absolute top-9 -left-[1.5px] block h-11 w-0.75 rounded-b-full",
+                  pinDown && "hidden",
+                )}
                 aria-hidden
               />
             </div>
@@ -169,7 +187,7 @@ export function EstimateSlider({
               unit={scale.unit}
             />
           ) : (
-            "At the market estimate. Move it to make a prediction."
+            "At the market. Move it to predict."
           )}
         </p>
       </div>

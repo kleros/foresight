@@ -120,7 +120,7 @@ describe("OptionCard", () => {
 
     expect(screen.getByText("0 $M")).toBeInTheDocument();
     expect(screen.getByText("500 $M")).toBeInTheDocument();
-    expect(screen.getByText("Market 312 $M")).toBeInTheDocument();
+    expect(screen.getByTestId("market-chip")).toHaveTextContent("312 $M");
   });
 
   it("starts the thumb at the market estimate", async () => {
@@ -129,7 +129,7 @@ describe("OptionCard", () => {
     await open();
 
     expect(screen.getByRole("slider")).toHaveValue(String(MARKET_ESTIMATE));
-    expect(screen.getByText("At the market estimate. Move it to make a prediction.")).toBeInTheDocument();
+    expect(screen.getByText("At the market. Move it to predict.")).toBeInTheDocument();
   });
 
   it("saves a typed estimate and ticks the option", async () => {

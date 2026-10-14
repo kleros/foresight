@@ -73,10 +73,10 @@ describe("EstimateSlider market pin", () => {
     expect(pin()).toHaveAttribute("data-placement", "up");
   });
 
-  it("drops under the track with the thumb on the market", () => {
+  it("stands above the track with no estimate set, the thumb resting on the market", () => {
     renderSlider(undefined);
 
-    expect(pin()).toHaveAttribute("data-placement", "down");
+    expect(pin()).toHaveAttribute("data-placement", "up");
   });
 
   it("drops under the track with the thumb inside the near band", () => {
@@ -88,7 +88,8 @@ describe("EstimateSlider market pin", () => {
   it("names the market's number on the pin", () => {
     renderSlider(400);
 
-    expect(pin()).toHaveTextContent("Market 312 $M");
+    expect(pin()).toHaveTextContent(/^Market/);
+    expect(screen.getByTestId("market-chip")).toHaveTextContent("312 $M");
   });
 });
 

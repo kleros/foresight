@@ -8,9 +8,9 @@ import {
   estimateDigits,
   estimateDirection,
   estimateStep,
-  PIN_CLEARANCE_PX,
+  STICK_CLEARANCE_PX,
   isNearMarket,
-  pinOverlapShare,
+  stickClearShare,
   selectedEstimates,
   snapEstimate,
 } from "../estimates";
@@ -139,12 +139,12 @@ describe("isNearMarket on a track too narrow for futarchy's band", () => {
   });
 });
 
-describe("pinOverlapShare", () => {
-  it("is the half-widths of the chip and the label plus the clearance, as a share of the track", () => {
-    expect(pinOverlapShare({ track: 300, chip: 90, label: 40 })).toBe((65 + PIN_CLEARANCE_PX) / 300);
+describe("stickClearShare", () => {
+  it("is half the thumb's number and the stick's clearance, as a share of the track", () => {
+    expect(stickClearShare({ track: 300, label: 40 })).toBe((20 + STICK_CLEARANCE_PX) / 300);
   });
 
-  it("is nothing before the track has a width", () => {
-    expect(pinOverlapShare({ track: 0, chip: 90, label: 40 })).toBe(0);
+  it("is 0 before the track is measured", () => {
+    expect(stickClearShare({ track: 0, label: 40 })).toBe(0);
   });
 });
