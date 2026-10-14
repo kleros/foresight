@@ -95,7 +95,7 @@ function lensQuotesAt(priceWad: bigint) {
 
 /** The real Lens quoter, with each request it was given kept. Lens is mocked, so the client is never read. */
 function recordingLensQuoter(): SwapQuoter & { requests: SwapQuoteRequest[] } {
-  const lens = createLensQuoter({} as PublicClient, 100, () => 0);
+  const lens = createLensQuoter({} as PublicClient, 100, () => Promise.resolve(0n));
   const requests: SwapQuoteRequest[] = [];
   return {
     requests,

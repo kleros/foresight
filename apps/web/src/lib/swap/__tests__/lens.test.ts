@@ -56,7 +56,7 @@ const request = (overrides: Partial<SwapQuoteRequest> = {}): SwapQuoteRequest =>
   ...overrides,
 });
 
-const quoter = () => createLensQuoter({} as PublicClient, 100, () => 0);
+const quoter = () => createLensQuoter({} as PublicClient, 100, () => Promise.resolve(0n));
 
 const params = (data: `0x${string}`) => {
   const decoded = decodeFunctionData({ abi: ROUTER_ABI, data });
@@ -69,6 +69,13 @@ describe("createLensQuoter", () => {
   beforeEach(() => {
     quote.mockReset();
     quote.mockResolvedValue({ ...lensResult, data: singleCall(495n) });
+  });
+
+  it("dates the deadline from the chain's latest block, not the visitor's clock", async () => {
+    const client = { getBlock: () => Promise.resolve({ timestamp: 5_000n }) } as unknown as PublicClient;
+    await createLensQuoter(client, 100).quote(request());
+
+    expect(quote).toHaveBeenCalledWith(expect.objectContaining({ deadline: 5_000n + 1_800n }));
   });
 
   it("signs the swap with the limit it was asked for, leaving the rest of Lens's call as it was", async () => {

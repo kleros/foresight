@@ -64,11 +64,19 @@ function minOutAtLimit(
     : (amountIn * Q192 * kept) / (priceX192 * 10_000n);
 }
 
-export function createLensQuoter(client: PublicClient, chainId: ChainId, now: () => number = Date.now): SwapQuoter {
+/** The latest block's time, in seconds: what the router checks a deadline against, whatever the visitor's clock says. */
+const latestBlockTime = (client: PublicClient) => async () => (await client.getBlock({ blockTag: "latest" })).timestamp;
+
+export function createLensQuoter(
+  client: PublicClient,
+  chainId: ChainId,
+  chainNow: () => Promise<bigint> = latestBlockTime(client),
+): SwapQuoter {
   const lens = new Lens(client, chainId);
 
   return {
     async quote(request) {
+      const deadline = (await chainNow()) + QUOTE_DEADLINE_SECONDS;
       const result = await lens
         .quote({
           tokenIn: request.tokenIn,
@@ -76,7 +84,7 @@ export function createLensQuoter(client: PublicClient, chainId: ChainId, now: ()
           amount: request.amount,
           recipient: request.recipient,
           slippageBps: request.slippageBps,
-          deadline: BigInt(Math.floor(now() / 1000)) + QUOTE_DEADLINE_SECONDS,
+          deadline,
         })
         .catch((error: unknown) => {
           if (!answeredNoRoute(error)) throw error;

@@ -105,5 +105,6 @@ export const nodeAnswers = {
 /** Seer's real Lens quoter, reading from a node that gives `answer` to everything. */
 export function lensQuoterOn(answer: NodeAnswer): SwapQuoter {
   const client = createPublicClient({ chain: gnosis, transport: custom({ request: answer }, { retryCount: 0 }) });
-  return createLensQuoter(client, 100);
+  // the deadline's clock is not what these answers are about, and most of them answer no block
+  return createLensQuoter(client, 100, () => Promise.resolve(0n));
 }

@@ -55,7 +55,7 @@ async function runOk(command: string, args: string[], cwd: string): Promise<stri
 
 const repoRoot = async () => (await runOk("git", ["rev-parse", "--show-toplevel"], process.cwd())).trim();
 
-/** Seeds a session on the fork and holds until the indexer has it. Returns its id. */
+/** Seeds a session on the fork and holds until the indexer has it, and with liquidity both pools of every option. */
 async function seedSession(root: string, { liquidity }: { liquidity: boolean }): Promise<string> {
   const output = await runOk("yarn", ["simulate:session:gnosis-fork", ...(liquidity ? ["--liquidity"] : [])], root);
   const sessionId = output.match(/Session #(\d+)/)?.[1];
@@ -66,13 +66,17 @@ async function seedSession(root: string, { liquidity }: { liquidity: boolean }):
     const response = await fetch(HASURA_URL, {
       method: "POST",
       headers: { "content-type": "application/json", "x-hasura-admin-secret": HASURA_SECRET },
-      body: JSON.stringify({ query: `{ Session(where: {sessionId: {_eq: "${sessionId}"}}) { id } }` }),
+      body: JSON.stringify({
+        query: `{ Session(where: {sessionId: {_eq: "${sessionId}"}}) { id children { pools { id } } } }`,
+      }),
     });
-    const body = (await response.json()) as { data?: { Session: unknown[] } };
-    if (body.data?.Session.length) return sessionId;
+    const body = (await response.json()) as { data?: { Session: Array<{ children: Array<{ pools: unknown[] }> }> } };
+    const session = body.data?.Session[0];
+    // the suites read a pool as soon as the session shows, and the indexer writes the pools after it
+    if (session && (!liquidity || session.children.every((child) => child.pools.length >= 2))) return sessionId;
     await new Promise((resolve) => setTimeout(resolve, 2_000));
   }
-  throw new Error(`The indexer never picked up session #${sessionId}.`);
+  throw new Error(`The indexer never picked up session #${sessionId}${liquidity ? " and its pools" : ""}.`);
 }
 
 /** The `Tests` count line of a vitest run, which says whether anything ran rather than skipped. */
