@@ -209,3 +209,27 @@ describe("an empty balance", () => {
     expect(screen.getByTestId("amount-slider").classList.contains("opacity-50")).toBe(true);
   });
 });
+
+describe("an amount over the balance", () => {
+  // jsdom computes no Tailwind, so the error variant is read from the border class the field gets for it
+  it.each([
+    [false, true],
+    [true, false],
+  ])("marks the field as an error only while it can be changed (locked: %s)", (isReadOnly, isError) => {
+    render(
+      <PredictAmountSection
+        amount={20n * WAD}
+        onAmountChange={vi.fn()}
+        tokens={[sDai]}
+        token={sDai}
+        onTokenChange={vi.fn()}
+        funding={planFunding({ amount: 20n * WAD, ownWallet: 10n * WAD, tradeWallet: 0n })}
+        collateral={{ symbol: "sDAI", decimals: 18 }}
+        isFirstPrediction
+        isReadOnly={isReadOnly}
+      />,
+    );
+
+    expect(screen.getByLabelText("Amount").classList.contains("border-klerosUIComponentsError")).toBe(isError);
+  });
+});
