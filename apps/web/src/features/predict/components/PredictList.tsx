@@ -78,10 +78,20 @@ function EstimateRow({
   // a move that rounds to nothing would read "51.22 % → 51.22 %"
   const moved = move && format(move.from) !== format(move.to) ? move : undefined;
   const where = moved ? (
-    <>
-      {/* a phone keeps the destination, the one figure the preview adds */}
-      <span className="max-sm:hidden">{formatEstimate(moved.from, null)} </span>→ {format(moved.to)}
-    </>
+    format(moved.to) === format(estimate.value) ? (
+      <>
+        {/* a destination equal to the estimate repeats it, so a phone names the origin instead */}
+        <span className="max-sm:hidden">
+          {formatEstimate(moved.from, null)} → {format(moved.to)}
+        </span>
+        <span className="sm:hidden">from {format(moved.from)}</span>
+      </>
+    ) : (
+      <>
+        {/* a phone keeps the destination, the one figure the preview adds */}
+        <span className="max-sm:hidden">{formatEstimate(moved.from, null)} </span>→ {format(moved.to)}
+      </>
+    )
   ) : estimate.marketEstimate !== undefined ? (
     `from ${format(estimate.marketEstimate)}`
   ) : undefined;
@@ -103,7 +113,11 @@ function EstimateRow({
           )}
         />
       ) : null}
-      {where ? <span data-testid="estimate-move" className="text-fs-text-secondary shrink-0 whitespace-nowrap tabular-nums">{where}</span> : null}
+      {where ? (
+        <span data-testid="estimate-move" className="text-fs-text-secondary shrink-0 whitespace-nowrap tabular-nums">
+          {where}
+        </span>
+      ) : null}
       {onRemove ? (
         <LightButton
           className="hover:bg-fs-surface relative ml-auto size-7 shrink-0 justify-center p-0 before:absolute before:-inset-x-2 before:-inset-y-1 before:content-['']"
