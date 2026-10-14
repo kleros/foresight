@@ -450,8 +450,8 @@ button[data-disabled].border:has(> .button-text) > .button-text {
   color: color-mix(in srgb, var(--klerosUIComponentsPrimaryBlue) 80%, transparent);
 }
 
-/* One keyboard focus ring, from the accent. */
-:where(a, button, summary, [role="button"], [tabindex]):focus-visible {
+/* One keyboard focus ring, from the accent. A tabindex="-1" container is focused by script, not reached by Tab. */
+:where(a, button, summary, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
   outline: 2px solid var(--fs-accent);
   outline-offset: 2px;
 }

@@ -293,6 +293,33 @@ test.describe("an amount over a four-digit balance at 375 x 667", () => {
   });
 });
 
+test.describe("the popup opening focused", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("draws no focus ring round the container it focuses itself", async ({ page }) => {
+    await openPopup(page, 2, "idle");
+    const focused = await page.evaluate(() => {
+      const element = document.activeElement!;
+      return {
+        tabIndex: element.getAttribute("tabindex"),
+        focusVisible: element.matches(":focus-visible"),
+        outline: getComputedStyle(element).outlineStyle,
+      };
+    });
+
+    expect(focused).toEqual({ tabIndex: "-1", focusVisible: true, outline: "none" });
+  });
+
+  test("keeps the ring on a control reached by keyboard", async ({ page }) => {
+    const dialog = await openPopup(page, 2, "idle");
+    await page.keyboard.press("Tab");
+    const outline = await page.evaluate(() => getComputedStyle(document.activeElement!).outlineStyle);
+
+    expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+    expect(outline).toBe("solid");
+  });
+});
+
 test.describe("the popup's tones", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
