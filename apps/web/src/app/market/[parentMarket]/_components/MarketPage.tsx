@@ -23,6 +23,7 @@ import { OptionCard } from "./OptionCard";
 import { ParticipateSection } from "./ParticipateSection";
 import { PredictCard } from "./PredictCard";
 import { SessionHeader } from "./SessionHeader";
+import { useOptionPositions } from "./useOptionPositions";
 
 const SessionChart = dynamic(() => import("@/features/sessions/components/SessionChart").then((m) => m.SessionChart), {
   ssr: false,
@@ -33,6 +34,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
   const session = useSession(parentMarket);
   const stats = useSessionStats(session.data?.id);
   const chart = useSessionChart(session.data ?? undefined);
+  const positions = useOptionPositions(session.data ?? undefined);
   useEstimateHydration();
 
   if (!isAddress(parentMarket, { strict: false }) || session.data === null) {
@@ -96,6 +98,8 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
             marketEstimate={marketEstimates[option.market.toLowerCase()]}
             isMarketPending={chart.isPending}
             isMarketUnavailable={chart.isError}
+            position={positions[option.market.toLowerCase()]}
+            collateralDecimals={detail.collateralDecimals ?? undefined}
           />
         ))}
         <EstimateActions

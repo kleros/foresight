@@ -28,11 +28,11 @@ export function scaleAmount(value: number, decimals: number): bigint {
   return BigInt(whole) * unit + BigInt(Math.round((value - whole) * Number(unit)));
 }
 
-/** Decimals `formatAmount` shows; anything finer is cut. */
+/** Decimals `formatAmount` shows by default; anything finer is cut. */
 export const DISPLAY_DECIMALS = 6;
 
-export function formatAmount(value: bigint, decimals: number): string {
+export function formatAmount(value: bigint, decimals: number, digits = DISPLAY_DECIMALS): string {
   const [whole = "0", fraction = ""] = formatUnits(value, decimals).split(".");
-  const trimmed = fraction.slice(0, DISPLAY_DECIMALS).replace(/0+$/, "");
+  const trimmed = fraction.slice(0, digits).replace(/0+$/, "");
   return trimmed ? `${whole}.${trimmed}` : whole;
 }

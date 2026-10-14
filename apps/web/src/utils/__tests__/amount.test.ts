@@ -40,4 +40,9 @@ describe("formatAmount", () => {
     expect(formatAmount(3_000000000000000000n, 18)).toBe("3");
     expect(formatAmount(0n, 18)).toBe("0");
   });
+
+  it("cuts to fewer decimals when asked", () => {
+    // 1.23456789 at 18 decimals
+    expect(formatAmount(1_234567890000000000n, 18, 2)).toBe("1.23");
+  });
 });

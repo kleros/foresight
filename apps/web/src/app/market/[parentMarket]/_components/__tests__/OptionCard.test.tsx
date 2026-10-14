@@ -29,7 +29,16 @@ const option: SessionOption = {
 const PARENT = addresses.parentMarket;
 const MARKET_ESTIMATE = 312;
 
-function renderCard(overrides: { status?: SessionStatus; marketEstimate?: number; isMarketPending?: boolean } = {}) {
+const WAD = 10n ** 18n;
+
+function renderCard(
+  overrides: {
+    status?: SessionStatus;
+    marketEstimate?: number;
+    isMarketPending?: boolean;
+    position?: { up: bigint; down: bigint };
+  } = {},
+) {
   return render(
     <OptionCard
       option={option}
@@ -37,6 +46,8 @@ function renderCard(overrides: { status?: SessionStatus; marketEstimate?: number
       status={overrides.status ?? "trading"}
       marketEstimate={"marketEstimate" in overrides ? overrides.marketEstimate : MARKET_ESTIMATE}
       isMarketPending={overrides.isMarketPending ?? false}
+      position={overrides.position}
+      collateralDecimals={18}
     />,
   );
 }
@@ -69,6 +80,37 @@ describe("OptionCard", () => {
 
     expect(screen.getByText("Greta Gerwig")).toBeInTheDocument();
     expect(screen.queryByRole("img", { name: "Estimate set" })).toBeNull();
+  });
+
+  it("says on the collapsed row that no estimate is set", () => {
+    renderCard();
+
+    expect(screen.getByText("Not set")).toBeInTheDocument();
+  });
+
+  it("reads a set estimate against the market on the collapsed row", () => {
+    useEstimateStore.getState().setEstimate(PARENT, option.market, 400);
+    renderCard();
+
+    const row = screen.getByRole("button", { name: /Greta Gerwig/ });
+    expect(row).toHaveTextContent("400 $M");
+    expect(row).toHaveTextContent("market 312 $M");
+  });
+
+  it("shows what the trade wallet holds of the option once it is opened", async () => {
+    renderCard({ position: { up: 20n * WAD, down: 0n } });
+
+    await open();
+
+    expect(screen.getByRole("region", { name: "Your position" })).toHaveTextContent("20 UP · 0 DOWN");
+  });
+
+  it("shows no position for an option the trade wallet holds none of", async () => {
+    renderCard();
+
+    await open();
+
+    expect(screen.queryByRole("region", { name: "Your position" })).toBeNull();
   });
 
   it("opens to an estimate scale bounded in the option's own unit, with the market marked", async () => {
