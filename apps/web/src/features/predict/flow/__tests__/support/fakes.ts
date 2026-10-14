@@ -4,8 +4,6 @@ import type { SwapQuote, SwapQuoteRequest, SwapQuoter } from "@/lib/swap/types";
 
 import type { OptionChainState, PredictCtx, PredictOption, PredictReader, PredictSnapshot } from "../../types";
 
-export { lensQuoterOn, nodeAnswers, type NodeAnswer } from "@/lib/swap/__tests__/support/lensNode";
-
 /** Sqrt prices exact at X96, so a volume to target is a round number. */
 export const AT = { "0.25": 2n ** 95n, "1": 2n ** 96n } as const;
 

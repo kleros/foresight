@@ -2,6 +2,7 @@ import type { FlowTx, TxGateway } from "@foresight/tx-orchestrator";
 import type { Hash, TransactionReceipt } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { lensQuoterOn, nodeAnswers, type NodeAnswer } from "@/lib/swap/__tests__/support/lensNode";
 import type { SwapQuoter } from "@/lib/swap/types";
 
 import {
@@ -9,12 +10,9 @@ import {
   ctx,
   fakeQuoter,
   fakeReader,
-  lensQuoterOn,
-  nodeAnswers,
   option,
   quoterFor,
   snapshot,
-  type NodeAnswer,
 } from "../../flow/__tests__/support/fakes";
 import type { PredictOption } from "../../flow/types";
 import { predictSteps } from "../../utils/predictSteps";
