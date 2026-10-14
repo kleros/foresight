@@ -7,6 +7,7 @@ import { depositNativeTx, depositTx } from "@/lib/trade-executor/funding";
 import { splitCalls } from "@/lib/trade-executor/positions";
 import { optionTradeCalls, type QuotedSwap } from "@/lib/trade-executor/predict";
 
+import { STEP_ID } from "./stepIds";
 import type {
   OptionChainState,
   PredictCtx,
@@ -26,11 +27,7 @@ import { planBuys, planSells, type OptionSide, type SoldLeg } from "../utils/pla
 
 type Step = TxStep<PredictSnapshot, PredictCtx>;
 
-export const STEP_ID = {
-  createExecutor: "create-wallet",
-  deposit: "deposit",
-  predict: (batch: number) => `predict-${batch}`,
-} as const;
+export { STEP_ID };
 
 /** Options per transaction. Movies-r3's default, and like it, unmeasured against real Seer gas. */
 export const PREDICT_BATCH_SIZE = 10;

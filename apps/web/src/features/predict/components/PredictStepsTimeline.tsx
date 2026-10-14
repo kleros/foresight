@@ -3,34 +3,39 @@ import { useEffect, useRef } from "react";
 import { CustomTimeline } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
-import { ForesightIcon, type ForesightIconName } from "@/components/ui/ForesightIcon";
-import Loader from "@/components/ui/Loader";
+import { Spinner } from "@/components/ui/Spinner";
+
+import CheckOutline from "@/assets/svg/check-outline.svg";
+import CircleOutline from "@/assets/svg/circle-outline.svg";
+import CloseCircle from "@/assets/svg/close-circle.svg";
 
 import type { PredictSteps, StepView } from "../utils/predictSteps";
 
 type TimelineItem = React.ComponentProps<typeof CustomTimeline>["items"][number];
 
-const BULLET: Record<StepView | "failed", { icon: ForesightIconName; className: string }> = {
-  idle: { icon: "empty", className: "text-fs-text-secondary" },
-  running: { icon: "empty", className: "text-fs-accent" },
-  done: { icon: "check", className: "text-fs-tone-success" },
-  inactive: { icon: "empty", className: "text-fs-text-secondary" },
-  failed: { icon: "cross", className: "text-fs-tone-error" },
+const BULLET: Record<StepView, { Icon: React.FC<React.SVGAttributes<SVGElement>>; className: string }> = {
+  idle: { Icon: CircleOutline, className: "text-fs-text-secondary" },
+  running: { Icon: CircleOutline, className: "text-fs-accent" },
+  done: { Icon: CheckOutline, className: "text-fs-tone-success" },
+  inactive: { Icon: CircleOutline, className: "text-fs-text-secondary" },
+  failed: { Icon: CloseCircle, className: "text-fs-tone-error" },
 };
 
-/** Defined once per view: a component built per render is a new type on every pass. */
+/** futarchy-ui's bullets, defined once per view: a component built per render is a new type on every pass. */
 const BULLETS = Object.fromEntries(
-  Object.entries(BULLET).map(([view, { icon, className }]) => [
+  Object.entries(BULLET).map(([view, { Icon, className }]) => [
     view,
-    () => <ForesightIcon name={icon} size={16} className={className} style={{ flex: "none" }} />,
+    () => <Icon data-bullet={view} className={clsx("size-6 shrink-0", className)} aria-hidden />,
   ]),
-) as Record<StepView | "failed", () => React.ReactNode>;
+) as Record<StepView, () => React.ReactNode>;
 
+/** Dimmed only when it will not run; a finished step stays at full strength, as futarchy-ui keeps it. */
 const TIMELINE_STATE: Record<StepView, TimelineItem["state"]> = {
   idle: undefined,
   running: "loading",
-  done: "disabled",
+  done: undefined,
   inactive: "disabled",
+  failed: undefined,
 };
 
 export function PredictStepsTimeline({ steps }: { steps: PredictSteps }) {
@@ -44,31 +49,22 @@ export function PredictStepsTimeline({ steps }: { steps: PredictSteps }) {
 
   const items: TimelineItem[] = steps.rows.map((row) => ({
     title: row.title,
-    party: row.view === "running" ? <Loader className="mb-1 size-4" /> : "",
+    party: row.view === "running" ? <Spinner className="mb-1" data-testid="step-spinner" /> : "",
     subtitle: row.subtitle,
     Icon: BULLETS[row.view],
     state: TIMELINE_STATE[row.view],
   }));
 
-  if (steps.failure !== undefined) {
-    items.push({
-      title: "Prediction failed!",
-      party: "",
-      subtitle: steps.failure,
-      variant: "refused",
-      Icon: BULLETS.failed,
-    });
-  }
-
   const [first, ...rest] = items;
   if (!first) return null;
 
   return (
-    <div ref={timeline} className="mt-2 flex flex-col items-center md:mt-5" role="status" aria-live="polite">
+    <div ref={timeline} className="mt-4 flex flex-col items-center">
       <CustomTimeline
         items={[first, ...rest]}
         className={clsx(
-          "[&_li>div:nth-child(1)]:min-h-8 md:[&_li>div:nth-child(1)]:min-h-14",
+          // every row keeps its subtitle line, empty or not, so a state change never moves the rows
+          "[&_li>div:nth-child(1)]:min-h-11 [&_small]:min-h-4 [&_small]:text-fs-text-secondary",
           "[&_li>div:nth-child(2)]:ml-2 [&_li>div:nth-child(2)]:pt-0.5",
           "[&_li>div:nth-child(1)>div]:border-l-fs-accent [&_li>div:nth-child(1)>div]:my-2",
         )}

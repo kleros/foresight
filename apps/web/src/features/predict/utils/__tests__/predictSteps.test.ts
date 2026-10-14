@@ -163,8 +163,33 @@ describe("predictSteps during a run", () => {
       }),
     });
 
-    expect(result.failure).toBe("3 of 5 predictions went through. You turned the request down.");
-    expect(result.rows[2]?.view).toBe("inactive");
+    expect(result.failure).toBe("You turned the request down.");
+    expect(result.rows[2]).toMatchObject({ view: "failed", subtitle: "3 of 5 predictions went through" });
+  });
+
+  it("marks the step that failed, not the prediction, when the deposit stops the run", () => {
+    const rows = steps({
+      progress: progress({
+        stage: "halted",
+        steps: [
+          { id: "create-wallet", label: "", state: "success" },
+          { id: "deposit", label: "", state: "error" },
+          { id: "predict-1", label: "", state: "pending" },
+        ],
+        failure: { reason: "rejected", retryable: true },
+      }),
+    }).rows;
+
+    expect(rows.map((row) => row.view)).toEqual(["done", "failed", "inactive"]);
+  });
+
+  it("marks the prediction failed when the run stops before any step", () => {
+    const pending = progress().steps.map((step) => ({ ...step, state: "pending" as const }));
+    const rows = steps({
+      progress: progress({ stage: "halted", steps: pending, failure: { reason: "quote", retryable: true } }),
+    }).rows;
+
+    expect(rows[2]?.view).toBe("failed");
   });
 
   it("has no failure to report while the run is going", () => {

@@ -3,13 +3,13 @@ import { formatUnits, type Address } from "viem";
 import { shortenAddress } from "@/utils/address";
 import { formatAmount } from "@/utils/amount";
 
-import { STEP_ID } from "../flow/plan";
+import { STEP_ID } from "../flow/stepIds";
 import { AMOUNT_DISPLAY_DECIMALS } from "../oracle/tolerances";
 import type { PredictProgress } from "../run/types";
 import type { PayToken } from "../types";
 import type { Funding } from "./funding";
 
-export type StepView = "idle" | "running" | "done" | "inactive";
+export type StepView = "idle" | "running" | "done" | "inactive" | "failed";
 
 export interface PredictStepRow {
   key: "wallet" | "funds" | "predict";
@@ -20,7 +20,7 @@ export interface PredictStepRow {
 
 export interface PredictSteps {
   rows: PredictStepRow[];
-  /** Set once a run has stopped short, in words the visitor can act on. */
+  /** Set once a run has stopped short, in words the visitor can act on; the row that stopped reads `failed`. */
   failure?: string;
 }
 
@@ -45,8 +45,7 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
 const FEE_SHORT_COPY = "Your wallet does not have enough xDAI for the network fee. Add some, then try the rest.";
 
 /** A transaction is out there and nothing has said how it ended, so it is neither a success nor a failure. */
-const PENDING_COPY =
-  "Your transaction was sent but has not confirmed yet. It may still go through, so it is checked before anything else is sent.";
+const PENDING_COPY = "Your transaction was sent but has not confirmed yet. It is checked before anything else is sent.";
 
 const STAGE_COPY: Partial<Record<PredictProgress["stage"], string>> = {
   quoting: "Finding the best prices…",
@@ -126,6 +125,17 @@ export function predictSteps(
   const adding = toAdd === 0n ? "" : `Adding ${shownAmount(toAdd, decimals)} ${symbol}${becomes ?? ""}`;
   const fundsWait = progress?.stage === "signing" || progress?.stage === "confirming" ? stageCopy : "";
 
+  // the row whose step errored is the one that stopped the run; with none, nothing got past pricing
+  const failedKey: PredictStepRow["key"] | undefined = halted
+    ? walletRow?.state === "error"
+      ? "wallet"
+      : fundsRow?.state === "error"
+        ? "funds"
+        : "predict"
+    : undefined;
+  const partial =
+    halted && progress.batchesDone > 0 ? `${progress.batchesDone} of ${progress.batches} predictions went through` : "";
+
   const rows: PredictStepRow[] = [
     walletReady && wallet
       ? { key: "wallet", title: "Trade wallet", subtitle: shortenAddress(wallet.address), view: "done" }
@@ -138,7 +148,8 @@ export function predictSteps(
     {
       key: "funds",
       title: "Add funds to your trade wallet",
-      subtitle: fundsRow?.state === "running" && fundsWait ? `${adding}. ${fundsWait}` : adding,
+      // while it runs the amount is in the locked field above; the row says what it waits on
+      subtitle: fundsRow?.state === "running" && fundsWait ? fundsWait : adding,
       view:
         fundsRow?.state === "running"
           ? "running"
@@ -166,8 +177,11 @@ export function predictSteps(
 
   if (!halted) return { rows };
 
-  const partial =
-    progress.batchesDone > 0 ? `${progress.batchesDone} of ${progress.batches} predictions went through. ` : "";
+  const marked = rows.map((stepRow) =>
+    stepRow.key === failedKey
+      ? { ...stepRow, view: "failed" as const, subtitle: stepRow.key === "predict" ? partial : stepRow.subtitle }
+      : stepRow,
+  );
   const reason = progress.pendingHash
     ? PENDING_COPY
     : progress.failure?.reason === "funds" && progress.moneyMoved
@@ -175,5 +189,36 @@ export function predictSteps(
       : progress.failure
         ? FAILURE_COPY[progress.failure.reason]
         : FAILURE_COPY.unknown;
-  return { rows, failure: `${partial}${reason}` };
+  return { rows: marked, failure: reason };
+}
+
+export interface StatusLine {
+  text: string;
+  tone: "neutral" | "warning" | "error" | "success";
+}
+
+/**
+ * The popup's one status line under the steps, most pressing first: what the visitor has to do,
+ * why a run stopped, what it left out, that it finished, or that a stored run is waiting.
+ */
+export function statusLine(args: {
+  steps: PredictSteps;
+  notice?: string;
+  skipped: number;
+  isRecovered: boolean;
+}): StatusLine | null {
+  const { steps, notice, skipped, isRecovered } = args;
+  if (notice) return { text: notice, tone: "warning" };
+  if (steps.failure) return { text: steps.failure, tone: "error" };
+  if (skipped > 0) {
+    return {
+      text: `${skipped} of your estimates could not be traded right now and ${skipped === 1 ? "was" : "were"} left out.`,
+      tone: "neutral",
+    };
+  }
+  if (steps.rows.some((row) => row.key === "predict" && row.view === "done")) {
+    return { text: "Prediction placed.", tone: "success" };
+  }
+  if (isRecovered) return { text: "This prediction did not finish.", tone: "neutral" };
+  return null;
 }
