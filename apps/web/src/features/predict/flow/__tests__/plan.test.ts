@@ -6,7 +6,21 @@ import { gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
 import { LEG_HEADROOM_BPS } from "../../utils/plan";
 import { createPredictHooks, PREDICT_BATCH_SIZE, planPredict, STEP_ID, type PredictDeps } from "../plan";
 import type { PredictOption } from "../types";
-import { addresses, AT, chainState, ctx, DEEP, fakeQuoter, fakeReader, option, snapshot, WAD } from "./support/fakes";
+import {
+  addresses,
+  AT,
+  chainState,
+  ctx,
+  DEEP,
+  fakeQuoter,
+  fakeReader,
+  lensQuoterOn,
+  nodeAnswers,
+  option,
+  quoterFor,
+  snapshot,
+  WAD,
+} from "./support/fakes";
 
 const deps = (overrides: Partial<PredictDeps> = {}): PredictDeps => ({
   reader: fakeReader(),
@@ -176,6 +190,17 @@ describe("the predict step", () => {
 
     expect(skipped.map((each) => each.childMarket)).toEqual([options[0]!.childMarket]);
     expect(batchShape(tx.data!).some((call) => call.startsWith(options[1]!.underlying))).toBe(true);
+  });
+
+  it("refuses the batch, leaving no option out, when one option's quote cannot be had", async () => {
+    const options = [option(1), option(2)];
+    const skipped: PredictOption[] = [];
+    const quoter = quoterFor(options[0]!, lensQuoterOn(nodeAnswers.unreachable), fakeQuoter());
+
+    await expect(
+      buildPredict(snapshot({ options }), { quoter, onSkip: (each) => skipped.push(each) }),
+    ).rejects.toBeInstanceOf(Error);
+    expect(skipped).toEqual([]);
   });
 
   it("sizes the buy from what the sell was quoted to pay, not from the merge alone", async () => {

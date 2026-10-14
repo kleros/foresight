@@ -4,6 +4,8 @@ import type { SwapQuote, SwapQuoteRequest, SwapQuoter } from "@/lib/swap/types";
 
 import type { OptionChainState, PredictCtx, PredictOption, PredictReader, PredictSnapshot } from "../../types";
 
+export { lensQuoterOn, nodeAnswers, type NodeAnswer } from "@/lib/swap/__tests__/support/lensNode";
+
 /** Sqrt prices exact at X96, so a volume to target is a round number. */
 export const AT = { "0.25": 2n ** 95n, "1": 2n ** 96n } as const;
 
@@ -117,5 +119,16 @@ export function fakeQuoter(opts: { refuse?: (request: SwapQuoteRequest) => boole
       };
       return Promise.resolve(quote);
     },
+  };
+}
+
+/** Sends each quote for `target`'s tokens to `quoter`, and every other quote to `rest`. */
+export function quoterFor(target: PredictOption, quoter: SwapQuoter, rest: SwapQuoter): SwapQuoter {
+  const tokens = [target.underlying, target.upToken, target.downToken];
+  return {
+    quote: (request) =>
+      tokens.includes(request.tokenIn) || tokens.includes(request.tokenOut)
+        ? quoter.quote(request)
+        : rest.quote(request),
   };
 }

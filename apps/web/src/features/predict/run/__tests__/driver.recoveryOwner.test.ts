@@ -120,6 +120,7 @@ const GENERIC: PredictFailureReason[] = [
   "rpc",
   "unknown",
   "no-route",
+  "quote",
   "balance",
   "deposit-unconfirmed",
 ];

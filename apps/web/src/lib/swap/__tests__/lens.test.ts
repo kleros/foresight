@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SLIPPAGE_BPS } from "@/features/predict/oracle/tolerances";
 
 import { createLensQuoter } from "../lens";
-import type { SwapQuoteRequest } from "../types";
+import { NoSwapRouteError, type SwapQuoteRequest } from "../types";
 
 const ROUTER_ABI = parseAbi([
   "function exactInputSingle((address tokenIn, address tokenOut, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 limitSqrtPrice) params) payable returns (uint256 amountOut)",
@@ -100,7 +100,7 @@ describe("createLensQuoter", () => {
     expect(params(result.data).amountOutMinimum).toBe(495n);
   });
 
-  it("refuses a route whose call carries no price limit", async () => {
+  it("answers no route when the only route's call carries no price limit", async () => {
     const multiHop = encodeFunctionData({
       abi: ROUTER_ABI,
       functionName: "exactInput",
@@ -108,7 +108,7 @@ describe("createLensQuoter", () => {
     });
     quote.mockResolvedValue({ ...lensResult, data: multiHop });
 
-    await expect(quoter().quote(request())).rejects.toThrow(/price limit/);
+    await expect(quoter().quote(request())).rejects.toBeInstanceOf(NoSwapRouteError);
   });
 });
 
