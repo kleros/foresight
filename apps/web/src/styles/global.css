@@ -33,6 +33,11 @@
   --color-fs-tone-error: var(--fs-tone-error);
   --color-fs-tone-error-bg: var(--fs-tone-error-bg);
   --color-fs-tone-neutral: var(--fs-tone-neutral);
+  --color-fs-tone-success-text: var(--fs-tone-success-text);
+  --color-fs-tone-warning-text: var(--fs-tone-warning-text);
+  --color-fs-tone-error-text: var(--fs-tone-error-text);
+  --color-fs-estimate-up: var(--fs-estimate-up);
+  --color-fs-estimate-down: var(--fs-estimate-down);
   --radius-fs: var(--fs-radius);
 }
 
@@ -180,7 +185,7 @@
     }
 
     ::-webkit-scrollbar-track {
-      background: #fff;
+      background: var(--fs-surface);
     }
 
     ::-webkit-scrollbar-thumb {
@@ -195,7 +200,7 @@
     /* Firefox */
     * {
       scrollbar-width: thin;
-      scrollbar-color: var(--color-klerosUIComponentsSecondaryBlue) #fff;
+      scrollbar-color: var(--color-klerosUIComponentsSecondaryBlue) var(--fs-surface);
     }
   }
 }

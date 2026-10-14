@@ -431,3 +431,26 @@
     animation-delay: 0ms;
   }
 }
+
+/* A disabled Kleros button keeps its enabled look, faded: the library's grey label on
+   light grey is 1.25:1. Unlayered, so it outranks the library's utilities. */
+button[data-disabled]:has(> .button-text):not(.bg-transparent) {
+  opacity: 0.5;
+  background-color: var(--klerosUIComponentsPrimaryBlue);
+}
+button[data-disabled]:has(> .button-text):not(.bg-transparent) > .button-text {
+  color: var(--klerosUIComponentsWhiteBackground);
+}
+button[data-disabled].border:has(> .button-text) {
+  background-color: var(--klerosUIComponentsWhiteBackground);
+  border-color: var(--klerosUIComponentsPrimaryBlue);
+}
+button[data-disabled].border:has(> .button-text) > .button-text {
+  color: var(--klerosUIComponentsPrimaryBlue);
+}
+
+/* One keyboard focus ring, from the accent. */
+:where(a, button, summary, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid var(--fs-accent);
+  outline-offset: 2px;
+}
