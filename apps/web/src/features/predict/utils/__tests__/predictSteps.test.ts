@@ -103,6 +103,13 @@ describe("predictSteps naming what the funds step adds", () => {
 });
 
 describe("predictSteps during a run", () => {
+  it("shows the prices being checked before the run has a step going", () => {
+    const pending = progress().steps.map((step) => ({ ...step, state: "pending" as const }));
+    const rows = steps({ progress: progress({ stage: "quoting", steps: pending }) }).rows;
+
+    expect(rows[2]).toMatchObject({ view: "running", subtitle: "Finding the best prices…" });
+  });
+
   it("says what the running prediction is waiting on", () => {
     const rows = steps({ progress: progress({ stage: "signing" }) }).rows;
 

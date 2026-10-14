@@ -66,7 +66,7 @@ export function PredictAmountSection({
           />
         )}
 
-        <div className="relative mb-4 w-full md:mb-5 md:min-w-lg">
+        <div className="relative mb-2 w-full md:mb-3 md:min-w-lg">
           <div className="flex items-center justify-between gap-2">
             <span className="text-fs-text-secondary mb-1 text-sm">{isFirstPrediction ? "You pay" : "Extra funds"}</span>
             <div className="flex items-center gap-2">
@@ -126,13 +126,16 @@ export function PredictAmountSection({
             />
           </div>
 
-          {notEnough ? (
-            <span className="text-fs-tone-error absolute text-xs">Not enough balance.</span>
-          ) : isNative && funding && funding.collateralIn > 0n ? (
-            <span className="text-fs-text-primary absolute text-xs">
-              Equivalent {collateral.symbol} ~{formatAmount(funding.collateralIn, collateral.decimals)}
-            </span>
-          ) : null}
+          {/* in the flow, with its height kept, so the slider's floating label never lands on it */}
+          <p className="mt-1 min-h-4 text-xs">
+            {notEnough ? (
+              <span className="text-fs-tone-error">Not enough balance.</span>
+            ) : isNative && funding && funding.collateralIn > 0n ? (
+              <span className="text-fs-text-primary">
+                Equivalent {collateral.symbol} ~{formatAmount(funding.collateralIn, collateral.decimals)}
+              </span>
+            ) : null}
+          </p>
         </div>
 
         <AmountSlider
@@ -151,11 +154,13 @@ export function PredictAmountSection({
             <span className="text-fs-text-secondary">
               (
               {[
-                funding.fromTradeWallet > 0n &&
-                  `${formatAmount(funding.fromTradeWallet, collateral.decimals)} from your trade wallet`,
-                funding.toAdd > 0n && `${formatAmount(funding.toAdd, collateral.decimals)} from your wallet`,
+                [funding.fromTradeWallet, "from your trade wallet"] as const,
+                [funding.toAdd, "from your wallet"] as const,
               ]
-                .filter(Boolean)
+                .map(([part, source]) => [formatAmount(part, collateral.decimals), source] as const)
+                // a part too small to show reads as "0", which says nothing
+                .filter(([shown]) => shown !== "0")
+                .map(([shown, source]) => `${shown} ${source}`)
                 .join(" + ")}
               )
             </span>

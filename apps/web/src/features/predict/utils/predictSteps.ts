@@ -33,7 +33,8 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
   unknown: "Something went wrong.",
   "no-route": "No trade moves these markets toward your estimates. Try a larger amount or a different estimate.",
   quote: "Prices could not be fetched. Try again in a moment.",
-  funds: "Your wallet does not have enough to cover this and the network fee. Lower the amount or add funds, then try again.",
+  funds:
+    "Your wallet does not have enough to cover this and the network fee. Lower the amount or add funds, then try again.",
   balance: "Your trade wallet balance is lower than shown. Check the amount and try again.",
   "deposit-unconfirmed": "Your last deposit may still be confirming. Check your wallet's activity, then try again.",
   "wrong-wallet": "This prediction was started from another wallet. Connect that wallet to finish it.",
@@ -114,7 +115,9 @@ export function predictSteps(
 
   const batches = runSteps.filter((step) => step.id.startsWith("predict-"));
   const runningBatch = batches.findIndex((step) => step.state === "running");
-  const predictRunning = runningBatch >= 0;
+  // the routes are priced before anything is signed, while no step of the run is going yet
+  const checking = progress?.stage === "quoting" && !runSteps.some((step) => step.state === "running");
+  const predictRunning = runningBatch >= 0 || checking;
   const stageCopy = progress ? (STAGE_COPY[progress.stage] ?? "") : "";
   const becomes = collateral && ` (~${shownAmount(collateral.amount, collateral.decimals)} ${collateral.symbol})`;
   const adding = toAdd === 0n ? "" : `Adding ${shownAmount(toAdd, decimals)} ${symbol}${becomes ?? ""}`;
@@ -145,13 +148,15 @@ export function predictSteps(
     {
       key: "predict",
       title: "Make prediction",
-      subtitle: predictRunning
-        ? batches.length > 1
-          ? `Prediction ${runningBatch + 1} of ${batches.length}. ${stageCopy}`
-          : stageCopy
-        : progress?.stage === "complete"
-          ? stageCopy
-          : "",
+      subtitle: checking
+        ? stageCopy
+        : predictRunning
+          ? batches.length > 1
+            ? `Prediction ${runningBatch + 1} of ${batches.length}. ${stageCopy}`
+            : stageCopy
+          : progress?.stage === "complete"
+            ? stageCopy
+            : "",
       view: predictRunning ? "running" : progress?.stage === "complete" ? "done" : halted ? "inactive" : "idle",
     },
   ];

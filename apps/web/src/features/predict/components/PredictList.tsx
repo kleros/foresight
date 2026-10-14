@@ -41,7 +41,13 @@ export function PredictList({
           {selected.map((estimate) => {
             const higher = estimate.direction === "higher";
             const Arrow = higher ? ArrowUp : ArrowDown;
-            const move = preview[estimate.scale.market.toLowerCase()];
+            const priced = preview[estimate.scale.market.toLowerCase()];
+            // a move that rounds to nothing would read "from 51.22 % to 51.22 %"
+            const move =
+              priced &&
+              formatEstimate(priced.from, estimate.scale.unit) !== formatEstimate(priced.to, estimate.scale.unit)
+                ? priced
+                : undefined;
             return (
               <li
                 key={estimate.scale.market}

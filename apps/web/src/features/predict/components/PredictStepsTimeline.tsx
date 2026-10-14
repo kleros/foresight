@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 import { CustomTimeline } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
@@ -32,6 +34,14 @@ const TIMELINE_STATE: Record<StepView, TimelineItem["state"]> = {
 };
 
 export function PredictStepsTimeline({ steps }: { steps: PredictSteps }) {
+  const timeline = useRef<HTMLDivElement>(null);
+  const running = steps.rows.find((row) => row.view === "running")?.key;
+  // the timeline sits below the amount, often past the fold of the popup's scroll area
+  useEffect(() => {
+    if (steps.failure === undefined && running === undefined) return;
+    timeline.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+  }, [steps.failure, running]);
+
   const items: TimelineItem[] = steps.rows.map((row) => ({
     title: row.title,
     party: row.view === "running" ? <Loader className="mb-1 size-4" /> : "",
@@ -54,7 +64,7 @@ export function PredictStepsTimeline({ steps }: { steps: PredictSteps }) {
   if (!first) return null;
 
   return (
-    <div className="mt-2 flex flex-col items-center md:mt-5" role="status" aria-live="polite">
+    <div ref={timeline} className="mt-2 flex flex-col items-center md:mt-5" role="status" aria-live="polite">
       <CustomTimeline
         items={[first, ...rest]}
         className={clsx(

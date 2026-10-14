@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { PredictProgress } from "../../run/types";
 import { predictSteps } from "../../utils/predictSteps";
@@ -43,5 +43,33 @@ describe("PredictStepsTimeline while adding funds", () => {
 
     expect(screen.getByText(/Confirming…/)).toBeInTheDocument();
     expect(screen.queryByText(/Waiting for your signature…/)).toBeNull();
+  });
+});
+
+describe("the timeline's place in the popup", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("scrolls itself into view when a run stops with a failure", () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    const view = render(
+      <PredictStepsTimeline
+        steps={{ rows: [{ key: "predict", title: "Make prediction", subtitle: "", view: "idle" }] }}
+      />,
+    );
+    expect(scroll).not.toHaveBeenCalled();
+
+    view.rerender(
+      <PredictStepsTimeline
+        steps={{
+          rows: [{ key: "predict", title: "Make prediction", subtitle: "", view: "inactive" }],
+          failure: "Something went wrong.",
+        }}
+      />,
+    );
+
+    expect(scroll).toHaveBeenCalledTimes(1);
   });
 });

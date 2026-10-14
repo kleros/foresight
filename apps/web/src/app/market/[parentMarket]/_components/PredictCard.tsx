@@ -11,6 +11,7 @@ import { useAccount } from "wagmi";
 import type { PredictSnapshot } from "@/features/predict/flow/types";
 import { discardRun, findInterruptedRun, hasPendingTransaction } from "@/features/predict/run/interrupted";
 import { useSessionEstimates } from "@/features/predict/stores/estimateStore";
+import type { SelectedEstimate } from "@/features/predict/types";
 import { selectedEstimates } from "@/features/predict/utils/estimates";
 import type { SessionDetail, SessionStatus } from "@/features/sessions/types";
 
@@ -47,7 +48,9 @@ interface PredictCardProps {
 }
 
 export function PredictCard({ session, status, marketEstimates, isMarketUnknown = false }: PredictCardProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  // what the popup lists, held from the press so a market refresh cannot empty it under the visitor
+  const [opened, setOpened] = useState<SelectedEstimate[]>();
+  const isOpen = opened !== undefined;
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [leftOut, setLeftOut] = useState<string[]>([]);
   const { address } = useAccount();
@@ -109,7 +112,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
           }
           text="Predict selected"
           isDisabled={isDisabled}
-          onPress={() => setIsOpen(true)}
+          onPress={() => setOpened(toPredict)}
         />
       </EnsureChain>
       {blocker ? <p className="text-fs-text-secondary w-full text-sm">{BLOCKER_TEXT[blocker]}</p> : null}
@@ -124,7 +127,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
           </p>
           <div className="flex gap-3">
             {isPending ? null : <Button small variant="secondary" text="Discard" onPress={discard} />}
-            <Button small text="Resume" onPress={() => setIsOpen(true)} />
+            <Button small text="Resume" onPress={() => setOpened(toPredict)} />
           </div>
         </div>
       ) : null}
@@ -133,11 +136,11 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
       {isOpen ? (
         <PredictRunner
           session={session}
-          selected={toPredict}
-          onClose={() => setIsOpen(false)}
+          selected={opened}
+          onClose={() => setOpened(undefined)}
           onSuccess={(skipped: Address[]) => {
             if (address) {
-              const traded = toPredict.filter((estimate) => !skipped.includes(estimate.scale.market));
+              const traded = opened.filter((estimate) => !skipped.includes(estimate.scale.market));
               setPlaced({
                 owner: address,
                 values: {
@@ -151,7 +154,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
             setLeftOut(
               session.options.filter((option) => skipped.includes(option.market)).map((option) => option.name),
             );
-            setIsOpen(false);
+            setOpened(undefined);
             setIsSuccessOpen(true);
           }}
         />

@@ -75,6 +75,12 @@ describe("the estimates going in", () => {
     expect(screen.getAllByText(/Market moves/)).toHaveLength(1);
   });
 
+  it("says nothing about a move too small to show", () => {
+    render(<PredictDialog {...props()} preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 312.0001 } }} />);
+
+    expect(screen.queryByText(/Market moves/)).toBeNull();
+  });
+
   it("lists each estimate with which way it moves the market", () => {
     render(<PredictDialog {...props()} />);
 

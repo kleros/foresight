@@ -156,3 +156,24 @@ describe("the amount field", () => {
     expect(screen.getByLabelText("Amount")).toBeInTheDocument();
   });
 });
+
+describe("the total line", () => {
+  it("leaves out a part too small to show rather than saying 0", () => {
+    const funding = planFunding({ amount: 4n * WAD + 1n, ownWallet: 10n * WAD, tradeWallet: 4n * WAD });
+    render(
+      <PredictAmountSection
+        amount={4n * WAD + 1n}
+        onAmountChange={vi.fn()}
+        tokens={[sDai]}
+        token={sDai}
+        onTokenChange={vi.fn()}
+        funding={funding}
+        collateral={{ symbol: "sDAI", decimals: 18 }}
+        isFirstPrediction={false}
+        isReadOnly={false}
+      />,
+    );
+
+    expect(screen.getByText(/from your trade wallet/)).toHaveTextContent("(4 from your trade wallet)");
+  });
+});
