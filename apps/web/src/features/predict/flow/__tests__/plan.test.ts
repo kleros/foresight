@@ -1,8 +1,9 @@
 import { decodeFunctionData, erc20Abi, type Address, type Hex } from "viem";
 import { describe, expect, it } from "vitest";
 
-import { gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
 import { lensQuoterOn, nodeAnswers } from "@/lib/swap/__tests__/support/lensNode";
+
+import { gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
 
 import { LEG_HEADROOM_BPS } from "../../utils/plan";
 import { createPredictHooks, PREDICT_BATCH_SIZE, planPredict, STEP_ID, type PredictDeps } from "../plan";
