@@ -1,7 +1,10 @@
+import { formatUnits } from "viem";
 import { describe, expect, it } from "vitest";
 
+import { AMOUNT_DISPLAY_DECIMALS } from "../../oracle/tolerances";
 import type { PredictProgress } from "../../run/types";
-import { predictSteps } from "../predictSteps";
+import { planFunding } from "../funding";
+import { fundsToAdd, predictSteps } from "../predictSteps";
 
 const WALLET = "0xdcee0000000000000000000000000000000c664f" as const;
 const WAD = 10n ** 18n;
@@ -49,7 +52,55 @@ describe("predictSteps before a run", () => {
   });
 
   it("never says it is adding 0 when the amount is below the shown decimals", () => {
-    expect(steps({ toAdd: 15n * 10n ** 10n }).rows[1]?.subtitle).toBe("Adding less than 0.000001 sDAI");
+    expect(steps({ toAdd: 15n * 10n ** 10n }).rows[1]?.subtitle).toBe(
+      `Adding less than ${formatUnits(1n, AMOUNT_DISPLAY_DECIMALS)} sDAI`,
+    );
+  });
+});
+
+describe("predictSteps naming what the funds step adds", () => {
+  const SDAI = { id: "collateral", symbol: "sDAI", decimals: 18 } as const;
+  const XDAI = { id: "native", symbol: "xDAI", decimals: 18 } as const;
+  // the deposit for 900 xDAI at this rate rounds to 1 wei short of 900; the sDAI is 717.546564785684787149
+  const XDAI_PER_SDAI = 1_254273999999999999n;
+
+  it("names an sDAI payment in sDAI alone", () => {
+    const funding = planFunding({ amount: 10n * WAD, ownWallet: 25n * WAD, tradeWallet: 0n });
+
+    expect(steps(fundsToAdd(funding, SDAI, SDAI)).rows[1]?.subtitle).toBe("Adding 10 sDAI");
+  });
+
+  it("names an xDAI payment in xDAI, with the sDAI it becomes", () => {
+    const funding = planFunding({
+      amount: 900n * WAD,
+      ownWallet: 1000n * WAD,
+      tradeWallet: 0n,
+      tokenPerCollateralWad: XDAI_PER_SDAI,
+    });
+
+    expect(steps(fundsToAdd(funding, XDAI, SDAI)).rows[1]?.subtitle).toBe("Adding 900 xDAI (~717.5466 sDAI)");
+  });
+
+  it("names only the xDAI the trade wallet does not already cover", () => {
+    const funding = planFunding({
+      amount: 900n * WAD,
+      ownWallet: 1000n * WAD,
+      tradeWallet: 100n * WAD,
+      tokenPerCollateralWad: 1_250000000000000000n,
+    });
+
+    expect(steps(fundsToAdd(funding, XDAI, SDAI)).rows[1]?.subtitle).toBe("Adding 775 xDAI (~620 sDAI)");
+  });
+
+  it("says nothing is added when the trade wallet covers an xDAI payment", () => {
+    const funding = planFunding({
+      amount: 900n * WAD,
+      ownWallet: 1000n * WAD,
+      tradeWallet: 720n * WAD,
+      tokenPerCollateralWad: 1_250000000000000000n,
+    });
+
+    expect(steps(fundsToAdd(funding, XDAI, SDAI)).rows[1]).toMatchObject({ subtitle: "", view: "inactive" });
   });
 });
 

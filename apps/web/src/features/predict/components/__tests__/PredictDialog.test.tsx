@@ -5,8 +5,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { OptionScale } from "@/types/optionScale";
 
 import type { SelectedEstimate } from "../../types";
-import type { Funding } from "../../utils/funding";
-import { predictSteps, type PredictSteps } from "../../utils/predictSteps";
+import { planFunding, type Funding } from "../../utils/funding";
+import { fundsToAdd, predictSteps, type PredictSteps } from "../../utils/predictSteps";
 import { PredictDialog } from "../PredictDialog";
 
 const scale = (market: string, name: string): OptionScale => ({
@@ -282,6 +282,44 @@ describe("predicting", () => {
     render(<PredictDialog {...props()} skipped={1} />);
 
     expect(screen.getByText(/1 of your estimates could not be traded/)).toBeInTheDocument();
+  });
+});
+
+describe("what the funds step says is added", () => {
+  const xDai = { id: "native" as const, symbol: "xDAI", decimals: 18 };
+  const wallet = { address: "0xdcee0000000000000000000000000000000c664f", deployed: true } as const;
+
+  it("names an xDAI payment in xDAI, with the sDAI it becomes", () => {
+    // 900 xDAI at 1.254273999999999999 xDAI per sDAI is 717.546564785684787149 sDAI
+    const paid = planFunding({
+      amount: 900n * WAD,
+      ownWallet: 1000n * WAD,
+      tradeWallet: 0n,
+      tokenPerCollateralWad: 1_254273999999999999n,
+    });
+    const shown = predictSteps({ wallet, ...fundsToAdd(paid, xDai, sDai), progress: null });
+
+    render(
+      <PredictDialog
+        {...props()}
+        tokens={[sDai, xDai]}
+        token={xDai}
+        amount={900n * WAD}
+        funding={paid}
+        steps={shown}
+      />,
+    );
+
+    expect(screen.getByText("Adding 900 xDAI (~717.5466 sDAI)")).toBeInTheDocument();
+  });
+
+  it("names an sDAI payment in sDAI alone", () => {
+    const paid = planFunding({ amount: 10n * WAD, ownWallet: 25n * WAD, tradeWallet: 0n });
+    const shown = predictSteps({ wallet, ...fundsToAdd(paid, sDai, sDai), progress: null });
+
+    render(<PredictDialog {...props()} funding={paid} steps={shown} />);
+
+    expect(screen.getByText("Adding 10 sDAI")).toBeInTheDocument();
   });
 });
 
