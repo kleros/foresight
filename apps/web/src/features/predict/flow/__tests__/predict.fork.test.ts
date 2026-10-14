@@ -354,7 +354,9 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
   type Side = "up" | "down";
 
   const send = async (from: PrivateKeyAccount, to: Address, data: Hex = "0x", value = 0n) => {
-    const hash = await wallet.sendTransaction({ account: from, chain: gnosis, to, data, value });
+    // an Algebra mint's estimate can fall short of what the next block charges it, as a wallet's margin covers
+    const gas = ((await client.estimateGas({ account: from, to, data, value })) * 3n) / 2n;
+    const hash = await wallet.sendTransaction({ account: from, chain: gnosis, to, data, value, gas });
     const receipt = await client.waitForTransactionReceipt({ hash });
     if (receipt.status !== "success") throw new Error(`${to} reverted`);
     return receipt;
@@ -413,10 +415,15 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
     targetPriceWad,
   });
 
+  // the indexer reads a rewind as a reorg and re-indexes what it rolled back, so a pool can be briefly absent
   const poolRef = async (child: ForkSession["children"][number], side: Side) => {
-    const ref = app.optionPoolRefs(await app.fetchSessionPools(session.id), child.id)[side];
-    if (!ref) throw new Error(`${child.id} has no ${side} pool.`);
-    return ref;
+    const deadline = Date.now() + 60_000;
+    for (;;) {
+      const ref = app.optionPoolRefs(await app.fetchSessionPools(session.id), child.id)[side];
+      if (ref) return ref;
+      if (Date.now() > deadline) throw new Error(`${child.id} has no ${side} pool.`);
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+    }
   };
 
   const poolPrice = async (child: ForkSession["children"][number], side: Side) => {
