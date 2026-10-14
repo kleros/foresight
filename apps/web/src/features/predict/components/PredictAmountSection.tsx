@@ -93,9 +93,10 @@ export function PredictAmountSection({
           <div className="border-fs-border rounded-fs flex h-fit flex-row border">
             <BigNumberField
               isRequired
-              aria-label="Amount"
+              // the field names its input only through its own label; "You pay" above is what shows
+              label="Amount"
               className={clsx(
-                "inline-block flex-1 max-md:w-fit",
+                "inline-block flex-1 max-md:w-fit [&>label]:sr-only",
                 "[&_input]:rounded-r-none [&_input]:border-none [&_input]:focus:shadow-none",
               )}
               minValue="0"

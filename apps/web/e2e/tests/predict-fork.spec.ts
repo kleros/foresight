@@ -84,4 +84,32 @@ test.describe("a session seeded on the gnosis fork", () => {
       await expect(predict).toBeEnabled();
     });
   }
+
+  test("a visitor places a prediction on a seeded session and sees it placed", async ({ page, wallet, indexer }) => {
+    test.setTimeout(300_000);
+    await indexer.caughtUp();
+    await page.goto(`/market/${parents[0]}`);
+    await wallet.connect("alice");
+
+    await page
+      .getByRole("button")
+      .filter({ has: page.getByRole("heading", { level: 3 }) })
+      .first()
+      .click();
+    const slider = page.getByRole("slider").first();
+    await expect(slider).toBeEnabled({ timeout: 30_000 });
+    await slider.focus();
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+
+    await page.getByRole("button", { name: "Predict selected" }).click();
+    const popup = page.getByRole("dialog");
+    const amount = popup.getByRole("spinbutton", { name: "Amount" });
+    await amount.fill("5");
+    await amount.blur();
+    await popup.getByRole("button", { name: "Predict", exact: true }).click();
+
+    // the dev wallet signs each step; the run ends in the success dialog, not a failure
+    await expect(page.getByRole("dialog", { name: "Prediction placed" })).toBeVisible({ timeout: 240_000 });
+  });
 });

@@ -148,3 +148,11 @@ describe("Max and 50% on a wallet of 1.234567 of a 6-decimal token", () => {
     expect(lastAmount(onAmountChange)).toBe(617_200n);
   });
 });
+
+describe("the amount field", () => {
+  it("is named Amount for assistive tech", () => {
+    renderSection(sDai, 10n ** 18n);
+
+    expect(screen.getByLabelText("Amount")).toBeInTheDocument();
+  });
+});
