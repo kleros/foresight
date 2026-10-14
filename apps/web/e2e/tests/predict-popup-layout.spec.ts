@@ -99,6 +99,8 @@ async function openPopup(page: Page, options: number, state: (typeof STATES)[num
   await page.goto(`${harness.url}?options=${options}&state=${state}${reason ? `&reason=${reason}` : ""}`);
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("button", { name: "Cancel" })).toBeVisible();
+  const accent = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--fs-accent"));
+  expect(accent.trim(), "the harness loads Foresight's token layer").not.toBe("");
   await expect(
     dialog.getByRole("listitem").filter({ has: page.getByRole("img", { name: /the market$/ }) }),
   ).toHaveCount(options);
@@ -245,5 +247,18 @@ test.describe("every failure at the narrowest popup", () => {
         )
         .toBe(true);
     }
+  });
+});
+
+test.describe("the popup's tones", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("draws a finished step in the success tone and a failure in the error text tone", async ({ page }) => {
+    const dialog = await openPopup(page, 2, "failed");
+    const color = (locator: Locator) => locator.evaluate((element) => getComputedStyle(element).color);
+
+    // --fs-tone-success and --fs-tone-error-text in the light theme
+    expect(await color(dialog.locator('[data-bullet="done"]').first())).toBe("rgb(0, 196, 43)");
+    expect(await color(dialog.getByRole("status"))).toBe("rgb(196, 0, 42)");
   });
 });

@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @import "../../../../node_modules/@kleros/ui-components-library/dist/assets/theme.css";
-@source "../../../../node_modules/@kleros/ui-components-library";
 
 /* Foresight's extension layer over the Kleros foundation. */
 @import "./tokens/typography.css";
@@ -8,6 +7,7 @@
 @import "./tokens/foresight-motion.css";
 @import "./tokens/foresight-gradients.css";
 @import "./tokens/foresight-components.css";
+@source "../../../../node_modules/@kleros/ui-components-library";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
