@@ -28,7 +28,8 @@ export function scaleAmount(value: number, decimals: number): bigint {
   return BigInt(whole) * unit + BigInt(Math.round((value - whole) * Number(unit)));
 }
 
-const DISPLAY_DECIMALS = 6;
+/** Decimals `formatAmount` shows; anything finer is cut. */
+export const DISPLAY_DECIMALS = 6;
 
 export function formatAmount(value: bigint, decimals: number): string {
   const [whole = "0", fraction = ""] = formatUnits(value, decimals).split(".");

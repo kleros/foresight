@@ -49,6 +49,8 @@ export interface PredictProgress {
   failure?: { reason: PredictFailureReason; retryable: boolean };
   /** A stopped run's broadcast transaction whose receipt has not been seen: it may still mine. */
   pendingHash?: Hash;
+  /** This run sent a deposit or a prediction, so retrying it signs its snapshot, not the form. */
+  moneyMoved?: true;
   /** The snapshot of a run restored from storage. It, not the popup's form, is what the run signs. */
   recovered?: PredictSnapshot;
 }

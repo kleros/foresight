@@ -3,6 +3,7 @@ import type { Hash, TransactionReceipt } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { chainState, ctx, fakeQuoter, fakeReader, snapshot } from "../../flow/__tests__/support/fakes";
+import type { PredictReader } from "../../flow/types";
 import { predictSteps } from "../../utils/predictSteps";
 import { createPredictRun } from "../driver";
 import type { PredictDriver, PredictProgress } from "../types";
@@ -13,15 +14,15 @@ const nodeRefusal = (details: string) =>
     cause: Object.assign(new Error("Internal JSON-RPC error."), { code: -32603, details }),
   });
 
-/** A wallet whose first send fails with `error`, and whose chain mines everything else. */
-function failingGateway(error: Error): TxGateway {
+/** A wallet whose send number `failAt` fails with `error`, and whose chain mines everything else. */
+function failingGateway(error: Error, failAt = 1): TxGateway {
   let sends = 0;
   const receipt = (hash: Hash) =>
     ({ transactionHash: hash, status: "success", blockNumber: 19_000_000n }) as TransactionReceipt;
   return {
     sendTransaction: (_tx: FlowTx) => {
       sends += 1;
-      if (sends === 1) return Promise.reject(error);
+      if (sends === failAt) return Promise.reject(error);
       return Promise.resolve(`0x${sends.toString(16).padStart(64, "0")}` as Hash);
     },
     waitForReceipt: ({ hash }) => Promise.resolve(receipt(hash)),
@@ -35,10 +36,10 @@ afterEach(() => {
   for (const driver of drivers.splice(0)) driver.dispose();
 });
 
-async function haltOn(error: Error): Promise<PredictProgress> {
+async function haltOn(error: Error, opts: { failAt?: number; reader?: PredictReader } = {}): Promise<PredictProgress> {
   const driver = createPredictRun({
-    gateway: failingGateway(error),
-    reader: fakeReader({ deployed: true, state: () => chainState() }),
+    gateway: failingGateway(error, opts.failAt),
+    reader: opts.reader ?? fakeReader({ deployed: true, state: () => chainState() }),
     quoter: fakeQuoter(),
     flowId: `predict-send-failure-${drivers.length}`,
     ctx: () => ctx(),
@@ -71,7 +72,18 @@ describe("createPredictRun when the node refuses a send", () => {
     );
 
     expect(progress.failure).toEqual({ reason: "funds", retryable: true });
+    expect(progress.moneyMoved).toBeUndefined();
     expect(message(progress)).not.toBe(NETWORK);
+  });
+
+  it("asks for the network fee, not a lower amount, once the deposit has gone through", async () => {
+    const before = await haltOn(nodeRefusal("insufficient funds for gas * price + value"));
+    const after = await haltOn(nodeRefusal("insufficient funds for gas * price + value"), { failAt: 2 });
+
+    expect(after.failure).toEqual({ reason: "funds", retryable: true });
+    expect(after.moneyMoved).toBe(true);
+    expect(message(after)).not.toBe(message(before));
+    expect(message(after)).not.toMatch(/lower the amount/i);
   });
 
   it("reads a client's insufficient-funds wording the same way", async () => {
@@ -95,5 +107,39 @@ describe("createPredictRun when the node refuses a send", () => {
     const progress = await haltOn(nodeRefusal("Internal error"));
 
     expect(progress.failure).toEqual({ reason: "rpc", retryable: true });
+  });
+});
+
+describe("createPredictRun after the deposit is sent", () => {
+  it("says money moved when a read after the deposit fails", async () => {
+    const reader = fakeReader({ deployed: true, state: () => chainState() });
+    const gateway = failingGateway(new Error("never sent"), 99);
+    let sent = false;
+    const send = gateway.sendTransaction;
+    gateway.sendTransaction = (tx) => {
+      sent = true;
+      return send(tx);
+    };
+    // reads before the deposit see an empty trade wallet; the one after it fails
+    reader.collateralBalance = () =>
+      sent ? Promise.reject(new Error("fetch failed", { cause: new Error("socket") })) : Promise.resolve(0n);
+
+    const driver = createPredictRun({
+      gateway,
+      reader,
+      quoter: fakeQuoter(),
+      flowId: "predict-read-after-deposit",
+      ctx: () => ctx(),
+      // an xDAI deposit reads what it minted once it lands
+      snapshot: () => snapshot({ depositNative: true }),
+    });
+    drivers.push(driver);
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("halted"));
+
+    const progress = driver.getProgress();
+    expect(sent).toBe(true);
+    expect(progress.failure?.retryable).toBe(true);
+    expect(progress.moneyMoved).toBe(true);
   });
 });

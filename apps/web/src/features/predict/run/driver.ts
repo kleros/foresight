@@ -84,6 +84,8 @@ export function createPredictRun(args: {
   let recovered = false;
   /** A restored run, reconciled, waiting for the visitor to resume it. */
   let reviewing = false;
+  /** Set once this run sends a transaction that moves money; a failed step put back to pending does not clear it. */
+  let moneyMoved = false;
   let cached: PredictProgress;
 
   const deps: PredictDeps = {
@@ -188,6 +190,7 @@ export function createPredictRun(args: {
       batches: batchRows.length,
       failure,
       ...(pendingHash ? { pendingHash } : {}),
+      ...(moneyMoved ? { moneyMoved: true as const } : {}),
       ...(recovered && run ? { recovered: run.snapshot } : {}),
     };
   }
@@ -195,6 +198,9 @@ export function createPredictRun(args: {
   cached = buildProgress();
 
   orchestrator.subscribe(notify);
+  orchestrator.on("step:submitted", (event) => {
+    if (event.stepId !== STEP_ID.createExecutor) moneyMoved = true;
+  });
   orchestrator.on("flow:paused", () => {
     const run = orchestrator.getRun();
     const reason = buildFailure ?? errorOf(run)?.cause;
@@ -295,6 +301,7 @@ export function createPredictRun(args: {
   const startRun = detached(async () => {
     report(undefined);
     skipped.length = 0;
+    moneyMoved = false;
 
     const requested = args.snapshot();
     const ctx = args.ctx();
@@ -352,6 +359,7 @@ export function createPredictRun(args: {
       if (!stored || !foreign(stored.ctx, args.ctx())) orchestrator.trash(args.flowId);
       recovered = false;
       reviewing = false;
+      moneyMoved = false;
       buildFailure = undefined;
       skipped.length = 0;
       planned = [];

@@ -158,7 +158,7 @@ describe("the amount field", () => {
 });
 
 describe("the total line", () => {
-  it("leaves out a part too small to show rather than saying 0", () => {
+  it("names a part too small to show rather than saying 0", () => {
     const funding = planFunding({ amount: 4n * WAD + 1n, ownWallet: 10n * WAD, tradeWallet: 4n * WAD });
     render(
       <PredictAmountSection
@@ -174,6 +174,6 @@ describe("the total line", () => {
       />,
     );
 
-    expect(screen.getByText(/from your trade wallet/)).toHaveTextContent("(4 from your trade wallet)");
+    expect(screen.getByText(/from your trade wallet/)).toHaveTextContent("(4 from your trade wallet + less than 0.000001 from your wallet)");
   });
 });

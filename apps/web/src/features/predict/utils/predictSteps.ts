@@ -41,6 +41,9 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
   "wrong-chain": "This prediction was started on another network. Switch to that network to finish it.",
 };
 
+/** Once the deposit is in the amount is fixed, so the only thing short is the fee in the wallet. */
+const FEE_SHORT_COPY = "Your wallet does not have enough xDAI for the network fee. Add some, then try the rest.";
+
 /** A transaction is out there and nothing has said how it ended, so it is neither a success nor a failure. */
 const PENDING_COPY =
   "Your transaction was sent but has not confirmed yet. It may still go through. Press Predict to check again.";
@@ -167,8 +170,10 @@ export function predictSteps(
     progress.batchesDone > 0 ? `${progress.batchesDone} of ${progress.batches} predictions went through. ` : "";
   const reason = progress.pendingHash
     ? PENDING_COPY
-    : progress.failure
-      ? FAILURE_COPY[progress.failure.reason]
-      : FAILURE_COPY.unknown;
+    : progress.failure?.reason === "funds" && progress.moneyMoved
+      ? FEE_SHORT_COPY
+      : progress.failure
+        ? FAILURE_COPY[progress.failure.reason]
+        : FAILURE_COPY.unknown;
   return { rows, failure: `${partial}${reason}` };
 }

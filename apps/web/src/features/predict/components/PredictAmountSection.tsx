@@ -7,7 +7,7 @@ import { Select } from "@/components/ui/Select";
 
 import DaiIcon from "@/assets/svg/dai.svg";
 
-import { formatAmount } from "@/utils/amount";
+import { DISPLAY_DECIMALS, formatAmount } from "@/utils/amount";
 
 import type { PayToken } from "../types";
 import { percentOf, roundToDisplay, shareOf, type Funding } from "../utils/funding";
@@ -157,10 +157,8 @@ export function PredictAmountSection({
                 [funding.fromTradeWallet, "from your trade wallet"] as const,
                 [funding.toAdd, "from your wallet"] as const,
               ]
-                .map(([part, source]) => [formatAmount(part, collateral.decimals), source] as const)
-                // a part too small to show reads as "0", which says nothing
-                .filter(([shown]) => shown !== "0")
-                .map(([shown, source]) => `${shown} ${source}`)
+                .filter(([part]) => part > 0n)
+                .map(([part, source]) => `${shownPart(part, collateral.decimals)} ${source}`)
                 .join(" + ")}
               )
             </span>
@@ -169,6 +167,13 @@ export function PredictAmountSection({
       </div>
     </div>
   );
+}
+
+/** A part too small for the shown decimals still costs a transaction, so it is named rather than shown as 0. */
+function shownPart(value: bigint, decimals: number): string {
+  const shown = formatAmount(value, decimals);
+  if (shown !== "0") return shown;
+  return `less than ${formatAmount(10n ** BigInt(Math.max(decimals - DISPLAY_DECIMALS, 0)), decimals)}`;
 }
 
 function toUnits(entered: string, decimals: number): bigint | undefined {

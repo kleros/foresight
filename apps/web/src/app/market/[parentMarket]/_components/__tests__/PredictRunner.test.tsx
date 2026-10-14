@@ -374,11 +374,18 @@ describe("PredictRunner, the dialog's controls", () => {
     expect(driver.retry).not.toHaveBeenCalled();
   });
 
-  it("picks a retryable stopped run back up once its deposit is on chain, with the form locked", () => {
-    progress = progressAt("halted", true, [
-      { id: "deposit", label: "Deposit", state: "success" },
-      { id: "predict-0", label: "Predict", state: "error" },
-    ]);
+  it("picks a retryable stopped run back up once it has moved money, with the form locked", () => {
+    progress = { ...progressAt("halted", true), moneyMoved: true };
+    mount();
+    expect(screen.getByTestId("can-retry")).toHaveTextContent("true");
+    fireEvent.click(screen.getByText("predict"));
+
+    expect(driver.retry).toHaveBeenCalledTimes(1);
+    expect(driver.start).not.toHaveBeenCalled();
+  });
+
+  it("locks the form to a run whose transaction may still mine, and checks it rather than starting over", () => {
+    progress = { ...progressAt("halted", true), pendingHash: `0x${"ab".repeat(32)}` };
     mount();
     expect(screen.getByTestId("can-retry")).toHaveTextContent("true");
     fireEvent.click(screen.getByText("predict"));
