@@ -82,9 +82,14 @@ LENS_QUOTER="0x82150d38288e53AfcF20a5eEee47682c5Ef796d8"
 
 grant_lens_quoter() {
   local upstream="${GNOSIS_RPC_URL:-https://rpc.gnosischain.com}" code
-  code="$(curl -sf -X POST "$upstream" -H 'Content-Type: application/json' \
-    -d "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getCode\",\"params\":[\"$LENS_QUOTER\",\"latest\"],\"id\":1}" |
-    jq -r '.result')"
+  # fetched with node, the client the fork itself reaches upstream with
+  code="$(UPSTREAM="$upstream" ADDRESS="$LENS_QUOTER" node -e '
+    fetch(process.env.UPSTREAM, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getCode", params: [process.env.ADDRESS, "latest"] }),
+    }).then((r) => r.json()).then((j) => console.log(j.result ?? ""))')" ||
+    die "could not reach $upstream for the LensQuoter code"
   [[ -n "$code" && "$code" != "0x" && "$code" != "null" ]] || die "LensQuoter $LENS_QUOTER has no code on $upstream"
   rpc_result hardhat_setCode "\"$LENS_QUOTER\",\"$code\"" | grep -q '"result"' ||
     die "could not set the LensQuoter code on the fork"
