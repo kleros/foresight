@@ -11,7 +11,7 @@ import "@/styles/global.css";
 const WAD = 10n ** 18n;
 const WALLET = "0xdcee0000000000000000000000000000000c664f";
 
-const CITIES = ["Berlin", "Lisbon", "Nairobi", "Montevideo", "Hanoi"];
+const CITIES = ["Berlin", "Lisbon metropolitan area", "Nairobi", "Montevideo", "Hanoi"];
 
 const params = new URLSearchParams(window.location.search);
 /** `?options=N` estimates, alternating higher and lower, each with a market move. */

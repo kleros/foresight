@@ -1,13 +1,11 @@
-import { formatUnits, type Address } from "viem";
+import type { Address } from "viem";
 
 import { shortenAddress } from "@/utils/address";
-import { formatAmount } from "@/utils/amount";
 
 import { STEP_ID } from "../flow/stepIds";
-import { AMOUNT_DISPLAY_DECIMALS } from "../oracle/tolerances";
 import type { PredictProgress } from "../run/types";
 import type { PayToken } from "../types";
-import type { Funding } from "./funding";
+import { shownAmount, type Funding } from "./funding";
 
 export type StepView = "idle" | "running" | "done" | "inactive" | "failed";
 
@@ -84,15 +82,6 @@ export function fundsToAdd(
     decimals: pay.decimals,
     collateral: { amount: toAdd, ...collateral },
   };
-}
-
-const LEAST_SHOWN = formatUnits(1n, AMOUNT_DISPLAY_DECIMALS);
-
-/** Rounded to the nearest shown decimal, so a deposit a wei short of a typed amount reads as typed. */
-function shownAmount(value: bigint, decimals: number): string {
-  const step = 10n ** BigInt(Math.max(decimals - AMOUNT_DISPLAY_DECIMALS, 0));
-  const shown = formatAmount(((value + step / 2n) / step) * step, decimals);
-  return shown === "0" && value > 0n ? `less than ${LEAST_SHOWN}` : shown;
 }
 
 /**
@@ -201,7 +190,8 @@ export interface StatusLine {
 
 /**
  * The popup's one status line under the steps, most pressing first: what the visitor has to do,
- * why a run stopped, what it left out, that it finished, or that a stored run is waiting.
+ * why a run stopped, what it left out, that it finished, that a stored run is waiting, or, before
+ * a run, that nothing is signed until the prices are checked. Null while a step is running.
  */
 export function statusLine(args: {
   steps: PredictSteps;
@@ -222,5 +212,6 @@ export function statusLine(args: {
     return { text: "Prediction placed.", tone: "success" };
   }
   if (isRecovered) return { text: "This prediction did not finish.", tone: "neutral" };
-  return null;
+  if (steps.rows.some((row) => row.view === "running")) return null;
+  return { text: "Prices are checked before anything is signed.", tone: "neutral" };
 }

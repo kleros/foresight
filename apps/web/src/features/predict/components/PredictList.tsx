@@ -77,16 +77,21 @@ function EstimateRow({
   const format = (value: number) => formatEstimate(value, scale.unit);
   // a move that rounds to nothing would read "51.22 % → 51.22 %"
   const moved = move && format(move.from) !== format(move.to) ? move : undefined;
-  const where = moved
-    ? `${formatEstimate(moved.from, null)} → ${format(moved.to)}`
-    : estimate.marketEstimate !== undefined
-      ? `from ${format(estimate.marketEstimate)}`
-      : undefined;
+  const where = moved ? (
+    <>
+      {/* a phone keeps the destination, the one figure the preview adds */}
+      <span className="max-sm:hidden">{formatEstimate(moved.from, null)} </span>→ {format(moved.to)}
+    </>
+  ) : estimate.marketEstimate !== undefined ? (
+    `from ${format(estimate.marketEstimate)}`
+  ) : undefined;
 
   return (
     <li className="bg-fs-surface-tint rounded-fs type-label flex h-9 w-full items-center gap-2.5 pr-1 pl-3">
       <span className="size-2 flex-none rounded-full" style={{ backgroundColor: scale.color }} aria-hidden />
-      <span className="text-fs-text-primary max-w-[45%] shrink-0 truncate font-semibold">{scale.name}</span>
+      <span className="text-fs-text-primary min-w-0 truncate font-semibold" title={scale.name}>
+        {scale.name}
+      </span>
       <span className="text-fs-text-primary shrink-0 font-semibold tabular-nums">{format(estimate.value)}</span>
       {estimate.direction ? (
         <Arrow
@@ -98,8 +103,7 @@ function EstimateRow({
           )}
         />
       ) : null}
-      {/* gives way before the name does */}
-      {where ? <span className="text-fs-text-secondary min-w-0 shrink-[4] truncate tabular-nums">{where}</span> : null}
+      {where ? <span data-testid="estimate-move" className="text-fs-text-secondary shrink-0 whitespace-nowrap tabular-nums">{where}</span> : null}
       {onRemove ? (
         <LightButton
           className="hover:bg-fs-surface relative ml-auto size-7 shrink-0 justify-center p-0 before:absolute before:-inset-x-2 before:-inset-y-1 before:content-['']"

@@ -106,7 +106,7 @@ export function PredictDialog({
       <div className="flex min-h-0 w-full flex-col">
         <PredictList selected={selected} onRemove={onRemove} isReadOnly={isLocked} preview={preview} />
         <ScrollFade className="min-h-32 w-full">
-          <div data-testid="predict-body">
+          <div data-testid="predict-body" className="pt-3">
             <PredictAmountSection
               amount={recovered ? recovered.deposit : amount}
               onAmountChange={onAmountChange}
@@ -121,19 +121,20 @@ export function PredictDialog({
               note={recovered ? "Resuming adds this deposit to the estimates above." : undefined}
             />
             <PredictStepsTimeline steps={steps} />
-            {/* four lines on a phone, three from md, held empty or not so the footer never moves */}
-            <p
-              role="status"
-              aria-live="polite"
-              className={clsx(
-                "type-label mt-2 flex h-20 items-center justify-center px-2 text-center text-pretty md:h-15",
-                status && STATUS_TONE[status.tone],
-              )}
-            >
-              {status?.text}
-            </p>
           </div>
         </ScrollFade>
+
+        {/* outside the scroll area, so the reason a run stopped is never under the fold; three lines, held empty or not */}
+        <p
+          role="status"
+          aria-live="polite"
+          className={clsx(
+            "type-label flex h-15 shrink-0 items-center justify-center px-2 text-center text-pretty",
+            status && STATUS_TONE[status.tone],
+          )}
+        >
+          {status?.text}
+        </p>
 
         <div className="bg-fs-surface sticky bottom-0 flex justify-center gap-3.5 py-4 md:pb-8">
           <Button text="Cancel" variant="secondary" onPress={onClose} isDisabled={isRunning} />

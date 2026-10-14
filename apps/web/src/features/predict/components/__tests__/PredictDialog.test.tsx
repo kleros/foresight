@@ -71,7 +71,9 @@ describe("the estimates going in", () => {
   it("says where each market would move", () => {
     render(<PredictDialog {...props()} preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 355 } }} />);
 
-    expect(screen.getByText("312 → 355 $M")).toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) => element?.tagName === "SPAN" && element.textContent === "312 → 355 $M"),
+    ).toBeInTheDocument();
     expect(screen.getAllByText(/→/)).toHaveLength(1);
   });
 
@@ -141,6 +143,19 @@ describe("the amount behind them", () => {
     expect(screen.getByText("Not enough balance. You can add up to 25 sDAI.")).toBeInTheDocument();
     expect(screen.queryByText(/26 sDAI/)).toBeNull();
     expect(screen.getByRole("button", { name: "Predict" })).toBeDisabled();
+  });
+
+  it("does not ask for more money while a stopped run waits on the amount it started with", () => {
+    render(<PredictDialog {...props()} amount={26n * WAD} canRetry />);
+
+    expect(screen.queryByText(/Not enough balance/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Try the rest" })).toBeEnabled();
+  });
+
+  it("says a returning visitor's prediction adds nothing when no amount is typed", () => {
+    render(<PredictDialog {...props()} amount={undefined} isFirstPrediction={false} />);
+
+    expect(screen.getByText("Trades from your trade wallet, nothing added")).toBeInTheDocument();
   });
 
   it("does not call a balance it has not read yet zero", () => {

@@ -112,11 +112,13 @@ async function footprint(page: Page, dialog: Locator) {
   const box = (await dialog.boundingBox())!;
   const cancel = (await dialog.getByRole("button", { name: "Cancel" }).boundingBox())!;
   const body = await page.getByTestId("predict-body").evaluate((element) => element.getBoundingClientRect().height);
+  const bullet = (await dialog.locator("[data-bullet]").first().boundingBox())!;
   const round = (value: number) => Math.round(value * 10) / 10;
   return {
     dialog: [box.x, box.y, box.width, box.height].map(round),
     footer: [cancel.x, cancel.y].map(round),
     body: round(body),
+    steps: round(bullet.x),
   };
 }
 
@@ -164,6 +166,17 @@ for (const height of [812, 667]) {
           const row = rows.nth(index);
           await row.evaluate((element) => element.scrollIntoView({ block: "nearest" }));
           expect.soft(await isFullyShown(row), `estimate ${index + 1} is shown once scrolled to`).toBe(true);
+          const move = row.getByTestId("estimate-move");
+          expect
+            .soft(
+              await move.evaluate((element) => {
+                const row = element.closest("li")!.getBoundingClientRect();
+                const box = element.getBoundingClientRect();
+                return element.scrollWidth <= element.clientWidth && box.left >= row.left && box.right <= row.right;
+              }),
+              `estimate ${index + 1}'s market move is shown whole`,
+            )
+            .toBe(true);
         }
 
         expect.soft(pageErrors, "page errors").toEqual([]);
@@ -207,14 +220,22 @@ for (const viewport of VIEWPORTS) {
         expect.soft(box.x + box.width, `${state}: right edge in the window`).toBeLessThanOrEqual(viewport.width);
         expect.soft(box.y + box.height, `${state}: bottom edge in the window`).toBeLessThanOrEqual(viewport.height);
 
-        for (const control of [
-          dialog.getByRole("button", { name: "Max" }),
-          dialog.getByRole("button", { name: /sDAI/ }),
-        ]) {
+        // a run's form is locked, and the popup scrolls to its running or failed step instead
+        const isEditable = state === "idle" || state === "over" || state === "disconnected";
+        for (const control of isEditable
+          ? [dialog.getByRole("button", { name: "Max" }), dialog.getByRole("button", { name: /sDAI/ })]
+          : []) {
           expect.soft(await isFullyShown(control), `${state}: ${await control.textContent()} is reachable`).toBe(true);
+        }
+        if (isEditable) {
+          const max = (await dialog.getByRole("button", { name: "Max" }).boundingBox())!;
+          expect.soft(Math.min(max.width, max.height), `${state}: Max is a 44px target`).toBeGreaterThanOrEqual(44);
         }
 
         const status = dialog.getByRole("status");
+        if ((await status.textContent())?.trim()) {
+          expect.soft(await isFullyShown(status), `${state}: the status line is in view`).toBe(true);
+        }
         expect
           .soft(
             await status.evaluate((element) => element.scrollHeight <= element.clientHeight + 1),
@@ -260,5 +281,19 @@ test.describe("the popup's tones", () => {
     // --fs-tone-success and --fs-tone-error-text in the light theme
     expect(await color(dialog.locator('[data-bullet="done"]').first())).toBe("rgb(0, 196, 43)");
     expect(await color(dialog.getByRole("status"))).toBe("rgb(196, 0, 42)");
+  });
+});
+
+test.describe("the popup under reduced motion", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("keeps the running step still", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const dialog = await openPopup(page, 2, "signing");
+    const animations = await dialog
+      .locator("li")
+      .evaluateAll((items) => items.map((item) => getComputedStyle(item).animationName));
+
+    expect(animations.every((name) => name === "none")).toBe(true);
   });
 });

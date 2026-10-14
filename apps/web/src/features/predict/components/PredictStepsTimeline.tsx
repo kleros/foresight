@@ -59,10 +59,12 @@ export function PredictStepsTimeline({ steps }: { steps: PredictSteps }) {
   if (!first) return null;
 
   return (
-    <div ref={timeline} className="mt-4 flex flex-col items-center">
+    // a fixed column, so a longer subtitle in one state does not re-centre the rows
+    <div ref={timeline} className="mx-auto mt-4 w-full max-w-75">
       <CustomTimeline
         items={[first, ...rest]}
         className={clsx(
+          "w-full motion-reduce:[&_li]:animate-none [&_small]:truncate",
           // every row keeps its subtitle line, empty or not, so a state change never moves the rows
           "[&_li>div:nth-child(1)]:min-h-11 [&_small]:min-h-4 [&_small]:text-fs-text-secondary",
           "[&_li>div:nth-child(2)]:ml-2 [&_li>div:nth-child(2)]:pt-0.5",

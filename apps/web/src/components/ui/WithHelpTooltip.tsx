@@ -20,7 +20,10 @@ const WithHelpTooltip: React.FC<IWithHelpTooltip> = ({ tooltipMsg, children, pla
       {...{ place, tooltipProps }}
       className="max-w-94 [&>small]:text-sm [&>small]:whitespace-pre-line"
     >
-      <HelpIcon className="ml-2 size-3 md:size-3.5" />
+      {/* a 24px box whose ::before reaches the 44px target */}
+      <span className="relative ml-1 inline-flex size-6 items-center justify-center before:absolute before:-inset-2.5 before:content-['']">
+        <HelpIcon className="size-3 md:size-3.5" />
+      </span>
     </Tooltip>
   </div>
 );

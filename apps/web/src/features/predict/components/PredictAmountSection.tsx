@@ -50,14 +50,22 @@ export function PredictAmountSection({
   note,
 }: PredictAmountSectionProps) {
   const available = funding?.available;
-  const notEnough = amount !== undefined && available !== undefined && amount > available;
+  const over = amount !== undefined && available !== undefined && amount > available;
+  // a locked amount is the one a run started with; a balance read since cannot make it too much
+  const notEnough = over && !isReadOnly;
   const roundDown = (value: bigint) => roundToDisplay(value, token.decimals);
   const max = available === undefined ? undefined : roundDown(available);
-  const summary = note ? { text: note, tone: "neutral" } : fundingSummary({ funding, amount, token, collateral });
+  const summary = note
+    ? { text: note, tone: "neutral" }
+    : over && isReadOnly
+      ? null
+      : !isFirstPrediction && !isReadOnly && funding && !amount
+        ? { text: "Trades from your trade wallet, nothing added", tone: "neutral" }
+        : fundingSummary({ funding, amount, token, collateral });
 
   return (
     <div className="flex w-full flex-col">
-      <div className="mb-1.5 flex items-center justify-between gap-2">
+      <div className="mb-3 flex items-center justify-between gap-2">
         <span className="type-label text-fs-text-secondary min-w-0 truncate">
           {isFirstPrediction ? (
             "You pay"
@@ -83,7 +91,8 @@ export function PredictAmountSection({
             isDisabled={isReadOnly || !available}
             onPress={() => max !== undefined && onAmountChange(max)}
             className={clsx(
-              "relative p-0 before:absolute before:-inset-3 before:content-[''] hover:bg-transparent!",
+              // a 44px target that takes no more height than its label
+              "-my-3 min-h-11 min-w-11 justify-center rounded-none! p-0 hover:bg-transparent!",
               "[&_.button-text]:text-fs-text-accent [&_.button-text]:text-xs [&_.button-text]:font-semibold",
             )}
           />

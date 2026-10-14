@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import type { PredictProgress } from "../../run/types";
-import { planFunding } from "../funding";
-import { fundsToAdd, predictSteps } from "../predictSteps";
+import { fundingSummary, planFunding } from "../funding";
+import { fundsToAdd, predictSteps, statusLine } from "../predictSteps";
 
 const WALLET = "0xdcee0000000000000000000000000000000c664f" as const;
 const WAD = 10n ** 18n;
@@ -241,5 +241,60 @@ describe("predictSteps while adding funds", () => {
 
     expect(signed?.subtitle).not.toBe(sent?.subtitle);
     expect(sent?.subtitle).not.toContain("Waiting for your signature…");
+  });
+});
+
+describe("the sDAI an xDAI payment becomes", () => {
+  it("reads the same in the summary under the amount and in the funds step", () => {
+    const xDai = { id: "native" as const, symbol: "xDAI", decimals: 18 };
+    const sDai = { symbol: "sDAI", decimals: 18 };
+    // 1.2543 xDAI per sDAI, so 1 xDAI is 0.79725... sDAI: truncating and rounding disagree in the 4th decimal
+    const funding = planFunding({ amount: WAD, ownWallet: 10n * WAD, tradeWallet: 0n, tokenPerCollateralWad: 12543n * 10n ** 14n });
+
+    const summary = fundingSummary({ funding, amount: WAD, token: xDai, collateral: sDai });
+    const subtitle = predictSteps({ wallet: null, progress: null, ...fundsToAdd(funding, xDai, sDai) }).rows[1]?.subtitle;
+
+    expect(summary?.text).toBe("≈ 0.7973 sDAI from your wallet");
+    expect(subtitle).toBe("Adding 1 xDAI (~0.7973 sDAI)");
+  });
+});
+
+describe("statusLine", () => {
+  const idle = steps();
+  const halted = steps({ progress: progress({ stage: "halted", failure: { reason: "rpc", retryable: true } }) });
+
+  it("says before a run that nothing is signed until the prices are checked", () => {
+    expect(statusLine({ steps: idle, skipped: 0, isRecovered: false })).toEqual({
+      text: "Prices are checked before anything is signed.",
+      tone: "neutral",
+    });
+  });
+
+  it("says nothing while a step is running", () => {
+    expect(statusLine({ steps: steps({ progress: progress() }), skipped: 0, isRecovered: false })).toBeNull();
+  });
+
+  it("puts what the visitor has to do ahead of why the run stopped", () => {
+    expect(
+      statusLine({ steps: halted, notice: "Switch your wallet to Gnosis.", skipped: 0, isRecovered: false }),
+    ).toEqual({ text: "Switch your wallet to Gnosis.", tone: "warning" });
+  });
+
+  it("puts what the visitor has to do ahead of a transaction still out", () => {
+    const pending = steps({
+      progress: progress({
+        stage: "halted",
+        failure: { reason: "rpc", retryable: true },
+        pendingHash: `0x${"ab".repeat(32)}`,
+      }),
+    });
+
+    expect(
+      statusLine({ steps: pending, notice: "Connect a wallet to make this prediction.", skipped: 0, isRecovered: false }),
+    ).toEqual({ text: "Connect a wallet to make this prediction.", tone: "warning" });
+  });
+
+  it("says why a run stopped when nothing else is asked of the visitor", () => {
+    expect(statusLine({ steps: halted, skipped: 0, isRecovered: false })?.tone).toBe("error");
   });
 });

@@ -80,14 +80,14 @@ export interface FundingSummary {
   tone: "neutral" | "error";
 }
 
-const shown = (value: bigint, decimals: number) => formatAmount(value, decimals, AMOUNT_DISPLAY_DECIMALS);
-
-/** A part too small for the shown decimals still costs a transaction, so it is named rather than shown as 0. */
-function shownPart(value: bigint, decimals: number): string {
-  const text = shown(value, decimals);
-  return text === "0"
-    ? `less than ${formatAmount(10n ** BigInt(Math.max(decimals - AMOUNT_DISPLAY_DECIMALS, 0)), decimals)}`
-    : text;
+/**
+ * An amount at the popup's shown decimals, rounded to the nearest so a deposit a wei short of a
+ * typed amount reads as typed; a non-zero amount below the last decimal is named, not shown as 0.
+ */
+export function shownAmount(value: bigint, decimals: number): string {
+  const step = 10n ** BigInt(Math.max(decimals - AMOUNT_DISPLAY_DECIMALS, 0));
+  const shown = formatAmount(((value + step / 2n) / step) * step, decimals);
+  return shown === "0" && value > 0n ? `less than ${formatAmount(step, decimals)}` : shown;
 }
 
 /**
@@ -104,17 +104,17 @@ export function fundingSummary(args: {
   if (!funding || amount === undefined || amount === 0n) return null;
   if (amount > funding.available) {
     return {
-      text: `Not enough balance. You can add up to ${shown(roundToDisplay(funding.available, token.decimals), token.decimals)} ${token.symbol}.`,
+      text: `Not enough balance. You can add up to ${shownAmount(roundToDisplay(funding.available, token.decimals), token.decimals)} ${token.symbol}.`,
       tone: "error",
     };
   }
 
-  const total = `${token.id === "native" ? "≈ " : ""}${shown(funding.collateralIn, collateral.decimals)} ${collateral.symbol}`;
+  const total = `${token.id === "native" ? "≈ " : ""}${shownAmount(funding.collateralIn, collateral.decimals)} ${collateral.symbol}`;
   const fromTrade = funding.fromTradeWallet > 0n;
   const fromWallet = funding.toAdd > 0n;
   const text =
     fromTrade && fromWallet
-      ? `${total} = ${shownPart(funding.fromTradeWallet, collateral.decimals)} in your trade wallet + ${shownPart(funding.toAdd, collateral.decimals)} from your wallet`
+      ? `${total} = ${shownAmount(funding.fromTradeWallet, collateral.decimals)} in your trade wallet + ${shownAmount(funding.toAdd, collateral.decimals)} from your wallet`
       : fromTrade
         ? `${total} from your trade wallet`
         : `${total} from your wallet`;
