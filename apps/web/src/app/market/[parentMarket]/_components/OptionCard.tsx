@@ -4,7 +4,7 @@ import { EstimateSlider } from "@/features/predict/components/EstimateSlider";
 import { PositionRow } from "@/features/predict/components/PositionRow";
 import { useEstimate, useEstimateStore } from "@/features/predict/stores/estimateStore";
 import { estimateDirection } from "@/features/predict/utils/estimates";
-import type { OptionPosition } from "@/features/predict/utils/position";
+import { POSITION_DIGITS, positionWorth, type OptionPosition } from "@/features/predict/utils/position";
 import { DisplayBlocks } from "@/features/sessions/components/DisplayBlocks";
 import type { SessionOption, SessionStatus } from "@/features/sessions/types";
 
@@ -61,7 +61,9 @@ export function OptionCard({
           option={option}
           held={
             position &&
-            `${formatAmount(position.up, collateralDecimals, 2)} UP · ${formatAmount(position.down, collateralDecimals, 2)} DOWN`
+            (marketEstimate === undefined
+              ? `${formatAmount(position.up, collateralDecimals, POSITION_DIGITS)} UP · ${formatAmount(position.down, collateralDecimals, POSITION_DIGITS)} DOWN`
+              : `≈ ${formatAmount(positionWorth(position, marketEstimate, option), collateralDecimals, POSITION_DIGITS)} ${option.name} tokens`)
           }
           readout={
             direction !== null && value !== undefined && marketEstimate !== undefined
@@ -94,6 +96,7 @@ export function OptionCard({
             position={position}
             marketEstimate={marketEstimate}
             decimals={collateralDecimals}
+            estimate={direction !== null && value !== undefined ? { value, direction } : undefined}
           />
         ) : null}
         <Disclosure
@@ -118,7 +121,7 @@ function TitleRow({
   readout,
 }: {
   option: SessionOption;
-  /** The position, already worded; shown from md up, and in full in the open card. */
+  /** The position's worth, already worded; shown from md up, and in full in the open card. */
   held?: string;
   readout?: { value: number; marketEstimate: number; direction: "higher" | "lower" };
 }) {

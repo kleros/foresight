@@ -4,6 +4,9 @@ import type { SelectedEstimate } from "../types";
 
 const WAD = 10n ** 18n;
 
+/** Decimals a position is shown at. */
+export const POSITION_DIGITS = 2;
+
 /** What a trade wallet holds of one option's UP and DOWN tokens, in base units. */
 export interface OptionPosition {
   up: bigint;
@@ -31,4 +34,10 @@ export function positionLeaning(position: OptionPosition): SelectedEstimate["dir
   if (position.up > position.down) return "higher";
   if (position.down > position.up) return "lower";
   return null;
+}
+
+/** False for a holding that would read "0 UP · 0 DOWN" at POSITION_DIGITS. */
+export function isShownPosition(position: OptionPosition, decimals: number): boolean {
+  const least = 10n ** BigInt(Math.max(decimals - POSITION_DIGITS, 0));
+  return position.up >= least || position.down >= least;
 }

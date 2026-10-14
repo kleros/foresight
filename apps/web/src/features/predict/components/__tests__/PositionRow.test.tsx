@@ -36,7 +36,7 @@ describe("PositionRow", () => {
       <PositionRow scale={scale} position={{ up: 200n * WAD, down: 40n * WAD }} marketEstimate={75} decimals={18} />,
     );
 
-    expect(screen.getByText("≈ 160 Movie A tokens at the market estimate")).toBeInTheDocument();
+    expect(screen.getByText("Worth ≈ 160 Movie A tokens if it resolved at today's 75 %")).toBeInTheDocument();
   });
 
   it("leaves the value out while the market estimate is unknown", () => {
@@ -49,12 +49,18 @@ describe("PositionRow", () => {
       />,
     );
 
-    expect(screen.queryByText(/at the market estimate/)).toBeNull();
+    expect(screen.queryByText(/^Worth/)).toBeNull();
   });
 
   it("says which side the position leans to", () => {
     render(<PositionRow scale={scale} position={{ up: 1n * WAD, down: 9n * WAD }} marketEstimate={75} decimals={18} />);
 
     expect(screen.getByText("Leaning lower")).toBeInTheDocument();
+  });
+
+  it("names no side for a position held evenly", () => {
+    render(<PositionRow scale={scale} position={{ up: 5n * WAD, down: 5n * WAD }} marketEstimate={75} decimals={18} />);
+
+    expect(screen.queryByText(/^Leaning/)).toBeNull();
   });
 });

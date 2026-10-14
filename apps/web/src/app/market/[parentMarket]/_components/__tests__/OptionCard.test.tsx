@@ -105,6 +105,33 @@ describe("OptionCard", () => {
     expect(screen.getByRole("region", { name: "Your position" })).toHaveTextContent("20 UP · 0 DOWN");
   });
 
+  it("names the position's worth on the collapsed row", () => {
+    // 20 UP at 312 of 0-500
+    renderCard({ position: { up: 20n * WAD, down: 0n } });
+
+    expect(screen.getByRole("button", { name: /Greta Gerwig/ })).toHaveTextContent("Position ≈ 12.48 Greta Gerwig tokens");
+  });
+
+  it("says an estimate on the other side of the market from the position sells some of it", async () => {
+    useEstimateStore.getState().setEstimate(PARENT, option.market, 200);
+    renderCard({ position: { up: 20n * WAD, down: 0n } });
+
+    await open();
+
+    expect(screen.getByRole("region", { name: "Your position" })).toHaveTextContent(
+      "Predicting 200 $M sells some of your UP.",
+    );
+  });
+
+  it("says an estimate on the position's side adds to it", async () => {
+    useEstimateStore.getState().setEstimate(PARENT, option.market, 400);
+    renderCard({ position: { up: 20n * WAD, down: 0n } });
+
+    await open();
+
+    expect(screen.getByRole("region", { name: "Your position" })).toHaveTextContent("Predicting 400 $M adds to your UP.");
+  });
+
   it("shows no position for an option the trade wallet holds none of", async () => {
     renderCard();
 
