@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Address } from "viem";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -26,8 +26,8 @@ const OPTIONS = [
   { market: THIRD_MARKET, name: "Chloe Zhao" },
 ] as const;
 
-/** The visitor's own wallet; the trade wallet holds nothing. Set per test before the popup opens. */
-const wallet = vi.hoisted(() => ({ sDai: 0n, xDai: 0n }));
+/** The visitor's own wallet, and the sDAI already in the trade wallet. Set per test before the popup opens. */
+const wallet = vi.hoisted(() => ({ sDai: 0n, xDai: 0n, trade: 0n }));
 /** Last input the page handed the run. */
 const runInput = vi.hoisted(() => ({ current: null as PredictRunInput | null }));
 
@@ -67,7 +67,7 @@ vi.mock("@/features/trade-executor/api/getFunds", async (importOriginal) => ({
     if (!holder) return { data: undefined, isPending: true };
     const own = holder.toLowerCase() === "0x9999999999999999999999999999999999999999";
     return {
-      data: { native: own ? wallet.xDai : 0n, token: token ? (own ? wallet.sDai : 0n) : null },
+      data: { native: own ? wallet.xDai : 0n, token: token ? (own ? wallet.sDai : wallet.trade) : null },
       isPending: false,
     };
   },
@@ -95,12 +95,33 @@ const driver = {
 
 const idle: PredictProgress = { stage: "idle", steps: [], skipped: [], batchesDone: 0, batches: 0 };
 
-vi.mock("@/features/predict/hooks/usePredictRun", () => ({
-  usePredictRun: (input: PredictRunInput | null) => {
-    if (input) runInput.current = input;
-    return { driver: input ? driver : null, progress: idle };
-  },
-}));
+/** The run's progress as the page reads it; `set` re-renders the popup. */
+const run = vi.hoisted(() => {
+  const listeners = new Set<() => void>();
+  let progress: PredictProgress = { stage: "idle", steps: [], skipped: [], batchesDone: 0, batches: 0 };
+  return {
+    get: () => progress,
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    set: (next: PredictProgress) => {
+      progress = next;
+      for (const listener of listeners) listener();
+    },
+  };
+});
+
+vi.mock("@/features/predict/hooks/usePredictRun", async () => {
+  const { useSyncExternalStore } = await import("react");
+  return {
+    usePredictRun: (input: PredictRunInput | null) => {
+      if (input) runInput.current = input;
+      const progress = useSyncExternalStore(run.subscribe, run.get);
+      return { driver: input ? driver : null, progress };
+    },
+  };
+});
 
 const session = () =>
   toSessionDetail(
@@ -163,6 +184,8 @@ beforeEach(() => {
   runInput.current = null;
   wallet.sDai = 0n;
   wallet.xDai = 0n;
+  wallet.trade = 0n;
+  run.set(idle);
 });
 
 describe("estimates removed in the popup are a draft until Predict", () => {
@@ -279,5 +302,40 @@ describe("the popup opens on a pay token the wallet holds", () => {
 
     await waitFor(async () => expect(await balanceToken(popup)).toBe("xDAI"));
     expect(popup.queryByText("Not enough balance.")).toBeNull();
+  });
+});
+
+describe("the funds step names what the visitor pays", () => {
+  it("names an sDAI payment in sDAI alone", async () => {
+    wallet.sDai = 10n * WAD;
+    renderPage();
+    const popup = await openPopup();
+    expect(await balanceToken(popup)).toBe("sDAI");
+
+    await userEvent.type(amountField(popup), "5");
+
+    expect(await popup.findByText("Adding 5 sDAI")).toBeInTheDocument();
+  });
+
+  it("names an xDAI payment in xDAI with the sDAI it becomes, held from Predict until the run stops", async () => {
+    wallet.xDai = 8n * WAD + GAS_RESERVE_WEI;
+    renderPage();
+    const popup = await openPopup();
+    await waitFor(async () => expect(await balanceToken(popup)).toBe("xDAI"));
+
+    await userEvent.type(amountField(popup), "5");
+    // 5 xDAI is 4 sDAI at 1.25 xDAI per sDAI
+    expect(await popup.findByText("Adding 5 xDAI (~4 sDAI)")).toBeInTheDocument();
+
+    await userEvent.click(popup.getByRole("button", { name: "Predict" }));
+    expect(driver.start).toHaveBeenCalledOnce();
+    act(() => run.set({ ...idle, stage: "quoting" }));
+    // 1 sDAI in the trade wallet leaves 3 sDAI, 3.75 xDAI, to add
+    wallet.trade = WAD;
+    act(() => run.set({ ...idle, stage: "signing" }));
+    expect(popup.getByText("Adding 5 xDAI (~4 sDAI)")).toBeInTheDocument();
+
+    act(() => run.set(idle));
+    expect(await popup.findByText("Adding 3.75 xDAI (~3 sDAI)")).toBeInTheDocument();
   });
 });

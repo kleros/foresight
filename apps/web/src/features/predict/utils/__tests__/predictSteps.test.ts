@@ -1,7 +1,5 @@
-import { formatUnits } from "viem";
 import { describe, expect, it } from "vitest";
 
-import { AMOUNT_DISPLAY_DECIMALS } from "../../oracle/tolerances";
 import type { PredictProgress } from "../../run/types";
 import { planFunding } from "../funding";
 import { fundsToAdd, predictSteps } from "../predictSteps";
@@ -52,9 +50,7 @@ describe("predictSteps before a run", () => {
   });
 
   it("never says it is adding 0 when the amount is below the shown decimals", () => {
-    expect(steps({ toAdd: 15n * 10n ** 10n }).rows[1]?.subtitle).toBe(
-      `Adding less than ${formatUnits(1n, AMOUNT_DISPLAY_DECIMALS)} sDAI`,
-    );
+    expect(steps({ toAdd: 15n * 10n ** 10n }).rows[1]?.subtitle).toBe("Adding less than 0.0001 sDAI");
   });
 });
 
