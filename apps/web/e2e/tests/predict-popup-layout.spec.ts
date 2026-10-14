@@ -271,6 +271,28 @@ test.describe("every failure at the narrowest popup", () => {
   });
 });
 
+test.describe("an amount over a four-digit balance at 375 x 667", () => {
+  test.use({ viewport: { width: 375, height: 667 } });
+
+  test("shows the balance and its token whole, and keeps the slider's 100% on the track", async ({ page }) => {
+    await page.goto(`${harness.url}?options=2&state=over&held=6833.959612`);
+    const dialog = page.getByRole("dialog");
+    const summary = dialog.getByText(/^Not enough balance/);
+
+    await expect(summary).toContainText("6839.9596 sDAI");
+    expect(await summary.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    // one line, so the body keeps the idle popup's height
+    expect((await summary.boundingBox())!.height).toBeLessThanOrEqual(21);
+    expect(await isFullyShown(summary)).toBe(true);
+
+    const label = dialog.locator("#slider-label");
+    await expect(label).toHaveText("100%");
+    const [labelBox, track] = await Promise.all([label.boundingBox(), dialog.locator("#slider-track").boundingBox()]);
+    expect(labelBox!.x).toBeGreaterThanOrEqual(track!.x);
+    expect(labelBox!.x + labelBox!.width).toBeLessThanOrEqual(track!.x + track!.width);
+  });
+});
+
 test.describe("the popup's tones", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
@@ -311,7 +333,9 @@ test.describe("a disabled Predict", () => {
       const numbers = (css: string) => css.match(/[\d.]+/g)!.map(Number);
       // a color-mix() fill computes to color(srgb r g b / a), channels 0-1
       const fill = getComputedStyle(button).backgroundColor;
-      const [r = 0, g = 0, b = 0, a = 1] = fill.startsWith("color(") ? numbers(fill) : numbers(fill).map((n, i) => (i < 3 ? n / 255 : n));
+      const [r = 0, g = 0, b = 0, a = 1] = fill.startsWith("color(")
+        ? numbers(fill)
+        : numbers(fill).map((n, i) => (i < 3 ? n / 255 : n));
       const opacity = Number(getComputedStyle(button).opacity);
       // on the dialog's white surface
       const over = (channel: number) => (channel * a + (1 - a)) * opacity + (1 - opacity);
@@ -335,9 +359,14 @@ test.describe("accent text in the dark theme", () => {
     const max = page.getByRole("dialog").getByRole("button", { name: "Max" }).locator(".button-text");
 
     const ratio = await max.evaluate((label) => {
-      const channels = (css: string) => css.match(/[\d.]+/g)!.slice(0, 3).map((n) => Number(n) / 255);
+      const channels = (css: string) =>
+        css
+          .match(/[\d.]+/g)!
+          .slice(0, 3)
+          .map((n) => Number(n) / 255);
       const linear = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-      const luminance = ([r = 0, g = 0, b = 0]: number[]) => 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+      const luminance = ([r = 0, g = 0, b = 0]: number[]) =>
+        0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
       const text = luminance(channels(getComputedStyle(label).color));
       const surface = luminance(channels(getComputedStyle(label.closest("section")!).backgroundColor));
       return (Math.max(text, surface) + 0.05) / (Math.min(text, surface) + 0.05);

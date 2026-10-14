@@ -104,7 +104,7 @@ export function fundingSummary(args: {
   if (!funding || amount === undefined || amount === 0n) return null;
   if (amount > funding.available) {
     return {
-      text: `Not enough balance. You can add up to ${shownAmount(roundToDisplay(funding.available, token.decimals), token.decimals)} ${token.symbol}.`,
+      text: `Not enough balance. Max ${shownAmount(roundToDisplay(funding.available, token.decimals), token.decimals)} ${token.symbol}.`,
       tone: "error",
     };
   }

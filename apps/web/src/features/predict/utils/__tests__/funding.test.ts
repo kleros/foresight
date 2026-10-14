@@ -282,7 +282,7 @@ describe("fundingSummary", () => {
     const funding = planFunding({ amount: 999n * WAD, ownWallet: 20n * WAD, tradeWallet: 5n * WAD });
 
     expect(fundingSummary({ funding, amount: 999n * WAD, token: sDai, collateral })).toEqual({
-      text: "Not enough balance. You can add up to 25 sDAI.",
+      text: "Not enough balance. Max 25 sDAI.",
       tone: "error",
     });
   });

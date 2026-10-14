@@ -140,7 +140,7 @@ describe("the amount behind them", () => {
   it("refuses an amount larger than the balance", () => {
     render(<PredictDialog {...props()} amount={26n * WAD} />);
 
-    expect(screen.getByText("Not enough balance. You can add up to 25 sDAI.")).toBeInTheDocument();
+    expect(screen.getByText("Not enough balance. Max 25 sDAI.")).toBeInTheDocument();
     expect(screen.queryByText(/26 sDAI/)).toBeNull();
     expect(screen.getByRole("button", { name: "Predict" })).toBeDisabled();
   });

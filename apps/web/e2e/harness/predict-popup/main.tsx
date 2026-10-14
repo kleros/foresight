@@ -1,5 +1,7 @@
 import { createRoot } from "react-dom/client";
 
+import { parseUnits } from "viem";
+
 import { PredictDialog } from "@/features/predict/components/PredictDialog";
 import type { ListedEstimate } from "@/features/predict/components/PredictList";
 import type { PredictFailureReason, PredictProgress } from "@/features/predict/run/types";
@@ -20,6 +22,8 @@ const count = Number(params.get("options") ?? "2");
 const state = (params.get("state") ?? "idle") as State;
 /** `?reason=` the failure a `failed` popup shows; "fee" is the funds failure after money moved. */
 const reason = params.get("reason") ?? "fee";
+/** `?held=` the sDAI in the visitor's own wallet, as a decimal. */
+const held = parseUnits(params.get("held") ?? "19", 18);
 if (params.get("theme") === "dark") document.documentElement.classList.add("dark");
 
 const selected: ListedEstimate[] = CITIES.slice(0, count).map((name, index) => ({
@@ -89,8 +93,8 @@ const PROGRESS: Partial<Record<State, PredictProgress>> = {
   recovered: run("review", ["success", "success"]),
 };
 
-const amount = state === "over" ? 999n * WAD : 10n * WAD;
-const funding = state === "disconnected" ? null : planFunding({ amount, ownWallet: 19n * WAD, tradeWallet: 6n * WAD });
+const amount = state === "over" ? held + 980n * WAD : 10n * WAD;
+const funding = state === "disconnected" ? null : planFunding({ amount, ownWallet: held, tradeWallet: 6n * WAD });
 const progress = PROGRESS[state] ?? null;
 const isRunning = state === "quoting" || state === "signing" || state === "confirming";
 const steps = predictSteps({

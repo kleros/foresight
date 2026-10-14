@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 import { BigNumberField, Slider } from "@kleros/ui-components-library";
 import clsx from "clsx";
 import { formatUnits, parseUnits } from "viem";
@@ -138,13 +140,12 @@ export function PredictAmountSection({
         />
       </div>
 
-      {/* one line, its height kept, so the slider's floating label never lands on it */}
+      {/* a line's height held when empty, so the slider's floating label never lands on it; an amount wraps whole */}
       <p
         className={clsx(
-          "mt-1.5 min-h-5 truncate text-xs leading-5",
+          "mt-1.5 min-h-5 text-xs leading-5 break-words",
           summary?.tone === "error" ? "text-fs-tone-error-text" : "text-fs-text-secondary",
         )}
-        title={summary?.text}
       >
         {summary?.text}
       </p>
@@ -182,10 +183,13 @@ function AmountSlider({
     <div
       data-testid="amount-slider"
       className={clsx("relative mt-4 w-[calc(100%-32px)] self-center", isDisabled && "opacity-50")}
+      style={{ "--label-shift": `${percent}%` } as CSSProperties}
     >
       <Slider
         className={clsx(
           "relative z-1 mt-0",
+          // shifted by its own width times the share, the label ends at the thumb's centre at 100% and starts there at 0%
+          "[&_#slider-label]:translate-x-[calc(-1*var(--label-shift))]",
           "[&_#slider-fill]:h-1 [&_#slider-track]:h-1",
           "[&_#slider-label]:text-fs-text-primary! [&_#slider-label]:font-semibold",
           // the field above already says the amount; at 0 the floating label is noise
