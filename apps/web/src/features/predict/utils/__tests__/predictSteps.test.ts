@@ -51,6 +51,8 @@ describe("predictSteps before a run", () => {
 
   it("never says it is adding 0 when the amount is below the shown decimals", () => {
     expect(steps({ toAdd: 15n * 10n ** 10n }).rows[1]?.subtitle).toBe("Adding less than 0.0001 sDAI");
+    // a single wei still reads as something being added
+    expect(steps({ toAdd: 1n }).rows[1]?.subtitle).toBe("Adding less than 0.0001 sDAI");
   });
 });
 

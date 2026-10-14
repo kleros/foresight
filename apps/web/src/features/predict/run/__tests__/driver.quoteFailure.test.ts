@@ -7,14 +7,17 @@ import type { SwapQuoter } from "@/lib/swap/types";
 
 import {
   addresses,
+  AT,
+  chainState,
   ctx,
+  DEEP,
   fakeQuoter,
   fakeReader,
   option,
   quoterFor,
   snapshot,
 } from "../../flow/__tests__/support/fakes";
-import type { PredictOption } from "../../flow/types";
+import type { OptionChainState, PredictOption } from "../../flow/types";
 import { predictSteps } from "../../utils/predictSteps";
 import { createPredictRun } from "../driver";
 import type { PredictDriver, PredictFailureReason, PredictProgress } from "../types";
@@ -53,11 +56,11 @@ afterEach(() => {
   for (const driver of drivers.splice(0)) driver.dispose();
 });
 
-function setup(quoter: SwapQuoter, options: PredictOption[] = [option(1)]) {
+function setup(quoter: SwapQuoter, options: PredictOption[] = [option(1)], state?: () => OptionChainState) {
   const gateway = fakeGateway();
   const driver = createPredictRun({
     gateway,
-    reader: fakeReader({ deployed: true }),
+    reader: fakeReader({ deployed: true, ...(state ? { state } : {}) }),
     quoter,
     flowId: `predict-quote-failure-${drivers.length}`,
     ctx: () => ctx(),
@@ -165,9 +168,27 @@ describe("createPredictRun when the quoter cannot be asked", () => {
     expect(gateway.signRequests.filter(isDeposit)).toHaveLength(1);
   });
 
-  it("pauses for a retry, without a second deposit, when the quoter fails after the deposit", async () => {
+  it.each(failures)("halts as a quote failure when a visitor holding nothing only buys, and %s", async (_, answer) => {
+    // both outcomes below their targets, so every leg is a buy
+    const buyOnly = () =>
+      chainState({
+        pools: {
+          up: { sqrtPriceX96: 2n ** 94n, liquidity: DEEP, tick: 0, fee: 0n, ticks: [], outcomeIsToken0: true },
+          down: { sqrtPriceX96: AT["0.25"], liquidity: DEEP, tick: 0, fee: 0n, ticks: [], outcomeIsToken0: true },
+        },
+      });
+    const { gateway, driver } = setup(lensQuoterOn(answer), [option(1)], buyOnly);
+
+    driver.start();
+    const progress = await settled(driver);
+
+    expect(progress.failure).toEqual({ reason: "quote", retryable: true });
+    expect(gateway.signRequests.filter(isDeposit)).toEqual([]);
+  });
+
+  it.each(failures)("pauses for a retry, without a second deposit, when %s after the deposit", async (_, answer) => {
     // The route check quotes one sell and one buy; the build's quotes are the ones that fail.
-    const quoter = flakyQuoter(nodeAnswers.unreachable, 2);
+    const quoter = flakyQuoter(answer, 2);
     const { gateway, driver } = setup(quoter);
 
     driver.start();
