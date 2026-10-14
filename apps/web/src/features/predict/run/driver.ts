@@ -327,6 +327,7 @@ export function createPredictRun(args: {
       if (!stored || !foreign(stored.ctx, args.ctx())) orchestrator.trash(args.flowId);
       recovered = false;
       reviewing = false;
+      buildFailure = undefined;
       skipped.length = 0;
       planned = [];
       report(undefined);

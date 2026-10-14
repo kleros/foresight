@@ -38,6 +38,8 @@ const NO_ROUTE_ERRORS = new Set(["NoRoute", "ZeroAmount", "UnsupportedAMM"]);
 
 /** Whether Lens answered that no route takes the swap, as opposed to giving no answer. */
 function answeredNoRoute(error: unknown): boolean {
+  // Lens throws InsufficientLiquidityError, with no cause, for any failure of its gas-capped
+  // simulation, so a transport failure on that one call still reads as no route.
   if (error instanceof InsufficientLiquidityError || error instanceof SwapRevertsError) return true;
   const reverted =
     error instanceof BaseError ? error.walk((link) => link instanceof ContractFunctionRevertedError) : null;
