@@ -1,6 +1,6 @@
 import type { Address, Hex } from "viem";
 
-import type { SwapQuote, SwapQuoteRequest, SwapQuoter } from "@/lib/swap/types";
+import { NoSwapRouteError, type SwapQuote, type SwapQuoteRequest, type SwapQuoter } from "@/lib/swap/types";
 
 import type { OptionChainState, PredictCtx, PredictOption, PredictReader, PredictSnapshot } from "../../types";
 
@@ -106,7 +106,7 @@ export function fakeQuoter(opts: { refuse?: (request: SwapQuoteRequest) => boole
     requests,
     quote: (request) => {
       requests.push(request);
-      if (opts.refuse?.(request)) return Promise.reject(new Error("No route."));
+      if (opts.refuse?.(request)) return Promise.reject(new NoSwapRouteError("No route."));
 
       const quote: SwapQuote = {
         amountIn: request.amount,

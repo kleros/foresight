@@ -1,5 +1,7 @@
-import { Lens, type ChainId } from "@seer-pm/lens/client";
+import { InsufficientLiquidityError, Lens, SwapRevertsError, type ChainId } from "@seer-pm/lens/client";
 import {
+  BaseError,
+  ContractFunctionRevertedError,
   decodeFunctionData,
   encodeFunctionData,
   parseAbi,
@@ -9,7 +11,7 @@ import {
   type PublicClient,
 } from "viem";
 
-import type { SwapQuoter } from "./types";
+import { NoSwapRouteError, type SwapQuoter } from "./types";
 
 /**
  * Seer's on-chain LensQuoter picks the route and returns the router call to make. It simulates
@@ -30,6 +32,17 @@ const ALGEBRA_ROUTER_ABI = parseAbi([
 const EXACT_INPUT_SINGLE = toFunctionSelector(ALGEBRA_ROUTER_ABI[0]);
 
 const Q192 = 2n ** 192n;
+
+/** LensQuoter's reverts that answer the request rather than fail it. */
+const NO_ROUTE_ERRORS = new Set(["NoRoute", "ZeroAmount", "UnsupportedAMM"]);
+
+/** Whether Lens answered that no route takes the swap, as opposed to giving no answer. */
+function answeredNoRoute(error: unknown): boolean {
+  if (error instanceof InsufficientLiquidityError || error instanceof SwapRevertsError) return true;
+  const reverted =
+    error instanceof BaseError ? error.walk((link) => link instanceof ContractFunctionRevertedError) : null;
+  return reverted instanceof ContractFunctionRevertedError && NO_ROUTE_ERRORS.has(reverted.data?.errorName ?? "");
+}
 
 /**
  * What `amountIn` returns at no worse than the limit price, before the pool fee, less `slippageBps`.
@@ -54,17 +67,24 @@ export function createLensQuoter(client: PublicClient, chainId: ChainId, now: ()
 
   return {
     async quote(request) {
-      const result = await lens.quote({
-        tokenIn: request.tokenIn,
-        tokenOut: request.tokenOut,
-        amount: request.amount,
-        recipient: request.recipient,
-        slippageBps: request.slippageBps,
-        deadline: BigInt(Math.floor(now() / 1000)) + QUOTE_DEADLINE_SECONDS,
-      });
+      const result = await lens
+        .quote({
+          tokenIn: request.tokenIn,
+          tokenOut: request.tokenOut,
+          amount: request.amount,
+          recipient: request.recipient,
+          slippageBps: request.slippageBps,
+          deadline: BigInt(Math.floor(now() / 1000)) + QUOTE_DEADLINE_SECONDS,
+        })
+        .catch((error: unknown) => {
+          if (!answeredNoRoute(error)) throw error;
+          throw new NoSwapRouteError(`Lens found no route from ${request.tokenIn} to ${request.tokenOut}.`, {
+            cause: error,
+          });
+        });
 
       if (!result.data.startsWith(EXACT_INPUT_SINGLE)) {
-        throw new Error(
+        throw new NoSwapRouteError(
           `Lens routed ${request.tokenIn} to ${request.tokenOut} through a call that takes no price limit.`,
         );
       }

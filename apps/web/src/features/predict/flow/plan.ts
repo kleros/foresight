@@ -1,7 +1,7 @@
 import type { FlowHooks, TxStep } from "@foresight/tx-orchestrator";
 import type { Address } from "viem";
 
-import type { SwapQuoter } from "@/lib/swap/types";
+import { NoSwapRouteError, type SwapQuote, type SwapQuoter, type SwapQuoteRequest } from "@/lib/swap/types";
 import { batchExecuteTx, createExecutorTx, type ExecutorCall } from "@/lib/trade-executor/executor";
 import { depositNativeTx, depositTx } from "@/lib/trade-executor/funding";
 import { splitCalls } from "@/lib/trade-executor/positions";
@@ -56,11 +56,28 @@ export class NoRouteError extends Error {
   }
 }
 
+/** The quoter gave no answer, so whether a route exists is unknown; trying again may help. */
+export class QuoteFailedError extends Error {
+  constructor(options: ErrorOptions) {
+    super("The quoter could not be asked for a price.", options);
+    this.name = "QuoteFailedError";
+  }
+}
+
 /** The run is set up so that it cannot succeed; trying again with the same input fails the same way. */
 export class PredictConfigError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "PredictConfigError";
+  }
+}
+
+async function quoteLeg(deps: PredictDeps, request: SwapQuoteRequest): Promise<SwapQuote> {
+  try {
+    return await deps.quoter.quote(request);
+  } catch (error) {
+    if (error instanceof NoSwapRouteError) throw error;
+    throw new QuoteFailedError({ cause: error });
   }
 }
 
@@ -89,7 +106,7 @@ async function optionCalls(
   const sold: SoldLeg[] = [];
   for (const leg of planSells(target)) {
     const tokenIn = outcomeToken(option, leg.side);
-    const quote = await deps.quoter.quote({
+    const quote = await quoteLeg(deps, {
       tokenIn,
       tokenOut: option.underlying,
       amount: leg.amountIn,
@@ -107,7 +124,7 @@ async function optionCalls(
 
   const buys: QuotedSwap[] = [];
   for (const leg of legs) {
-    const quote = await deps.quoter.quote({
+    const quote = await quoteLeg(deps, {
       tokenIn: option.underlying,
       tokenOut: outcomeToken(option, leg.side),
       amount: leg.amountIn,
@@ -162,6 +179,7 @@ async function predictCalls(args: {
       calls.push(...(await optionCalls(ctx, option, state, mint, deps)));
       traded += 1;
     } catch (reason) {
+      if (reason instanceof QuoteFailedError) throw reason;
       deps.onSkip?.(option, reason);
     }
   }

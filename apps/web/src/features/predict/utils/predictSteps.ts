@@ -29,6 +29,7 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
   rpc: "The network did not answer in time.",
   unknown: "Something went wrong.",
   "no-route": "No trade moves these markets toward your estimates. Try a larger amount or a different estimate.",
+  quote: "Prices could not be fetched. Try again in a moment.",
   balance: "Your trade wallet balance is lower than shown. Check the amount and try again.",
   "deposit-unconfirmed": "Your last deposit may still be confirming. Check your wallet's activity, then try again.",
   "wrong-wallet": "This prediction was started from another wallet. Connect that wallet to finish it.",

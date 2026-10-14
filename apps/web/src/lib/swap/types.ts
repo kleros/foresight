@@ -33,6 +33,15 @@ export interface SwapQuote {
   value: bigint;
 }
 
+/** The quoter answered that nothing takes this swap. Any other rejection means it gave no answer. */
+export class NoSwapRouteError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "NoSwapRouteError";
+  }
+}
+
 export interface SwapQuoter {
+  /** Rejects with `NoSwapRouteError` when no route takes the swap. */
   quote(request: SwapQuoteRequest): Promise<SwapQuote>;
 }

@@ -21,6 +21,7 @@ import {
   NoRouteError,
   planPredict,
   PredictConfigError,
+  QuoteFailedError,
   STEP_ID,
   tradeWalletShare,
   type PredictDeps,
@@ -59,7 +60,8 @@ export function createPredictRun(args: {
   let planned: PredictStepRow[] = [];
   /** Set while the routes are checked, before the orchestrator has a run; reset and dispose clear it. */
   let checking: object | undefined;
-  let noRoute = false;
+  /** The reason a build failed with, which the orchestrator's own causes cannot carry. */
+  let buildFailure: "no-route" | "quote" | undefined;
   /** Set while a sent transaction's outcome is read from the chain; the run itself stays stopped meanwhile. */
   let reconciling = false;
   /** Set once a stored run is restored, until it is thrown away: the popup shows its snapshot, not the form. */
@@ -86,10 +88,12 @@ export function createPredictRun(args: {
     now: args.now,
     // A build reads the chain and the indexer before it signs anything. Those failures are
     // transient and leave nothing behind, so they pause for a retry rather than ending the run.
-    // A missing route is fatal to the orchestrator; `noRoute` keeps the reason it cannot carry.
+    // A missing route is fatal to the orchestrator and a failed quote pauses it.
     classifyError: (error) => {
-      noRoute = error instanceof NoRouteError;
-      if (noRoute || error instanceof PredictConfigError) return "unknown";
+      buildFailure =
+        error instanceof NoRouteError ? "no-route" : error instanceof QuoteFailedError ? "quote" : undefined;
+      if (buildFailure === "quote") return "rpc";
+      if (buildFailure === "no-route" || error instanceof PredictConfigError) return "unknown";
       return error instanceof Error && !("cause" in error) ? "rpc" : classifyTxError(error);
     },
   });
@@ -168,11 +172,13 @@ export function createPredictRun(args: {
   orchestrator.subscribe(notify);
   orchestrator.on("flow:paused", () => {
     const run = orchestrator.getRun();
-    report(errorOf(run)?.cause, pendingHashOf(run) ? reconcileRun : resumeRun);
+    const reason = buildFailure ?? errorOf(run)?.cause;
+    buildFailure = undefined;
+    report(reason, pendingHashOf(run) ? reconcileRun : resumeRun);
   });
   orchestrator.on("flow:failed", (event) => {
-    const reason = noRoute ? "no-route" : event.error.cause;
-    noRoute = false;
+    const reason = buildFailure ?? event.error.cause;
+    buildFailure = undefined;
     // A failed wait keeps its hash, so the chain is asked how it ended before anything is signed again.
     if (pendingHashOf(orchestrator.getRun())) report(reason, reconcileRun);
     // A reverted batch is rebuilt from fresh quotes; the steps before it stay settled.
@@ -188,6 +194,7 @@ export function createPredictRun(args: {
     const action = () =>
       void work().catch((error: unknown) => {
         if (error instanceof NoRouteError) report("no-route");
+        else if (error instanceof QuoteFailedError) report("quote", action);
         else if (error instanceof TradeWalletShortError) report("balance");
         else if (error instanceof PredictConfigError) report("unknown");
         else report(classifyTxError(error), action);
