@@ -77,6 +77,20 @@ fork_deploy_ready() {
 
 fork_ready() { fork_is_gnosis && fork_deploy_ready; }
 
+# Seer's LensQuoter quotes every swap the app makes, and it was deployed after the pinned fork block
+LENS_QUOTER="0x82150d38288e53AfcF20a5eEee47682c5Ef796d8"
+
+grant_lens_quoter() {
+  local upstream="${GNOSIS_RPC_URL:-https://rpc.gnosischain.com}" code
+  code="$(curl -sf -X POST "$upstream" -H 'Content-Type: application/json' \
+    -d "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getCode\",\"params\":[\"$LENS_QUOTER\",\"latest\"],\"id\":1}" |
+    jq -r '.result')"
+  [[ -n "$code" && "$code" != "0x" && "$code" != "null" ]] || die "LensQuoter $LENS_QUOTER has no code on $upstream"
+  rpc_result hardhat_setCode "\"$LENS_QUOTER\",\"$code\"" | grep -q '"result"' ||
+    die "could not set the LensQuoter code on the fork"
+  log "✓ LensQuoter copied onto the fork"
+}
+
 indexer_synced() {
   curl -sf "$INDEXER_URL/metrics" | grep -q '^envio_progress_ready{[^}]*} 1$'
 }
@@ -162,6 +176,7 @@ cmd_start() {
     web_cmd="yarn dev:gnosis-fork"
 
     wait_for "gnosis fork (chain 100, live deployment)" fork_ready
+    grant_lens_quoter
     log "wiring indexer config to the gnosis deployment"
     yarn indexer:update:gnosis-fork
   else

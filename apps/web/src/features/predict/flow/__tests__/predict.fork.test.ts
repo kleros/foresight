@@ -57,28 +57,17 @@ const OWNER_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f
 
 /** Seer's LensQuoter on Gnosis, which quotes every swap. */
 const LENS_QUOTER = "0x82150d38288e53AfcF20a5eEee47682c5Ef796d8" as const;
-const LIVE_GNOSIS_RPC = process.env.FORK_UPSTREAM_RPC_URL ?? "https://rpc.gnosischain.com";
 
-/**
- * ADR 0023 pins the fork to the block Foresight's own contracts were deployed at, which is
- * older than Seer's LensQuoter. Copying its live runtime code onto the fork is cheaper than
- * re-pinning, which would make the indexer replay half a million blocks.
- */
-async function grantLensQuoter(rpcUrl: string): Promise<void> {
-  const call = async (url: string, method: string, params: unknown[]) => {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-    });
-    return ((await response.json()) as { result?: string }).result;
-  };
-
-  if ((await call(rpcUrl, "eth_getCode", [LENS_QUOTER, "latest"])) !== "0x") return;
-
-  const code = await call(LIVE_GNOSIS_RPC, "eth_getCode", [LENS_QUOTER, "latest"]);
-  if (!code || code === "0x") throw new Error("The LensQuoter is not deployed on gnosis either.");
-  await call(rpcUrl, "hardhat_setCode", [LENS_QUOTER, code]);
+/** `yarn local-stack gnosis-fork` copies the LensQuoter onto the fork; its pinned block predates it. */
+async function requireLensQuoter(rpcUrl: string): Promise<void> {
+  const response = await fetch(rpcUrl, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getCode", params: [LENS_QUOTER, "latest"] }),
+  });
+  const code = ((await response.json()) as { result?: string }).result;
+  if (!code || code === "0x")
+    throw new Error("The fork has no LensQuoter. Start it with `yarn local-stack gnosis-fork`.");
 }
 
 const DEPOSIT = parseEther("50");
@@ -126,7 +115,7 @@ describe("the predict flow, against a gnosis fork", () => {
     const transport = http(FORK_RPC_URL, { timeout: FORK_RPC_TIMEOUT_MS });
     client = createPublicClient({ chain: gnosis, transport }) as PublicClient;
     wallet = createWalletClient({ account, chain: gnosis, transport });
-    await grantLensQuoter(FORK_RPC_URL!);
+    await requireLensQuoter(FORK_RPC_URL!);
     session = await newestSessionWithPools();
   }, 120_000);
 
@@ -341,7 +330,7 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
     const transport = http(FORK_RPC_URL, { timeout: FORK_RPC_TIMEOUT_MS });
     client = createPublicClient({ chain: gnosis, transport }) as PublicClient;
     wallet = createWalletClient({ chain: gnosis, transport });
-    await grantLensQuoter(FORK_RPC_URL);
+    await requireLensQuoter(FORK_RPC_URL);
     session = await newestSessionWithPools();
     app = await load();
     tolerances = await import("../../oracle/tolerances");
@@ -817,7 +806,7 @@ describe("the split amount when the cached trade-wallet balance is stale, agains
     const transport = http(FORK_RPC_URL, { timeout: FORK_RPC_TIMEOUT_MS });
     client = createPublicClient({ chain: gnosis, transport }) as PublicClient;
     wallet = createWalletClient({ chain: gnosis, transport });
-    await grantLensQuoter(FORK_RPC_URL);
+    await requireLensQuoter(FORK_RPC_URL);
     session = await newestSessionWithPools();
     app = await load();
   }, 120_000);
