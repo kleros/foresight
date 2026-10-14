@@ -149,7 +149,7 @@ export function PredictAmountSection({
           onChange={(percent) => max !== undefined && onAmountChange(roundDown(shareOf(max, percent)))}
         />
 
-        <hr className="border-fs-border my-2 w-full md:my-4" />
+        <hr className="border-fs-border my-1 w-full md:my-4" />
 
         {funding && amount !== undefined && amount > 0n ? (
           <p className="text-fs-text-primary text-xs">
@@ -205,7 +205,7 @@ function AmountSlider({
   return (
     <div
       data-testid="amount-slider"
-      className={clsx("relative mt-4 w-[calc(100%-32px)] self-center", isDimmed && "opacity-50")}
+      className={clsx("relative mt-3.5 w-[calc(100%-32px)] self-center md:mt-4", isDimmed && "opacity-50")}
     >
       <Slider
         className={clsx(
