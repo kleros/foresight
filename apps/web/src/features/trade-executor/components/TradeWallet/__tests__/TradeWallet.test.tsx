@@ -124,6 +124,20 @@ describe("TradeWallet positions", () => {
     expect(positionsOf("Berlin")).toEqual(["UP 2.25", "DOWN 30.44"]);
   });
 
+  it("shows holdings at the position row's 2 decimals, with the full amount in the title", async () => {
+    held = new Map([
+      [LISBON.underlying, units("160.9234")],
+      [LISBON.up, units("214.0912")],
+      [LISBON.down, units("1.4387")],
+    ]);
+
+    renderWallet();
+
+    await waitFor(() => expect(positionsOf("Lisbon")).toEqual(["UP 214.09", "DOWN 1.43"]));
+    expect(screen.getByText("214.09")).toHaveAttribute("title", "214.0912");
+    expect(screen.getByText("160.92")).toHaveAttribute("title", "160.9234");
+  });
+
   it("shows a dash for each position while its balance is loading", async () => {
     held = new Map([[LISBON.underlying, units("4")]]);
     positionRead = "pending";

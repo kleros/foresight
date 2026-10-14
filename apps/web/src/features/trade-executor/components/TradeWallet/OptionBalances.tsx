@@ -6,8 +6,8 @@ import { formatAmount } from "@/utils/amount";
 
 import type { TradeWalletOption } from "../../types";
 
-/** Enough to tell holdings apart; the full amount is in each box's title. */
-const SHOWN_DIGITS = 4;
+/** The market page's position row shows holdings at 2 decimals too; the full amount is in each title. */
+const SHOWN_DIGITS = 2;
 
 /**
  * What the wallet holds of each outcome's token, and of the UP and DOWN beneath it.
@@ -94,7 +94,10 @@ function OptionBalance({
             return (
               <li key={token} className="flex min-w-0 gap-1.5">
                 <span className="text-fs-text-secondary">{side}</span>{" "}
-                <span className="text-fs-text-primary truncate">
+                <span
+                  className="text-fs-text-primary truncate"
+                  title={held === undefined ? undefined : formatAmount(held, decimals)}
+                >
                   {held === undefined ? "—" : formatAmount(held, decimals, SHOWN_DIGITS)}
                 </span>
               </li>
