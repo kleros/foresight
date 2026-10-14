@@ -70,6 +70,7 @@ vi.mock("@/features/predict/components/PredictDialog", () => ({
     <div>
       <p data-testid="notice">{props.notice ?? ""}</p>
       <p data-testid="running">{String(props.isRunning)}</p>
+      <p data-testid="can-retry">{String(props.canRetry)}</p>
       <p data-testid="funds">{props.steps.rows.find((row) => row.key === "funds")?.subtitle}</p>
       <p data-testid="token">{props.token.symbol}</p>
       <p data-testid="listed">{props.selected.length}</p>
@@ -91,9 +92,9 @@ const fundingMock = vi.mocked(usePredictFunding);
 let heldMore: PayToken | undefined;
 let nativeAvailable: bigint | undefined;
 
-const progressAt = (stage: PredictStage, retryable = false): PredictProgress => ({
+const progressAt = (stage: PredictStage, retryable = false, steps: PredictProgress["steps"] = []): PredictProgress => ({
   stage,
-  steps: [],
+  steps,
   skipped: [],
   batchesDone: 0,
   batches: 0,
@@ -373,13 +374,31 @@ describe("PredictRunner, the dialog's controls", () => {
     expect(driver.retry).not.toHaveBeenCalled();
   });
 
-  it("picks a retryable stopped run back up instead of starting over", () => {
-    progress = progressAt("halted", true);
+  it("picks a retryable stopped run back up once its deposit is on chain, with the form locked", () => {
+    progress = progressAt("halted", true, [
+      { id: "deposit", label: "Deposit", state: "success" },
+      { id: "predict-0", label: "Predict", state: "error" },
+    ]);
     mount();
+    expect(screen.getByTestId("can-retry")).toHaveTextContent("true");
     fireEvent.click(screen.getByText("predict"));
 
     expect(driver.retry).toHaveBeenCalledTimes(1);
     expect(driver.start).not.toHaveBeenCalled();
+  });
+
+  it("starts over from the form when a retryable run stopped before anything reached the chain", () => {
+    progress = progressAt("halted", true, [
+      { id: "create-wallet", label: "Create", state: "success" },
+      { id: "deposit", label: "Deposit", state: "error" },
+    ]);
+    mount();
+    expect(screen.getByTestId("can-retry")).toHaveTextContent("false");
+    fireEvent.click(screen.getByText("predict"));
+
+    expect(driver.retry).not.toHaveBeenCalled();
+    expect(driver.reset).toHaveBeenCalled();
+    expect(driver.start).toHaveBeenCalledTimes(1);
   });
 
   it("starts over from a stopped run that cannot be retried", () => {

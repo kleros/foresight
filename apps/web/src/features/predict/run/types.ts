@@ -11,7 +11,7 @@ import type { PredictSnapshot } from "../flow/types";
  * `wrong-wallet`, `wrong-chain`: a saved run belongs to another wallet or network than the connected one.
  */
 export type PredictFailureReason =
-  TxErrorCause | "no-route" | "quote" | "balance" | "deposit-unconfirmed" | "wrong-wallet" | "wrong-chain";
+  TxErrorCause | "no-route" | "quote" | "funds" | "balance" | "deposit-unconfirmed" | "wrong-wallet" | "wrong-chain";
 
 /** What the popup shows while a prediction runs. */
 export type PredictStage =

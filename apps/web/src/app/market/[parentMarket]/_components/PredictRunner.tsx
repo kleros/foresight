@@ -7,6 +7,7 @@ import { useAccount } from "wagmi";
 
 import type { PayTokenChoice } from "@/features/predict/components/PredictAmountSection";
 import { PredictDialog } from "@/features/predict/components/PredictDialog";
+import { STEP_ID } from "@/features/predict/flow/plan";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import type { PayToken, SelectedEstimate } from "@/features/predict/types";
 import { roundToDisplay } from "@/features/predict/utils/funding";
@@ -107,10 +108,10 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
 
   // a transaction that may still mine stays stored, so the next popup recovers it instead of signing again
   const pendingHash = progress?.pendingHash;
-  // a reverted batch is rebuilt from the snapshot the run started with; a pending hash is only checked
-  const canRetry = recovered
-    ? stage === "review" || retryable
-    : retryable && !pendingHash && progress?.failure?.reason === "reverted";
+  // once money has moved the run's snapshot is what gets signed, so the form locks to it
+  const onChain = progress?.steps.some((step) => step.state === "success" && step.id !== STEP_ID.createExecutor);
+  // a pending hash is only checked, never retried from the form
+  const canRetry = recovered ? stage === "review" || retryable : retryable && !pendingHash && Boolean(onChain);
 
   const close = () => {
     if (stage === "halted" && !pendingHash) driver?.reset();
@@ -118,12 +119,12 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
   };
 
   const predict = () => {
-    if (retryable) {
-      driver?.retry();
-      return;
-    }
     if (stage === "review") {
       driver?.resume();
+      return;
+    }
+    if (canRetry || (retryable && pendingHash)) {
+      driver?.retry();
       return;
     }
     // a stored run is resumed or closed, never replaced by the form behind it

@@ -57,6 +57,9 @@ const config: HardhatUserConfig = {
   networks: {
     hardhat: {
       saveDeployments: true,
+      // estimate a send that names no gas, as a wallet does; the default fills the block gas limit, which
+      // the balance check counts in full
+      gas: "auto",
       ...(forkGnosis && {
         chainId: 100,
         forking: {

@@ -31,6 +31,22 @@ import type { PredictCtx, PredictReader, PredictRequest, PredictSnapshot } from 
 /** The trade wallet holds less than the share of the prediction it was shown to cover. */
 class TradeWalletShortError extends Error {}
 
+/** Every message along the `cause` chain viem and wagmi wrap a node's error in, lower-cased. */
+function chainText(error: unknown): string {
+  const parts: string[] = [];
+  let current: unknown = error;
+  for (let depth = 0; typeof current === "object" && current !== null && depth < 10; depth++) {
+    const link = current as { message?: unknown; shortMessage?: unknown; details?: unknown; cause?: unknown };
+    for (const part of [link.shortMessage, link.message, link.details]) if (typeof part === "string") parts.push(part);
+    current = link.cause;
+  }
+  return parts.join(" ").toLowerCase();
+}
+
+// a node reports both as an internal JSON-RPC error, which the orchestrator reads as a slow network
+const OUT_OF_FUNDS = /insufficient funds|doesn't have enough funds/;
+const REVERTS = /execution reverted|reverted with|vm exception/;
+
 /** Why a saved run cannot be continued from the connected wallet, if it cannot. */
 function foreign(saved: PredictCtx, current: PredictCtx): "wrong-wallet" | "wrong-chain" | undefined {
   if (String(saved.owner).toLowerCase() !== current.owner.toLowerCase()) return "wrong-wallet";
@@ -60,8 +76,8 @@ export function createPredictRun(args: {
   let planned: PredictStepRow[] = [];
   /** Set while the routes are checked, before the orchestrator has a run; reset and dispose clear it. */
   let checking: object | undefined;
-  /** The reason a build failed with, which the orchestrator's own causes cannot carry. */
-  let buildFailure: "no-route" | "quote" | undefined;
+  /** The reason a step failed with, which the orchestrator's own causes cannot carry. */
+  let buildFailure: "no-route" | "quote" | "funds" | undefined;
   /** Set while a sent transaction's outcome is read from the chain; the run itself stays stopped meanwhile. */
   let reconciling = false;
   /** Set once a stored run is restored, until it is thrown away: the popup shows its snapshot, not the form. */
@@ -94,7 +110,16 @@ export function createPredictRun(args: {
         error instanceof NoRouteError ? "no-route" : error instanceof QuoteFailedError ? "quote" : undefined;
       if (buildFailure === "quote") return "rpc";
       if (buildFailure === "no-route" || error instanceof PredictConfigError) return "unknown";
-      return error instanceof Error && !("cause" in error) ? "rpc" : classifyTxError(error);
+      if (error instanceof Error && !("cause" in error)) return "rpc";
+      const cause = classifyTxError(error);
+      if (cause === "rejected") return cause;
+      const text = chainText(error);
+      // a top-up lets the same transaction through, so the run pauses rather than ends
+      if (OUT_OF_FUNDS.test(text)) {
+        buildFailure = "funds";
+        return "rpc";
+      }
+      return REVERTS.test(text) ? "reverted" : cause;
     },
   });
 
