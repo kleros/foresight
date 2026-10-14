@@ -100,7 +100,7 @@ describe("OptionCard", () => {
     await userEvent.tab();
 
     expect(saved()).toBe(250);
-    expect(screen.getByText("Lower than the market estimate")).toBeInTheDocument();
+    expect(screen.getByText("62 $M below the market (312 $M)")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Estimate set" })).toBeInTheDocument();
   });
 
@@ -148,7 +148,7 @@ describe("OptionCard", () => {
     await open();
 
     expect(screen.getByRole("slider")).toHaveValue("400");
-    expect(screen.getByText("Higher than the market estimate")).toBeInTheDocument();
+    expect(screen.getByText("88 $M above the market (312 $M)")).toBeInTheDocument();
   });
 
   it("refuses estimates where the option has no trading", async () => {

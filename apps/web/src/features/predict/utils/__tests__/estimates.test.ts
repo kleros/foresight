@@ -3,7 +3,17 @@ import { describe, expect, it } from "vitest";
 import { addresses } from "@/testing/fixtures";
 import type { OptionScale } from "@/types/optionScale";
 
-import { estimateDigits, estimateDirection, estimateStep, selectedEstimates, snapEstimate } from "../estimates";
+import {
+  NEAR_MARKET_SHARE,
+  estimateDigits,
+  estimateDirection,
+  estimateStep,
+  PIN_CLEARANCE_PX,
+  isNearMarket,
+  pinOverlapShare,
+  selectedEstimates,
+  snapEstimate,
+} from "../estimates";
 
 const scale = (market: OptionScale["market"], name = "Option"): OptionScale => ({
   market,
@@ -90,5 +100,51 @@ describe("selectedEstimates", () => {
     const checksummed = { ...scale(FIRST), market: FIRST.replace("0xc", "0xC") as OptionScale["market"] };
 
     expect(selectedEstimates([checksummed], { [FIRST]: 250 }, markets)).toHaveLength(1);
+  });
+});
+
+describe("isNearMarket", () => {
+  // a 0-500 scale, so the near band is NEAR_MARKET_SHARE of 500 either side of the market
+  const band = NEAR_MARKET_SHARE * 500;
+
+  it("is near with the thumb on the market", () => {
+    expect(isNearMarket(312, 312, scale(FIRST))).toBe(true);
+  });
+
+  it("is near up to the band's edge on either side", () => {
+    expect(isNearMarket(312 + band, 312, scale(FIRST))).toBe(true);
+    expect(isNearMarket(312 - band, 312, scale(FIRST))).toBe(true);
+  });
+
+  it("is not near past the band's edge", () => {
+    expect(isNearMarket(312 + band + 1, 312, scale(FIRST))).toBe(false);
+    expect(isNearMarket(312 - band - 1, 312, scale(FIRST))).toBe(false);
+  });
+
+  it("measures the band against the scale's width, not its upper bound", () => {
+    const offset = { ...scale(FIRST), lowerBound: 400, upperBound: 500 };
+
+    expect(isNearMarket(450 + NEAR_MARKET_SHARE * 100 + 1, 450, offset)).toBe(false);
+  });
+});
+
+describe("isNearMarket on a track too narrow for futarchy's band", () => {
+  it("widens the band to a wider share it is given", () => {
+    expect(isNearMarket(312 + 0.2 * 500, 312, scale(FIRST), 0.2)).toBe(true);
+    expect(isNearMarket(312 + 0.2 * 500 + 1, 312, scale(FIRST), 0.2)).toBe(false);
+  });
+
+  it("never narrows the band below futarchy's", () => {
+    expect(isNearMarket(312 + NEAR_MARKET_SHARE * 500, 312, scale(FIRST), 0.01)).toBe(true);
+  });
+});
+
+describe("pinOverlapShare", () => {
+  it("is the half-widths of the chip and the label plus the clearance, as a share of the track", () => {
+    expect(pinOverlapShare({ track: 300, chip: 90, label: 40 })).toBe((65 + PIN_CLEARANCE_PX) / 300);
+  });
+
+  it("is nothing before the track has a width", () => {
+    expect(pinOverlapShare({ track: 0, chip: 90, label: 40 })).toBe(0);
   });
 });

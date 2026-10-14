@@ -36,6 +36,28 @@ export function estimateDirection(value: number, marketEstimate: number): Select
   return null;
 }
 
+/** futarchy-ui's band: within 5 % of the scale's width, the market pin drops under the track. */
+export const NEAR_MARKET_SHARE = 0.05;
+
+/** Space kept between the pin's chip and the thumb's label, in px. */
+export const PIN_CLEARANCE_PX = 8;
+
+/** The share of the track the chip and the thumb's label need side by side; 0 until measured. */
+export function pinOverlapShare(px: { track: number; chip: number; label: number }): number {
+  return px.track > 0 ? ((px.chip + px.label) / 2 + PIN_CLEARANCE_PX) / px.track : 0;
+}
+
+/** `band` widens futarchy's 5 % where the chip would otherwise cover the thumb's label. */
+export function isNearMarket(
+  value: number,
+  marketEstimate: number,
+  scale: Pick<OptionScale, "lowerBound" | "upperBound">,
+  band = NEAR_MARKET_SHARE,
+): boolean {
+  const share = Math.max(band, NEAR_MARKET_SHARE);
+  return Math.abs(value - marketEstimate) <= share * (scale.upperBound - scale.lowerBound);
+}
+
 /**
  * The estimates that would become predictions: set on an option that is trading, and away
  * from where the market already sits. Order follows `scales`.
