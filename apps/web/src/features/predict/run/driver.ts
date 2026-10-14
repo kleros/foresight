@@ -36,8 +36,18 @@ function chainText(error: unknown): string {
   const parts: string[] = [];
   let current: unknown = error;
   for (let depth = 0; typeof current === "object" && current !== null && depth < 10; depth++) {
-    const link = current as { message?: unknown; shortMessage?: unknown; details?: unknown; cause?: unknown };
-    for (const part of [link.shortMessage, link.message, link.details]) if (typeof part === "string") parts.push(part);
+    const link = current as {
+      message?: unknown;
+      shortMessage?: unknown;
+      details?: unknown;
+      data?: unknown;
+      cause?: unknown;
+    };
+    // an injected wallet's JSON-RPC error carries the node's reason only in `data`
+    const data =
+      typeof link.data === "object" && link.data !== null ? (link.data as { message?: unknown }).message : link.data;
+    for (const part of [link.shortMessage, link.message, link.details, data])
+      if (typeof part === "string") parts.push(part);
     current = link.cause;
   }
   return parts.join(" ").toLowerCase();

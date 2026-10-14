@@ -84,13 +84,17 @@ export function PredictAmountSection({
                 onPress={() => max !== undefined && onAmountChange(max)}
                 className={clsx(
                   "p-0 hover:bg-transparent!",
+                  isReadOnly && "opacity-50",
                   "[&_.button-text]:text-fs-accent [&_.button-text]:text-xs [&_.button-text]:font-semibold",
                 )}
               />
             </div>
           </div>
 
-          <div className="border-fs-border rounded-fs flex h-fit flex-row border">
+          <div
+            data-testid="amount-input"
+            className={clsx("border-fs-border rounded-fs flex h-fit flex-row border", isReadOnly && "opacity-50")}
+          >
             <BigNumberField
               isRequired
               // the field names its input only through its own label; "You pay" above is what shows
@@ -141,6 +145,7 @@ export function PredictAmountSection({
         <AmountSlider
           percent={percentOf(amount ?? 0n, max ?? 0n)}
           isDisabled={isReadOnly || !max}
+          isDimmed={isReadOnly}
           onChange={(percent) => max !== undefined && onAmountChange(roundDown(shareOf(max, percent)))}
         />
 
@@ -188,14 +193,20 @@ function toUnits(entered: string, decimals: number): bigint | undefined {
 function AmountSlider({
   percent,
   isDisabled,
+  isDimmed,
   onChange,
 }: {
   percent: number;
   isDisabled: boolean;
+  /** Locked to a run, as opposed to merely having nothing to share out. */
+  isDimmed: boolean;
   onChange: (percent: number) => void;
 }) {
   return (
-    <div className="relative mt-2 w-[calc(100%-32px)] md:mt-4 self-center">
+    <div
+      data-testid="amount-slider"
+      className={clsx("relative mt-4 w-[calc(100%-32px)] self-center", isDimmed && "opacity-50")}
+    >
       <Slider
         className={clsx(
           "relative z-1",

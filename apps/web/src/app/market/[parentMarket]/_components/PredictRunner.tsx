@@ -139,7 +139,8 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
     wallet: predicted ? { address: predicted, deployed: Boolean(executor.data?.deployed) } : null,
     ...(recovered
       ? { toAdd: recovered.deposit, symbol: runToken.symbol, decimals: runToken.decimals }
-      : ((stage === "idle" ? undefined : frozenToAdd) ?? fundsToAdd(funding, token, collateral))),
+      : // held only while the form is locked to the run; otherwise the form is what the next press signs
+        ((isRunning || canRetry) && frozenToAdd) || fundsToAdd(funding, token, collateral)),
     progress,
   });
 

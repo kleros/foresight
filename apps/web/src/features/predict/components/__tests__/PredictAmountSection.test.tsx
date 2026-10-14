@@ -174,6 +174,30 @@ describe("the total line", () => {
       />,
     );
 
-    expect(screen.getByText(/from your trade wallet/)).toHaveTextContent("(4 from your trade wallet + less than 0.000001 from your wallet)");
+    expect(screen.getByText(/from your trade wallet/)).toHaveTextContent(
+      "(4 from your trade wallet + less than 0.000001 from your wallet)",
+    );
+  });
+});
+
+describe("a locked amount", () => {
+  // jsdom computes no Tailwind, so the dimmed look is read from the class on each control's root
+  it.each([true, false])("dims the field and the slider only when locked (%s)", (isReadOnly) => {
+    render(
+      <PredictAmountSection
+        amount={WAD}
+        onAmountChange={vi.fn()}
+        tokens={[sDai]}
+        token={sDai}
+        onTokenChange={vi.fn()}
+        funding={planFunding({ amount: WAD, ownWallet: 10n * WAD, tradeWallet: 0n })}
+        collateral={{ symbol: "sDAI", decimals: 18 }}
+        isFirstPrediction
+        isReadOnly={isReadOnly}
+      />,
+    );
+
+    for (const id of ["amount-input", "amount-slider"])
+      expect(screen.getByTestId(id).classList.contains("opacity-50")).toBe(isReadOnly);
   });
 });

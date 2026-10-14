@@ -86,6 +86,19 @@ describe("createPredictRun when the node refuses a send", () => {
     expect(message(after)).not.toMatch(/lower the amount/i);
   });
 
+  it("reads the reason a wallet puts only in the error's data", async () => {
+    const progress = await haltOn(
+      new Error("Transaction failed", {
+        cause: Object.assign(new Error("Internal JSON-RPC error."), {
+          code: -32603,
+          data: { message: "insufficient funds for gas * price + value" },
+        }),
+      }),
+    );
+
+    expect(progress.failure?.reason).toBe("funds");
+  });
+
   it("reads a client's insufficient-funds wording the same way", async () => {
     const progress = await haltOn(nodeRefusal("insufficient funds for gas * price + value"));
 

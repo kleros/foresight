@@ -12,6 +12,7 @@ import { usePredictRun, type PredictRunInput } from "@/features/predict/hooks/us
 import type { PredictDriver, PredictProgress, PredictStage } from "@/features/predict/run/types";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import type { PayToken, SelectedEstimate } from "@/features/predict/types";
+import { planFunding } from "@/features/predict/utils/funding";
 import { sessionChartKey } from "@/features/sessions/api/getSessionChart";
 import { sessionStatsKey } from "@/features/sessions/api/getSessionStats";
 import type { SessionDetail } from "@/features/sessions/types";
@@ -392,6 +393,31 @@ describe("PredictRunner, the dialog's controls", () => {
 
     expect(driver.retry).toHaveBeenCalledTimes(1);
     expect(driver.start).not.toHaveBeenCalled();
+  });
+
+  it("shows the amount now typed, not the one pressed, once a run stops before money moved", () => {
+    fundingMock.mockImplementation(({ amount }) => ({
+      funding: planFunding({ amount, ownWallet: 100n * 10n ** 18n, tradeWallet: 0n }),
+      token: "collateral",
+      available: () => undefined,
+      canPayNative: false,
+    }));
+    const view = mount();
+    fireEvent.click(screen.getByText("pay ten"));
+    fireEvent.click(screen.getByText("predict"));
+    progress = progressAt("halted", true);
+    view.rerenderAt();
+    expect(screen.getByTestId("funds")).toHaveTextContent("Adding 10 sDAI");
+
+    fundingMock.mockImplementation(() => ({
+      funding: planFunding({ amount: 4n * 10n ** 18n, ownWallet: 100n * 10n ** 18n, tradeWallet: 0n }),
+      token: "collateral",
+      available: () => undefined,
+      canPayNative: false,
+    }));
+    view.rerenderAt();
+
+    expect(screen.getByTestId("funds")).toHaveTextContent("Adding 4 sDAI");
   });
 
   it("starts over from the form when a retryable run stopped before anything reached the chain", () => {
