@@ -4,13 +4,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
 import { ctx, snapshot, WAD } from "../../flow/__tests__/support/fakes";
-import {
-  discardRun,
-  findInterruptedRun,
-  hasPendingTransaction,
-  legacyPredictFlowId,
-  predictFlowId,
-} from "../interrupted";
+import { discardRun, findInterruptedRun, hasPendingTransaction, predictFlowId } from "../interrupted";
 
 const OWNER = "0xA11ce000000000000000000000000000000A11CE";
 const OTHER = "0xb0b00000000000000000000000000000000000b0";
@@ -69,41 +63,29 @@ describe("findInterruptedRun", () => {
   });
 });
 
-describe("runs saved under the session-only key", () => {
-  it("are still found for their owner", () => {
-    expect(findInterruptedRun(storeWith(legacyPredictFlowId("7"), OWNER), "7", OWNER)).toEqual(SAVED);
-  });
-
-  it("are not found for another owner", () => {
-    expect(findInterruptedRun(storeWith(legacyPredictFlowId("7"), OWNER), "7", OTHER)).toBeNull();
-  });
-});
-
 describe("discardRun", () => {
-  it("forgets the owner's run under either key", () => {
-    for (const key of [predictFlowId("7", OWNER), legacyPredictFlowId("7")]) {
-      const store = storeWith(key, OWNER);
-      discardRun(store, "7", OWNER);
-      expect(store.load(key)).toBeNull();
-    }
+  it("forgets the owner's run", () => {
+    const store = storeWith(predictFlowId("7", OWNER), OWNER);
+    discardRun(store, "7", OWNER);
+    expect(store.load(predictFlowId("7", OWNER))).toBeNull();
   });
 
-  it("leaves another owner's session-only run alone", () => {
-    const store = storeWith(legacyPredictFlowId("7"), OWNER);
-    discardRun(store, "7", OTHER);
-    expect(store.load(legacyPredictFlowId("7"))).not.toBeNull();
+  it("leaves another owner's run alone", () => {
+    const store = storeWith(predictFlowId("7", OTHER), OTHER);
+    discardRun(store, "7", OWNER);
+    expect(store.load(predictFlowId("7", OTHER))).not.toBeNull();
   });
 });
 
 describe("a run whose transaction has not reconciled", () => {
-  it("is reported as pending for its owner under either key", () => {
-    for (const key of [predictFlowId("7", OWNER), legacyPredictFlowId("7")]) {
+  it("is reported as pending for its owner ", () => {
+    for (const key of [predictFlowId("7", OWNER)]) {
       expect(hasPendingTransaction(storeWith(key, OWNER, submitted, halted), "7", OWNER)).toBe(true);
     }
   });
 
   it("is kept when discarded", () => {
-    for (const key of [predictFlowId("7", OWNER), legacyPredictFlowId("7")]) {
+    for (const key of [predictFlowId("7", OWNER)]) {
       const store = storeWith(key, OWNER, submitted, halted);
       discardRun(store, "7", OWNER);
       expect(store.load(key)).not.toBeNull();
@@ -126,65 +108,5 @@ describe("a run with nothing awaiting a receipt", () => {
     const store = storeWith(predictFlowId("7", OWNER), OWNER, deposit, phase);
     discardRun(store, "7", OWNER);
     expect(store.load(predictFlowId("7", OWNER))).toBeNull();
-  });
-});
-
-describe("session-only runs by the chain they were saved on", () => {
-  const ANOTHER_CHAIN_ID = DEFAULT_CHAIN_ID + 1;
-
-  it("finds the owner's session-only run saved on the default chain", () => {
-    const store = storeWith(
-      legacyPredictFlowId("7"),
-      OWNER,
-      { status: "pending" },
-      { status: "running" },
-      DEFAULT_CHAIN_ID,
-    );
-    expect(findInterruptedRun(store, "7", OWNER)).toEqual(SAVED);
-  });
-
-  it("does not find the owner's session-only run saved on another chain", () => {
-    const store = storeWith(
-      legacyPredictFlowId("7"),
-      OWNER,
-      { status: "pending" },
-      { status: "running" },
-      ANOTHER_CHAIN_ID,
-    );
-    expect(findInterruptedRun(store, "7", OWNER)).toBeNull();
-  });
-
-  it("reports a pending transaction in a session-only run saved on the default chain", () => {
-    const store = storeWith(legacyPredictFlowId("7"), OWNER, submitted, halted, DEFAULT_CHAIN_ID);
-    expect(hasPendingTransaction(store, "7", OWNER)).toBe(true);
-  });
-
-  it("does not report a pending transaction in a session-only run saved on another chain", () => {
-    const store = storeWith(legacyPredictFlowId("7"), OWNER, submitted, halted, ANOTHER_CHAIN_ID);
-    expect(hasPendingTransaction(store, "7", OWNER)).toBe(false);
-  });
-
-  it("discards a settled session-only run saved on the default chain", () => {
-    const store = storeWith(
-      legacyPredictFlowId("7"),
-      OWNER,
-      { status: "pending" },
-      { status: "running" },
-      DEFAULT_CHAIN_ID,
-    );
-    discardRun(store, "7", OWNER);
-    expect(store.load(legacyPredictFlowId("7"))).toBeNull();
-  });
-
-  it("leaves a settled session-only run saved on another chain in storage when discarding", () => {
-    const store = storeWith(
-      legacyPredictFlowId("7"),
-      OWNER,
-      { status: "pending" },
-      { status: "running" },
-      ANOTHER_CHAIN_ID,
-    );
-    discardRun(store, "7", OWNER);
-    expect(store.load(legacyPredictFlowId("7"))).not.toBeNull();
   });
 });

@@ -7,7 +7,14 @@ import { depositNativeTx, depositTx } from "@/lib/trade-executor/funding";
 import { splitCalls } from "@/lib/trade-executor/positions";
 import { optionTradeCalls, type QuotedSwap } from "@/lib/trade-executor/predict";
 
-import type { OptionChainState, PredictCtx, PredictOption, PredictReader, PredictSnapshot } from "./types";
+import type {
+  OptionChainState,
+  PredictCtx,
+  PredictOption,
+  PredictReader,
+  PredictRequest,
+  PredictSnapshot,
+} from "./types";
 import { SLIPPAGE_BPS } from "../oracle/tolerances";
 import { planBuys, planSells, type OptionSide, type SoldLeg } from "../utils/plan";
 
@@ -167,24 +174,20 @@ async function predictCalls(args: {
 }
 
 /** The part of `collateralIn` the trade wallet already held, as the visitor was shown it. */
-export function tradeWalletShare(snap: PredictSnapshot): bigint {
-  const shown = snap.collateralBefore ?? 0n;
+export function tradeWalletShare(snap: Pick<PredictSnapshot, "collateralIn" | "collateralBefore">): bigint {
+  const shown = snap.collateralBefore;
   return snap.collateralIn < shown ? snap.collateralIn : shown;
 }
-
-const startingBalance = (snap: PredictSnapshot): bigint | undefined => snap.collateralAtStart ?? snap.collateralBefore;
 
 /**
  * The executor balance that shows the deposit has landed. An xDAI deposit mints an amount only
  * the chain knows, so any rise over the starting balance counts.
  */
 export function depositLandedAt(snap: PredictSnapshot): bigint {
-  const start = startingBalance(snap);
-  if (start === undefined) return snap.deposit;
-  return start + (snap.depositNative ? 1n : snap.deposit);
+  return snap.collateralAtStart + (snap.depositNative ? 1n : snap.deposit);
 }
 
-export function planPredict(snapshot: PredictSnapshot, deps: PredictDeps): Step[] {
+export function planPredict(snapshot: PredictRequest, deps: PredictDeps): Step[] {
   if (snapshot.options.length === 0) {
     throw new PredictConfigError("There are no estimates to predict.");
   }
@@ -263,7 +266,7 @@ export function createPredictHooks(deps: Pick<PredictDeps, "reader">): FlowHooks
       if (completed.stepId !== STEP_ID.deposit || !snapshot.depositNative) return;
 
       // The adapter mints whatever the xDAI was worth, which is only knowable once it lands.
-      const minted = (await deps.reader.collateralBalance(ctx.executor)) - (startingBalance(snapshot) ?? 0n);
+      const minted = (await deps.reader.collateralBalance(ctx.executor)) - snapshot.collateralAtStart;
       return { snapshotPatch: { collateralIn: minted + tradeWalletShare(snapshot) } };
     },
   };

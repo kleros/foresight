@@ -22,7 +22,7 @@ import { gnosis } from "viem/chains";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { planFunding } from "../../utils/funding";
-import type { PredictCtx, PredictOption, PredictSnapshot } from "../types";
+import type { PredictCtx, PredictOption, PredictRequest, PredictSnapshot } from "../types";
 
 /**
  * The app's modules read validated env when they load, so they are pulled in inside the test
@@ -197,6 +197,11 @@ describe("the predict flow, against a gnosis fork", () => {
         deposit: DEPOSIT,
         depositNative: false,
         collateralIn: DEPOSIT,
+        collateralBefore: 0n,
+        // read from the chain the way the run reads it when it starts
+        collateralAtStart: await createPredictReader({ client, sessionId: session.id, collateral }).collateralBalance(
+          ctx.executor,
+        ),
         startedAt: Math.floor(Date.now() / 1000),
       };
 
@@ -564,6 +569,11 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
       deposit,
       depositNative: false,
       collateralIn: deposit,
+      collateralBefore: 0n,
+      // read from the chain the way the run reads it when it starts
+      collateralAtStart: await app
+        .createPredictReader({ client, sessionId: session.id, collateral: session.collateralToken })
+        .collateralBalance(ctx.executor),
       startedAt: Math.floor(Date.now() / 1000),
     };
     const deps = {
@@ -916,7 +926,7 @@ describe("the split amount when the cached trade-wallet balance is stale, agains
 
     // what the popup shows, worked out from the cached balance as usePredictFunding does
     const funding = planFunding({ amount, ownWallet, tradeWallet: args.cached(real), tokenPerCollateralWad });
-    const snapshot: PredictSnapshot = {
+    const snapshot: PredictRequest = {
       options: [await roomyOption()],
       deposit: funding.deposit,
       depositNative: args.native,

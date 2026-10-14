@@ -13,10 +13,10 @@ import { wagmiConfig } from "@/lib/web3/wagmi";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
-import type { PredictCtx, PredictOption, PredictSnapshot } from "../flow/types";
+import type { PredictCtx, PredictOption, PredictRequest } from "../flow/types";
 import { SLIPPAGE_BPS } from "../oracle/tolerances";
 import { createPredictRun } from "../run/driver";
-import { legacyPredictFlowId, predictFlowId } from "../run/interrupted";
+import { predictFlowId } from "../run/interrupted";
 import { createPredictReader } from "../run/reader";
 import type { PredictDriver, PredictProgress } from "../run/types";
 
@@ -67,7 +67,6 @@ export function usePredictRun(input: PredictRunInput | null): {
     if (!identity || !held) return null;
     const input = held;
     const flowId = predictFlowId(input.sessionId, input.owner);
-    adoptLegacyRun(store, legacyPredictFlowId(input.sessionId), flowId, input.owner);
 
     return createPredictRun({
       gateway: createViemTxGateway({
@@ -105,7 +104,7 @@ export function usePredictRun(input: PredictRunInput | null): {
           sDaiAdapter: now.sDaiAdapter,
         };
       },
-      snapshot: (): PredictSnapshot => {
+      snapshot: (): PredictRequest => {
         const now = latest.current;
         if (!now) throw new Error("This session is no longer open for predictions.");
         return {
@@ -132,13 +131,4 @@ export function usePredictRun(input: PredictRunInput | null): {
   );
 
   return { driver, progress };
-}
-
-/** Moves a run saved under the session-only key to the scoped one, if it is this owner's on this chain. */
-function adoptLegacyRun(store: FlowRunStore, legacyId: string, flowId: string, owner: Address) {
-  const legacy = store.load<PredictSnapshot, PredictCtx>(legacyId);
-  if (!legacy) return;
-  if (String(legacy.ctx.owner).toLowerCase() !== owner.toLowerCase() || legacy.ctx.chainId !== DEFAULT_CHAIN_ID) return;
-  store.save({ ...legacy, flowId });
-  store.clear(legacyId);
 }

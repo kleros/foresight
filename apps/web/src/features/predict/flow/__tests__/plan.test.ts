@@ -271,15 +271,15 @@ describe("skipping a deposit that has already landed", () => {
   };
 
   it("does not mistake funds already in the trade wallet for the deposit", async () => {
-    await expect(canSkip(WAD * 6n, { deposit: WAD * 4n, collateralBefore: WAD * 6n })).resolves.toBe(false);
+    await expect(canSkip(WAD * 6n, { deposit: WAD * 4n, collateralAtStart: WAD * 6n })).resolves.toBe(false);
   });
 
   it("skips once the trade wallet holds what it had plus the deposit", async () => {
-    await expect(canSkip(WAD * 10n, { deposit: WAD * 4n, collateralBefore: WAD * 6n })).resolves.toBe(true);
+    await expect(canSkip(WAD * 10n, { deposit: WAD * 4n, collateralAtStart: WAD * 6n })).resolves.toBe(true);
   });
 
   it("takes any rise over the starting balance as an xDAI deposit landing", async () => {
-    const snap = { deposit: WAD * 5n, depositNative: true, collateralBefore: WAD * 6n };
+    const snap = { deposit: WAD * 5n, depositNative: true, collateralAtStart: WAD * 6n };
 
     await expect(canSkip(WAD * 6n, snap)).resolves.toBe(false);
     await expect(canSkip(WAD * 6n + 1n, snap)).resolves.toBe(true);
@@ -296,11 +296,6 @@ describe("skipping a deposit that has already landed", () => {
     const snap = { deposit: WAD * 5n, depositNative: true, collateralBefore: WAD * 3n, collateralAtStart: WAD * 5n };
 
     await expect(canSkip(WAD * 5n, snap)).resolves.toBe(false);
-  });
-
-  it("compares against the deposit alone for a run persisted without a starting balance", async () => {
-    await expect(canSkip(WAD, { deposit: WAD })).resolves.toBe(true);
-    await expect(canSkip(WAD - 1n, { deposit: WAD })).resolves.toBe(false);
   });
 });
 
@@ -328,12 +323,10 @@ describe("createPredictHooks", () => {
   it.each([
     ["the cache 2 below the chain", WAD * 3n, WAD * 5n, WAD * 9n, WAD * 6n, WAD * 9n],
     ["the cache at 0", 0n, WAD * 15n, WAD * 10n, WAD * 10n, WAD * 10n],
-    ["a run persisted before the chain read", WAD * 6n, undefined, WAD * 9n, (WAD * 7n) / 2n, (WAD * 19n) / 2n],
   ])(
     "splits what an xDAI deposit minted plus the trade-wallet share shown (%s)",
     async (_, shown, atStart, estimate, minted, expected) => {
-      const start = atStart ?? shown;
-      const hooks = createPredictHooks({ reader: fakeReader({ collateral: start + minted }) });
+      const hooks = createPredictHooks({ reader: fakeReader({ collateral: atStart + minted }) });
 
       const result = await hooks.afterStep!({
         ctx: ctx(),

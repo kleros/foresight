@@ -25,7 +25,7 @@ import {
   tradeWalletShare,
   type PredictDeps,
 } from "../flow/plan";
-import type { PredictCtx, PredictReader, PredictSnapshot } from "../flow/types";
+import type { PredictCtx, PredictReader, PredictRequest, PredictSnapshot } from "../flow/types";
 
 /** The trade wallet holds less than the share of the prediction it was shown to cover. */
 class TradeWalletShortError extends Error {}
@@ -45,7 +45,7 @@ export function createPredictRun(args: {
   /** Keyed per chain, owner and session, so no two runs share a stored record. */
   flowId: string;
   ctx: () => PredictCtx;
-  snapshot: () => PredictSnapshot;
+  snapshot: () => PredictRequest;
   store?: FlowRunStore;
   slippageBps?: number;
   optionsPerBatch?: number;
@@ -252,7 +252,7 @@ export function createPredictRun(args: {
   });
 
   /** Pins the trade wallet's balance before anything is signed, and checks a route exists. */
-  async function prepare(ctx: PredictCtx, requested: PredictSnapshot): Promise<PredictSnapshot> {
+  async function prepare(ctx: PredictCtx, requested: PredictRequest): Promise<PredictSnapshot> {
     const collateralAtStart = await args.reader.collateralBalance(ctx.executor);
     if (collateralAtStart < tradeWalletShare(requested)) throw new TradeWalletShortError();
     const snapshot = { ...requested, collateralAtStart };

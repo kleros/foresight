@@ -6,7 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 
 import { ctx, snapshot, WAD } from "@/features/predict/flow/__tests__/support/fakes";
-import { legacyPredictFlowId, predictFlowId } from "@/features/predict/run/interrupted";
+import { predictFlowId } from "@/features/predict/run/interrupted";
 import { sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 import { toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
 
@@ -100,18 +100,4 @@ it("says a transaction may still be pending while the run's transaction awaits i
   expect(
     await screen.findByText(/A transaction from it may still be pending; resume to check it\./),
   ).toBeInTheDocument();
-});
-
-it("shows the run that Discard kept because its transaction awaits a receipt", async () => {
-  saveRun({ status: "pending" }, { status: "running" });
-  saveRun({ status: "submitted", hash: HASH }, halted, legacyPredictFlowId("7"));
-  render(<PredictCard session={session()} status="trading" marketEstimates={{}} />);
-
-  await userEvent.click(await screen.findByRole("button", { name: "Discard" }));
-
-  expect(
-    await screen.findByText(/A transaction from it may still be pending; resume to check it\./),
-  ).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
 });

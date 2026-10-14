@@ -64,6 +64,8 @@ export const snapshot = (overrides: Partial<PredictSnapshot> = {}): PredictSnaps
   deposit: WAD,
   depositNative: false,
   collateralIn: WAD,
+  collateralBefore: 0n,
+  collateralAtStart: 0n,
   startedAt: 1_700_000_000,
   ...overrides,
 });
