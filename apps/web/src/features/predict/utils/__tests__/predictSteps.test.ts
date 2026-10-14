@@ -249,10 +249,16 @@ describe("the sDAI an xDAI payment becomes", () => {
     const xDai = { id: "native" as const, symbol: "xDAI", decimals: 18 };
     const sDai = { symbol: "sDAI", decimals: 18 };
     // 1.2543 xDAI per sDAI, so 1 xDAI is 0.79725... sDAI: truncating and rounding disagree in the 4th decimal
-    const funding = planFunding({ amount: WAD, ownWallet: 10n * WAD, tradeWallet: 0n, tokenPerCollateralWad: 12543n * 10n ** 14n });
+    const funding = planFunding({
+      amount: WAD,
+      ownWallet: 10n * WAD,
+      tradeWallet: 0n,
+      tokenPerCollateralWad: 12543n * 10n ** 14n,
+    });
 
     const summary = fundingSummary({ funding, amount: WAD, token: xDai, collateral: sDai });
-    const subtitle = predictSteps({ wallet: null, progress: null, ...fundsToAdd(funding, xDai, sDai) }).rows[1]?.subtitle;
+    const subtitle = predictSteps({ wallet: null, progress: null, ...fundsToAdd(funding, xDai, sDai) }).rows[1]
+      ?.subtitle;
 
     expect(summary?.text).toBe("≈ 0.7973 sDAI from your wallet");
     expect(subtitle).toBe("Adding 1 xDAI (~0.7973 sDAI)");
@@ -290,8 +296,36 @@ describe("statusLine", () => {
     });
 
     expect(
-      statusLine({ steps: pending, notice: "Connect a wallet to make this prediction.", skipped: 0, isRecovered: false }),
+      statusLine({
+        steps: pending,
+        notice: "Connect a wallet to make this prediction.",
+        skipped: 0,
+        isRecovered: false,
+      }),
     ).toEqual({ text: "Connect a wallet to make this prediction.", tone: "warning" });
+  });
+
+  it("warns, rather than errs, about a transaction sent but not yet confirmed", () => {
+    const pending = steps({
+      progress: progress({
+        stage: "halted",
+        failure: { reason: "rpc", retryable: true },
+        pendingHash: `0x${"ab".repeat(32)}`,
+      }),
+    });
+
+    expect(statusLine({ steps: pending, skipped: 0, isRecovered: false })?.tone).toBe("warning");
+  });
+
+  it("keeps the line shown before a run for before a run", () => {
+    const between = steps({
+      progress: progress({
+        stage: "confirming",
+        steps: progress().steps.map((step) => ({ ...step, state: "success" as const })),
+      }),
+    });
+
+    expect(statusLine({ steps: between, skipped: 0, isRecovered: false })).toBeNull();
   });
 
   it("says why a run stopped when nothing else is asked of the visitor", () => {

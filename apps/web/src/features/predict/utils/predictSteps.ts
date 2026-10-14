@@ -20,6 +20,12 @@ export interface PredictSteps {
   rows: PredictStepRow[];
   /** Set once a run has stopped short, in words the visitor can act on; the row that stopped reads `failed`. */
   failure?: string;
+  /** The stopped run's transaction was sent and may still confirm, so `failure` is a warning. */
+  pending?: true;
+  /** What the run is doing while it checks a sent transaction before going on. */
+  note?: string;
+  /** A run exists, so the line shown before one no longer applies. */
+  started?: true;
 }
 
 /** The chain's own errors name gas and contracts, which the popup never shows. */
@@ -44,6 +50,8 @@ const FEE_SHORT_COPY = "Your wallet does not have enough xDAI for the network fe
 
 /** A transaction is out there and nothing has said how it ended, so it is neither a success nor a failure. */
 const PENDING_COPY = "Your transaction was sent but has not confirmed yet. It is checked before anything else is sent.";
+
+const RECONCILING_COPY = "Checking your last transaction on chain…";
 
 const STAGE_COPY: Partial<Record<PredictProgress["stage"], string>> = {
   quoting: "Finding the best prices…",
@@ -95,7 +103,15 @@ export function predictSteps(
   },
 ): PredictSteps {
   const { wallet, toAdd, symbol, decimals, collateral, progress } = args;
-  const runSteps = progress?.steps ?? [];
+  // the driver reads a sent transaction's receipt under "confirming" with no step of its own running
+  const reconciling =
+    progress?.stage === "confirming" &&
+    Boolean(progress.pendingHash) &&
+    !progress.steps.some((step) => step.state === "running");
+  const sentId = reconciling ? progress.steps.find((step) => step.state !== "success")?.id : undefined;
+  const runSteps = (progress?.steps ?? []).map((step) =>
+    step.id === sentId ? { ...step, state: "running" as const } : step,
+  );
   const row = (id: string) => runSteps.find((step) => step.id === id);
   const halted = progress?.stage === "halted";
 
@@ -166,7 +182,8 @@ export function predictSteps(
     },
   ];
 
-  if (!halted) return { rows };
+  const started = progress && progress.stage !== "idle" ? { started: true as const } : {};
+  if (!halted) return { rows, ...started, ...(reconciling ? { note: RECONCILING_COPY } : {}) };
 
   const marked = rows.map((stepRow) =>
     stepRow.key === failedKey
@@ -180,7 +197,7 @@ export function predictSteps(
       : progress.failure
         ? FAILURE_COPY[progress.failure.reason]
         : FAILURE_COPY.unknown;
-  return { rows: marked, failure: reason };
+  return { rows: marked, failure: reason, ...started, ...(progress.pendingHash ? { pending: true as const } : {}) };
 }
 
 export interface StatusLine {
@@ -190,8 +207,8 @@ export interface StatusLine {
 
 /**
  * The popup's one status line under the steps, most pressing first: what the visitor has to do,
- * why a run stopped, what it left out, that it finished, that a stored run is waiting, or, before
- * a run, that nothing is signed until the prices are checked. Null while a step is running.
+ * why a run stopped, what a run is checking, what it left out, that it finished, that a stored run
+ * is waiting, or, before a run, that nothing is signed until the prices are checked.
  */
 export function statusLine(args: {
   steps: PredictSteps;
@@ -201,7 +218,8 @@ export function statusLine(args: {
 }): StatusLine | null {
   const { steps, notice, skipped, isRecovered } = args;
   if (notice) return { text: notice, tone: "warning" };
-  if (steps.failure) return { text: steps.failure, tone: "error" };
+  if (steps.failure) return { text: steps.failure, tone: steps.pending ? "warning" : "error" };
+  if (steps.note) return { text: steps.note, tone: "neutral" };
   if (skipped > 0) {
     return {
       text: `${skipped} of your estimates could not be traded right now and ${skipped === 1 ? "was" : "were"} left out.`,
@@ -212,6 +230,6 @@ export function statusLine(args: {
     return { text: "Prediction placed.", tone: "success" };
   }
   if (isRecovered) return { text: "This prediction did not finish.", tone: "neutral" };
-  if (steps.rows.some((row) => row.view === "running")) return null;
+  if (steps.started || steps.rows.some((row) => row.view === "running")) return null;
   return { text: "Prices are checked before anything is signed.", tone: "neutral" };
 }
