@@ -157,19 +157,20 @@ describe("the predict flow, against a gnosis fork", () => {
 
       const { predicted } = await fetchExecutorState(client, { factory, owner: account.address });
 
-      // one option, asked to move well above where the pool sits
       const child = session.children[0]!;
+      const before = await readPoolLiquidity(client, optionPoolRefs(await fetchSessionPools(session.id), child.id).up!);
+      const priceBefore = priceFromSqrtPriceX96(before.sqrtPriceX96, before.outcomeIsToken0);
+
+      // one option, asked to move well above where the pool sits; an earlier run on this session may
+      // already have moved it, so the target is set from the price now
       const option: PredictOption = {
         childMarket: child.id,
         underlying: child.underlyingToken,
         upToken: child.upToken,
         downToken: child.downToken,
         invalidToken: child.invalidToken,
-        targetPriceWad: (10n ** 18n * 85n) / 100n,
+        targetPriceWad: priceBefore + (10n ** 18n - priceBefore) / 2n,
       };
-
-      const before = await readPoolLiquidity(client, optionPoolRefs(await fetchSessionPools(session.id), child.id).up!);
-      const priceBefore = priceFromSqrtPriceX96(before.sqrtPriceX96, before.outcomeIsToken0);
 
       const ctx: PredictCtx = {
         chainId: CHAIN_ID,
