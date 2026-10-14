@@ -238,18 +238,18 @@ describe("switching the pay token keeps the typed amount, clamped to the new bal
 
     fireEvent.change(popup.getByRole("slider"), { target: { value: "50" } });
     await waitFor(() => expect(amountField(popup)).toHaveValue("5"));
-    expect(popup.getByText("Total: 5 sDAI")).toBeInTheDocument();
+    expect(popup.getByText("5 sDAI from your wallet")).toBeInTheDocument();
 
     // 5 xDAI is 4 sDAI at 1.25 xDAI per sDAI
     await chooseToken(popup, "xDAI");
     await waitFor(() => expect(popup.getByText(/^Balance: 8 xDAI/)).toBeInTheDocument());
     expect(amountField(popup)).toHaveValue("5");
-    expect(popup.getByText("Total: 4 sDAI")).toBeInTheDocument();
+    expect(popup.getByText("≈ 4 sDAI from your wallet")).toBeInTheDocument();
 
     await chooseToken(popup, "sDAI");
     await waitFor(() => expect(popup.getByText(/^Balance: 10 sDAI/)).toBeInTheDocument());
     expect(amountField(popup)).toHaveValue("5");
-    expect(popup.getByText("Total: 5 sDAI")).toBeInTheDocument();
+    expect(popup.getByText("5 sDAI from your wallet")).toBeInTheDocument();
   });
 
   it("clamps an amount larger than the new token's balance to that balance", async () => {
@@ -266,8 +266,8 @@ describe("switching the pay token keeps the typed amount, clamped to the new bal
     await waitFor(() => expect(popup.getByText(/^Balance: 5 xDAI/)).toBeInTheDocument());
     expect(amountField(popup)).toHaveValue("5");
     // 5 xDAI is 4 sDAI at 1.25 xDAI per sDAI
-    expect(popup.getByText("Total: 4 sDAI")).toBeInTheDocument();
-    expect(popup.queryByText("Not enough balance.")).toBeNull();
+    expect(popup.getByText("≈ 4 sDAI from your wallet")).toBeInTheDocument();
+    expect(popup.queryByText(/Not enough balance/)).toBeNull();
   });
 });
 
@@ -301,11 +301,23 @@ describe("the popup opens on a pay token the wallet holds", () => {
     popup = await openPopup();
 
     await waitFor(async () => expect(await balanceToken(popup)).toBe("xDAI"));
-    expect(popup.queryByText("Not enough balance.")).toBeNull();
+    expect(popup.queryByText(/Not enough balance/)).toBeNull();
   });
 });
 
 describe("the funds step names what the visitor pays", () => {
+  it("names nothing to add for an amount over the balance", async () => {
+    wallet.sDai = 10n * WAD;
+    renderPage();
+    const popup = await openPopup();
+    expect(await balanceToken(popup)).toBe("sDAI");
+
+    await userEvent.type(amountField(popup), "999");
+
+    expect(await popup.findByText(/Not enough balance/)).toBeInTheDocument();
+    expect(popup.queryByText(/^Adding /)).toBeNull();
+  });
+
   it("names an sDAI payment in sDAI alone", async () => {
     wallet.sDai = 10n * WAD;
     renderPage();

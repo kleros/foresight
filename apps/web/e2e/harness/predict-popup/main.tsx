@@ -2,15 +2,25 @@ import { createRoot } from "react-dom/client";
 
 import { PredictDialog } from "@/features/predict/components/PredictDialog";
 import type { ListedEstimate } from "@/features/predict/components/PredictList";
+import type { PredictFailureReason, PredictProgress } from "@/features/predict/run/types";
+import { planFunding } from "@/features/predict/utils/funding";
+import { fundsToAdd, predictSteps } from "@/features/predict/utils/predictSteps";
 
 import "@/styles/global.css";
 
 const WAD = 10n ** 18n;
+const WALLET = "0xdcee0000000000000000000000000000000c664f";
 
 const CITIES = ["Berlin", "Lisbon", "Nairobi", "Montevideo", "Hanoi"];
 
+const params = new URLSearchParams(window.location.search);
 /** `?options=N` estimates, alternating higher and lower, each with a market move. */
-const count = Number(new URLSearchParams(window.location.search).get("options") ?? "2");
+const count = Number(params.get("options") ?? "2");
+/** `?state=` one of STATES: the popup as each point of a run leaves it. */
+const state = (params.get("state") ?? "idle") as State;
+/** `?reason=` the failure a `failed` popup shows; "fee" is the funds failure after money moved. */
+const reason = params.get("reason") ?? "fee";
+if (params.get("theme") === "dark") document.documentElement.classList.add("dark");
 
 const selected: ListedEstimate[] = CITIES.slice(0, count).map((name, index) => ({
   scale: {
@@ -22,6 +32,7 @@ const selected: ListedEstimate[] = CITIES.slice(0, count).map((name, index) => (
     upperBound: 500,
   },
   value: 400 - index * 40,
+  marketEstimate: 250,
   direction: index % 2 === 0 ? "higher" : "lower",
 }));
 
@@ -30,6 +41,63 @@ const preview = Object.fromEntries(
 );
 
 const sDai = { id: "collateral" as const, symbol: "sDAI", decimals: 18 };
+const collateral = { symbol: "sDAI", decimals: 18 };
+
+const run = (
+  stage: PredictProgress["stage"],
+  states: string[],
+  extra: Partial<PredictProgress> = {},
+): PredictProgress => ({
+  stage,
+  steps: ["create-wallet", "deposit", "predict-1", "predict-2"].map((id, index) => ({
+    id,
+    label: "",
+    state: (states[index] ?? "pending") as PredictProgress["steps"][number]["state"],
+  })),
+  skipped: [],
+  batchesDone: 0,
+  batches: 2,
+  ...extra,
+});
+
+type State =
+  | "idle"
+  | "quoting"
+  | "signing"
+  | "confirming"
+  | "failed"
+  | "pending"
+  | "success"
+  | "recovered"
+  | "over"
+  | "disconnected";
+
+const PROGRESS: Partial<Record<State, PredictProgress>> = {
+  quoting: run("quoting", []),
+  signing: run("signing", ["success", "running"]),
+  confirming: run("confirming", ["success", "success", "success", "running"], { batchesDone: 1 }),
+  failed: run("halted", ["success", "success", "success", "error"], {
+    batchesDone: 1,
+    failure: { reason: (reason === "fee" ? "funds" : reason) as PredictFailureReason, retryable: true },
+    moneyMoved: reason === "fee" ? true : undefined,
+  }),
+  pending: run("halted", ["success", "running"], {
+    failure: { reason: "rpc", retryable: true },
+    pendingHash: `0x${"ab".repeat(32)}`,
+  }),
+  success: run("complete", ["success", "success", "success", "success"], { batchesDone: 2 }),
+  recovered: run("review", ["success", "success"]),
+};
+
+const amount = state === "over" ? 999n * WAD : 10n * WAD;
+const funding = state === "disconnected" ? null : planFunding({ amount, ownWallet: 19n * WAD, tradeWallet: 6n * WAD });
+const progress = PROGRESS[state] ?? null;
+const isRunning = state === "quoting" || state === "signing" || state === "confirming";
+const steps = predictSteps({
+  wallet: { address: WALLET, deployed: false },
+  ...fundsToAdd(state === "over" ? null : funding, sDai, collateral),
+  progress,
+});
 
 createRoot(document.getElementById("root")!).render(
   <>
@@ -39,32 +107,23 @@ createRoot(document.getElementById("root")!).render(
       onClose={() => {}}
       selected={selected}
       onRemove={() => {}}
-      preview={preview}
-      amount={10n * WAD}
+      preview={state === "recovered" ? undefined : preview}
+      amount={amount}
       onAmountChange={() => {}}
       tokens={[sDai]}
       token={sDai}
       onTokenChange={() => {}}
-      funding={{
-        available: 25n * WAD,
-        collateralIn: 10n * WAD,
-        tradeWallet: 6n * WAD,
-        fromTradeWallet: 6n * WAD,
-        toAdd: 4n * WAD,
-        deposit: 4n * WAD,
-      }}
-      collateral={{ symbol: "sDAI", decimals: 18 }}
+      funding={funding}
+      collateral={collateral}
       isFirstPrediction
-      steps={{
-        rows: [
-          { key: "wallet", title: "Create a trade wallet", subtitle: "", view: "idle" },
-          { key: "funds", title: "Add funds to your trade wallet", subtitle: "Adding 4 sDAI", view: "idle" },
-          { key: "predict", title: "Make prediction", subtitle: "", view: "idle" },
-        ],
-      }}
+      isDisconnected={state === "disconnected"}
+      steps={steps}
       skipped={0}
-      isRunning={false}
-      canRetry={false}
+      isRunning={isRunning}
+      canRetry={state === "failed" || state === "pending" || state === "recovered"}
+      isPending={state === "pending"}
+      recovered={state === "recovered" ? { deposit: 4n * WAD, token: sDai } : undefined}
+      notice={state === "disconnected" ? "Connect a wallet to make this prediction." : undefined}
       onPredict={() => {}}
     />
   </>,

@@ -12,7 +12,8 @@ import { formatEstimate } from "@/utils/formatEstimate";
 import type { SelectedEstimate } from "../types";
 
 /** An estimate as the list shows it; a stored run's has no market estimate to compare against. */
-export type ListedEstimate = Pick<SelectedEstimate, "scale" | "value"> & Partial<Pick<SelectedEstimate, "direction">>;
+export type ListedEstimate = Pick<SelectedEstimate, "scale" | "value"> &
+  Partial<Pick<SelectedEstimate, "direction" | "marketEstimate">>;
 
 /** An option's market estimate before and after the prediction, in the option's unit. */
 export interface PriceMove {
@@ -20,7 +21,7 @@ export interface PriceMove {
   to: number;
 }
 
-/** The popup's title and the estimates going into it, each removable while more than one is left. */
+/** The popup's title and the estimates going into it, one line each, removable while more than one is left. */
 export function PredictList({
   selected,
   onRemove,
@@ -30,77 +31,85 @@ export function PredictList({
   selected: ListedEstimate[];
   onRemove: (market: string) => void;
   isReadOnly: boolean;
-  /** Keyed by lower-case market; an option without an entry shows no move. */
+  /** Keyed by lower-case market; an option without an entry shows where its market is now. */
   preview?: Record<string, PriceMove>;
 }) {
   return (
-    <div className="mb-1 flex min-h-28 w-full shrink grow-0 flex-col items-center gap-2 md:mb-4 md:gap-4">
-      <h2 className="text-fs-text-primary shrink-0 text-xl font-semibold md:text-2xl">Predict</h2>
-      <ScrollFade className="rounded-fs max-h-35 min-h-18 md:max-h-40 w-full shrink">
-        <ul className="flex w-full flex-col gap-0.25">
-          {selected.map((estimate) => {
-            const higher = estimate.direction === "higher";
-            const Arrow = higher ? ArrowUp : ArrowDown;
-            const priced = preview[estimate.scale.market.toLowerCase()];
-            // a move that rounds to nothing would read "from 51.22 % to 51.22 %"
-            const move =
-              priced &&
-              formatEstimate(priced.from, estimate.scale.unit) !== formatEstimate(priced.to, estimate.scale.unit)
-                ? priced
-                : undefined;
-            return (
-              <li
-                key={estimate.scale.market}
-                className={clsx(
-                  "bg-fs-surface-tint rounded-fs relative w-full",
-                  "flex flex-col items-center justify-center py-1.5 md:p-3",
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="size-2 flex-none rounded-full"
-                      style={{ backgroundColor: estimate.scale.color }}
-                      aria-hidden
-                    />
-                    <span className="text-fs-text-primary text-sm font-semibold sm:text-base">
-                      {estimate.scale.name}
-                    </span>
-                  </div>
-                  <div className="space-x-2">
-                    <span className="text-fs-text-primary text-sm sm:text-base">Estimate</span>
-                    <span className="text-fs-text-primary text-sm font-semibold sm:text-base">
-                      {formatEstimate(estimate.value, estimate.scale.unit)}
-                    </span>
-                  </div>
-                </div>
-                {estimate.direction ? (
-                  <span className={clsx("text-xs sm:text-sm", higher ? "text-fs-tone-success" : "text-fs-tone-error")}>
-                    <Arrow className="mr-1 inline size-3 [&_path]:fill-current" aria-hidden />
-                    {higher ? "Higher" : "Lower"} than the market
-                  </span>
-                ) : null}
-                {move ? (
-                  <span className="text-fs-text-secondary text-xs sm:text-sm">
-                    Market moves from {formatEstimate(move.from, estimate.scale.unit)} to{" "}
-                    {formatEstimate(move.to, estimate.scale.unit)}
-                  </span>
-                ) : null}
-                {selected.length > 1 ? (
-                  <LightButton
-                    className="absolute top-1/2 right-2 -translate-y-1/2 p-1"
-                    text=""
-                    aria-label={`Remove ${estimate.scale.name}`}
-                    icon={<CloseIcon className="text-fs-text-secondary size-3" />}
-                    isDisabled={isReadOnly}
-                    onPress={() => onRemove(estimate.scale.market)}
-                  />
-                ) : null}
-              </li>
-            );
-          })}
+    <div className="mb-4 flex w-full shrink-0 flex-col gap-3">
+      <div className="flex items-baseline justify-between gap-4">
+        <h2 className="text-fs-text-primary text-xl font-semibold md:text-2xl">Predict</h2>
+        <span className="type-label text-fs-text-secondary">
+          {selected.length} {selected.length === 1 ? "estimate" : "estimates"}
+        </span>
+      </div>
+      {/* five rows before it scrolls */}
+      <ScrollFade className="max-h-[196px] w-full">
+        <ul className="flex w-full flex-col gap-1">
+          {selected.map((estimate) => (
+            <EstimateRow
+              key={estimate.scale.market}
+              estimate={estimate}
+              move={preview[estimate.scale.market.toLowerCase()]}
+              onRemove={selected.length > 1 ? () => onRemove(estimate.scale.market) : undefined}
+              isReadOnly={isReadOnly}
+            />
+          ))}
         </ul>
       </ScrollFade>
     </div>
+  );
+}
+
+function EstimateRow({
+  estimate,
+  move,
+  onRemove,
+  isReadOnly,
+}: {
+  estimate: ListedEstimate;
+  move: PriceMove | undefined;
+  onRemove?: () => void;
+  isReadOnly: boolean;
+}) {
+  const { scale } = estimate;
+  const higher = estimate.direction === "higher";
+  const Arrow = higher ? ArrowUp : ArrowDown;
+  const format = (value: number) => formatEstimate(value, scale.unit);
+  // a move that rounds to nothing would read "51.22 % → 51.22 %"
+  const moved = move && format(move.from) !== format(move.to) ? move : undefined;
+  const where = moved
+    ? `${formatEstimate(moved.from, null)} → ${format(moved.to)}`
+    : estimate.marketEstimate !== undefined
+      ? `from ${format(estimate.marketEstimate)}`
+      : undefined;
+
+  return (
+    <li className="bg-fs-surface-tint rounded-fs type-label flex h-9 w-full items-center gap-2.5 pr-1 pl-3">
+      <span className="size-2 flex-none rounded-full" style={{ backgroundColor: scale.color }} aria-hidden />
+      <span className="text-fs-text-primary max-w-[45%] shrink-0 truncate font-semibold">{scale.name}</span>
+      <span className="text-fs-text-primary shrink-0 font-semibold tabular-nums">{format(estimate.value)}</span>
+      {estimate.direction ? (
+        <Arrow
+          role="img"
+          aria-label={higher ? "above the market" : "below the market"}
+          className={clsx(
+            "size-3 shrink-0 [&_path]:fill-current",
+            higher ? "text-fs-tone-success-text" : "text-fs-tone-error-text",
+          )}
+        />
+      ) : null}
+      {/* gives way before the name does */}
+      {where ? <span className="text-fs-text-secondary min-w-0 shrink-[4] truncate tabular-nums">{where}</span> : null}
+      {onRemove ? (
+        <LightButton
+          className="hover:bg-fs-surface relative ml-auto size-7 shrink-0 justify-center p-0 before:absolute before:-inset-x-2 before:-inset-y-1 before:content-['']"
+          text=""
+          aria-label={`Remove ${scale.name}`}
+          icon={<CloseIcon className="text-fs-text-secondary size-3" />}
+          isDisabled={isReadOnly}
+          onPress={onRemove}
+        />
+      ) : null}
+    </li>
   );
 }

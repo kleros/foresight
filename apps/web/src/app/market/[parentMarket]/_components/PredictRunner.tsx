@@ -134,13 +134,15 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
     driver?.start();
   };
 
-  const runToken = recovered?.depositNative ? NATIVE : collateral;
+  // an amount over the balance cannot be predicted, so nothing is named as being added for it
+  const overBalance = funding !== null && amount !== undefined && amount > funding.available;
+  const runToken: PayTokenChoice = recovered?.depositNative ? NATIVE : { id: "collateral", ...collateral };
   const steps = predictSteps({
     wallet: predicted ? { address: predicted, deployed: Boolean(executor.data?.deployed) } : null,
     ...(recovered
       ? { toAdd: recovered.deposit, symbol: runToken.symbol, decimals: runToken.decimals }
       : // held only while the form is locked to the run; otherwise the form is what the next press signs
-        ((isRunning || canRetry) && frozenToAdd) || fundsToAdd(funding, token, collateral)),
+        ((isRunning || canRetry) && frozenToAdd) || fundsToAdd(overBalance ? null : funding, token, collateral)),
     progress,
   });
 
@@ -171,7 +173,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
       isRunning={isRunning}
       canRetry={canRetry}
       isPending={Boolean(pendingHash)}
-      recovered={recovered && { deposit: recovered.deposit, symbol: runToken.symbol, decimals: runToken.decimals }}
+      recovered={recovered && { deposit: recovered.deposit, token: runToken }}
       notice={
         // once a run is going its own state is the story, not what the wallet is doing now
         isRunning ? undefined : notice({ owner, onRightChain: chainId === DEFAULT_CHAIN_ID, ready })

@@ -2,9 +2,7 @@
 
 import { Button, Modal } from "@kleros/ui-components-library";
 import clsx from "clsx";
-import { formatUnits } from "viem";
 
-import InfoCard from "@/components/ui/InfoCard";
 import { ScrollFade } from "@/components/ui/ScrollFade";
 
 import type { PayToken } from "../types";
@@ -12,7 +10,7 @@ import { PredictAmountSection, type PayTokenChoice } from "./PredictAmountSectio
 import { PredictList, type ListedEstimate, type PriceMove } from "./PredictList";
 import { PredictStepsTimeline } from "./PredictStepsTimeline";
 import type { Funding } from "../utils/funding";
-import type { PredictSteps } from "../utils/predictSteps";
+import { statusLine, type PredictSteps, type StatusLine } from "../utils/predictSteps";
 
 interface PredictDialogProps {
   isOpen: boolean;
@@ -40,15 +38,25 @@ interface PredictDialogProps {
   canRetry: boolean;
   /** The stopped run sent a transaction whose outcome is unknown; pressing on checks it first. */
   isPending?: boolean;
-  /** A stored run under review: its own deposit replaces the amount form, and Resume replaces Predict. */
-  recovered?: { deposit: bigint; symbol: string; decimals: number };
+  /** A stored run under review: its own deposit fills the locked amount form, and Resume replaces Predict. */
+  recovered?: { deposit: bigint; token: PayTokenChoice };
   /** What the visitor has to do before this prediction can be made, if anything. */
   notice?: string;
   /** Starts a run, or picks a stopped one up again. */
   onPredict: () => void;
 }
 
-/** Futarchy's predict popup: the estimates, the amount behind them, and the steps that place them. */
+const STATUS_TONE: Record<StatusLine["tone"], string> = {
+  neutral: "text-fs-text-secondary",
+  warning: "text-fs-tone-warning-text",
+  error: "text-fs-tone-error-text",
+  success: "text-fs-tone-success-text font-semibold",
+};
+
+/**
+ * Futarchy's predict popup with every region at a fixed height, so the dialog keeps one size
+ * from the first look through signing, a failure and the end of the run.
+ */
 export function PredictDialog({
   isOpen,
   onClose,
@@ -77,6 +85,8 @@ export function PredictDialog({
   const tooMuch = funding !== null && amount !== undefined && amount > funding.available;
   // with nothing held, an empty amount has nothing to trade with
   const nothingToTrade = isFirstPrediction && (funding?.collateralIn ?? 0n) === 0n;
+  const status = statusLine({ steps, notice, skipped, isRecovered: recovered !== undefined });
+  const runToken = recovered?.token;
 
   return (
     <Modal
@@ -87,66 +97,58 @@ export function PredictDialog({
       onOpenChange={(open) => (open || isRunning ? undefined : onClose())}
       className={clsx(
         "fixed top-18 left-1/2 -translate-x-1/2 transform md:top-20",
-        "h-auto max-h-[calc(100dvh-5rem)] w-max md:max-h-[calc(100dvh-7rem)]",
-        "max-md:w-[calc(100vw-2rem)] max-md:max-w-sm",
-        "flex p-3 pb-0! md:px-10 md:py-8",
+        "h-auto max-h-[calc(100dvh-5rem)] md:max-h-[calc(100dvh-7rem)]",
+        "w-[calc(100vw-2rem)] max-w-[560px]",
+        "flex px-4 pt-4 pb-0! md:px-10 md:pt-8",
         "rounded-fs border-fs-border bg-fs-surface border",
       )}
     >
-      <div className="flex min-h-0 w-full flex-col items-center">
+      <div className="flex min-h-0 w-full flex-col">
         <PredictList selected={selected} onRemove={onRemove} isReadOnly={isLocked} preview={preview} />
         <ScrollFade className="min-h-32 w-full">
-          {recovered ? (
-            <div className="mb-4 flex flex-col items-center gap-1 text-center">
-              <p className="text-fs-text-secondary text-sm">
-                This prediction did not finish. Resuming it uses the amount and estimates it started with.
-              </p>
-              <p className="text-fs-text-primary text-base font-semibold">
-                Deposit: {formatUnits(recovered.deposit, recovered.decimals)} {recovered.symbol}
-              </p>
-            </div>
-          ) : (
+          <div data-testid="predict-body">
             <PredictAmountSection
-              amount={amount}
+              amount={recovered ? recovered.deposit : amount}
               onAmountChange={onAmountChange}
-              tokens={tokens}
-              token={token}
+              tokens={runToken ? [runToken] : tokens}
+              token={runToken ?? token}
               onTokenChange={onTokenChange}
               funding={funding}
               collateral={collateral}
               isFirstPrediction={isFirstPrediction}
               isReadOnly={isLocked}
               isDisconnected={isDisconnected}
+              note={recovered ? "Resuming adds this deposit to the estimates above." : undefined}
             />
-          )}
-          <PredictStepsTimeline steps={steps} />
-          <p className="text-fs-text-secondary text-center text-sm">
-            Trading stops at your estimate, so no market moves past it. The average price you pay or receive includes
-            the pool fee, so you may pay more or receive less than your estimate.
-          </p>
-          {skipped > 0 ? (
-            <p className="text-fs-text-secondary text-center text-sm">
-              {skipped} of your estimates could not be traded right now and were left out.
+            <PredictStepsTimeline steps={steps} />
+            {/* four lines on a phone, three from md, held empty or not so the footer never moves */}
+            <p
+              role="status"
+              aria-live="polite"
+              className={clsx(
+                "type-label mt-2 flex h-20 items-center justify-center px-2 text-center text-pretty md:h-15",
+                status && STATUS_TONE[status.tone],
+              )}
+            >
+              {status?.text}
             </p>
-          ) : null}
+          </div>
         </ScrollFade>
 
-        <div className="bg-fs-surface sticky bottom-0 flex flex-col items-center gap-3 py-2 md:py-4">
-          {notice !== undefined ? <InfoCard className="text-sm" msg={notice} /> : null}
-          <div className="flex flex-wrap gap-3.5">
-            <Button text="Cancel" variant="secondary" onPress={onClose} isDisabled={isRunning} />
-            <Button
-              text={recovered ? "Resume" : isPending ? "Check again" : canRetry ? "Try the rest" : "Predict"}
-              onPress={onPredict}
-              isDisabled={
-                isRunning ||
-                notice !== undefined ||
-                (!canRetry &&
-                  (recovered !== undefined || selected.length === 0 || funding === null || tooMuch || nothingToTrade))
-              }
-              isLoading={isRunning}
-            />
-          </div>
+        <div className="bg-fs-surface sticky bottom-0 flex justify-center gap-3.5 py-4 md:pb-8">
+          <Button text="Cancel" variant="secondary" onPress={onClose} isDisabled={isRunning} />
+          <Button
+            className="min-w-[170px]"
+            text={recovered ? "Resume" : isPending ? "Check again" : canRetry ? "Try the rest" : "Predict"}
+            onPress={onPredict}
+            isDisabled={
+              isRunning ||
+              notice !== undefined ||
+              (!canRetry &&
+                (recovered !== undefined || selected.length === 0 || funding === null || tooMuch || nothingToTrade))
+            }
+            isLoading={isRunning}
+          />
         </div>
       </div>
     </Modal>

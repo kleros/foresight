@@ -174,8 +174,8 @@ describe("the total line", () => {
       />,
     );
 
-    expect(screen.getByText(/from your trade wallet/)).toHaveTextContent(
-      "(4 from your trade wallet + less than 0.000001 from your wallet)",
+    expect(screen.getByText(/in your trade wallet/)).toHaveTextContent(
+      `4 sDAI = 4 in your trade wallet + less than ${1 / 10 ** AMOUNT_DISPLAY_DECIMALS} from your wallet`,
     );
   });
 });
@@ -199,5 +199,13 @@ describe("a locked amount", () => {
 
     for (const id of ["amount-input", "amount-slider"])
       expect(screen.getByTestId(id).classList.contains("opacity-50")).toBe(isReadOnly);
+  });
+});
+
+describe("an empty balance", () => {
+  it("dims the share slider, which has nothing to share out", () => {
+    renderSection(sDai, 0n);
+
+    expect(screen.getByTestId("amount-slider").classList.contains("opacity-50")).toBe(true);
   });
 });

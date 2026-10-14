@@ -1,4 +1,7 @@
+import { formatAmount } from "@/utils/amount";
+
 import { AMOUNT_DISPLAY_DECIMALS, GAS_RESERVE_WEI } from "../oracle/tolerances";
+import type { PayToken } from "../types";
 
 const WAD = 10n ** 18n;
 
@@ -66,3 +69,54 @@ export const shareOf = (balance: bigint, percent: number): bigint => (balance * 
 /** What share of `balance` the value is, as a whole percentage. */
 export const percentOf = (value: bigint, balance: bigint): number =>
   balance === 0n ? 0 : Math.min(100, Number((value * 100n) / balance));
+
+interface Token {
+  symbol: string;
+  decimals: number;
+}
+
+export interface FundingSummary {
+  text: string;
+  tone: "neutral" | "error";
+}
+
+const shown = (value: bigint, decimals: number) => formatAmount(value, decimals, AMOUNT_DISPLAY_DECIMALS);
+
+/** A part too small for the shown decimals still costs a transaction, so it is named rather than shown as 0. */
+function shownPart(value: bigint, decimals: number): string {
+  const text = shown(value, decimals);
+  return text === "0"
+    ? `less than ${formatAmount(10n ** BigInt(Math.max(decimals - AMOUNT_DISPLAY_DECIMALS, 0)), decimals)}`
+    : text;
+}
+
+/**
+ * The one line under the amount: the collateral the prediction uses and where it comes from, or,
+ * over the balance, how much can be added. Null until an amount is typed.
+ */
+export function fundingSummary(args: {
+  funding: Funding | null;
+  amount: bigint | undefined;
+  token: Token & { id: PayToken };
+  collateral: Token;
+}): FundingSummary | null {
+  const { funding, amount, token, collateral } = args;
+  if (!funding || amount === undefined || amount === 0n) return null;
+  if (amount > funding.available) {
+    return {
+      text: `Not enough balance. You can add up to ${shown(roundToDisplay(funding.available, token.decimals), token.decimals)} ${token.symbol}.`,
+      tone: "error",
+    };
+  }
+
+  const total = `${token.id === "native" ? "≈ " : ""}${shown(funding.collateralIn, collateral.decimals)} ${collateral.symbol}`;
+  const fromTrade = funding.fromTradeWallet > 0n;
+  const fromWallet = funding.toAdd > 0n;
+  const text =
+    fromTrade && fromWallet
+      ? `${total} = ${shownPart(funding.fromTradeWallet, collateral.decimals)} in your trade wallet + ${shownPart(funding.toAdd, collateral.decimals)} from your wallet`
+      : fromTrade
+        ? `${total} from your trade wallet`
+        : `${total} from your wallet`;
+  return { text, tone: "neutral" };
+}
