@@ -137,7 +137,7 @@ describe("the popup's estimates", () => {
     );
 
     const view = render(card(at(MARKET_ESTIMATE)));
-    await userEvent.click(screen.getByRole("button", { name: "Predict selected" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Predict (\d+ )?estimates?$/ }));
     const popup = within(await screen.findByRole("dialog"));
     view.rerender(card(at(ESTIMATE)));
 

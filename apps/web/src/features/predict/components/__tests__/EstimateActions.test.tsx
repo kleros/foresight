@@ -43,17 +43,17 @@ describe("EstimateActions", () => {
     useEstimateStore.getState().setEstimate(addresses.deployer, FIRST, 250);
     renderActions();
 
-    await userEvent.click(screen.getByRole("button", { name: "Reset predictions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Reset estimates" }));
 
     expect(useEstimateStore.getState().estimates).toEqual({ [addresses.deployer]: { [FIRST]: 250 } });
-    expect(screen.queryByRole("button", { name: "Reset predictions" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reset estimates" })).toBeNull();
   });
 
   it("cannot reset once the session has stopped trading", () => {
     useEstimateStore.getState().setEstimate(PARENT, FIRST, 250);
     render(<EstimateActions parentMarket={PARENT} scales={scales} marketEstimates={marketEstimates} isDisabled />);
 
-    expect(screen.getByRole("button", { name: "Reset predictions" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reset estimates" })).toBeDisabled();
   });
 
   it("exports the set estimates as a CSV stamped with the local date and time", async () => {
@@ -61,7 +61,7 @@ describe("EstimateActions", () => {
     useEstimateStore.getState().setEstimate(PARENT, FIRST, 250);
     renderActions();
 
-    await userEvent.click(screen.getByRole("button", { name: "Export predictions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Export estimates" }));
 
     expect(downloadTextFile).toHaveBeenCalledWith(
       expect.stringMatching(/^estimates-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}\.csv$/),

@@ -164,7 +164,7 @@ describe("MarketPage on a trading session", () => {
     answerTrading(() => new Promise(() => {}));
 
     renderPage();
-    await screen.findByRole("button", { name: "Predict selected" });
+    await screen.findByRole("button", { name: /^Predict (\d+ )?estimates?$/ });
 
     expect(screen.queryByText(NO_LIQUIDITY)).toBeNull();
   });

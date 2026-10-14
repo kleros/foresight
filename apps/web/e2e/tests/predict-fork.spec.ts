@@ -65,7 +65,7 @@ test.describe("a session seeded on the gnosis fork", () => {
       await expect(page.getByText("Countdown")).toBeVisible({ timeout: 30_000 });
       await expect(page.getByText("Closed", { exact: true })).toHaveCount(0);
 
-      const predict = page.getByRole("button", { name: "Predict selected" });
+      const predict = page.getByRole("button", { name: /^Predict (\d+ )?estimates?$/ });
       await expect(predict).toBeVisible();
       await expect(predict).toBeDisabled();
 
@@ -102,7 +102,7 @@ test.describe("a session seeded on the gnosis fork", () => {
     await page.keyboard.press("ArrowRight");
     await page.keyboard.press("ArrowRight");
 
-    await page.getByRole("button", { name: "Predict selected" }).click();
+    await page.getByRole("button", { name: /^Predict (\d+ )?estimates?$/ }).click();
     const popup = page.getByRole("dialog");
     const amount = popup.getByRole("spinbutton", { name: "Amount" });
     await amount.fill("5");

@@ -156,7 +156,7 @@ async function openSecondPrediction(changed: (typeof OPTIONS)[number]) {
   );
 
   const view = render(card(marketAt(MARKET_BEFORE)));
-  await userEvent.click(screen.getByRole("button", { name: "Predict selected" }));
+  await userEvent.click(screen.getByRole("button", { name: /^Predict (\d+ )?estimates?$/ }));
   const first = within(await screen.findByRole("dialog"));
   for (const option of OPTIONS) expect(first.getByText(option.name)).toBeInTheDocument();
   act(() => run.set(progressAt("signing")));
@@ -169,7 +169,7 @@ async function openSecondPrediction(changed: (typeof OPTIONS)[number]) {
   view.rerender(card(marketAt(MARKET_AFTER)));
   act(() => useEstimateStore.getState().setEstimate(detail.parentMarket, changed.market, 420));
 
-  await userEvent.click(screen.getByRole("button", { name: "Predict selected" }));
+  await userEvent.click(screen.getByRole("button", { name: /^Predict (\d+ )?estimates?$/ }));
   return within(await screen.findByRole("dialog"));
 }
 

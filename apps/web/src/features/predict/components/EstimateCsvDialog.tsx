@@ -1,15 +1,19 @@
 import { useState } from "react";
 
 import { Button, FileUploader } from "@kleros/ui-components-library";
+import clsx from "clsx";
 
 import { Dialog } from "@/components/ui/Dialog";
 import LightButton from "@/components/ui/LightButton";
+
+import UploadIcon from "@/assets/svg/upload.svg";
 
 import { downloadTextFile } from "@/utils/download";
 import { successToast } from "@/utils/toast";
 
 import type { OptionScale } from "@/types/optionScale";
 
+import { LINK } from "./EstimateActions";
 import { useEstimateStore, useSessionEstimates } from "../stores/estimateStore";
 import { CSV_COLUMNS, parseEstimateCsv, serializeEstimateCsv } from "../utils/estimateCsv";
 
@@ -61,16 +65,18 @@ export function EstimateCsvDialog({ parentMarket, scales, marketEstimates, noun,
 
   return (
     <>
-      <Button
-        text="Upload CSV predictions"
-        variant="secondary"
+      <LightButton
+        small
+        text="Upload estimates (CSV)"
         isDisabled={isDisabled}
         onPress={() => setIsOpen(true)}
+        className={clsx(LINK, "flex-row-reverse")}
+        icon={<UploadIcon className="[&_path]:fill-fs-text-accent! ml-2" />}
       />
       <Dialog
         isOpen={isOpen}
         onClose={close}
-        title="Upload CSV predictions"
+        title="Upload estimates (CSV)"
         hint="One row per option, each with your estimate for it."
         className="w-full md:w-162"
       >

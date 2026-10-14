@@ -37,6 +37,7 @@ const BLOCKER_TEXT: Record<PredictBlocker, string> = {
   closed: "Trading has closed for this session.",
   "no-liquidity": "This option has no liquidity yet, so it can't be predicted.",
   "no-move": "Move an estimate away from the market estimate to make a prediction.",
+  disconnected: "Connect a wallet to predict.",
 };
 
 interface PredictCardProps {
@@ -75,19 +76,33 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
 
   const estimates = useSessionEstimates(session.parentMarket);
   const selected = selectedEstimates(session.options, estimates, marketEstimates);
-  const isDisabled = selected.length === 0 || status !== "trading";
+  const isDisabled = selected.length === 0 || status !== "trading" || !address;
   const blocker = predictBlocker({
     status,
     options: session.options,
     marketEstimates,
     isMarketUnknown,
     selectedCount: selected.length,
+    isConnected: Boolean(address),
   });
   const changed = selected.filter(
     (estimate) => placed?.owner !== address || placed?.values[estimate.scale.market.toLowerCase()] !== estimate.value,
   );
   // with nothing changed, the same estimates can still be backed with more funds
   const toPredict = changed.length > 0 ? changed : selected;
+
+  const predictButton = (
+    <Button
+      icon={<CheckOutline className="[&_path]:fill-klerosUIComponentsWhiteBackground mr-2 size-4" />}
+      text={
+        selected.length > 0
+          ? `Predict ${selected.length} ${selected.length === 1 ? "estimate" : "estimates"}`
+          : "Predict estimates"
+      }
+      isDisabled={isDisabled}
+      onPress={() => setOpened(toPredict)}
+    />
+  );
 
   return (
     <SectionCard
@@ -97,24 +112,9 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
         "md:flex-row md:items-center md:justify-between",
       )}
     >
-      <h3 className="text-fs-text-primary text-base font-semibold">Predict all the estimates above</h3>
-      <EnsureChain>
-        <Button
-          icon={
-            <CheckOutline
-              className={clsx(
-                "mr-2 size-4",
-                isDisabled
-                  ? "[&_path]:fill-klerosUIComponentsStroke"
-                  : "[&_path]:fill-klerosUIComponentsWhiteBackground",
-              )}
-            />
-          }
-          text="Predict selected"
-          isDisabled={isDisabled}
-          onPress={() => setOpened(toPredict)}
-        />
-      </EnsureChain>
+      <h3 className="text-fs-text-primary text-base font-semibold">Place your estimates</h3>
+      {/* without a wallet the button stays put and disabled; the blocker line says to connect */}
+      {address ? <EnsureChain>{predictButton}</EnsureChain> : predictButton}
       {blocker ? <p className="text-fs-text-secondary w-full text-sm">{BLOCKER_TEXT[blocker]}</p> : null}
 
       {interrupted ? (

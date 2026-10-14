@@ -129,7 +129,7 @@ async function predictAndComplete(skipped: Address[]) {
       <PredictCard session={detail} status="trading" marketEstimates={marketEstimates} />
     </QueryClientProvider>,
   );
-  await userEvent.click(screen.getByRole("button", { name: "Predict selected" }));
+  await userEvent.click(screen.getByRole("button", { name: /^Predict (\d+ )?estimates?$/ }));
   await screen.findByRole("dialog");
   act(() => run.set(progressAt("signing")));
   act(() => run.set(progressAt("complete", skipped)));

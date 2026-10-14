@@ -129,7 +129,7 @@ function renderPage() {
 }
 
 async function openPopup() {
-  await userEvent.click(screen.getByRole("button", { name: "Predict selected" }));
+  await userEvent.click(screen.getByRole("button", { name: /^Predict (\d+ )?estimates?$/ }));
   return within(await screen.findByRole("dialog"));
 }
 

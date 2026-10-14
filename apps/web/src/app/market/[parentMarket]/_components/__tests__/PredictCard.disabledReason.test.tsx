@@ -61,7 +61,7 @@ function renderCard(
       isMarketUnknown={isMarketUnknown}
     />,
   );
-  return screen.getByRole("button", { name: "Predict selected" });
+  return screen.getByRole("button", { name: /^Predict (\d+ )?estimates?$/ });
 }
 
 beforeEach(() => {
@@ -69,7 +69,19 @@ beforeEach(() => {
   useEstimateStore.getState().resetEstimates(session().parentMarket);
 });
 
-describe("the predict card names one reason Predict selected is disabled", () => {
+describe("the predict card's button", () => {
+  it("counts the estimates it would place", () => {
+    const detail = session();
+    moveEveryEstimate(detail);
+
+    const button = renderCard(detail, "trading", pricedMarkets(detail));
+
+    expect(button).toHaveTextContent("Predict 2 estimates");
+    expect(screen.getByRole("heading", { name: "Place your estimates" })).toBeInTheDocument();
+  });
+});
+
+describe("the predict card names one reason Predict is disabled", () => {
   it("says trading has closed on a closed session", () => {
     const detail = session();
     moveEveryEstimate(detail);

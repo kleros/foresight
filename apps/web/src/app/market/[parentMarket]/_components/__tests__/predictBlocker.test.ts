@@ -12,6 +12,7 @@ const blocker = (marketEstimates: Record<string, number | undefined>) =>
     marketEstimates,
     isMarketUnknown: false,
     selectedCount: 0,
+    isConnected: true,
   });
 
 describe("predictBlocker with nothing selected", () => {
@@ -25,5 +26,25 @@ describe("predictBlocker with nothing selected", () => {
 
   it("matches a mixed-case market to its lower-case market estimate", () => {
     expect(blocker({ [LIQUID.toLowerCase()]: 312, [DRY]: undefined })).toBe("no-move");
+  });
+});
+
+describe("predictBlocker with an estimate moved", () => {
+  const moved = (isConnected: boolean) =>
+    predictBlocker({
+      status: "trading",
+      options: [{ market: LIQUID }],
+      marketEstimates: { [LIQUID.toLowerCase()]: 312 },
+      isMarketUnknown: false,
+      selectedCount: 1,
+      isConnected,
+    });
+
+  it("asks for a wallet when none is connected", () => {
+    expect(moved(false)).toBe("disconnected");
+  });
+
+  it("has nothing to say with a wallet connected", () => {
+    expect(moved(true)).toBeNull();
   });
 });
