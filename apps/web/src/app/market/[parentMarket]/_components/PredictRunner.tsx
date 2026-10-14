@@ -10,7 +10,7 @@ import { PredictDialog } from "@/features/predict/components/PredictDialog";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import type { PayToken, SelectedEstimate } from "@/features/predict/types";
 import { roundToDisplay } from "@/features/predict/utils/funding";
-import { predictSteps } from "@/features/predict/utils/predictSteps";
+import { fundsToAdd, predictSteps, type FundsToAdd } from "@/features/predict/utils/predictSteps";
 import type { SessionDetail } from "@/features/sessions/types";
 import { useExecutor } from "@/features/trade-executor/api/getExecutor";
 
@@ -44,7 +44,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
   // removed in this popup; cleared from the page only once Predict is pressed
   const [removed, setRemoved] = useState<string[]>([]);
   // what the steps say is being added, held from the press so a refreshed balance cannot rewrite it
-  const [frozenToAdd, setFrozenToAdd] = useState<bigint>();
+  const [frozenToAdd, setFrozenToAdd] = useState<FundsToAdd>();
 
   const clearEstimate = useEstimateStore((state) => state.clearEstimate);
   const executor = useExecutor();
@@ -130,16 +130,16 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
     if (recovered) return;
     if (stage === "halted" && !pendingHash) driver?.reset();
     for (const market of removed) clearEstimate(session.parentMarket, market);
-    setFrozenToAdd(funding?.toAdd);
+    setFrozenToAdd(fundsToAdd(funding, token, collateral));
     driver?.start();
   };
 
   const runToken = recovered?.depositNative ? NATIVE : collateral;
   const steps = predictSteps({
     wallet: predicted ? { address: predicted, deployed: Boolean(executor.data?.deployed) } : null,
-    toAdd: recovered?.deposit ?? (stage === "idle" ? undefined : frozenToAdd) ?? funding?.toAdd ?? 0n,
-    symbol: runToken.symbol,
-    decimals: runToken.decimals,
+    ...(recovered
+      ? { toAdd: recovered.deposit, symbol: runToken.symbol, decimals: runToken.decimals }
+      : ((stage === "idle" ? undefined : frozenToAdd) ?? fundsToAdd(funding, token, collateral))),
     progress,
   });
 

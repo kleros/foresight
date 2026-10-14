@@ -1,10 +1,13 @@
-import type { Address } from "viem";
+import { formatUnits, type Address } from "viem";
 
 import { shortenAddress } from "@/utils/address";
 import { formatAmount } from "@/utils/amount";
 
 import { STEP_ID } from "../flow/plan";
+import { AMOUNT_DISPLAY_DECIMALS } from "../oracle/tolerances";
 import type { PredictProgress } from "../run/types";
+import type { PayToken } from "../types";
+import type { Funding } from "./funding";
 
 export type StepView = "idle" | "running" | "done" | "inactive";
 
@@ -47,19 +50,58 @@ const STAGE_COPY: Partial<Record<PredictProgress["stage"], string>> = {
   complete: "Prediction successful!",
 };
 
+interface TokenAmount {
+  amount: bigint;
+  symbol: string;
+  decimals: number;
+}
+
+/** What the funds step adds, frozen when a run starts so a refreshed balance does not rewrite it. */
+export interface FundsToAdd {
+  /** In the token the visitor pays with. */
+  toAdd: bigint;
+  symbol: string;
+  decimals: number;
+  /** The collateral `toAdd` becomes, when the visitor pays in another token. */
+  collateral?: TokenAmount;
+}
+
+/** An xDAI payment adds its deposit, which becomes `toAdd` collateral; a collateral payment adds `toAdd` itself. */
+export function fundsToAdd(
+  funding: Funding | null,
+  pay: { id: PayToken; symbol: string; decimals: number },
+  collateral: { symbol: string; decimals: number },
+): FundsToAdd {
+  const toAdd = funding?.toAdd ?? 0n;
+  if (pay.id === "collateral") return { toAdd, ...collateral };
+  return {
+    toAdd: funding?.deposit ?? 0n,
+    symbol: pay.symbol,
+    decimals: pay.decimals,
+    collateral: { amount: toAdd, ...collateral },
+  };
+}
+
+const LEAST_SHOWN = formatUnits(1n, AMOUNT_DISPLAY_DECIMALS);
+
+/** Rounded to the nearest shown decimal, so a deposit a wei short of a typed amount reads as typed. */
+function shownAmount(value: bigint, decimals: number): string {
+  const step = 10n ** BigInt(Math.max(decimals - AMOUNT_DISPLAY_DECIMALS, 0));
+  const shown = formatAmount(((value + step / 2n) / step) * step, decimals);
+  return shown === "0" && value > 0n ? `less than ${LEAST_SHOWN}` : shown;
+}
+
 /**
  * The three rows of futarchy's predict timeline — trade wallet, funds, prediction — shown before
  * a run starts and filled in by the run's own steps once it does.
  */
-export function predictSteps(args: {
-  wallet: { address: Address; deployed: boolean } | null;
-  /** Collateral the run adds, frozen when it starts so a refreshed balance does not rewrite it. */
-  toAdd: bigint;
-  symbol: string;
-  decimals: number;
-  progress: PredictProgress | null;
-}): PredictSteps {
-  const { wallet, toAdd, symbol, decimals, progress } = args;
+export function predictSteps(
+  args: FundsToAdd & {
+    wallet: { address: Address; deployed: boolean } | null;
+    progress: PredictProgress | null;
+  },
+): PredictSteps {
+  const { wallet, toAdd, symbol, decimals, collateral, progress } = args;
   const runSteps = progress?.steps ?? [];
   const row = (id: string) => runSteps.find((step) => step.id === id);
   const halted = progress?.stage === "halted";
@@ -73,9 +115,8 @@ export function predictSteps(args: {
   const runningBatch = batches.findIndex((step) => step.state === "running");
   const predictRunning = runningBatch >= 0;
   const stageCopy = progress ? (STAGE_COPY[progress.stage] ?? "") : "";
-  const shown = formatAmount(toAdd, decimals);
-  // an xDAI deposit can leave a shortfall below the shown decimals, which would read as "Adding 0"
-  const adding = toAdd === 0n ? "" : `Adding ${shown === "0" ? "less than 0.000001" : shown} ${symbol}`;
+  const becomes = collateral && ` (~${shownAmount(collateral.amount, collateral.decimals)} ${collateral.symbol})`;
+  const adding = toAdd === 0n ? "" : `Adding ${shownAmount(toAdd, decimals)} ${symbol}${becomes ?? ""}`;
   const fundsWait = progress?.stage === "signing" || progress?.stage === "confirming" ? stageCopy : "";
 
   const rows: PredictStepRow[] = [
