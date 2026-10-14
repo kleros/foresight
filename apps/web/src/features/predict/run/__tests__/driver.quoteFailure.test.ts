@@ -19,18 +19,28 @@ import { predictSteps } from "../../utils/predictSteps";
 import { createPredictRun } from "../driver";
 import type { PredictDriver, PredictFailureReason, PredictProgress } from "../types";
 
-function fakeGateway(): TxGateway & { readonly signRequests: FlowTx[] } {
+function fakeGateway(): TxGateway & { readonly signRequests: FlowTx[]; cancelNextInWallet: () => void } {
   const signRequests: FlowTx[] = [];
   const receipt = (hash: Hash): TransactionReceipt =>
     ({ transactionHash: hash, status: "success", blockNumber: 19_000_000n }) as TransactionReceipt;
+  let cancelNext = false;
 
   return {
     signRequests,
+    cancelNextInWallet: () => {
+      cancelNext = true;
+    },
     sendTransaction: (tx) => {
       signRequests.push(tx);
       return Promise.resolve(`0x${signRequests.length.toString(16).padStart(64, "0")}` as Hash);
     },
-    waitForReceipt: ({ hash }) => Promise.resolve(receipt(hash)),
+    waitForReceipt: ({ hash, onReplaced }) => {
+      if (!cancelNext) return Promise.resolve(receipt(hash));
+      cancelNext = false;
+      const cancel = `0x${"c".repeat(64)}` as Hash;
+      onReplaced?.({ reason: "cancelled", hash: cancel });
+      return Promise.resolve(receipt(cancel));
+    },
     getReceipt: (hash) => Promise.resolve(receipt(hash)),
     isKnown: () => Promise.resolve(true),
   };
@@ -170,6 +180,20 @@ describe("createPredictRun when the quoter cannot be asked", () => {
 
     expect(progress.stage).toBe("complete");
     expect(gateway.signRequests.filter(isDeposit)).toHaveLength(1);
+  });
+
+  it("reports a batch cancelled in the wallet on the retry as cancelled, not as the earlier quote failure", async () => {
+    const quoter = flakyQuoter(nodeAnswers.unreachable, 2);
+    const { gateway, driver } = setup(quoter);
+
+    driver.start();
+    expect((await settled(driver)).failure).toEqual({ reason: "quote", retryable: true });
+    quoter.recover();
+    gateway.cancelNextInWallet();
+    driver.retry();
+    await vi.waitFor(() => expect(driver.getProgress().failure).toBeDefined());
+
+    expect(driver.getProgress().failure?.reason).toBe("cancelled");
   });
 });
 

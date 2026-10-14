@@ -6,7 +6,14 @@ import { lensQuoterOn, nodeAnswers } from "@/lib/swap/__tests__/support/lensNode
 import { gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
 
 import { LEG_HEADROOM_BPS } from "../../utils/plan";
-import { createPredictHooks, PREDICT_BATCH_SIZE, planPredict, STEP_ID, type PredictDeps } from "../plan";
+import {
+  createPredictHooks,
+  PREDICT_BATCH_SIZE,
+  planPredict,
+  QuoteFailedError,
+  STEP_ID,
+  type PredictDeps,
+} from "../plan";
 import type { PredictOption } from "../types";
 import {
   addresses,
@@ -199,7 +206,7 @@ describe("the predict step", () => {
 
     await expect(
       buildPredict(snapshot({ options }), { quoter, onSkip: (each) => skipped.push(each) }),
-    ).rejects.toBeInstanceOf(Error);
+    ).rejects.toBeInstanceOf(QuoteFailedError);
     expect(skipped).toEqual([]);
   });
 

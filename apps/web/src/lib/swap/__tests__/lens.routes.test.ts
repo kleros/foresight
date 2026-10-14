@@ -30,6 +30,13 @@ describe("createLensQuoter, against Seer's Lens client over a node", () => {
   });
 
   it.each([
+    ["the routed swap reverts when simulated", nodeAnswers.swapReverts],
+    ["the routed swap needs more gas than a block allows", nodeAnswers.thinPool],
+  ])("answers that no route exists when %s", async (_, answer) => {
+    expect(await quoteFrom(answer)).toBeInstanceOf(NoSwapRouteError);
+  });
+
+  it.each([
     ["the node cannot be reached", nodeAnswers.unreachable],
     ["the address has no code", nodeAnswers.noCode],
     ["the call reverts with no reason", nodeAnswers.bareRevert],

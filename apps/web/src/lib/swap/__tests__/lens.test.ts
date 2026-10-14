@@ -108,7 +108,10 @@ describe("createLensQuoter", () => {
     });
     quote.mockResolvedValue({ ...lensResult, data: multiHop });
 
-    await expect(quoter().quote(request())).rejects.toBeInstanceOf(NoSwapRouteError);
+    const quoted = quoter().quote(request());
+
+    await expect(quoted).rejects.toBeInstanceOf(NoSwapRouteError);
+    await expect(quoted).rejects.toThrow(/price limit/);
   });
 });
 
