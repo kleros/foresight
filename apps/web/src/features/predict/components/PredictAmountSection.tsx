@@ -32,7 +32,7 @@ interface PredictAmountSectionProps {
   isReadOnly: boolean;
   /** No wallet is connected, so no balance is being read. */
   isDisconnected?: boolean;
-  /** Said in place of the funding summary, for an amount the visitor cannot change. */
+  /** Said in place of the funding summary and the balance, for an amount the visitor cannot change. */
   note?: string;
 }
 
@@ -69,11 +69,13 @@ export function PredictAmountSection({
         </span>
         <div className="flex items-center gap-2">
           <span className="text-fs-text-secondary text-xs whitespace-nowrap">
-            {isDisconnected
-              ? "Connect a wallet to see your balance"
-              : available === undefined
-                ? "Checking your balance…"
-                : `Balance: ${formatAmount(available, token.decimals, AMOUNT_DISPLAY_DECIMALS)} ${token.symbol}`}
+            {note
+              ? ""
+              : isDisconnected
+                ? "Connect a wallet to see your balance"
+                : available === undefined
+                  ? "Checking your balance…"
+                  : `Balance: ${formatAmount(available, token.decimals, AMOUNT_DISPLAY_DECIMALS)} ${token.symbol}`}
           </span>
           <LightButton
             small

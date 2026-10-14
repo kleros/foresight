@@ -288,6 +288,8 @@ describe("predicting", () => {
 
     expect(screen.getByLabelText("Amount")).toHaveValue("7.250000000000000001");
     expect(screen.getByText(/Resuming adds this deposit/)).toBeInTheDocument();
+    // the form's balance is in the form's token, not necessarily the stored run's
+    expect(screen.queryByText(/^Balance: /)).toBeNull();
     expect(screen.getByText("410 $M")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Max" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Predict" })).not.toBeInTheDocument();
