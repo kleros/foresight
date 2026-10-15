@@ -65,9 +65,17 @@ function estimateControls() {
   return {
     slider: screen.getByRole("slider"),
     sliderRoot: screen.getByRole("group", { name: new RegExp(`^Your estimate for ${option.name}`) }),
-    field: screen.getByRole("textbox", { name: /Your estimate/ }),
-    fieldRoot: screen.getByText("Your estimate").parentElement,
   };
+}
+
+const pill = () => screen.getByRole("button", { name: `Type your estimate for ${option.name}` });
+const field = () => screen.getByRole("textbox", { name: `Your estimate for ${option.name}` });
+
+async function typeEstimate(text: string) {
+  await userEvent.click(pill());
+  await userEvent.clear(field());
+  await userEvent.type(field(), text);
+  await userEvent.tab();
 }
 
 beforeEach(() => {
@@ -96,7 +104,9 @@ describe("OptionCard", () => {
 
     await open();
 
-    expect(screen.getByRole("region", { name: "Your position" })).toHaveTextContent("20 UP · 0 DOWN");
+    const region = screen.getByRole("region", { name: "Your position" });
+    expect(region).toHaveTextContent("20 UP");
+    expect(region).toHaveTextContent("0 DOWN");
   });
 
   it("says an estimate on the other side of the market from the position sells some of it", async () => {
@@ -105,9 +115,7 @@ describe("OptionCard", () => {
 
     await open();
 
-    expect(screen.getByRole("region", { name: "Your position" })).toHaveTextContent(
-      "Predicting 200 $M sells some of your UP.",
-    );
+    expect(screen.getByRole("region", { name: "Your position" })).toHaveTextContent("200 $M sells some UP");
   });
 
   it("says an estimate on the position's side adds to it", async () => {
@@ -116,9 +124,7 @@ describe("OptionCard", () => {
 
     await open();
 
-    expect(screen.getByRole("region", { name: "Your position" })).toHaveTextContent(
-      "Predicting 400 $M adds to your UP.",
-    );
+    expect(screen.getByRole("region", { name: "Your position" })).toHaveTextContent("400 $M adds to your UP");
   });
 
   it("shows no position for an option the trade wallet holds none of", async () => {
@@ -152,13 +158,10 @@ describe("OptionCard", () => {
     renderCard();
     await open();
 
-    const field = screen.getByRole("textbox", { name: /Your estimate/ });
-    await userEvent.clear(field);
-    await userEvent.type(field, "250");
-    await userEvent.tab();
+    await typeEstimate("250");
 
     expect(saved()).toBe(250);
-    expect(screen.getByText("62 $M below the market (312 $M)")).toBeInTheDocument();
+    expect(screen.getByText("62 $M below the market")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Estimate set" })).toBeInTheDocument();
   });
 
@@ -173,14 +176,11 @@ describe("OptionCard", () => {
     expect(screen.getByRole("img", { name: "Estimate set" })).toBeInTheDocument();
   });
 
-  it("keeps a typed estimate inside the option's scale, which the field itself enforces", async () => {
+  it("keeps a typed estimate inside the option's scale", async () => {
     renderCard();
     await open();
 
-    const field = screen.getByRole("textbox", { name: /Your estimate/ });
-    await userEvent.clear(field);
-    await userEvent.type(field, "900");
-    await userEvent.tab();
+    await typeEstimate("900");
 
     expect(saved()).toBe(500);
   });
@@ -190,10 +190,7 @@ describe("OptionCard", () => {
     renderCard();
     await open();
 
-    const field = screen.getByRole("textbox", { name: /Your estimate/ });
-    await userEvent.clear(field);
-    await userEvent.type(field, String(MARKET_ESTIMATE));
-    await userEvent.tab();
+    await typeEstimate(String(MARKET_ESTIMATE));
 
     expect(saved()).toBeUndefined();
     expect(screen.queryByRole("img", { name: "Estimate set" })).toBeNull();
@@ -206,7 +203,7 @@ describe("OptionCard", () => {
     await open();
 
     expect(screen.getByRole("slider")).toHaveValue("400");
-    expect(screen.getByText("88 $M above the market (312 $M)")).toBeInTheDocument();
+    expect(screen.getByText("88 $M above the market")).toBeInTheDocument();
   });
 
   it("refuses estimates where the option has no trading", async () => {
@@ -215,7 +212,7 @@ describe("OptionCard", () => {
     await open();
 
     expect(screen.getByRole("slider")).toBeDisabled();
-    expect(screen.getByText("No trading is available for this option yet.")).toBeInTheDocument();
+    expect(screen.getByText("No trading on this option yet.")).toBeInTheDocument();
   });
 
   it("refuses estimates while the session is still being set up", async () => {
@@ -224,7 +221,7 @@ describe("OptionCard", () => {
     await open();
 
     expect(screen.getByRole("slider")).toBeDisabled();
-    expect(screen.getByText("Estimates open once every option is set up.")).toBeInTheDocument();
+    expect(screen.getByText("Opens once the session is set up.")).toBeInTheDocument();
   });
 
   it("refuses estimates after trading has closed", async () => {
@@ -232,35 +229,31 @@ describe("OptionCard", () => {
 
     await open();
 
-    const { slider, field } = estimateControls();
-    expect(slider).toBeDisabled();
-    expect(field).toBeDisabled();
-    expect(screen.getByText("Trading has closed for this session.")).toBeInTheDocument();
+    expect(estimateControls().slider).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /^Type your estimate/ })).toBeNull();
+    expect(screen.getByText("Trading has closed.")).toBeInTheDocument();
   });
 
   it.each([
     { label: "a closed session", overrides: { status: "closed" as const } },
     { label: "an option with no trading", overrides: { marketEstimate: undefined } },
-  ])("dims the slider and the field on $label", async ({ overrides }) => {
+  ])("dims the slider and offers no typed estimate on $label", async ({ overrides }) => {
     renderCard(overrides);
 
     await open();
 
-    const { slider, sliderRoot, field, fieldRoot } = estimateControls();
+    const { slider, sliderRoot } = estimateControls();
     expect(slider).toBeDisabled();
-    expect(field).toBeDisabled();
     expect(sliderRoot).toHaveClass(DIMMED);
-    expect(fieldRoot).toHaveClass(DIMMED);
+    expect(screen.queryByRole("button", { name: /^Type your estimate/ })).toBeNull();
   });
 
-  it("leaves the slider and the field undimmed while the session trades", async () => {
+  it("leaves the slider undimmed while the session trades", async () => {
     renderCard();
 
     await open();
 
-    const { sliderRoot, fieldRoot } = estimateControls();
-    expect(sliderRoot).not.toHaveClass(DIMMED);
-    expect(fieldRoot).not.toHaveClass(DIMMED);
+    expect(estimateControls().sliderRoot).not.toHaveClass(DIMMED);
   });
 
   it("says the market numbers could not be loaded, rather than that there is no trading", async () => {
@@ -278,8 +271,8 @@ describe("OptionCard", () => {
     await open();
 
     expect(screen.getByRole("slider")).toBeDisabled();
-    expect(screen.getByText("Market estimates could not be loaded. Reload in a moment.")).toBeInTheDocument();
-    expect(screen.queryByText("No trading is available for this option yet.")).toBeNull();
+    expect(screen.getByText("Could not load the market. Reload in a moment.")).toBeInTheDocument();
+    expect(screen.queryByText("No trading on this option yet.")).toBeNull();
   });
 
   it("waits for the market estimate before taking one", async () => {
@@ -288,7 +281,7 @@ describe("OptionCard", () => {
     await open();
 
     expect(screen.getByRole("slider")).toBeDisabled();
-    expect(screen.getByText("Loading the market estimate…")).toBeInTheDocument();
+    expect(screen.getByText("Loading the market…")).toBeInTheDocument();
   });
 
   it("keeps a fine-grained estimate through the field on a narrow scale", async () => {
@@ -305,14 +298,12 @@ describe("OptionCard", () => {
     );
     await open();
 
-    const field = screen.getByRole("textbox", { name: /Your estimate/ });
-    await userEvent.click(field);
+    await userEvent.click(pill());
+    expect(field()).toHaveValue("0.12");
     await userEvent.tab();
     expect(saved()).toBe(0.12);
 
-    await userEvent.clear(field);
-    await userEvent.type(field, "0.45");
-    await userEvent.tab();
+    await typeEstimate("0.45");
     expect(saved()).toBe(0.45);
   });
 
@@ -320,7 +311,7 @@ describe("OptionCard", () => {
     renderCard();
 
     await open();
-    await userEvent.click(screen.getByText("Details"));
+    await userEvent.click(screen.getByRole("button", { name: "Details" }));
 
     expect(screen.getByText("Opening weekend gross if Gerwig directs")).toBeInTheDocument();
     expect(screen.getByText("Barbie")).toBeInTheDocument();
@@ -339,7 +330,7 @@ describe("OptionCard", () => {
 
     await open();
 
-    expect(screen.getByText("The scale for this option could not be read.")).toBeInTheDocument();
+    expect(screen.getByText("This option's range could not be read.")).toBeInTheDocument();
     expect(screen.queryByRole("slider")).toBeNull();
   });
 });

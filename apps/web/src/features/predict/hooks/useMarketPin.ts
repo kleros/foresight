@@ -1,0 +1,65 @@
+"use client";
+
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+
+interface PinSizes {
+  track: number;
+  pill: number;
+  chip: number;
+  lower: number;
+  upper: number;
+}
+
+const NONE: PinSizes = { track: 0, pill: 0, chip: 0, lower: 0, upper: 0 };
+
+const same = (a: PinSizes, b: PinSizes) =>
+  a.track === b.track && a.pill === b.pill && a.chip === b.chip && a.lower === b.lower && a.upper === b.upper;
+
+/**
+ * Measures the slider track, the value pill, the market's chip and the bound labels (`[data-bound]`)
+ * after every render. `ready` turns on a frame after the first measurement, so the pin's first placement does not animate.
+ */
+export function useMarketPin() {
+  const track = useRef<HTMLDivElement>(null);
+  const chip = useRef<HTMLDivElement>(null);
+  const pill = useRef<HTMLSpanElement>(null);
+  const [sizes, setSizes] = useState<PinSizes>(NONE);
+  const [ready, setReady] = useState(false);
+
+  const measure = () => {
+    const root = track.current;
+    if (!root) return;
+    const widthOf = (selector: string) => root.querySelector(selector)?.getBoundingClientRect().width ?? 0;
+    const next: PinSizes =
+      root.clientWidth === 0
+        ? NONE
+        : {
+            track: root.clientWidth,
+            pill: pill.current?.offsetWidth ?? 0,
+            chip: chip.current?.offsetWidth ?? 0,
+            lower: widthOf('[data-bound="lower"]'),
+            upper: widthOf('[data-bound="upper"]'),
+          };
+    setSizes((current) => (same(current, next) ? current : next));
+  };
+
+  // the pill's text, and so its width, follows the thumb
+  useLayoutEffect(measure);
+
+  useEffect(() => {
+    const root = track.current;
+    if (!root) return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, []);
+
+  const measured = sizes.track > 0;
+  useEffect(() => {
+    if (!measured) return setReady(false);
+    const frame = requestAnimationFrame(() => setReady(true));
+    return () => cancelAnimationFrame(frame);
+  }, [measured]);
+
+  return { track, chip, pill, sizes, ready };
+}

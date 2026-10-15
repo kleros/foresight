@@ -1,16 +1,20 @@
-import { NumberField, Slider } from "@kleros/ui-components-library";
+import { forwardRef, useEffect, useRef, useState, type KeyboardEvent } from "react";
+
+import { Slider } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
 import ArrowDown from "@/assets/svg/long-arrow-down.svg";
 import ArrowUp from "@/assets/svg/long-arrow-up.svg";
+import PencilIcon from "@/assets/svg/pencil.svg";
 
 import { getReadableTextColor } from "@/utils/branchColor";
 import { formatEstimate } from "@/utils/formatEstimate";
 
 import type { OptionScale } from "@/types/optionScale";
 
-import { usePinBand } from "../hooks/usePinBand";
-import { estimateDigits, estimateDirection, estimateStep, isNearMarket, snapEstimate } from "../utils/estimates";
+import { useMarketPin } from "../hooks/useMarketPin";
+import { estimateDigits, estimateDirection, estimateStep, snapEstimate } from "../utils/estimates";
+import { chipLeft, pinDrop, pinGap } from "../utils/marketPin";
 
 interface EstimateSliderProps {
   scale: OptionScale;
@@ -21,16 +25,21 @@ interface EstimateSliderProps {
   value: number | undefined;
   onCommit: (value: number) => void;
   onClear: () => void;
-  /** Set when the session as a whole cannot take estimates; shown in place of the input. */
+  /** Set when the session as a whole cannot take estimates; shown in place of the hint. */
   lockedReason?: string;
 }
 
 const ESTIMATE_COLOR = { higher: "var(--fs-estimate-up)", lower: "var(--fs-estimate-down)" } as const;
 
+/** The chip's travel from its place above the track to 2px under the thumb, in px. */
+const PIN_DROP_PX = 52;
+/** The stick from the raised chip down to the track, in px. */
+const STICK_PX = 14;
+
 /**
  * An estimate on the option's own scale, drawn as futarchy-ui draws it: the fill and thumb take
- * the direction's colour, and once an estimate is set the market's pin drops under the track
- * while the thumb is near it.
+ * the direction's colour, and the market's pin dips as the thumb's value nears it and drops under the track once it is close.
+ * The value above the thumb is a pill that opens as a field; a typed number is applied on Enter or blur.
  */
 export function EstimateSlider({
   scale,
@@ -46,9 +55,9 @@ export function EstimateSlider({
   const step = estimateStep(scale);
   const shown = value ?? marketEstimate ?? scale.lowerBound + range / 2;
   const reason =
-    lockedReason ??
-    (marketEstimate === undefined && !isMarketPending ? "No trading is available for this option yet." : undefined);
+    lockedReason ?? (marketEstimate === undefined && !isMarketPending ? "No trading on this option yet." : undefined);
   const isDisabled = reason !== undefined || isMarketPending;
+  const [note, setNote] = useState<string>();
 
   const commit = (next: number) => {
     const snapped = snapEstimate(next, scale);
@@ -58,25 +67,30 @@ export function EstimateSlider({
 
   const direction = marketEstimate !== undefined ? estimateDirection(shown, marketEstimate) : null;
   const tone = direction && !isDisabled ? ESTIMATE_COLOR[direction] : undefined;
-  const marketAt = marketEstimate === undefined ? undefined : ((marketEstimate - scale.lowerBound) / range) * 100;
-  const pin = usePinBand(shown, marketAt === undefined ? undefined : marketAt / 100);
-  const atRest = value === undefined && marketEstimate !== undefined;
-  const pinDown =
-    value !== undefined && marketEstimate !== undefined && isNearMarket(shown, marketEstimate, scale, pin.band);
+  const thumbShare = (shown - scale.lowerBound) / range;
+  const marketShare = marketEstimate === undefined ? undefined : (marketEstimate - scale.lowerBound) / range;
+  const pin = useMarketPin();
+  const drop = marketShare === undefined ? 0 : pinDrop(pinGap(pin.sizes, { thumb: thumbShare, market: marketShare }));
+  const isDown = drop === 1;
+  const chipAt = marketShare === undefined ? 0 : chipLeft(pin.sizes, marketShare);
+  const covers = {
+    lower: pin.sizes.track > 0 && chipAt < pin.sizes.lower,
+    upper: pin.sizes.track > 0 && chipAt + pin.sizes.chip > pin.sizes.track - pin.sizes.upper,
+  };
+  const dipPx = drop * PIN_DROP_PX;
 
   return (
     <div className="flex w-full flex-col gap-4">
-      {/* pt-16 holds the raised pin above the thumb's number; pb-3 the dropped pin's caption */}
-      <div className="w-full pt-16 pb-3">
+      {/* pt-10 holds the raised pin's caption, pb-3 the dropped one's */}
+      <div className="w-full pt-10 pb-3">
         <div ref={pin.track} className="relative w-full">
           <Slider
             className={clsx(
               "w-full",
-              "[&_#slider-label]:text-fs-text-primary! [&_#slider-label]:font-semibold",
-              // with no estimate set the thumb sits on the market, whose number the pin already shows
-              atRest && "[&_#slider-label]:invisible",
-              // the library gives the thumb no id; it is the element holding #slider-label
-              // above the track, with a 44px target: the inset counts from inside its 3px border
+              // the pill below shows the value; the library's label stays for the thumb's size
+              "[&_#slider-label]:invisible",
+              // the library gives the thumb no id; it is the element holding #slider-label,
+              // with a 44px target: the inset counts from inside its 3px border
               "[&_div:has(>#slider-label)]:z-10",
               "[&_div:has(>#slider-label)]:before:absolute [&_div:has(>#slider-label)]:before:-inset-3.25",
               "[&_div:has(>#slider-label)]:before:content-['']",
@@ -94,7 +108,10 @@ export function EstimateSlider({
             leftLabel=""
             rightLabel=""
             formatter={(amount) => formatEstimate(amount, scale.unit)}
-            callback={commit}
+            callback={(next) => {
+              setNote(undefined);
+              commit(next);
+            }}
             isDisabled={isDisabled}
             theme={
               tone
@@ -107,25 +124,49 @@ export function EstimateSlider({
                 : undefined
             }
           />
-          {marketAt !== undefined ? (
+          {!isDisabled ? (
+            <ValuePill
+              ref={pin.pill}
+              share={thumbShare}
+              shown={shown}
+              scale={scale}
+              onOpen={() => setNote(undefined)}
+              onTyped={(typed) => {
+                const clamped = Math.min(scale.upperBound, Math.max(scale.lowerBound, typed));
+                setNote(
+                  typed > scale.upperBound
+                    ? `The most is ${formatEstimate(scale.upperBound, scale.unit)}.`
+                    : typed < scale.lowerBound
+                      ? `The least is ${formatEstimate(scale.lowerBound, scale.unit)}.`
+                      : undefined,
+                );
+                commit(clamped);
+              }}
+              onInvalid={setNote}
+            />
+          ) : null}
+          {marketShare !== undefined ? (
             <div
               data-testid="market-pin"
-              data-placement={pinDown ? "down" : "up"}
+              data-placement={isDown ? "down" : "up"}
+              data-drop={drop.toFixed(3)}
               className={clsx(
-                // up: caption, chip and stick end at the track's lower edge, the chip above the thumb's number;
-                // down: the chip sits 2px under the thumb with the caption beneath it
-                "pointer-events-none absolute -top-15.5 w-0",
-                "transition-transform duration-(--fs-dur-enter) ease-(--fs-ease-structural) motion-reduce:transition-none",
-                pinDown && "translate-y-18.5",
+                // the chip's raised place: its foot level with the pill's, the stick running down to the track
+                "pointer-events-none absolute -top-6 w-0",
+                pin.ready &&
+                  "transition-transform duration-(--fs-dur-structural) ease-(--fs-ease-spring) motion-reduce:transition-none",
               )}
-              style={{ left: `${marketAt}%` }}
+              style={{ left: `${marketShare * 100}%`, transform: `translateY(${dipPx}px)` }}
             >
               {/* only the chip is in flow, so the caption changing sides never shifts it */}
               <div
                 ref={pin.chip}
-                className="absolute top-4 left-0 flex w-max flex-col items-center"
+                className="absolute top-0 left-0 flex w-max flex-col items-center"
                 style={{
-                  transform: pin.chipShift === undefined ? "translateX(-50%)" : `translateX(${pin.chipShift}px)`,
+                  transform:
+                    pin.sizes.track > 0
+                      ? `translateX(${chipAt - marketShare * pin.sizes.track}px)`
+                      : "translateX(-50%)",
                 }}
               >
                 <span
@@ -142,13 +183,13 @@ export function EstimateSlider({
                 {(["up", "down"] as const).map((side) => (
                   <span
                     key={side}
-                    aria-hidden={(side === "down") !== pinDown}
+                    aria-hidden={(side === "down") !== isDown}
                     className={clsx(
                       "text-fs-text-primary absolute text-xs leading-4",
                       side === "up" ? "bottom-full" : "top-full",
                       "transition-opacity duration-(--fs-dur-echo) ease-(--fs-ease-enter)",
-                      // the arriving caption waits out the leaving one, so it never crosses the thumb's number
-                      (side === "down") === pinDown ? "opacity-100 delay-(--fs-dur-echo)" : "opacity-0",
+                      // the arriving caption waits out the leaving one, so the two never show at once
+                      (side === "down") === isDown ? "opacity-100 delay-(--fs-dur-echo)" : "opacity-0",
                     )}
                   >
                     Market
@@ -158,76 +199,158 @@ export function EstimateSlider({
               <span
                 data-testid="market-stick"
                 className={clsx(
-                  "bg-fs-text-primary absolute top-9 -left-[1.5px] block h-11 w-0.75 rounded-b-full",
-                  "transition-opacity duration-(--fs-dur-echo) ease-(--fs-ease-enter)",
-                  pinDown && "opacity-0",
+                  "bg-fs-text-primary absolute top-5 -left-[1.5px] block h-3.5 w-0.75 origin-top rounded-b-full",
+                  pin.ready &&
+                    "transition-[transform,opacity] duration-(--fs-dur-structural) ease-(--fs-ease-spring) motion-reduce:transition-none",
                 )}
+                style={{
+                  // shortens as the pin dips, so its foot stays on the track
+                  transform: `scaleY(${Math.max(STICK_PX - dipPx, 0) / STICK_PX})`,
+                  opacity: isDown ? 0 : 1,
+                }}
                 aria-hidden
               />
             </div>
           ) : null}
           <div className="type-caption text-fs-text-secondary flex justify-between">
             {/* a dropped pin names its own point, so the bound under its chip steps aside */}
-            <span data-bound="lower" className={clsx(pinDown && pin.covers.lower && "invisible")}>
+            <span data-bound="lower" className={clsx(isDown && covers.lower && "invisible")}>
               {formatEstimate(scale.lowerBound, scale.unit)}
             </span>
-            <span data-bound="upper" className={clsx(pinDown && pin.covers.upper && "invisible")}>
+            <span data-bound="upper" className={clsx(isDown && covers.upper && "invisible")}>
               {formatEstimate(scale.upperBound, scale.unit)}
             </span>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
-        <div className="flex items-end gap-2">
-          <NumberField
-            label="Your estimate"
-            value={shown}
-            minValue={scale.lowerBound}
-            maxValue={scale.upperBound}
-            formatOptions={{ maximumFractionDigits: estimateDigits(scale) }}
-            onChange={(typed) => (Number.isNaN(typed) ? onClear() : commit(typed))}
-            isDisabled={isDisabled}
-            className={clsx("[&_label]:text-fs-text-secondary w-44", isDisabled && "opacity-50")}
-          />
-          {scale.unit ? (
-            <span data-testid="estimate-unit" className="type-label text-fs-text-secondary pb-3">
-              {scale.unit}
-            </span>
-          ) : null}
-        </div>
-        <p className="type-label text-fs-text-secondary pb-3">
-          {reason ? (
-            <span className={lockedReason ? "text-fs-tone-warning-text" : undefined}>{reason}</span>
-          ) : isMarketPending ? (
-            "Loading the market estimate…"
-          ) : direction !== null && marketEstimate !== undefined ? (
-            <DirectionHint
-              direction={direction}
-              gap={Math.abs(shown - marketEstimate)}
-              market={marketEstimate}
-              unit={scale.unit}
-            />
-          ) : (
-            "At the market. Move it to predict."
-          )}
-        </p>
-      </div>
+      <p className="type-label text-fs-text-secondary min-h-5">
+        {note ? (
+          <span role="status">{note}</span>
+        ) : reason ? (
+          <span className={lockedReason ? "text-fs-tone-warning-text" : undefined}>{reason}</span>
+        ) : isMarketPending ? (
+          "Loading the market…"
+        ) : direction !== null && marketEstimate !== undefined ? (
+          <DirectionHint direction={direction} gap={Math.abs(shown - marketEstimate)} unit={scale.unit} />
+        ) : (
+          "At the market. Move it to predict."
+        )}
+      </p>
     </div>
   );
 }
 
-function DirectionHint({
-  direction,
-  gap,
-  market,
-  unit,
-}: {
-  direction: "higher" | "lower";
-  gap: number;
-  market: number;
-  unit: string | null;
-}) {
+/** Reads a typed estimate, allowing the unit and grouping commas; NaN when it is not a number. */
+function readTyped(text: string, unit: string | null): number {
+  const bare = (unit ? text.split(unit).join("") : text).replace(/[\s,]/g, "");
+  return bare === "" ? Number.NaN : Number(bare);
+}
+
+interface ValuePillProps {
+  /** The thumb's place on the track, 0 to 1. */
+  share: number;
+  shown: number;
+  scale: OptionScale;
+  onOpen: () => void;
+  onTyped: (value: number) => void;
+  onInvalid: (message: string) => void;
+}
+
+const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill(
+  { share, shown, scale, onOpen, onTyped, onInvalid },
+  ref,
+) {
+  const [draft, setDraft] = useState<string>();
+  // a blur can arrive after Enter or Escape closed the field, from the closing render's handler
+  const isOpen = useRef(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef(false);
+  const editing = draft !== undefined;
+
+  useEffect(() => {
+    if (editing || !returnFocus.current) return;
+    returnFocus.current = false;
+    button.current?.focus();
+  }, [editing]);
+
+  const close = (refocus: boolean) => {
+    isOpen.current = false;
+    returnFocus.current = refocus;
+    setDraft(undefined);
+  };
+
+  const apply = (refocus: boolean) => {
+    if (!isOpen.current) return;
+    const typed = readTyped(draft ?? "", scale.unit);
+    if ((draft ?? "").trim() === "") return close(refocus);
+    if (!Number.isFinite(typed)) {
+      if (refocus) return onInvalid("Enter a number.");
+      return close(false);
+    }
+    onTyped(typed);
+    close(refocus);
+  };
+
+  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      apply(true);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      close(true);
+    }
+  };
+
+  return (
+    <span
+      ref={ref}
+      data-testid="value-pill"
+      // slides across the track with the thumb, so the pill never leaves it and its foot stays over the thumb
+      className="absolute -top-8 z-20"
+      style={{ left: `${share * 100}%`, transform: `translateX(-${share * 100}%)` }}
+    >
+      {editing ? (
+        <span className="border-fs-accent bg-fs-surface rounded-full inline-flex h-7 items-center gap-1 border px-2.5 text-sm">
+          <input
+            autoFocus
+            aria-label={`Your estimate for ${scale.name}`}
+            inputMode="decimal"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={onKeyDown}
+            onBlur={() => apply(false)}
+            onFocus={(event) => event.target.select()}
+            className="text-fs-text-primary w-[7ch] bg-transparent font-semibold tabular-nums outline-none"
+          />
+          {scale.unit ? <span className="text-fs-text-secondary">{scale.unit}</span> : null}
+        </span>
+      ) : (
+        <button
+          ref={button}
+          type="button"
+          aria-label={`Type your estimate for ${scale.name}`}
+          onClick={() => {
+            onOpen();
+            isOpen.current = true;
+            setDraft(String(Number(shown.toFixed(estimateDigits(scale)))));
+          }}
+          className={clsx(
+            "border-fs-border bg-fs-surface text-fs-text-primary rounded-full fs-echo",
+            "inline-flex h-7 cursor-pointer items-center gap-1.5 border px-2.5 text-sm font-semibold whitespace-nowrap tabular-nums",
+            "hover:border-fs-accent focus-visible:ring-fs-accent focus-visible:ring-2 focus-visible:outline-none",
+          )}
+        >
+          {formatEstimate(shown, scale.unit)}
+          <PencilIcon className="text-fs-text-secondary size-3" aria-hidden />
+        </button>
+      )}
+    </span>
+  );
+});
+
+function DirectionHint({ direction, gap, unit }: { direction: "higher" | "lower"; gap: number; unit: string | null }) {
   const higher = direction === "higher";
   const Arrow = higher ? ArrowUp : ArrowDown;
   return (
@@ -238,7 +361,7 @@ function DirectionHint({
       )}
     >
       <Arrow className="size-3 shrink-0 [&_path]:fill-current" aria-hidden />
-      {`${formatEstimate(gap, unit)} ${higher ? "above" : "below"} the market (${formatEstimate(market, unit)})`}
+      {`${formatEstimate(gap, unit)} ${higher ? "above" : "below"} the market`}
     </span>
   );
 }

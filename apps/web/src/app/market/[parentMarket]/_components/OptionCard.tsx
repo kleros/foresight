@@ -26,8 +26,8 @@ interface OptionCardProps {
 }
 
 const LOCKED: Partial<Record<SessionStatus, string>> = {
-  "setting-up": "Estimates open once every option is set up.",
-  closed: "Trading has closed for this session.",
+  "setting-up": "Opens once the session is set up.",
+  closed: "Trading has closed.",
 };
 
 export function OptionCard({
@@ -59,12 +59,11 @@ export function OptionCard({
             onCommit={(next) => setEstimate(parentMarket, option.market, next)}
             onClear={() => clearEstimate(parentMarket, option.market)}
             lockedReason={
-              LOCKED[status] ??
-              (isMarketUnavailable ? "Market estimates could not be loaded. Reload in a moment." : undefined)
+              LOCKED[status] ?? (isMarketUnavailable ? "Could not load the market. Reload in a moment." : undefined)
             }
           />
         ) : (
-          <p className="type-caption text-fs-text-secondary">The scale for this option could not be read.</p>
+          <p className="type-caption text-fs-text-secondary">{"This option's range could not be read."}</p>
         )}
         {position ? (
           <PositionRow
@@ -77,9 +76,8 @@ export function OptionCard({
         ) : null}
         <Disclosure
           className="w-full"
-          buttonClassName="w-fit gap-2 border-none bg-transparent px-0 py-1 md:px-0 hover:bg-transparent hover:text-fs-text-accent"
-          bodyClassName="px-0 pt-2 pb-0 md:px-0 md:pt-2 md:pb-0"
-          title={<span className="type-label text-fs-text-secondary">Details</span>}
+          bodyClassName="px-0 pt-4 pb-0 md:px-0 md:pt-4 md:pb-0"
+          title={<span className="text-fs-text-primary text-base">Details</span>}
         >
           <div className="flex w-full min-w-0 flex-col gap-3">
             <p className="type-caption text-fs-text-secondary text-pretty">{option.question}</p>

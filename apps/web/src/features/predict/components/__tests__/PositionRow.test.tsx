@@ -16,8 +16,10 @@ const scale: OptionScale = {
   upperBound: 100,
 };
 
+const segment = (side: "up" | "down") => screen.getByTestId(`position-bar-${side}`);
+
 describe("PositionRow", () => {
-  it("lists the UP and DOWN held", () => {
+  it("names the UP and DOWN held under the bar's two ends", () => {
     render(
       <PositionRow
         scale={scale}
@@ -27,7 +29,31 @@ describe("PositionRow", () => {
       />,
     );
 
-    expect(screen.getByText("214.09 UP · 1.44 DOWN")).toBeInTheDocument();
+    expect(screen.getByText("214.09 UP")).toBeInTheDocument();
+    expect(screen.getByText("1.44 DOWN")).toBeInTheDocument();
+  });
+
+  it("groups a large holding in threes", () => {
+    render(
+      <PositionRow scale={scale} position={{ up: 1_234_567n * WAD, down: 0n }} marketEstimate={75} decimals={18} />,
+    );
+
+    expect(screen.getByText("1,234,567 UP")).toBeInTheDocument();
+  });
+
+  it("splits the bar by the share of UP and DOWN held", () => {
+    render(<PositionRow scale={scale} position={{ up: 3n * WAD, down: 1n * WAD }} marketEstimate={75} decimals={18} />);
+
+    expect(segment("up").style.transform).toBe("scaleX(0.75)");
+    expect(segment("down").style.transform).toBe("scaleX(0.25)");
+  });
+
+  it("keeps a small side visible on the bar", () => {
+    render(
+      <PositionRow scale={scale} position={{ up: 10_000n * WAD, down: 1n * WAD }} marketEstimate={75} decimals={18} />,
+    );
+
+    expect(segment("down").style.transform).not.toBe("scaleX(0)");
   });
 
   it("values the position at the market estimate, in the option's own tokens", () => {
@@ -36,7 +62,7 @@ describe("PositionRow", () => {
       <PositionRow scale={scale} position={{ up: 200n * WAD, down: 40n * WAD }} marketEstimate={75} decimals={18} />,
     );
 
-    expect(screen.getByText("Worth ≈ 160 Movie A tokens if it resolved at today's 75 %")).toBeInTheDocument();
+    expect(screen.getByText("≈ 160 Movie A tokens")).toBeInTheDocument();
   });
 
   it("leaves the value out while the market estimate is unknown", () => {
@@ -49,18 +75,48 @@ describe("PositionRow", () => {
       />,
     );
 
-    expect(screen.queryByText(/^Worth/)).toBeNull();
+    expect(screen.queryByText(/^≈/)).toBeNull();
   });
 
-  it("says which side the position leans to", () => {
-    render(<PositionRow scale={scale} position={{ up: 1n * WAD, down: 9n * WAD }} marketEstimate={75} decimals={18} />);
+  it("says an estimate on the position's side adds to it", () => {
+    render(
+      <PositionRow
+        scale={scale}
+        position={{ up: 9n * WAD, down: 1n * WAD }}
+        marketEstimate={75}
+        decimals={18}
+        estimate={{ value: 87, direction: "higher" }}
+      />,
+    );
 
-    expect(screen.getByText("Leaning lower")).toBeInTheDocument();
+    expect(screen.getByText("87 % adds to your UP")).toBeInTheDocument();
   });
 
-  it("names no side for a position held evenly", () => {
-    render(<PositionRow scale={scale} position={{ up: 5n * WAD, down: 5n * WAD }} marketEstimate={75} decimals={18} />);
+  it("says an estimate on the other side sells some of the position", () => {
+    render(
+      <PositionRow
+        scale={scale}
+        position={{ up: 9n * WAD, down: 1n * WAD }}
+        marketEstimate={75}
+        decimals={18}
+        estimate={{ value: 55, direction: "lower" }}
+      />,
+    );
 
-    expect(screen.queryByText(/^Leaning/)).toBeNull();
+    expect(screen.getByText("55 % sells some UP")).toBeInTheDocument();
+  });
+
+  it("says nothing of an estimate against a position held evenly", () => {
+    render(
+      <PositionRow
+        scale={scale}
+        position={{ up: 5n * WAD, down: 5n * WAD }}
+        marketEstimate={75}
+        decimals={18}
+        estimate={{ value: 87, direction: "higher" }}
+      />,
+    );
+
+    expect(screen.queryByText(/your UP|some UP|your DOWN|some DOWN/)).toBeNull();
   });
 });
