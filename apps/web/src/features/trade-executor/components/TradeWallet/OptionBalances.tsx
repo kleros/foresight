@@ -77,9 +77,9 @@ function OptionBalance({
           {balance === undefined ? "—" : formatAmount(balance, decimals, SHOWN_DIGITS)}
         </span>
         <span className="mr-2 size-2 flex-none rounded-full" style={{ backgroundColor: option.color }} aria-hidden />
-        {/* the Tooltip's trigger div is the flex child, so it takes the min-w-0 the name needs to truncate */}
+        {/* the Tooltip's trigger div is the flex child, so it takes the min-w-0; an inline span cannot truncate */}
         <Tooltip text={option.name} closeDelay={125} wrapperProps={{ className: "min-w-0" }}>
-          <span className="text-fs-text-primary min-w-0 truncate text-sm">{option.name}</span>
+          <span className="text-fs-text-primary block min-w-0 truncate text-sm">{option.name}</span>
         </Tooltip>
       </div>
       {option.positions.length > 0 ? (
