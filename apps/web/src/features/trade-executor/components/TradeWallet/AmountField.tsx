@@ -48,8 +48,12 @@ export function AmountField({
         // toString gives exponential notation below 1e-7 and from 1e+21, which no parser here accepts
         onChange={(entered) => onChange(entered.toFixed())}
         isReadOnly={isReadOnly}
-        // Max sits at the right end of the message row
-        className="w-full [&>div:last-child]:pr-10"
+        className={clsx(
+          // Max sits at the right end of the message row; the library justifies it, which spaces out a wrapped line
+          "w-full [&>div:last-child]:pr-10 [&>div:last-child]:text-left",
+          // two lines held on a phone, where an over-balance line wraps, so the dialog keeps its height
+          "max-sm:[&>div:last-child]:min-h-10 max-sm:[&>div:last-child]:items-start",
+        )}
       />
       <LightButton
         small
@@ -57,7 +61,7 @@ export function AmountField({
         isDisabled={isReadOnly || available === undefined}
         onPress={() => available !== undefined && onChange(formatUnits(available, decimals))}
         className={clsx(
-          "absolute -right-1 -bottom-1 px-1 py-0.5",
+          "absolute -right-1 -bottom-1 px-1 py-0.5 max-sm:bottom-4",
           "[&_.button-text]:text-fs-accent [&_.button-text]:text-sm",
         )}
       />
