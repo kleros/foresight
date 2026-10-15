@@ -12,6 +12,8 @@ import {
 } from "@foresight/tx-orchestrator";
 import type { Address, Hash } from "viem";
 
+import { chainText, OUT_OF_FUNDS, REVERTS } from "@/utils/txErrorText";
+
 import type { SwapQuoter } from "@/lib/swap/types";
 
 import type { PredictDriver, PredictFailureReason, PredictProgress, PredictStepRow } from "./types";
@@ -30,32 +32,6 @@ import type { PredictCtx, PredictReader, PredictRequest, PredictSnapshot } from 
 
 /** The trade wallet holds less than the share of the prediction it was shown to cover. */
 class TradeWalletShortError extends Error {}
-
-/** Every message along the `cause` chain viem and wagmi wrap a node's error in, lower-cased. */
-function chainText(error: unknown): string {
-  const parts: string[] = [];
-  let current: unknown = error;
-  for (let depth = 0; typeof current === "object" && current !== null && depth < 10; depth++) {
-    const link = current as {
-      message?: unknown;
-      shortMessage?: unknown;
-      details?: unknown;
-      data?: unknown;
-      cause?: unknown;
-    };
-    // an injected wallet's JSON-RPC error carries the node's reason only in `data`
-    const data =
-      typeof link.data === "object" && link.data !== null ? (link.data as { message?: unknown }).message : link.data;
-    for (const part of [link.shortMessage, link.message, link.details, data])
-      if (typeof part === "string") parts.push(part);
-    current = link.cause;
-  }
-  return parts.join(" ").toLowerCase();
-}
-
-// a node reports both as an internal JSON-RPC error, which the orchestrator reads as a slow network
-const OUT_OF_FUNDS = /insufficient funds|doesn't have enough funds/;
-const REVERTS = /execution reverted|reverted with|vm exception/;
 
 /** Why a saved run cannot be continued from the connected wallet, if it cannot. */
 function foreign(saved: PredictCtx, current: PredictCtx): "wrong-wallet" | "wrong-chain" | undefined {

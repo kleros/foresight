@@ -1,5 +1,14 @@
 import { waitForTransactionReceipt, type Config } from "@wagmi/core";
-import { HttpRequestError, UserRejectedRequestError, type Hash } from "viem";
+import {
+  ExecutionRevertedError,
+  HttpRequestError,
+  InsufficientFundsError,
+  InternalRpcError,
+  RpcRequestError,
+  UserRejectedRequestError,
+  WaitForTransactionReceiptTimeoutError,
+  type Hash,
+} from "viem";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { errorToast, infoToast, successToast } from "../toast";
@@ -13,6 +22,9 @@ const HASH: Hash = `0x${"ab".repeat(32)}`;
 const config = {} as Config;
 
 type Receipt = Awaited<ReturnType<typeof waitForTransactionReceipt>>;
+
+const rpcError = (message: string) =>
+  new RpcRequestError({ body: {}, error: { code: -32000, message }, url: "https://rpc.example" });
 
 const receipt = (status: Receipt["status"]) => ({ status, chainId: 100 }) as Receipt;
 
@@ -64,5 +76,38 @@ describe("wrapWithToast", () => {
     await expect(wrapWithToast(config, () => Promise.reject(error))).rejects.toBe(error);
 
     expect(errorToast).toHaveBeenCalledExactlyOnceWith(toast);
+  });
+
+  it.each([
+    [
+      "an out-of-funds send over http",
+      new InsufficientFundsError({ cause: rpcError("insufficient funds for gas * price + value") }),
+      "Not enough in your wallet for this and the network fee.",
+    ],
+    [
+      "an out-of-funds send through an injected wallet",
+      new InsufficientFundsError({ cause: new InternalRpcError(new Error("insufficient funds for transfer")) }),
+      "Not enough in your wallet for this and the network fee.",
+    ],
+    [
+      "a send that reverts while gas is estimated",
+      new ExecutionRevertedError({ cause: rpcError("execution reverted") }),
+      "Transaction failed.",
+    ],
+  ])("reports %s as what it is rather than a silent network", async (_name, error, toast) => {
+    await expect(wrapWithToast(config, () => Promise.reject(error))).rejects.toBe(error);
+
+    expect(errorToast).toHaveBeenCalledExactlyOnceWith(toast);
+  });
+
+  it("says a sent transaction may still confirm when waiting for its receipt fails", async () => {
+    const timeout = new WaitForTransactionReceiptTimeoutError({ hash: HASH });
+    vi.mocked(waitForTransactionReceipt).mockRejectedValue(timeout);
+
+    await expect(wrapWithToast(config, () => Promise.resolve(HASH))).rejects.toBe(timeout);
+
+    expect(errorToast).toHaveBeenCalledExactlyOnceWith(
+      "Sent, not confirmed yet. Check your wallet before trying again.",
+    );
   });
 });

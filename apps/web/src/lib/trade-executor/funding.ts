@@ -4,6 +4,7 @@ import { encodeFunctionData, erc20Abi, type Address, type Hex } from "viem";
 import { sDaiAdapterAbi } from "@/config/contracts";
 
 import { batchValueExecuteTx } from "./executor";
+import { PreflightError } from "./preflightError";
 import type { Asset } from "./types";
 
 /** Pays xDAI to the adapter, which mints the sDAI it is worth straight to the executor. */
@@ -30,7 +31,7 @@ export function depositTx(args: { executor: Address; asset: Asset }): FlowTx {
 
 export function withdrawTx(args: { executor: Address; recipient: Address; assets: Asset[] }): FlowTx {
   if (args.assets.length === 0) {
-    throw new Error("Nothing to withdraw.");
+    throw new PreflightError("Nothing to withdraw.");
   }
 
   return batchValueExecuteTx(

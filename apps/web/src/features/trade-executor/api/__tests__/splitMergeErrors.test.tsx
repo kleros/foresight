@@ -12,6 +12,7 @@ import { gnosisRouterAddress } from "@/config/contracts";
 
 import { useMergeFromExecutor } from "../mergeFromExecutor";
 import { useSplitFromExecutor } from "../splitFromExecutor";
+import { useWithdrawFromExecutor } from "../withdrawFromExecutor";
 
 vi.mock("@/utils/toast", () => ({ infoToast: vi.fn(), successToast: vi.fn(), errorToast: vi.fn() }));
 vi.mock("@wagmi/core", () => ({ sendTransaction: vi.fn(), waitForTransactionReceipt: vi.fn() }));
@@ -44,7 +45,7 @@ beforeEach(() => {
   vi.mocked(gnosisRouterAddress).mockReturnValue(ROUTER);
 });
 
-describe("Mint and Merge failing before anything is sent", () => {
+describe("Mint, Merge and Withdraw failing before anything is sent", () => {
   it("toasts once that Mint is not available without a router", async () => {
     vi.mocked(gnosisRouterAddress).mockReturnValue(null);
     const { result } = renderHook(() => useSplitFromExecutor(), { wrapper });
@@ -70,6 +71,15 @@ describe("Mint and Merge failing before anything is sent", () => {
     await settle(() => result.current.mutate({ ...merge, outcomeTokens: [] }), result);
 
     expect(errorToast).toHaveBeenCalledExactlyOnceWith("Nothing to merge.");
+    expect(sendTransaction).not.toHaveBeenCalled();
+  });
+
+  it("toasts once that there is nothing to withdraw without an asset", async () => {
+    const { result } = renderHook(() => useWithdrawFromExecutor(), { wrapper });
+
+    await settle(() => result.current.mutate({ executor: address("2"), recipient: address("1"), assets: [] }), result);
+
+    expect(errorToast).toHaveBeenCalledExactlyOnceWith("Nothing to withdraw.");
     expect(sendTransaction).not.toHaveBeenCalled();
   });
 });
