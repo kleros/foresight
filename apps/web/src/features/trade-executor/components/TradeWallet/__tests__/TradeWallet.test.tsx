@@ -278,7 +278,8 @@ describe("TradeWallet positions", () => {
       screen.getByRole("button", { name: "Balances" }).getAttribute("aria-controls") ?? "",
     );
 
-    expect(within(panel!).getAllByRole("button", { name: "" })).toHaveLength(1);
+    expect(within(panel!).getAllByRole("button", { name: "About UP and DOWN" })).toHaveLength(1);
+    expect(within(panel!).queryAllByRole("button", { name: "" })).toHaveLength(0);
   });
 });
 

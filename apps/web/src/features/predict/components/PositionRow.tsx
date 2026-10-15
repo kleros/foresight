@@ -60,7 +60,7 @@ export function PositionRow({
         </span>
       ) : null}
       {marketEstimate !== undefined ? (
-        <WithHelpTooltip tooltipMsg={WORTH_HELP}>
+        <WithHelpTooltip label="How the worth is worked out" tooltipMsg={WORTH_HELP}>
           <span className="text-fs-text-primary tabular-nums">
             {`Worth ≈ ${amount(positionWorth(position, marketEstimate, scale))} ${scale.name} tokens if it resolved at today's ${formatEstimate(marketEstimate, scale.unit)}`}
           </span>

@@ -34,7 +34,7 @@ export function OptionBalances({
 
   return (
     <div className="flex flex-col gap-2">
-      <WithHelpTooltip tooltipMsg="UP gains if it resolves high, DOWN if low.">
+      <WithHelpTooltip label="About UP and DOWN" tooltipMsg="UP gains if it resolves high, DOWN if low.">
         <h4 className="type-label text-fs-text-secondary first-letter:uppercase">{noun} tokens</h4>
       </WithHelpTooltip>
       <div className="grid w-full grid-cols-[repeat(auto-fill,minmax(11rem,16rem))] gap-4">

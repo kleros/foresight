@@ -84,7 +84,10 @@ export function TradeWallet({
       <section aria-label="Trade wallet" className="bg-fs-surface-sunken rounded-fs flex flex-col px-4 py-3 md:px-6">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 max-sm:w-full">
-            <WithHelpTooltip tooltipMsg="Holds the money behind your predictions and places them all in one transaction.">
+            <WithHelpTooltip
+              label="About the trade wallet"
+              tooltipMsg="Holds the money behind your predictions and places them all in one transaction."
+            >
               <h3 className="text-fs-text-primary text-sm font-semibold">Trade wallet</h3>
             </WithHelpTooltip>
             {explorer ? (
