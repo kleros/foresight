@@ -210,11 +210,11 @@ export function statusLine(args: { steps: PredictSteps; notice?: string; skipped
   if (notice) return { text: notice, tone: "warning" };
   if (steps.failure) return { text: steps.failure, tone: steps.pending ? "warning" : "error" };
   if (steps.note) return { text: steps.note, tone: "neutral" };
-  if (skipped > 0) {
-    return {
-      text: `${skipped} ${skipped === 1 ? "estimate" : "estimates"} could not be traded and ${skipped === 1 ? "was" : "were"} left out.`,
-      tone: "neutral",
-    };
-  }
+  if (skipped > 0) return { text: `${leftOutText(skipped)}.`, tone: "neutral" };
   return null;
+}
+
+/** "2 estimates could not be traded and were left out", with no full stop. */
+export function leftOutText(count: number): string {
+  return `${count} ${count === 1 ? "estimate" : "estimates"} could not be traded and ${count === 1 ? "was" : "were"} left out`;
 }

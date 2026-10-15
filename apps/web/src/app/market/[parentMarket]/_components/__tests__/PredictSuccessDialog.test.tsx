@@ -17,6 +17,15 @@ beforeEach(() => {
 });
 
 describe("PredictSuccessDialog", () => {
+  it.each([
+    [["Hanoi"], "1 estimate could not be traded and was left out: Hanoi."],
+    [["Berlin", "Hanoi"], "2 estimates could not be traded and were left out: Berlin, Hanoi."],
+  ])("names what it left out as the popup words it: %j", (leftOut, line) => {
+    render(<PredictSuccessDialog isOpen leftOut={leftOut} onClose={vi.fn()} />);
+
+    expect(screen.getByText(line)).toBeInTheDocument();
+  });
+
   it("is named by its heading", () => {
     render(<PredictSuccessDialog isOpen leftOut={[]} onClose={vi.fn()} />);
 
@@ -27,7 +36,7 @@ describe("PredictSuccessDialog", () => {
     atlas = { userExists: false, isVerified: false, isSigningIn: false, authoriseUser: vi.fn() };
     render(<PredictSuccessDialog isOpen leftOut={[]} onClose={vi.fn()} />);
 
-    expect(screen.getByRole("heading", { name: "Get an email when it resolves" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Get an email when the market resolves" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign in to subscribe" })).toBeInTheDocument();
     expect(screen.queryByText(/when this market resolves/)).toBeNull();
   });

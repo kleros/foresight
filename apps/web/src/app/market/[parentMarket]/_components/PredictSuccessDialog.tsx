@@ -4,6 +4,7 @@ import { useAtlasProvider } from "@kleros/kleros-app";
 import { Button, Modal, TextField } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
+import { leftOutText } from "@/features/predict/utils/predictSteps";
 import ContactDetailsForm from "@/features/settings/components/NotificationSettings/ContactDetailsForm";
 
 import EnsureAuth from "@/components/auth/EnsureAuth";
@@ -40,7 +41,7 @@ export function PredictSuccessDialog({
       <CheckIcon className="size-32" />
       {leftOut.length > 0 ? (
         <p className="text-fs-text-secondary text-center text-sm">
-          Could not be traded, so left out: {leftOut.join(", ")}.
+          {leftOutText(leftOut.length)}: {leftOut.join(", ")}.
         </p>
       ) : null}
 
@@ -69,7 +70,7 @@ export function PredictSuccessDialog({
       ) : (
         <div className="flex w-full flex-col items-center gap-8">
           <h2 className="text-fs-text-primary w-full text-center text-base font-semibold">
-            Get an email when it resolves
+            Get an email when the market resolves
           </h2>
           <EnsureAuth text="Sign in to subscribe">
             <ContactDetailsForm />
