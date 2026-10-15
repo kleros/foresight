@@ -4,9 +4,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { sendTransaction } from "@wagmi/core";
 import type { Address } from "viem";
 
+import { errorToast } from "@/utils/toast";
 import { wrapWithToast } from "@/utils/wrapWithToast";
 
 import { splitTx } from "@/lib/trade-executor/positions";
+import { PreflightError } from "@/lib/trade-executor/preflightError";
 import { wagmiConfig } from "@/lib/web3/wagmi";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
@@ -27,12 +29,16 @@ export function useSplitFromExecutor(onSuccess?: () => void) {
 
   return useMutation({
     mutationFn: (args: SplitArgs) => {
-      if (!router) throw new Error("There is no Seer router on this network.");
+      if (!router) throw new PreflightError("Mint and Merge are not available on this network.");
       const tx = splitTx({ ...args, router });
 
       return wrapWithToast(wagmiConfig, () =>
         sendTransaction(wagmiConfig, { to: tx.to, data: tx.data, chainId: DEFAULT_CHAIN_ID }),
       );
+    },
+    // wrapWithToast reports everything from the send on
+    onError: (error) => {
+      if (error instanceof PreflightError) errorToast(error.message);
     },
     onSuccess: () => {
       onSuccess?.();
