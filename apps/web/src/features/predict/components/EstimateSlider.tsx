@@ -359,7 +359,7 @@ function DirectionHint({ direction, gap, unit }: { direction: "higher" | "lower"
   return (
     <span
       className={clsx(
-        "inline-flex items-center gap-1",
+        "inline-flex items-center gap-1 align-top",
         higher ? "text-fs-tone-success-text" : "text-fs-tone-error-text",
       )}
     >
