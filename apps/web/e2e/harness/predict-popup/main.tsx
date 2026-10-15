@@ -13,7 +13,18 @@ import "@/styles/global.css";
 const WAD = 10n ** 18n;
 const WALLET = "0xdcee0000000000000000000000000000000c664f";
 
-const CITIES = ["Berlin", "Lisbon metropolitan area", "Nairobi", "Montevideo", "Hanoi"];
+const CITIES = [
+  "Berlin",
+  "Lisbon metropolitan area",
+  "Nairobi",
+  "Montevideo",
+  "Hanoi",
+  "Accra",
+  "Kraków",
+  "Medellín",
+  "Osaka",
+  "Tbilisi",
+];
 
 const params = new URLSearchParams(window.location.search);
 /** `?options=N` estimates, alternating higher and lower, each with a market move. */
@@ -22,6 +33,8 @@ const count = Number(params.get("options") ?? "2");
 const state = (params.get("state") ?? "idle") as State;
 /** `?reason=` the failure a `failed` popup shows; "fee" is the funds failure after money moved. */
 const reason = params.get("reason") ?? "fee";
+/** `?first=0` a returning predictor: a funded trade wallet and nothing typed. */
+const isFirstPrediction = params.get("first") !== "0";
 /** `?held=` the sDAI in the visitor's own wallet, as a decimal. */
 const held = parseUnits(params.get("held") ?? "19", 18);
 if (params.get("theme") === "dark") document.documentElement.classList.add("dark");
@@ -93,12 +106,13 @@ const PROGRESS: Partial<Record<State, PredictProgress>> = {
   recovered: run("review", ["success", "success"]),
 };
 
-const amount = state === "over" ? held + 980n * WAD : 10n * WAD;
-const funding = state === "disconnected" ? null : planFunding({ amount, ownWallet: held, tradeWallet: 6n * WAD });
+const amount = state === "over" ? held + 980n * WAD : isFirstPrediction ? 10n * WAD : undefined;
+const funding =
+  state === "disconnected" ? null : planFunding({ amount: amount ?? 0n, ownWallet: held, tradeWallet: 6n * WAD });
 const progress = PROGRESS[state] ?? null;
 const isRunning = state === "quoting" || state === "signing" || state === "confirming";
 const steps = predictSteps({
-  wallet: { address: WALLET, deployed: false },
+  wallet: { address: WALLET, deployed: !isFirstPrediction },
   ...fundsToAdd(state === "over" ? null : funding, sDai, collateral),
   progress,
 });
@@ -119,7 +133,7 @@ createRoot(document.getElementById("root")!).render(
       onTokenChange={() => {}}
       funding={funding}
       collateral={collateral}
-      isFirstPrediction
+      isFirstPrediction={isFirstPrediction}
       isDisconnected={state === "disconnected"}
       steps={steps}
       skipped={0}

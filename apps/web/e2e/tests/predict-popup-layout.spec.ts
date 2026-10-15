@@ -95,8 +95,14 @@ function isFullyShown(locator: Locator): Promise<boolean> {
   });
 }
 
-async function openPopup(page: Page, options: number, state: (typeof STATES)[number] = "idle", reason?: string) {
-  await page.goto(`${harness.url}?options=${options}&state=${state}${reason ? `&reason=${reason}` : ""}`);
+async function openPopup(
+  page: Page,
+  options: number,
+  state: (typeof STATES)[number] = "idle",
+  reason?: string,
+  extra = "",
+) {
+  await page.goto(`${harness.url}?options=${options}&state=${state}${reason ? `&reason=${reason}` : ""}${extra}`);
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("button", { name: "Cancel" })).toBeVisible();
   const accent = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--fs-accent"));
@@ -104,6 +110,15 @@ async function openPopup(page: Page, options: number, state: (typeof STATES)[num
   await expect(
     dialog.getByRole("listitem").filter({ has: page.getByRole("img", { name: /the market$/ }) }),
   ).toHaveCount(options);
+  // a finished entrance leaves no transform behind to count as overflow; the running pulse never finishes
+  await dialog.evaluate((element) =>
+    Promise.all(
+      element
+        .getAnimations({ subtree: true })
+        .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
+        .map((animation) => animation.finished),
+    ),
+  );
   return dialog;
 }
 
@@ -112,7 +127,7 @@ async function footprint(page: Page, dialog: Locator) {
   const box = (await dialog.boundingBox())!;
   const cancel = (await dialog.getByRole("button", { name: "Cancel" }).boundingBox())!;
   const body = await page.getByTestId("predict-body").evaluate((element) => element.getBoundingClientRect().height);
-  const bullet = (await dialog.locator("[data-bullet]").first().boundingBox())!;
+  const bullet = (await dialog.locator("ol [data-bullet]").first().boundingBox())!;
   const round = (value: number) => Math.round(value * 10) / 10;
   return {
     dialog: [box.x, box.y, box.width, box.height].map(round),
@@ -123,7 +138,7 @@ async function footprint(page: Page, dialog: Locator) {
 }
 
 for (const height of [812, 667]) {
-  for (const options of [2, 5]) {
+  for (const options of [2, 10]) {
     test.describe(`a ${options}-option popup at 375 x ${height}`, () => {
       test.use({ viewport: { width: 375, height } });
 
@@ -207,60 +222,78 @@ for (const height of [812, 667]) {
 }
 
 for (const viewport of VIEWPORTS) {
-  test.describe(`the popup through a run at ${viewport.width} x ${viewport.height}`, () => {
-    test.use({ viewport });
+  for (const options of [2, 10]) {
+    test.describe(`the ${options}-estimate popup through a run at ${viewport.width} x ${viewport.height}`, () => {
+      test.use({ viewport });
 
-    test("keeps one footprint and its footer in place in every state, inside the window", async ({
-      page,
-    }, testInfo) => {
-      const pageErrors: string[] = [];
-      page.on("pageerror", (error) => pageErrors.push(error.message));
+      test("keeps one footprint and its footer in place in every state, inside the window", async ({
+        page,
+      }, testInfo) => {
+        const pageErrors: string[] = [];
+        page.on("pageerror", (error) => pageErrors.push(error.message));
 
-      const idle = await footprint(page, await openPopup(page, 2, "idle"));
-      for (const state of STATES) {
-        const dialog = await openPopup(page, 2, state);
-        await testInfo.attach(`${viewport.width}x${viewport.height}-${state}`, {
-          body: await page.screenshot(),
-          contentType: "image/png",
-        });
-
-        expect.soft(await footprint(page, dialog), `${state} has the idle popup's footprint`).toEqual(idle);
-
-        const box = (await dialog.boundingBox())!;
-        expect.soft(box.x, `${state}: left edge in the window`).toBeGreaterThanOrEqual(0);
-        expect.soft(box.x + box.width, `${state}: right edge in the window`).toBeLessThanOrEqual(viewport.width);
-        expect.soft(box.y + box.height, `${state}: bottom edge in the window`).toBeLessThanOrEqual(viewport.height);
-
-        // a run's form is locked, and the popup scrolls to its running or failed step instead
-        const isEditable = state === "idle" || state === "over" || state === "disconnected";
-        for (const control of isEditable
-          ? [dialog.getByRole("button", { name: "Max" }), dialog.getByRole("button", { name: /sDAI/ })]
-          : []) {
-          expect.soft(await isFullyShown(control), `${state}: ${await control.textContent()} is reachable`).toBe(true);
+        const idleDialog = await openPopup(page, options, "idle");
+        const idle = await footprint(page, idleDialog);
+        // the spine fits the window: every step is in view as the popup opens, with nothing to scroll to
+        for (const title of STEPS) {
+          expect
+            .soft(await isFullyShown(idleDialog.getByText(title, { exact: true })), `"${title}" is in view at open`)
+            .toBe(true);
         }
-        if (isEditable) {
-          const max = (await dialog.getByRole("button", { name: "Max" }).boundingBox())!;
-          expect.soft(Math.min(max.width, max.height), `${state}: Max is a 44px target`).toBeGreaterThanOrEqual(44);
-        }
-
-        const status = dialog.getByRole("status");
-        if ((await status.textContent())?.trim()) {
-          expect.soft(await isFullyShown(status), `${state}: the status line is in view`).toBe(true);
-        }
+        const returning = await openPopup(page, options, "idle", undefined, "&first=0");
         expect
-          .soft(
-            await status.evaluate((element) => element.scrollHeight <= element.clientHeight + 1),
-            `${state}: the status line fits its slot`,
-          )
-          .toBe(true);
-      }
-      expect.soft(pageErrors, "page errors").toEqual([]);
+          .soft(await footprint(page, returning), "a returning predictor has the idle popup's footprint")
+          .toEqual(idle);
+        for (const state of STATES) {
+          const dialog = await openPopup(page, options, state);
+          await testInfo.attach(`${viewport.width}x${viewport.height}-${options}-${state}`, {
+            body: await page.screenshot(),
+            contentType: "image/png",
+          });
 
-      if (testInfo.errors.length > 0 || viewport.width !== 1280) return;
-      await openPopup(page, 2, "idle");
-      await expect(page).toHaveScreenshot("predict-popup-1280x800-idle.png", { animations: "disabled", caret: "hide" });
+          expect.soft(await footprint(page, dialog), `${state} has the idle popup's footprint`).toEqual(idle);
+
+          const box = (await dialog.boundingBox())!;
+          expect.soft(box.x, `${state}: left edge in the window`).toBeGreaterThanOrEqual(0);
+          expect.soft(box.x + box.width, `${state}: right edge in the window`).toBeLessThanOrEqual(viewport.width);
+          expect.soft(box.y + box.height, `${state}: bottom edge in the window`).toBeLessThanOrEqual(viewport.height);
+
+          // a run's form is locked, and the popup scrolls to its running or failed step instead
+          const isEditable = state === "idle" || state === "over" || state === "disconnected";
+          for (const control of isEditable
+            ? [dialog.getByRole("button", { name: "Max" }), dialog.getByRole("button", { name: /sDAI/ })]
+            : []) {
+            expect
+              .soft(await isFullyShown(control), `${state}: ${await control.textContent()} is reachable`)
+              .toBe(true);
+          }
+          if (isEditable) {
+            const max = (await dialog.getByRole("button", { name: "Max" }).boundingBox())!;
+            expect.soft(Math.min(max.width, max.height), `${state}: Max is a 44px target`).toBeGreaterThanOrEqual(44);
+          }
+
+          const status = dialog.getByRole("status");
+          if ((await status.textContent())?.trim()) {
+            expect.soft(await isFullyShown(status), `${state}: the status line is in view`).toBe(true);
+          }
+          expect
+            .soft(
+              await status.evaluate((element) => element.scrollHeight <= element.clientHeight + 1),
+              `${state}: the status line fits its slot`,
+            )
+            .toBe(true);
+        }
+        expect.soft(pageErrors, "page errors").toEqual([]);
+
+        if (testInfo.errors.length > 0 || viewport.width !== 1280 || options !== 2) return;
+        await openPopup(page, 2, "idle");
+        await expect(page).toHaveScreenshot("predict-popup-1280x800-idle.png", {
+          animations: "disabled",
+          caret: "hide",
+        });
+      });
     });
-  });
+  }
 }
 
 test.describe("the popup's scroll area", () => {
@@ -272,7 +305,7 @@ test.describe("the popup's scroll area", () => {
       page,
     }) => {
       await page.setViewportSize(viewport);
-      const dialog = await openPopup(page, 5);
+      const dialog = await openPopup(page, 10);
       const scroller = page.getByTestId("predict-body").locator("..");
       const cue = dialog.getByTestId("more-below");
       const overflows = await scroller.evaluate((element) => element.scrollHeight >= element.clientHeight + 16);
@@ -286,18 +319,25 @@ test.describe("the popup's scroll area", () => {
     });
   }
 
-  test("caps the estimate list at three rows, with five listed", async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 667 });
-    const dialog = await openPopup(page, 5);
-    const list = dialog.getByRole("list").first();
-    const [box, row] = await Promise.all([
-      list.locator("..").boundingBox(),
-      list.getByRole("listitem").first().boundingBox(),
-    ]);
+  // the cut row and its fade say there is more; four rows on a wide popup would overflow by a fade's worth for nothing
+  for (const [width, height, options, rows] of [
+    [1280, 800, 10, 3.5],
+    [1280, 800, 4, 4],
+    [375, 667, 10, 3],
+    [375, 667, 3, 3],
+  ] as const) {
+    test(`shows ${rows} estimate rows of ${options} at ${width} x ${height}`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      const dialog = await openPopup(page, options);
+      const list = dialog.getByRole("list").first();
+      const [box, row] = await Promise.all([
+        list.locator("..").boundingBox(),
+        list.getByRole("listitem").first().boundingBox(),
+      ]);
 
-    expect(box!.height).toBeLessThan(row!.height * 3.5);
-    expect(box!.height).toBeGreaterThan(row!.height * 2.9);
-  });
+      expect(box!.height / row!.height).toBeCloseTo(rows, 1);
+    });
+  }
 });
 
 test.describe("a popup on a short screen", () => {
@@ -339,9 +379,12 @@ test.describe("an amount over a four-digit balance at 375 x 812", () => {
     const summary = dialog.getByText(/^Not enough balance/);
 
     await expect(summary).toContainText("6,839.9596 sDAI");
-    expect(await summary.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-    // one line, so the body keeps the idle popup's height
-    expect((await summary.boundingBox())!.height).toBeLessThanOrEqual(21);
+    // inside its held slot, so the body keeps the idle popup's height
+    expect(
+      await summary.evaluate(
+        (element) => element.scrollWidth <= element.clientWidth && element.scrollHeight <= element.clientHeight,
+      ),
+    ).toBe(true);
     expect(await isFullyShown(summary)).toBe(true);
 
     const label = dialog.locator("#slider-label");
@@ -505,5 +548,41 @@ test.describe("accent text in the dark theme", () => {
     });
 
     expect(ratio).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+test.describe("the spine's line", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  /** The accent fill over each connector, top to bottom: true where it is drawn. */
+  const fills = (dialog: Locator) =>
+    dialog
+      .locator(".spine-line, .predict-spine > li > div:first-child > div:last-child")
+      .evaluateAll((lines) =>
+        lines.map((line) => getComputedStyle(line, "::after").transform === "matrix(1, 0, 0, 1, 0, 0)"),
+      );
+
+  test("is unfilled at rest, and fills under each node and step that has finished", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    expect(await fills(await openPopup(page, 2, "idle"))).toEqual([false, false, false, false]);
+
+    // the estimates, the amount and the trade wallet are done; adding funds is running
+    expect(await fills(await openPopup(page, 2, "signing"))).toEqual([true, true, true, false]);
+  });
+
+  test("shows the check of a finished step and the cross of a failed one, each glyph alone", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const dialog = await openPopup(page, 2, "failed");
+    const shown = (view: string) =>
+      dialog
+        .locator(`[data-bullet="${view}"]`)
+        .first()
+        .locator("svg")
+        .evaluateAll((glyphs) =>
+          glyphs.filter((glyph) => getComputedStyle(glyph).opacity === "1").map((glyph) => glyph.dataset.glyph),
+        );
+
+    expect(await shown("done")).toEqual(["check"]);
+    expect(await shown("failed")).toEqual(["cross"]);
   });
 });
