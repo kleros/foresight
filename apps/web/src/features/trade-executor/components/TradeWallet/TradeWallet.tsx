@@ -181,6 +181,8 @@ export function TradeWallet({
           native={chain && { symbol: chain.nativeCurrency.symbol, decimals: chain.nativeCurrency.decimals }}
           onSubmit={(asset) => withdraw.mutate({ executor: deployed, recipient: owner, assets: [asset] })}
           isPending={withdraw.isPending}
+          // what is shown is cut to four decimals, and a cut Max would leave dust behind
+          maxIsExact
         />
       ) : null}
 

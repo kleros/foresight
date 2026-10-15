@@ -47,6 +47,12 @@ export function formatDisplayAmount(value: bigint, decimals: number, digits = DI
 /** Decimals shown for an amount the visitor holds. */
 export const OWNED_DECIMALS = 4;
 
+/** A held amount cut to `OWNED_DECIMALS`, so it equals what `ownedAmount` shows. */
+export function cutToOwned(value: bigint, decimals: number): bigint {
+  const step = 10n ** BigInt(Math.max(decimals - OWNED_DECIMALS, 0));
+  return value - (value % step);
+}
+
 /** A held amount cut, never rounded up, to `OWNED_DECIMALS`; a non-zero amount below the last one is named. */
 export function ownedAmount(value: bigint, decimals: number): string {
   const shown = formatDisplayAmount(value, decimals, OWNED_DECIMALS);

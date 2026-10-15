@@ -7,7 +7,7 @@ import { Select } from "@/components/ui/Select";
 
 import DaiIcon from "@/assets/svg/dai.svg";
 
-import { ownedAmount } from "@/utils/amount";
+import { cutToOwned, ownedAmount } from "@/utils/amount";
 
 export interface TokenChoice {
   id: string;
@@ -26,6 +26,7 @@ export function TokenAmountField({
   error,
   isLoadingBalance,
   isReadOnly,
+  maxIsExact = false,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -37,7 +38,10 @@ export function TokenAmountField({
   error?: string;
   isLoadingBalance?: boolean;
   isReadOnly?: boolean;
+  /** Max takes the whole balance rather than the shown amount. */
+  maxIsExact?: boolean;
 }) {
+  const max = available === undefined ? undefined : maxIsExact ? available : cutToOwned(available, decimals);
   const symbol = tokens.find((token) => token.id === selected)?.symbol ?? "";
 
   return (
@@ -77,8 +81,8 @@ export function TokenAmountField({
       <LightButton
         small
         text="Max"
-        isDisabled={isReadOnly || available === undefined}
-        onPress={() => available !== undefined && onChange(formatUnits(available, decimals))}
+        isDisabled={isReadOnly || max === undefined || max === 0n}
+        onPress={() => max !== undefined && onChange(formatUnits(max, decimals))}
         className={clsx("absolute -right-1 px-1 py-0.5", "[&_.button-text]:text-fs-accent [&_.button-text]:text-sm")}
       />
       {error ? (

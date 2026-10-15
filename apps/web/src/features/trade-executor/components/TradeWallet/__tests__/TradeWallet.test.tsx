@@ -352,7 +352,7 @@ describe("TradeWallet's amount dialogs", () => {
     expect(await within(dialog).findByText("Not enough balance.")).toBeInTheDocument();
   });
 
-  it("groups a large balance and its cap in threes, and Max fills the raw amount", async () => {
+  it("groups a large balance and its cap in threes, and Max fills the shown amount ungrouped", async () => {
     ownerHeld = new Map([[COLLATERAL, units("98765432109.12345")]]);
     renderWallet(market, { closed: true });
 
@@ -361,7 +361,7 @@ describe("TradeWallet's amount dialogs", () => {
 
     expect(await within(dialog).findByText("Balance: 98,765,432,109.1234 sDAI")).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole("button", { name: "Max" }));
-    expect(within(dialog).getByRole("spinbutton")).toHaveValue("98765432109.12345");
+    expect(within(dialog).getByRole("spinbutton")).toHaveValue("98765432109.1234");
   });
 
   it("names no Max when a deposit is over a balance under the last shown decimal", async () => {

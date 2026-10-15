@@ -35,6 +35,8 @@ interface TransferDialogProps {
   native?: TokenChoice;
   onSubmit: (asset: Asset) => void;
   isPending: boolean;
+  /** Max takes the whole balance rather than the shown amount. */
+  maxIsExact?: boolean;
 }
 
 export function TransferDialog({
@@ -48,6 +50,7 @@ export function TransferDialog({
   native,
   onSubmit,
   isPending,
+  maxIsExact,
 }: TransferDialogProps) {
   const [selected, setSelected] = useState(COLLATERAL);
   const [input, setInput] = useState("");
@@ -88,6 +91,7 @@ export function TransferDialog({
           }
           isLoadingBalance={funds.isPending}
           isReadOnly={isPending}
+          maxIsExact={maxIsExact}
         />
 
         <Button

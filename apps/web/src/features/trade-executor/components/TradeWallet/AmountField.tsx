@@ -4,7 +4,7 @@ import { formatUnits } from "viem";
 
 import LightButton from "@/components/ui/LightButton";
 
-import { ownedAmount } from "@/utils/amount";
+import { cutToOwned, ownedAmount } from "@/utils/amount";
 
 export function AmountField({
   value,
@@ -16,6 +16,7 @@ export function AmountField({
   error,
   isLoadingBalance,
   isReadOnly,
+  maxIsExact = false,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -27,7 +28,10 @@ export function AmountField({
   error?: string;
   isLoadingBalance?: boolean;
   isReadOnly?: boolean;
+  /** Max takes the whole balance rather than the shown amount. */
+  maxIsExact?: boolean;
 }) {
+  const max = available === undefined ? undefined : maxIsExact ? available : cutToOwned(available, decimals);
   const availableText = isLoadingBalance
     ? "Reading balance…"
     : // a balance we could not read must not read as an empty one
@@ -58,8 +62,8 @@ export function AmountField({
       <LightButton
         small
         text="Max"
-        isDisabled={isReadOnly || available === undefined}
-        onPress={() => available !== undefined && onChange(formatUnits(available, decimals))}
+        isDisabled={isReadOnly || max === undefined || max === 0n}
+        onPress={() => max !== undefined && onChange(formatUnits(max, decimals))}
         className={clsx(
           "absolute -right-1 -bottom-1 px-1 py-0.5 max-sm:bottom-4",
           "[&_.button-text]:text-fs-accent [&_.button-text]:text-sm",
