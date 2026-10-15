@@ -292,9 +292,18 @@ describe("statusLine", () => {
     });
 
     expect(statusLine({ steps: pending, skipped: 0 })).toEqual({
-      text: "Sent, not confirmed yet. It is checked before anything else is sent.",
+      text: "Sent, not confirmed yet.",
       tone: "warning",
     });
+  });
+
+  it.each([
+    ["cancelled", "Your wallet cancelled or replaced the request."],
+    ["funds", "Not enough in your wallet for this and the network fee. Lower the amount or add funds."],
+  ] as const)("names a %s stop in words with a referent", (reason, text) => {
+    const stopped = steps({ progress: progress({ stage: "halted", failure: { reason, retryable: true } }) });
+
+    expect(statusLine({ steps: stopped, skipped: 0 })?.text).toBe(text);
   });
 
   it("says nothing while a step is running", () => {
