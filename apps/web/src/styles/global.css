@@ -282,7 +282,10 @@
     }
   }
 
+  /* also the library's own hover class: its fields, selects and buttons carry it */
   .hover-short-transition {
-    transition: 0.1s;
+    transition-property: background-color, border-color, color, fill, outline-color, box-shadow, transform, opacity;
+    transition-duration: var(--fs-dur-echo);
+    transition-timing-function: var(--fs-ease-enter);
   }
 }
