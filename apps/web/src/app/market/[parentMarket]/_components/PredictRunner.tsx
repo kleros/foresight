@@ -185,7 +185,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
 
 /** Why this prediction cannot be made, in the words of the thing the visitor has to do. */
 function notice(args: { owner?: string; onRightChain: boolean; ready: boolean }): string | undefined {
-  if (!args.owner) return "Connect a wallet to make this prediction.";
-  if (!args.onRightChain) return "Switch to Gnosis to make this prediction.";
+  if (!args.owner) return "Connect a wallet to predict.";
+  if (!args.onRightChain) return "Switch to Gnosis to predict.";
   return args.ready ? undefined : "This session cannot be traded yet.";
 }

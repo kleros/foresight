@@ -199,10 +199,10 @@ describe("PredictDialog on a second prediction with one changed option", () => {
     },
   );
 
-  it("shows no 'Adding 0 sDAI' step when the trade wallet covers it", async () => {
+  it("leaves the funds step without an amount when the trade wallet covers it", async () => {
     const popup = await openSecondPrediction(OPTIONS[1]);
+    const funds = popup.getByRole("listitem", { name: "Timeline item: Add funds" });
 
-    expect(popup.queryByText(/Adding 0 sDAI/)).toBeNull();
-    expect(popup.queryByText(/Adding 0\b/)).toBeNull();
+    expect(funds.querySelector("small")?.textContent ?? "").toBe("");
   });
 });

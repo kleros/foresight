@@ -42,10 +42,13 @@ const funding = (overrides: Partial<Funding> = {}): Funding => ({
 const steps: PredictSteps = {
   rows: [
     { key: "wallet", title: "Create a trade wallet", subtitle: "", view: "idle" },
-    { key: "funds", title: "Add funds to your trade wallet", subtitle: "Adding 4 sDAI", view: "idle" },
-    { key: "predict", title: "Make prediction", subtitle: "", view: "idle" },
+    { key: "funds", title: "Add funds", subtitle: "4 sDAI", view: "idle" },
+    { key: "predict", title: "Place prediction", subtitle: "", view: "idle" },
   ],
 };
+
+const subtitleOf = (title: string) =>
+  screen.getByRole("listitem", { name: `Timeline item: ${title}` }).querySelector("small")?.textContent ?? "";
 
 const props = () => ({
   isOpen: true,
@@ -161,7 +164,7 @@ describe("the amount behind them", () => {
   it("does not call a balance it has not read yet zero", () => {
     render(<PredictDialog {...props()} funding={null} />);
 
-    expect(screen.getByText("Checking your balance…")).toBeInTheDocument();
+    expect(screen.getByText("Reading balance…")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Predict" })).toBeDisabled();
   });
 
@@ -206,8 +209,8 @@ describe("predicting", () => {
     render(<PredictDialog {...props()} />);
 
     expect(screen.getByText("Create a trade wallet")).toBeInTheDocument();
-    expect(screen.getByText("Adding 4 sDAI")).toBeInTheDocument();
-    expect(screen.getByText("Make prediction")).toBeInTheDocument();
+    expect(subtitleOf("Add funds")).toBe("4 sDAI");
+    expect(screen.getByText("Place prediction")).toBeInTheDocument();
   });
 
   it("starts the run on Predict", async () => {
@@ -220,9 +223,9 @@ describe("predicting", () => {
   });
 
   it("asks for what is missing before it can predict", () => {
-    render(<PredictDialog {...props()} notice="Switch to Gnosis to make this prediction." />);
+    render(<PredictDialog {...props()} notice="Switch to Gnosis to predict." />);
 
-    expect(screen.getByRole("status")).toHaveTextContent("Switch to Gnosis to make this prediction.");
+    expect(screen.getByRole("status")).toHaveTextContent("Switch to Gnosis to predict.");
     expect(screen.getByRole("button", { name: "Predict" })).toBeDisabled();
   });
 
@@ -244,12 +247,12 @@ describe("predicting", () => {
     render(
       <PredictDialog
         {...props()}
-        steps={{ ...steps, failure: "You turned the request down." }}
+        steps={{ ...steps, failure: "You declined in your wallet." }}
         onPredict={onPredict}
       />,
     );
 
-    expect(screen.getByRole("status")).toHaveTextContent("You turned the request down.");
+    expect(screen.getByRole("status")).toHaveTextContent("You declined in your wallet.");
     await userEvent.click(screen.getByRole("button", { name: "Predict" }));
     expect(onPredict).toHaveBeenCalled();
   });
@@ -270,7 +273,7 @@ describe("predicting", () => {
         canRetry
         steps={{
           ...steps,
-          failure: "The trade could not go through at these prices.",
+          failure: "The trade did not go through at these prices.",
         }}
         onPredict={onPredict}
       />,
@@ -284,7 +287,7 @@ describe("predicting", () => {
   });
 
   it("does not offer the rest while the wallet is on the wrong network", () => {
-    render(<PredictDialog {...props()} canRetry notice="Switch to Gnosis to make this prediction." />);
+    render(<PredictDialog {...props()} canRetry notice="Switch to Gnosis to predict." />);
 
     expect(screen.getByRole("button", { name: "Try the rest" })).toBeDisabled();
   });
@@ -302,7 +305,7 @@ describe("predicting", () => {
     );
 
     expect(screen.getByLabelText("Amount")).toHaveValue("7.250000000000000001");
-    expect(screen.getByText(/Resuming adds this deposit/)).toBeInTheDocument();
+    expect(screen.getByText("Locked to the amount this prediction started with.")).toBeInTheDocument();
     // the form's balance is in the form's token, not necessarily the stored run's
     expect(screen.queryByText(/^Balance: /)).toBeNull();
     expect(screen.getByText("410 $M")).toBeInTheDocument();
@@ -321,7 +324,7 @@ describe("predicting", () => {
   it("says which estimates were left out", () => {
     render(<PredictDialog {...props()} skipped={1} />);
 
-    expect(screen.getByRole("status")).toHaveTextContent(/1 of your estimates could not be traded/);
+    expect(screen.getByRole("status")).toHaveTextContent("1 estimate could not be traded and was left out.");
   });
 });
 
@@ -350,7 +353,7 @@ describe("what the funds step says is added", () => {
       />,
     );
 
-    expect(screen.getByText("Adding 900 xDAI (~717.5466 sDAI)")).toBeInTheDocument();
+    expect(subtitleOf("Add funds")).toBe("900 xDAI (≈ 717.5466 sDAI)");
   });
 
   it("names an sDAI payment in sDAI alone", () => {
@@ -359,7 +362,7 @@ describe("what the funds step says is added", () => {
 
     render(<PredictDialog {...props()} funding={paid} steps={shown} />);
 
-    expect(screen.getByText("Adding 10 sDAI")).toBeInTheDocument();
+    expect(subtitleOf("Add funds")).toBe("10 sDAI");
   });
 });
 
@@ -373,7 +376,7 @@ describe("a second prediction the trade wallet already covers", () => {
       progress: null,
     });
 
-  it.each(["sDAI", "xDAI"])("shows no 'Adding 0 %s' step", (symbol) => {
+  it.each(["sDAI", "xDAI"])("leaves the %s funds step without an amount", (symbol) => {
     render(
       <PredictDialog
         {...props()}
@@ -384,8 +387,7 @@ describe("a second prediction the trade wallet already covers", () => {
       />,
     );
 
-    expect(screen.queryByText(new RegExp(`Adding 0 ${symbol}`))).toBeNull();
-    expect(screen.queryByText(/Adding 0\b/)).toBeNull();
+    expect(subtitleOf("Add funds")).toBe("");
   });
 });
 

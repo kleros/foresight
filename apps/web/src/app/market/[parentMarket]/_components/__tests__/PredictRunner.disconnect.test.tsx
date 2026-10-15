@@ -154,8 +154,8 @@ describe("the balance line when the wallet disconnects with the popup open", () 
 
     act(() => account.set(undefined));
 
-    expect(await popup.findByText("Connect a wallet to see your balance")).toBeInTheDocument();
-    expect(popup.queryByText("Checking your balance…")).toBeNull();
+    expect(await popup.findByText("No wallet connected")).toBeInTheDocument();
+    expect(popup.queryByText("Reading balance…")).toBeNull();
     expect(popup.queryByText(/^Balance: /)).toBeNull();
   });
 
@@ -165,10 +165,10 @@ describe("the balance line when the wallet disconnects with the popup open", () 
     await popup.findByText("Balance: 10 sDAI");
 
     act(() => account.set(undefined));
-    await popup.findByText("Connect a wallet to see your balance");
+    await popup.findByText("No wallet connected");
     act(() => account.set(OWNER));
 
     expect(await popup.findByText("Balance: 10 sDAI")).toBeInTheDocument();
-    expect(popup.queryByText("Connect a wallet to see your balance")).toBeNull();
+    expect(popup.queryByText("No wallet connected")).toBeNull();
   });
 });

@@ -33,16 +33,14 @@ const timeline = (progress: PredictProgress) => (
 );
 
 describe("PredictStepsTimeline while adding funds", () => {
-  it("moves from waiting for a signature to confirming once the deposit is signed", () => {
+  it("says nothing while the deposit waits on a signature, then says it is confirming", () => {
     const { rerender } = render(timeline(depositing("signing")));
 
-    expect(screen.getByText("Add funds to your trade wallet")).toBeInTheDocument();
-    expect(screen.getByText(/Waiting for your signature…/)).toBeInTheDocument();
+    expect(item("Add funds").querySelector("small")?.textContent ?? "").toBe("");
 
     rerender(timeline(depositing("confirming")));
 
-    expect(screen.getByText(/Confirming…/)).toBeInTheDocument();
-    expect(screen.queryByText(/Waiting for your signature…/)).toBeNull();
+    expect(item("Add funds").querySelector("small")?.textContent).toBe("Confirming…");
   });
 });
 
@@ -66,9 +64,9 @@ describe("PredictStepsTimeline bullets", () => {
   it("pulses the running step with the Kleros timeline's own loading state, and nothing beside it", () => {
     render(timeline(depositing("signing")));
 
-    expect(bullet("Add funds to your trade wallet")).toBe("running");
-    expect(item("Add funds to your trade wallet")).toHaveClass("animate-loading");
-    expect(within(item("Add funds to your trade wallet")).queryByLabelText("Timeline item party element")).toBeNull();
+    expect(bullet("Add funds")).toBe("running");
+    expect(item("Add funds")).toHaveClass("animate-loading");
+    expect(within(item("Add funds")).queryByLabelText("Timeline item party element")).toBeNull();
   });
 
   it("checks a finished step and keeps it at full strength", () => {
@@ -81,7 +79,7 @@ describe("PredictStepsTimeline bullets", () => {
   it("crosses the step that stopped the run, in place, with no row added", () => {
     render(timeline(halted));
 
-    expect(bullet("Make prediction")).toBe("failed");
+    expect(bullet("Place prediction")).toBe("failed");
     expect(screen.getAllByRole("listitem")).toHaveLength(3);
   });
 });
@@ -96,7 +94,7 @@ describe("the timeline's place in the popup", () => {
     Element.prototype.scrollIntoView = scroll;
     const view = render(
       <PredictStepsTimeline
-        steps={{ rows: [{ key: "predict", title: "Make prediction", subtitle: "", view: "idle" }] }}
+        steps={{ rows: [{ key: "predict", title: "Place prediction", subtitle: "", view: "idle" }] }}
       />,
     );
     expect(scroll).not.toHaveBeenCalled();
@@ -104,7 +102,7 @@ describe("the timeline's place in the popup", () => {
     view.rerender(
       <PredictStepsTimeline
         steps={{
-          rows: [{ key: "predict", title: "Make prediction", subtitle: "", view: "inactive" }],
+          rows: [{ key: "predict", title: "Place prediction", subtitle: "", view: "inactive" }],
           failure: "Something went wrong.",
         }}
       />,

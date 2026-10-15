@@ -291,14 +291,14 @@ async function firstVisit(answers: Array<"accept" | "reject">, opts: { holdMinin
 /** A turns the deposit down and reloads. */
 async function leaveRejectedDeposit() {
   const view = await firstVisit(["reject"]);
-  await waitFor(() => expect(onScreen()).toContain("You turned the request down."));
+  await waitFor(() => expect(onScreen()).toContain("You declined in your wallet."));
   view.unmount();
 }
 
 /** A's deposit lands, A turns the prediction down and reloads. Returns the deposit's hash. */
 async function leaveRejectedPredictionAfterDeposit() {
   const view = await firstVisit(["accept", "reject"]);
-  await waitFor(() => expect(onScreen()).toContain("You turned the request down."));
+  await waitFor(() => expect(onScreen()).toContain("You declined in your wallet."));
   view.unmount();
   const deposit = chain.prompts.find(isDeposit)!;
   expect(chain.receipts.get(deposit.hash)).toBe("success");

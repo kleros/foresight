@@ -283,7 +283,7 @@ async function firstVisit(answers: Array<"accept" | "reject">, opts: { holdMinin
 /** A's deposit lands in the trade wallet, A turns the prediction down and reloads. */
 async function leaveDepositLandedPredictionRejected() {
   const view = await firstVisit(["accept", "reject"]);
-  await waitFor(() => expect(document.body.textContent).toContain("You turned the request down."));
+  await waitFor(() => expect(document.body.textContent).toContain("You declined in your wallet."));
   view.unmount();
   const deposit = chain.prompts.find(isDeposit)!;
   expect(transferOf(deposit)).toEqual({ to: A_EXECUTOR, amount: SAVED.deposit });

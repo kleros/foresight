@@ -30,18 +30,18 @@ export interface PredictSteps {
 
 /** The chain's own errors name gas and contracts, which the popup never shows. */
 const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], string> = {
-  rejected: "You turned the request down.",
-  cancelled: "Your wallet replaced the request with something else.",
-  reverted: "The trade could not go through at these prices.",
-  rpc: "The network did not answer in time.",
+  rejected: "You declined in your wallet.",
+  cancelled: "Your wallet replaced the request.",
+  reverted: "The trade did not go through at these prices.",
+  rpc: "The network did not answer.",
   unknown: "Something went wrong.",
   "no-route": "No trade moves these markets toward your estimates. Try a larger amount.",
   quote: "Prices could not be fetched. Try again in a moment.",
   funds: "Not enough for this and the network fee. Lower the amount or add funds.",
   balance: "Your trade wallet balance is lower than shown. Check the amount and try again.",
-  "deposit-unconfirmed": "Your last deposit may still be confirming. Check your wallet's activity, then try again.",
+  "deposit-unconfirmed": "Your last deposit may still be confirming. Check your wallet, then try again.",
   "wrong-wallet": "This prediction was started from another wallet. Connect that wallet to finish it.",
-  "wrong-chain": "This prediction was started on another network. Switch to that network to finish it.",
+  "wrong-chain": "This prediction was started on another network. Switch to it to finish.",
 };
 
 /** Once the deposit is in the amount is fixed, so the only thing short is the fee in the wallet. */
@@ -53,10 +53,8 @@ const PENDING_COPY = "Sent, not confirmed yet. It is checked before anything els
 const RECONCILING_COPY = "Checking your last transaction…";
 
 const STAGE_COPY: Partial<Record<PredictProgress["stage"], string>> = {
-  quoting: "Finding the best prices…",
-  signing: "Waiting for your signature…",
+  quoting: "Finding prices…",
   confirming: "Confirming…",
-  complete: "Prediction successful!",
 };
 
 interface TokenAmount {
@@ -125,8 +123,8 @@ export function predictSteps(
   const checking = progress?.stage === "quoting" && !runSteps.some((step) => step.state === "running");
   const predictRunning = runningBatch >= 0 || checking;
   const stageCopy = progress ? (STAGE_COPY[progress.stage] ?? "") : "";
-  const becomes = collateral && ` (~${shownAmount(collateral.amount, collateral.decimals)} ${collateral.symbol})`;
-  const adding = toAdd === 0n ? "" : `Adding ${shownAmount(toAdd, decimals)} ${symbol}${becomes ?? ""}`;
+  const becomes = collateral && ` (≈ ${shownAmount(collateral.amount, collateral.decimals)} ${collateral.symbol})`;
+  const adding = toAdd === 0n ? "" : `${shownAmount(toAdd, decimals)} ${symbol}${becomes ?? ""}`;
   const fundsWait = progress?.stage === "signing" || progress?.stage === "confirming" ? stageCopy : "";
 
   // the row whose step errored stopped the run; with none, nothing got past pricing.
@@ -140,7 +138,7 @@ export function predictSteps(
           : "predict"
       : undefined;
   const partial =
-    halted && progress.batchesDone > 0 ? `${progress.batchesDone} of ${progress.batches} predictions went through` : "";
+    halted && progress.batchesDone > 0 ? `${progress.batchesDone} of ${progress.batches} went through` : "";
 
   const rows: PredictStepRow[] = [
     walletReady && wallet
@@ -153,9 +151,9 @@ export function predictSteps(
         },
     {
       key: "funds",
-      title: "Add funds to your trade wallet",
-      // while it runs the amount is in the locked field above; the row says what it waits on
-      subtitle: fundsRow?.state === "running" && fundsWait ? fundsWait : adding,
+      title: "Add funds",
+      // while it runs the amount is in the locked field above, so the row shows only the wait
+      subtitle: fundsRow?.state === "running" ? fundsWait : adding,
       view:
         fundsRow?.state === "running"
           ? "running"
@@ -167,16 +165,14 @@ export function predictSteps(
     },
     {
       key: "predict",
-      title: "Make prediction",
+      title: "Place prediction",
       subtitle: checking
         ? stageCopy
         : predictRunning
           ? batches.length > 1
-            ? `Prediction ${runningBatch + 1} of ${batches.length}. ${stageCopy}`
+            ? `${runningBatch + 1} of ${batches.length}${stageCopy ? ` · ${stageCopy}` : ""}`
             : stageCopy
-          : progress?.stage === "complete"
-            ? stageCopy
-            : "",
+          : "",
       view: predictRunning ? "running" : progress?.stage === "complete" ? "done" : halted ? "inactive" : "idle",
     },
   ];
@@ -215,7 +211,7 @@ export function statusLine(args: { steps: PredictSteps; notice?: string; skipped
   if (steps.note) return { text: steps.note, tone: "neutral" };
   if (skipped > 0) {
     return {
-      text: `${skipped} of your estimates could not be traded and ${skipped === 1 ? "was" : "were"} left out.`,
+      text: `${skipped} ${skipped === 1 ? "estimate" : "estimates"} could not be traded and ${skipped === 1 ? "was" : "were"} left out.`,
       tone: "neutral",
     };
   }

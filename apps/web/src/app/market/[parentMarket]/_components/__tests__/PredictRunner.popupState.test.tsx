@@ -153,6 +153,9 @@ function renderPage() {
   return detail;
 }
 
+const fundsSubtitle = (popup: ReturnType<typeof within>) =>
+  popup.getByRole("listitem", { name: "Timeline item: Add funds" }).querySelector("small")?.textContent ?? "";
+
 async function openPopup() {
   await userEvent.click(screen.getByRole("button", { name: /^Predict (\d+ )?estimates?$/ }));
   return within(await screen.findByRole("dialog"));
@@ -315,7 +318,7 @@ describe("the funds step names what the visitor pays", () => {
     await userEvent.type(amountField(popup), "999");
 
     expect(await popup.findByText(/Not enough balance/)).toBeInTheDocument();
-    expect(popup.queryByText(/^Adding /)).toBeNull();
+    expect(fundsSubtitle(popup)).toBe("");
   });
 
   it("names an sDAI payment in sDAI alone", async () => {
@@ -326,7 +329,7 @@ describe("the funds step names what the visitor pays", () => {
 
     await userEvent.type(amountField(popup), "5");
 
-    expect(await popup.findByText("Adding 5 sDAI")).toBeInTheDocument();
+    await waitFor(() => expect(fundsSubtitle(popup)).toBe("5 sDAI"));
   });
 
   it("names an xDAI payment in xDAI with the sDAI it becomes, held from Predict until the run stops", async () => {
@@ -337,7 +340,7 @@ describe("the funds step names what the visitor pays", () => {
 
     await userEvent.type(amountField(popup), "5");
     // 5 xDAI is 4 sDAI at 1.25 xDAI per sDAI
-    expect(await popup.findByText("Adding 5 xDAI (~4 sDAI)")).toBeInTheDocument();
+    await waitFor(() => expect(fundsSubtitle(popup)).toBe("5 xDAI (≈ 4 sDAI)"));
 
     await userEvent.click(popup.getByRole("button", { name: "Predict" }));
     expect(driver.start).toHaveBeenCalledOnce();
@@ -345,9 +348,9 @@ describe("the funds step names what the visitor pays", () => {
     // 1 sDAI in the trade wallet leaves 3 sDAI, 3.75 xDAI, to add
     wallet.trade = WAD;
     act(() => run.set({ ...idle, stage: "signing" }));
-    expect(popup.getByText("Adding 5 xDAI (~4 sDAI)")).toBeInTheDocument();
+    expect(fundsSubtitle(popup)).toBe("5 xDAI (≈ 4 sDAI)");
 
     act(() => run.set(idle));
-    expect(await popup.findByText("Adding 3.75 xDAI (~3 sDAI)")).toBeInTheDocument();
+    await waitFor(() => expect(fundsSubtitle(popup)).toBe("3.75 xDAI (≈ 3 sDAI)"));
   });
 });

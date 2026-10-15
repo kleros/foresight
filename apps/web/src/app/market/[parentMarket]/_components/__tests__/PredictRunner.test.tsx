@@ -168,14 +168,14 @@ describe("PredictRunner, what the visitor is told", () => {
     account(undefined, undefined);
     mount();
 
-    expect(screen.getByTestId("notice")).toHaveTextContent("Connect a wallet to make this prediction.");
+    expect(screen.getByTestId("notice")).toHaveTextContent("Connect a wallet to predict.");
   });
 
   it("asks for Gnosis when the wallet is on another chain", () => {
     connected(DEFAULT_CHAIN_ID + 1);
     mount();
 
-    expect(screen.getByTestId("notice")).toHaveTextContent("Switch to Gnosis to make this prediction.");
+    expect(screen.getByTestId("notice")).toHaveTextContent("Switch to Gnosis to predict.");
   });
 
   it("says the session cannot be traded when its collateral did not read", () => {
@@ -407,7 +407,7 @@ describe("PredictRunner, the dialog's controls", () => {
     fireEvent.click(screen.getByText("predict"));
     progress = progressAt("halted", true);
     view.rerenderAt();
-    expect(screen.getByTestId("funds")).toHaveTextContent("Adding 10 sDAI");
+    expect(screen.getByTestId("funds")).toHaveTextContent(/^10 sDAI$/);
 
     fundingMock.mockImplementation(() => ({
       funding: planFunding({ amount: 4n * 10n ** 18n, ownWallet: 100n * 10n ** 18n, tradeWallet: 0n }),
@@ -417,7 +417,7 @@ describe("PredictRunner, the dialog's controls", () => {
     }));
     view.rerenderAt();
 
-    expect(screen.getByTestId("funds")).toHaveTextContent("Adding 4 sDAI");
+    expect(screen.getByTestId("funds")).toHaveTextContent(/^4 sDAI$/);
   });
 
   it("starts over from the form when a retryable run stopped before anything reached the chain", () => {
@@ -463,7 +463,7 @@ describe("PredictRunner, the dialog's controls", () => {
     progress = { ...progressAt("review"), recovered: { ...snapshot(), deposit: 7_250_000_000_000_000_000n } };
     mount();
 
-    expect(screen.getByTestId("funds")).toHaveTextContent("Adding 7.25");
+    expect(screen.getByTestId("funds")).toHaveTextContent(/^7\.25 /);
   });
 
   it("resumes a stored run under review instead of starting one from the form", () => {

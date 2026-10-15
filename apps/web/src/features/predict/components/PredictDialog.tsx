@@ -117,7 +117,7 @@ export function PredictDialog({
               isFirstPrediction={isFirstPrediction}
               isReadOnly={isLocked}
               isDisconnected={isDisconnected}
-              note={recovered ? "Resuming adds this deposit to the estimates above." : undefined}
+              note={recovered ? "Locked to the amount this prediction started with." : undefined}
             />
             <PredictStepsTimeline steps={steps} />
           </div>

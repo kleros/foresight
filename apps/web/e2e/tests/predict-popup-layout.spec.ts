@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { startHarness } from "../utils/component-harness";
 
-const STEPS = ["Create a trade wallet", "Add funds to your trade wallet", "Make prediction"];
+const STEPS = ["Create a trade wallet", "Add funds", "Place prediction"];
 /** Every point of a run the harness can render; `?state=` in e2e/harness/predict-popup/main.tsx. */
 const STATES = [
   "idle",

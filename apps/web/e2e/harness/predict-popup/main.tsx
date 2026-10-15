@@ -127,7 +127,7 @@ createRoot(document.getElementById("root")!).render(
       canRetry={state === "failed" || state === "pending" || state === "recovered"}
       isPending={state === "pending"}
       recovered={state === "recovered" ? { deposit: 4n * WAD, token: sDai } : undefined}
-      notice={state === "disconnected" ? "Connect a wallet to make this prediction." : undefined}
+      notice={state === "disconnected" ? "Connect a wallet to predict." : undefined}
       onPredict={() => {}}
     />
   </>,

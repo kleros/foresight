@@ -82,9 +82,9 @@ export function PredictAmountSection({
             {note
               ? ""
               : isDisconnected
-                ? "Connect a wallet to see your balance"
+                ? "No wallet connected"
                 : available === undefined
-                  ? "Checking your balance…"
+                  ? "Reading balance…"
                   : `Balance: ${formatAmount(available, token.decimals, AMOUNT_DISPLAY_DECIMALS)} ${token.symbol}`}
           </span>
           <LightButton

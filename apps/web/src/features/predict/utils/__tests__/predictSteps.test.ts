@@ -34,8 +34,8 @@ describe("predictSteps before a run", () => {
   it("offers to create the trade wallet, then add funds, then predict", () => {
     expect(steps().rows).toEqual([
       { key: "wallet", title: "Create a trade wallet", subtitle: "", view: "idle" },
-      { key: "funds", title: "Add funds to your trade wallet", subtitle: "Adding 4 sDAI", view: "idle" },
-      { key: "predict", title: "Make prediction", subtitle: "", view: "idle" },
+      { key: "funds", title: "Add funds", subtitle: "4 sDAI", view: "idle" },
+      { key: "predict", title: "Place prediction", subtitle: "", view: "idle" },
     ]);
   });
 
@@ -50,9 +50,9 @@ describe("predictSteps before a run", () => {
   });
 
   it("never says it is adding 0 when the amount is below the shown decimals", () => {
-    expect(steps({ toAdd: 15n * 10n ** 10n }).rows[1]?.subtitle).toBe("Adding less than 0.0001 sDAI");
+    expect(steps({ toAdd: 15n * 10n ** 10n }).rows[1]?.subtitle).toBe("less than 0.0001 sDAI");
     // a single wei still reads as something being added
-    expect(steps({ toAdd: 1n }).rows[1]?.subtitle).toBe("Adding less than 0.0001 sDAI");
+    expect(steps({ toAdd: 1n }).rows[1]?.subtitle).toBe("less than 0.0001 sDAI");
   });
 });
 
@@ -65,7 +65,7 @@ describe("predictSteps naming what the funds step adds", () => {
   it("names an sDAI payment in sDAI alone", () => {
     const funding = planFunding({ amount: 10n * WAD, ownWallet: 25n * WAD, tradeWallet: 0n });
 
-    expect(steps(fundsToAdd(funding, SDAI, SDAI)).rows[1]?.subtitle).toBe("Adding 10 sDAI");
+    expect(steps(fundsToAdd(funding, SDAI, SDAI)).rows[1]?.subtitle).toBe("10 sDAI");
   });
 
   it("names an xDAI payment in xDAI, with the sDAI it becomes", () => {
@@ -76,7 +76,7 @@ describe("predictSteps naming what the funds step adds", () => {
       tokenPerCollateralWad: XDAI_PER_SDAI,
     });
 
-    expect(steps(fundsToAdd(funding, XDAI, SDAI)).rows[1]?.subtitle).toBe("Adding 900 xDAI (~717.5466 sDAI)");
+    expect(steps(fundsToAdd(funding, XDAI, SDAI)).rows[1]?.subtitle).toBe("900 xDAI (≈ 717.5466 sDAI)");
   });
 
   it("names only the xDAI the trade wallet does not already cover", () => {
@@ -87,7 +87,7 @@ describe("predictSteps naming what the funds step adds", () => {
       tokenPerCollateralWad: 1_250000000000000000n,
     });
 
-    expect(steps(fundsToAdd(funding, XDAI, SDAI)).rows[1]?.subtitle).toBe("Adding 775 xDAI (~620 sDAI)");
+    expect(steps(fundsToAdd(funding, XDAI, SDAI)).rows[1]?.subtitle).toBe("775 xDAI (≈ 620 sDAI)");
   });
 
   it("says nothing is added when the trade wallet covers an xDAI payment", () => {
@@ -107,14 +107,14 @@ describe("predictSteps during a run", () => {
     const pending = progress().steps.map((step) => ({ ...step, state: "pending" as const }));
     const rows = steps({ progress: progress({ stage: "quoting", steps: pending }) }).rows;
 
-    expect(rows[2]).toMatchObject({ view: "running", subtitle: "Finding the best prices…" });
+    expect(rows[2]).toMatchObject({ view: "running", subtitle: "Finding prices…" });
   });
 
-  it("says what the running prediction is waiting on", () => {
+  it("shows the prediction running with no words while the wallet asks for a signature", () => {
     const rows = steps({ progress: progress({ stage: "signing" }) }).rows;
 
     expect(rows.map((row) => row.view)).toEqual(["done", "done", "running"]);
-    expect(rows[2]?.subtitle).toBe("Waiting for your signature…");
+    expect(rows[2]?.subtitle).toBe("");
   });
 
   it("counts the batches when a prediction takes more than one", () => {
@@ -131,7 +131,7 @@ describe("predictSteps during a run", () => {
       }),
     }).rows;
 
-    expect(rows[2]?.subtitle).toBe("Prediction 2 of 2. Confirming…");
+    expect(rows[2]?.subtitle).toBe("2 of 2 · Confirming…");
   });
 
   it("marks the prediction done once the run completes", () => {
@@ -146,7 +146,7 @@ describe("predictSteps during a run", () => {
       }),
     }).rows;
 
-    expect(rows[2]).toMatchObject({ view: "done", subtitle: "Prediction successful!" });
+    expect(rows[2]).toMatchObject({ view: "done", subtitle: "" });
   });
 
   it("says why a stopped run stopped, and how much went through", () => {
@@ -163,8 +163,8 @@ describe("predictSteps during a run", () => {
       }),
     });
 
-    expect(result.failure).toBe("You turned the request down.");
-    expect(result.rows[2]).toMatchObject({ view: "failed", subtitle: "3 of 5 predictions went through" });
+    expect(result.failure).toBe("You declined in your wallet.");
+    expect(result.rows[2]).toMatchObject({ view: "failed", subtitle: "3 of 5 went through" });
   });
 
   it("marks the step that failed, not the prediction, when the deposit stops the run", () => {
@@ -226,21 +226,13 @@ describe("predictSteps while adding funds", () => {
     });
 
   it.each([
-    ["signing", "Waiting for your signature…"],
+    ["signing", ""],
     ["confirming", "Confirming…"],
-  ] as const)("shows Add funds running and says what it waits on while %s", (stage, copy) => {
-    const funds = steps({ progress: depositing(stage) }).rows[1];
+  ] as const)("shows Add funds running, without the amount, while %s", (stage, copy) => {
+    const funds = steps({ progress: depositing(stage), toAdd: 4n * WAD }).rows[1];
 
     expect(funds?.view).toBe("running");
-    expect(funds?.subtitle).toContain(copy);
-  });
-
-  it("stops asking for a signature once the deposit's hash is known", () => {
-    const signed = steps({ progress: depositing("signing") }).rows[1];
-    const sent = steps({ progress: depositing("confirming") }).rows[1];
-
-    expect(signed?.subtitle).not.toBe(sent?.subtitle);
-    expect(sent?.subtitle).not.toContain("Waiting for your signature…");
+    expect(funds?.subtitle).toBe(copy);
   });
 });
 
@@ -261,7 +253,7 @@ describe("the sDAI an xDAI payment becomes", () => {
       ?.subtitle;
 
     expect(summary?.text).toBe("≈ 0.7973 sDAI from your wallet");
-    expect(subtitle).toBe("Adding 1 xDAI (~0.7973 sDAI)");
+    expect(subtitle).toBe("1 xDAI (≈ 0.7973 sDAI)");
   });
 });
 
@@ -284,9 +276,10 @@ describe("statusLine", () => {
 
   it("names the estimates a run left out, since they were not signed", () => {
     expect(statusLine({ steps: idle, skipped: 2 })).toEqual({
-      text: "2 of your estimates could not be traded and were left out.",
+      text: "2 estimates could not be traded and were left out.",
       tone: "neutral",
     });
+    expect(statusLine({ steps: idle, skipped: 1 })?.text).toBe("1 estimate could not be traded and was left out.");
   });
 
   it("says in a few words that a sent transaction is not confirmed yet", () => {
@@ -327,10 +320,10 @@ describe("statusLine", () => {
     expect(
       statusLine({
         steps: pending,
-        notice: "Connect a wallet to make this prediction.",
+        notice: "Connect a wallet to predict.",
         skipped: 0,
       }),
-    ).toEqual({ text: "Connect a wallet to make this prediction.", tone: "warning" });
+    ).toEqual({ text: "Connect a wallet to predict.", tone: "warning" });
   });
 
   it("warns, rather than errs, about a transaction sent but not yet confirmed", () => {
