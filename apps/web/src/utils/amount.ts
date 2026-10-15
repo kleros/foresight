@@ -37,12 +37,19 @@ export function formatAmount(value: bigint, decimals: number, digits = DISPLAY_D
   return trimmed ? `${whole}.${trimmed}` : whole;
 }
 
+/** `formatAmount` for the screen, its whole part grouped in threes; never for a value read back as a number. */
+export function formatDisplayAmount(value: bigint, decimals: number, digits = DISPLAY_DECIMALS): string {
+  const [whole = "0", fraction] = formatAmount(value, decimals, digits).split(".");
+  const grouped = whole.replace(/\B(?=(\d{3})+$)/g, ",");
+  return fraction ? `${grouped}.${fraction}` : grouped;
+}
+
 /** Decimals shown for an amount the visitor holds. */
 export const OWNED_DECIMALS = 4;
 
 /** A held amount cut, never rounded up, to `OWNED_DECIMALS`; a non-zero amount below the last one is named. */
 export function ownedAmount(value: bigint, decimals: number): string {
-  const shown = formatAmount(value, decimals, OWNED_DECIMALS);
+  const shown = formatDisplayAmount(value, decimals, OWNED_DECIMALS);
   if (shown !== "0" || value <= 0n) return shown;
   return `less than ${formatAmount(10n ** BigInt(Math.max(decimals - OWNED_DECIMALS, 0)), decimals)}`;
 }

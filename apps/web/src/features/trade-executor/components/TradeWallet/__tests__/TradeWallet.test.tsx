@@ -204,6 +204,18 @@ describe("TradeWallet positions", () => {
     expect(screen.getByText("160.92")).toHaveAttribute("title", "160.9234");
   });
 
+  it("groups large holdings in threes, in the grid and its titles", async () => {
+    held = new Map([
+      [LISBON.underlying, units("123456789.123")],
+      [LISBON.up, units("1234567.891")],
+    ]);
+
+    renderWallet();
+
+    await waitFor(() => expect(positionsOf("Lisbon")).toEqual(["UP 1,234,567.89", "DOWN 0"]));
+    expect(screen.getByText("123,456,789.12")).toHaveAttribute("title", "123,456,789.123");
+  });
+
   it("shows a dash for each position while its balance is loading", async () => {
     held = new Map([[LISBON.underlying, units("4")]]);
     positionRead = "pending";
@@ -338,6 +350,18 @@ describe("TradeWallet's amount dialogs", () => {
     await userEvent.type(within(dialog).getByRole("spinbutton"), "1");
 
     expect(await within(dialog).findByText("Not enough balance.")).toBeInTheDocument();
+  });
+
+  it("groups a large balance and its cap in threes, and Max fills the raw amount", async () => {
+    ownerHeld = new Map([[COLLATERAL, units("98765432109.12345")]]);
+    renderWallet(market, { closed: true });
+
+    await userEvent.click(screen.getByRole("button", { name: "Deposit" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(await within(dialog).findByText("Balance: 98,765,432,109.1234 sDAI")).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Max" }));
+    expect(within(dialog).getByRole("spinbutton")).toHaveValue("98765432109.12345");
   });
 
   it("names no Max when a deposit is over a balance under the last shown decimal", async () => {

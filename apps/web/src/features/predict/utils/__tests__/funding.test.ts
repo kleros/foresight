@@ -299,6 +299,18 @@ describe("fundingSummary", () => {
     });
   });
 
+  it("groups a large cap and total in threes", () => {
+    const over = planFunding({ amount: 2_000_000n * WAD, ownWallet: 1_234_567n * WAD, tradeWallet: 0n });
+    expect(fundingSummary({ funding: over, amount: 2_000_000n * WAD, token: sDai, collateral })?.text).toBe(
+      "Not enough balance. Max 1,234,567 sDAI.",
+    );
+
+    const under = planFunding({ amount: 1_500n * WAD, ownWallet: 1_234_567n * WAD, tradeWallet: 0n });
+    expect(fundingSummary({ funding: under, amount: 1_500n * WAD, token: sDai, collateral })?.text).toBe(
+      "1,500 sDAI from your wallet",
+    );
+  });
+
   it("says nothing before an amount is typed", () => {
     const funding = planFunding({ amount: 0n, ownWallet: 20n * WAD, tradeWallet: 0n });
 

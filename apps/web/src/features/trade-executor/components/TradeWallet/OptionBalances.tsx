@@ -4,7 +4,7 @@ import type { Address } from "viem";
 
 import WithHelpTooltip from "@/components/ui/WithHelpTooltip";
 
-import { formatAmount } from "@/utils/amount";
+import { formatDisplayAmount } from "@/utils/amount";
 
 import type { TradeWalletOption } from "../../types";
 
@@ -72,9 +72,9 @@ function OptionBalance({
             "rounded-fs border-fs-border rounded-r-none border border-r-0",
             "bg-fs-surface text-fs-text-secondary text-sm",
           )}
-          title={balance === undefined ? undefined : formatAmount(balance, decimals)}
+          title={balance === undefined ? undefined : formatDisplayAmount(balance, decimals)}
         >
-          {balance === undefined ? "—" : formatAmount(balance, decimals, SHOWN_DIGITS)}
+          {balance === undefined ? "—" : formatDisplayAmount(balance, decimals, SHOWN_DIGITS)}
         </span>
         <span className="mr-2 size-2 flex-none rounded-full" style={{ backgroundColor: option.color }} aria-hidden />
         {/* the Tooltip's trigger div is the flex child, so it takes the min-w-0; an inline span cannot truncate */}
@@ -91,9 +91,9 @@ function OptionBalance({
                 <span className="text-fs-text-secondary">{side}</span>{" "}
                 <span
                   className="text-fs-text-primary truncate"
-                  title={held === undefined ? undefined : formatAmount(held, decimals)}
+                  title={held === undefined ? undefined : formatDisplayAmount(held, decimals)}
                 >
-                  {held === undefined ? "—" : formatAmount(held, decimals, SHOWN_DIGITS)}
+                  {held === undefined ? "—" : formatDisplayAmount(held, decimals, SHOWN_DIGITS)}
                 </span>
               </li>
             );

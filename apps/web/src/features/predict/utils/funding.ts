@@ -1,4 +1,4 @@
-import { formatAmount } from "@/utils/amount";
+import { formatAmount, formatDisplayAmount } from "@/utils/amount";
 
 import { AMOUNT_DISPLAY_DECIMALS, GAS_RESERVE_WEI } from "../oracle/tolerances";
 import type { PayToken } from "../types";
@@ -86,7 +86,7 @@ export interface FundingSummary {
  */
 export function shownAmount(value: bigint, decimals: number): string {
   const step = 10n ** BigInt(Math.max(decimals - AMOUNT_DISPLAY_DECIMALS, 0));
-  const shown = formatAmount(((value + step / 2n) / step) * step, decimals);
+  const shown = formatDisplayAmount(((value + step / 2n) / step) * step, decimals);
   return shown === "0" && value > 0n ? `less than ${formatAmount(step, decimals)}` : shown;
 }
 

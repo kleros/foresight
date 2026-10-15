@@ -5,7 +5,7 @@ import WithHelpTooltip from "@/components/ui/WithHelpTooltip";
 import ArrowDown from "@/assets/svg/long-arrow-down.svg";
 import ArrowUp from "@/assets/svg/long-arrow-up.svg";
 
-import { formatAmount } from "@/utils/amount";
+import { formatDisplayAmount } from "@/utils/amount";
 import { formatEstimate } from "@/utils/formatEstimate";
 
 import type { OptionScale } from "@/types/optionScale";
@@ -36,7 +36,7 @@ export function PositionRow({
 }) {
   const leaning = positionLeaning(position);
   const Arrow = leaning === "higher" ? ArrowUp : ArrowDown;
-  const amount = (value: bigint) => formatAmount(value, decimals, POSITION_DIGITS);
+  const amount = (value: bigint) => formatDisplayAmount(value, decimals, POSITION_DIGITS);
   const side = leaning === "higher" ? "UP" : "DOWN";
 
   return (

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatAmount, ownedAmount, parseAmount } from "../amount";
+import { formatAmount, formatDisplayAmount, ownedAmount, parseAmount } from "../amount";
 
 describe("parseAmount", () => {
   it("scales a decimal by the token's precision", () => {
@@ -47,7 +47,30 @@ describe("formatAmount", () => {
   });
 });
 
+describe("formatDisplayAmount", () => {
+  it.each([
+    [1_234_567_890_123456789012345678n, "1,234,567,890.123456"],
+    [1_000_000000000000000000n, "1,000"],
+    [999_500000000000000000n, "999.5"],
+    [0n, "0"],
+  ])("groups the whole part of %s in threes and leaves the fraction alone", (value, shown) => {
+    expect(formatDisplayAmount(value, 18)).toBe(shown);
+  });
+
+  it("cuts to fewer decimals when asked", () => {
+    expect(formatDisplayAmount(12_345_678_901234567890000000n, 18, 2)).toBe("12,345,678.9");
+  });
+
+  it("leaves formatAmount ungrouped, since a total read back with Number() relies on it", () => {
+    expect(formatAmount(1_000_000000000000000000n, 18)).toBe("1000");
+  });
+});
+
 describe("ownedAmount", () => {
+  it("groups a large holding", () => {
+    expect(ownedAmount(98_765_432_109_123456789000000000n, 18)).toBe("98,765,432,109.1234");
+  });
+
   it("cuts to four decimals rather than rounding up past what is held", () => {
     expect(ownedAmount(4_123456789012345678n, 18)).toBe("4.1234");
   });
