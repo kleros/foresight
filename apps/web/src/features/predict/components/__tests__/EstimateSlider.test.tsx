@@ -287,6 +287,7 @@ describe("EstimateSlider value pill", () => {
 
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(pill()).toBeInTheDocument();
+    expect(props.onCommit).not.toHaveBeenCalled();
   });
 
   it("keeps the estimate when the field loses focus holding no number", async () => {
