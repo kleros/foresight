@@ -147,7 +147,7 @@ describe("MarketPage", () => {
 });
 
 describe("MarketPage on a trading session", () => {
-  const NO_LIQUIDITY = "This option has no liquidity yet, so it can't be predicted.";
+  const NO_LIQUIDITY = "None of the directors can be traded yet.";
 
   /** Closes on 1 January 2100, so the session is trading whatever the wall clock reads. */
   function answerTrading(chart: () => unknown) {

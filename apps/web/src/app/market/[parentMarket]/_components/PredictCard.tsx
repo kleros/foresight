@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "@kleros/ui-components-library";
 import clsx from "clsx";
-import { formatUnits, type Address } from "viem";
+import type { Address } from "viem";
 import { useAccount } from "wagmi";
 
 import type { PredictSnapshot } from "@/features/predict/flow/types";
@@ -13,7 +13,9 @@ import { discardRun, findInterruptedRun, hasPendingTransaction } from "@/feature
 import { useSessionEstimates } from "@/features/predict/stores/estimateStore";
 import type { SelectedEstimate } from "@/features/predict/types";
 import { selectedEstimates } from "@/features/predict/utils/estimates";
+import { shownAmount } from "@/features/predict/utils/funding";
 import type { SessionDetail, SessionStatus } from "@/features/sessions/types";
+import { optionNoun } from "@/features/sessions/utils/optionNoun";
 
 import { SectionCard } from "@/components/ui/SectionCard";
 import EnsureChain from "@/components/wallet/EnsureChain";
@@ -33,12 +35,13 @@ const PredictSuccessDialog = dynamic(
   { ssr: false },
 );
 
-const BLOCKER_TEXT: Record<PredictBlocker, string> = {
-  closed: "Trading has closed for this session.",
-  "no-liquidity": "This option has no liquidity yet, so it can't be predicted.",
-  "no-move": "Move an estimate away from the market estimate to make a prediction.",
-  disconnected: "Connect a wallet to predict.",
-};
+const blockerText = (blocker: PredictBlocker, noun: string): string =>
+  ({
+    closed: "Trading has closed.",
+    "no-liquidity": `None of the ${noun} can be traded yet.`,
+    "no-move": "Set an estimate above or below the market to predict.",
+    disconnected: "Connect a wallet to predict.",
+  })[blocker];
 
 interface PredictCardProps {
   session: SessionDetail;
@@ -73,6 +76,11 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
     if (address) discardRun(createRunStore(), session.id, address);
     setDiscards((count) => count + 1);
   };
+
+  const depositShown = (run: PredictSnapshot) =>
+    run.depositNative
+      ? `${shownAmount(run.deposit, 18)} xDAI`
+      : `${shownAmount(run.deposit, session.collateralDecimals ?? 18)} ${session.collateralSymbol ?? "sDAI"}`;
 
   const estimates = useSessionEstimates(session.parentMarket);
   const selected = selectedEstimates(session.options, estimates, marketEstimates);
@@ -115,15 +123,17 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
       <h3 className="text-fs-text-primary text-base font-semibold">Place your estimates</h3>
       {/* without a wallet the button stays put and disabled; the blocker line says to connect */}
       {address ? <EnsureChain>{predictButton}</EnsureChain> : predictButton}
-      {blocker ? <p className="text-fs-text-secondary w-full text-sm">{BLOCKER_TEXT[blocker]}</p> : null}
+      {blocker ? (
+        <p className="text-fs-text-secondary w-full text-sm">
+          {blockerText(blocker, optionNoun(session.itemNamePlural))}
+        </p>
+      ) : null}
 
       {interrupted ? (
         <div className="flex w-full flex-wrap items-center justify-between gap-3">
           <p className="text-fs-text-secondary text-sm">
-            Your last prediction did not finish. Deposit:{" "}
-            {formatUnits(interrupted.deposit, interrupted.depositNative ? 18 : (session.collateralDecimals ?? 18))}{" "}
-            {interrupted.depositNative ? "xDAI" : (session.collateralSymbol ?? "sDAI")}
-            {isPending ? ". A transaction from it may still be pending; resume to check it." : null}
+            {`A prediction with a ${depositShown(interrupted)} deposit did not finish.`}
+            {isPending ? " A transaction from it may still be pending." : null}
           </p>
           <div className="flex gap-3">
             {isPending ? null : <Button small variant="secondary" text="Discard" onPress={discard} />}

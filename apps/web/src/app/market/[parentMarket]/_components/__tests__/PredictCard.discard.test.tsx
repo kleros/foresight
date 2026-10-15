@@ -38,11 +38,11 @@ const halted: PersistedPhase = {
   error: { stepId: "deposit", message: "RPC unavailable", cause: "rpc", hash: HASH },
 };
 
-function saveRun(deposit: StepOutcome, phase: PersistedPhase, flowId = predictFlowId("7", OWNER)) {
+function saveRun(deposit: StepOutcome, phase: PersistedPhase, flowId = predictFlowId("7", OWNER), amount = WAD * 3n) {
   createRunStore().save({
     flowId,
     adapterId: "predict-flow",
-    snapshot: snapshot({ deposit: WAD * 3n }),
+    snapshot: snapshot({ deposit: amount }),
     ctx: ctx({ owner: OWNER, chainId: DEFAULT_CHAIN_ID }),
     steps: [
       { stepId: "deposit", label: "Add funds", outcome: deposit },
@@ -98,6 +98,15 @@ it("says a transaction may still be pending while the run's transaction awaits i
   render(<PredictCard session={session()} status="trading" marketEstimates={{}} />);
 
   expect(
-    await screen.findByText(/A transaction from it may still be pending; resume to check it\./),
+    await screen.findByText(
+      "A prediction with a 3 sDAI deposit did not finish. A transaction from it may still be pending.",
+    ),
   ).toBeInTheDocument();
+});
+
+it("shows the interrupted deposit at four decimals, not every wei", async () => {
+  saveRun({ status: "pending" }, { status: "running" }, undefined, 4_123456789012345678n);
+  render(<PredictCard session={session()} status="trading" marketEstimates={{}} />);
+
+  expect(await screen.findByText("A prediction with a 4.1235 sDAI deposit did not finish.")).toBeInTheDocument();
 });

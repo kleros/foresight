@@ -9,7 +9,7 @@ export function AdvancedSection({ parentMarket }: { parentMarket: string }) {
 
   return (
     <p className="type-label text-fs-text-secondary mt-2 mb-16">
-      Advanced: <ExternalLink href={url}>Trade or provide liquidity for individual outcome tokens on Seer</ExternalLink>
+      Advanced: <ExternalLink href={url}>trade or add liquidity for the outcome tokens on Seer</ExternalLink>
     </p>
   );
 }
