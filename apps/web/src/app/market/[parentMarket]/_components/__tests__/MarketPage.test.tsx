@@ -156,11 +156,15 @@ describe("MarketPage's trade wallet", () => {
     });
   }
 
-  it("names the options in the singular, lower-cased, as in Mint director tokens", async () => {
-    answerItemName("Director");
+  it.each([
+    ["Director", "director"],
+    ["US State", "US state"],
+    ["NBA Team", "NBA team"],
+  ])("names the options in the singular, %s in a sentence as %s", async (itemName, noun) => {
+    answerItemName(itemName);
     renderPage();
 
-    expect(await screen.findByTestId("trade-wallet-noun")).toHaveTextContent(/^director$/);
+    expect(await screen.findByTestId("trade-wallet-noun")).toHaveTextContent(new RegExp(`^${noun}$`));
   });
 
   it("falls back to branch when the session names no item", async () => {

@@ -14,7 +14,7 @@ import { useSession } from "@/features/sessions/api/getSession";
 import { useSessionChart } from "@/features/sessions/api/getSessionChart";
 import { useSessionStats } from "@/features/sessions/api/getSessionStats";
 import { latestEstimates } from "@/features/sessions/utils/latestEstimates";
-import { optionNoun } from "@/features/sessions/utils/optionNoun";
+import { optionNoun, optionNounSingular } from "@/features/sessions/utils/optionNoun";
 import { sessionStatus } from "@/features/sessions/utils/toSessionDetail";
 import { TradeWallet } from "@/features/trade-executor/components/TradeWallet/TradeWallet";
 
@@ -127,7 +127,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
           marketEstimates={marketEstimates}
           isMarketUnknown={chart.data === undefined}
         />
-        {walletMarket ? <TradeWallet market={walletMarket} noun={(detail.itemName || "branch").toLowerCase()} /> : null}
+        {walletMarket ? <TradeWallet market={walletMarket} noun={optionNounSingular(detail.itemName)} /> : null}
         <AdvancedSection parentMarket={detail.parentMarket} />
       </section>
     </PageColumn>
