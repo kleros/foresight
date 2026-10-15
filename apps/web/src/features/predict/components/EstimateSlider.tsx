@@ -262,8 +262,6 @@ const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill
   ref,
 ) {
   const [draft, setDraft] = useState<string>();
-  // a blur can arrive after Enter or Escape closed the field, from the closing render's handler
-  const isOpen = useRef(false);
   const button = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef(false);
   const editing = draft !== undefined;
@@ -275,21 +273,17 @@ const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill
   }, [editing]);
 
   const close = (refocus: boolean) => {
-    isOpen.current = false;
     returnFocus.current = refocus;
     setDraft(undefined);
   };
 
-  const apply = (refocus: boolean) => {
-    if (!isOpen.current) return;
+  /** Enter keeps the field open on text that is not a number; a blur closes it unchanged. */
+  const apply = (byEnter: boolean) => {
     const typed = readTyped(draft ?? "", scale.unit);
-    if ((draft ?? "").trim() === "") return close(refocus);
-    if (!Number.isFinite(typed)) {
-      if (refocus) return onInvalid("Enter a number.");
-      return close(false);
-    }
+    if ((draft ?? "").trim() === "") return close(byEnter);
+    if (!Number.isFinite(typed)) return byEnter ? onInvalid("Enter a number.") : close(false);
     onTyped(typed);
-    close(refocus);
+    close(byEnter);
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -333,7 +327,6 @@ const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill
           aria-label={`Type your estimate for ${scale.name}`}
           onClick={() => {
             onOpen();
-            isOpen.current = true;
             setDraft(String(Number(shown.toFixed(estimateDigits(scale)))));
           }}
           className={clsx(

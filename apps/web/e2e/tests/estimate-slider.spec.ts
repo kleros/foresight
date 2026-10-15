@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { PIN_PREFLIGHT_DROP } from "../../src/features/predict/utils/marketPin";
 import { startHarness } from "../utils/component-harness";
 
 /** The slider's track in an option card: 375 and 1280 wide windows. */
@@ -24,11 +25,14 @@ async function open(page: Page, query: Record<string, string | number>) {
   await expect(page.getByTestId("market-chip")).toBeVisible();
 }
 
-/** Where everything the pin can collide with is drawn, in page px. */
+const settle = (page: Page) =>
+  page
+    .evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    .then(() => page.waitForFunction(() => document.getAnimations().length === 0));
+
+/** Where everything the pin can collide with is drawn, in page px, once it has settled. */
 async function geometry(page: Page) {
-  // the pin is placed from a measurement taken after the thumb's render, and the thumb glides
-  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-  await page.waitForFunction(() => document.getAnimations().length === 0);
+  await settle(page);
   return page.evaluate(() => {
     const box = (element: Element | null): Box | null => {
       if (!element) return null;
@@ -39,12 +43,10 @@ async function geometry(page: Page) {
     const bound = (side: string) => document.querySelector<HTMLElement>(`[data-bound="${side}"]`)!;
     return {
       placement: pin.dataset.placement,
+      drop: Number(pin.dataset.drop),
       chip: box(pin.querySelector('[data-testid="market-chip"]')),
       stick: box(pin.querySelector('[data-testid="market-stick"]')),
-      label: (() => {
-        const label = document.querySelector("#slider-label")!;
-        return getComputedStyle(label).visibility === "hidden" ? null : box(label);
-      })(),
+      pill: box(document.querySelector('[data-testid="value-pill"]')),
       thumb: box(document.querySelector("#slider-label")!.parentElement),
       track: box(document.querySelector("#slider-track")),
       lower: { box: box(bound("lower")), hidden: getComputedStyle(bound("lower")).visibility === "hidden" },
@@ -59,46 +61,31 @@ const overlaps = (a: Box | null, b: Box | null) =>
 
 for (const track of TRACKS) {
   test.describe(`the market pin on a ${track}px track`, () => {
-    // the pin's drop is a transition; geometry is read where it lands
+    // the pin's moves are transitions; geometry is read where they land
     test.use({ viewport: { width: track + 64, height: 400 }, contextOptions: { reducedMotion: "reduce" } });
 
-    test("stands up with no estimate set, in place of the thumb's number, and prints both bounds", async ({ page }) => {
+    test("sits under the track with no estimate set, the pill showing the market's number", async ({ page }) => {
       await open(page, { track, market: MARKET });
       const shown = await geometry(page);
 
-      expect(shown.placement).toBe("up");
-      expect(shown.label, "the thumb's number").toBeNull();
-      expect(shown.lower.hidden).toBe(false);
-      expect(shown.upper.hidden).toBe(false);
+      expect(shown.placement).toBe("down");
+      await expect(page.getByTestId("value-pill")).toHaveText(`${MARKET} %`);
     });
 
-    test("drops only within futarchy's 5 % of the market", async ({ page }) => {
-      for (const [gap, placement] of [
-        [0, "down"],
-        [3, "down"],
-        [-5, "down"],
-        [8, "up"],
-        [12, "up"],
-        [16, "up"],
-        [-20, "up"],
-      ] as const) {
-        await open(page, { track, market: MARKET, value: MARKET + gap });
-        expect.soft((await geometry(page)).placement, `${gap} from the market`).toBe(placement);
-      }
-    });
-
-    test("never draws the chip over the thumb's number, and drops the stick before it crosses it", async ({ page }) => {
+    test("never draws the chip over the pill or the thumb, nor the stick through the pill, from 0 to 100", async ({
+      page,
+    }) => {
       await open(page, { track, market: MARKET, value: 0 });
       const slider = page.getByRole("slider");
       await slider.focus();
       for (let value = 0; value <= 100; value++) {
         if (value > 0) await slider.press("ArrowRight");
         const shown = await geometry(page);
-        expect.soft(overlaps(shown.chip, shown.label), `chip over the label at ${value}`).toBe(false);
+        expect.soft(overlaps(shown.chip, shown.pill), `chip over the pill at ${value}`).toBe(false);
         expect.soft(overlaps(shown.chip, shown.thumb), `chip over the thumb at ${value}`).toBe(false);
-        if (shown.placement === "up") {
-          expect.soft(overlaps(shown.stick, shown.label), `stick through the label at ${value}`).toBe(false);
-        }
+        expect.soft(overlaps(shown.stick, shown.pill), `stick through the pill at ${value}`).toBe(false);
+        expect.soft(shown.pill!.left, `pill's left edge at ${value}`).toBeGreaterThanOrEqual(shown.track!.left - 0.5);
+        expect.soft(shown.pill!.right, `pill's right edge at ${value}`).toBeLessThanOrEqual(shown.track!.right + 0.5);
         for (const side of ["lower", "upper"] as const) {
           const bound = shown[side];
           // a bound steps aside only for a dropped chip that sits on it
@@ -109,9 +96,33 @@ for (const track of TRACKS) {
       }
     });
 
+    test("dips the chip as the value nears it, keeping it above the track, before it drops", async ({ page }) => {
+      await open(page, { track, market: MARKET, value: 0 });
+      const slider = page.getByRole("slider");
+      await slider.focus();
+      const raisedTop = (await geometry(page)).chip!.top;
+
+      const dips: number[] = [];
+      for (let value = 1; value <= MARKET; value++) {
+        await slider.press("ArrowRight");
+        const shown = await geometry(page);
+        if (shown.placement === "down") break;
+        if (shown.drop > 0) {
+          dips.push(shown.drop);
+          expect.soft(shown.chip!.top, `chip dipped at ${value}`).toBeGreaterThan(raisedTop);
+          expect.soft(shown.chip!.bottom, `chip above the track at ${value}`).toBeLessThanOrEqual(shown.track!.top);
+        }
+      }
+
+      expect(dips.length, "steps in the preflight dip").toBeGreaterThan(1);
+      expect(dips, "the dip deepens as the value nears").toEqual([...dips].sort((a, b) => a - b));
+      expect(Math.max(...dips)).toBeLessThanOrEqual(PIN_PREFLIGHT_DROP);
+      await expect(page.getByTestId("market-pin")).toHaveAttribute("data-placement", "down");
+    });
+
     for (const market of [0, 2, 98, 100]) {
       test(`keeps the chip on the track with the market at ${market}`, async ({ page }) => {
-        for (const value of [undefined, market]) {
+        for (const value of [undefined, market, 50]) {
           await open(page, { track, market, ...(value === undefined ? {} : { value }) });
           const shown = await geometry(page);
 
@@ -148,6 +159,58 @@ for (const track of TRACKS) {
     });
   });
 }
+
+test.describe("the value pill", () => {
+  test.use({ viewport: { width: 375, height: 400 } });
+
+  const pill = (page: Page) => page.getByRole("button", { name: "Type your estimate for Movie A" });
+  const field = (page: Page) => page.getByRole("textbox", { name: "Your estimate for Movie A" });
+
+  test("leaves the thumb where it is while a number is typed, and moves it on Enter", async ({ page }) => {
+    await open(page, { track: 311, market: MARKET, value: 40 });
+    const slider = page.getByRole("slider");
+
+    await pill(page).click();
+    await field(page).fill("90");
+    await expect(slider).toHaveValue("40");
+    await field(page).press("Enter");
+
+    await expect(slider).toHaveValue("90");
+    await expect(pill(page)).toBeFocused();
+  });
+
+  test("keeps the value on Escape", async ({ page }) => {
+    await open(page, { track: 311, market: MARKET, value: 40 });
+
+    await pill(page).click();
+    await field(page).fill("90");
+    await field(page).press("Escape");
+
+    await expect(page.getByRole("slider")).toHaveValue("40");
+    await expect(pill(page)).toBeFocused();
+  });
+
+  test("applies a typed number when the field loses focus", async ({ page }) => {
+    await open(page, { track: 311, market: MARKET, value: 40 });
+
+    await pill(page).click();
+    await field(page).fill("62");
+    await page.mouse.click(5, 380);
+
+    await expect(page.getByRole("slider")).toHaveValue("62");
+  });
+
+  test("is reached by Tab from the slider and opened by Enter", async ({ page }) => {
+    await open(page, { track: 311, market: MARKET, value: 40 });
+
+    await page.getByRole("slider").focus();
+    await page.keyboard.press("Tab");
+    await expect(pill(page)).toBeFocused();
+    await page.keyboard.press("Enter");
+
+    await expect(field(page)).toBeFocused();
+  });
+});
 
 test.describe("the market chip's text", () => {
   test.use({ viewport: { width: 375, height: 400 } });
@@ -200,54 +263,82 @@ function pinAnimations(page: Page, action: "pause" | "finish" | "cancel" | "seek
   );
 }
 
+const chipTop = (page: Page) => page.getByTestId("market-chip").evaluate((chip) => chip.getBoundingClientRect().top);
+
+/** Steps the thumb right until the pin drops, leaving its transitions paused at their start. */
+async function stepUntilDropped(page: Page) {
+  const slider = page.getByRole("slider");
+  const pin = page.getByTestId("market-pin");
+  await slider.focus();
+  let before = await chipTop(page);
+  for (let step = 0; step < 100 && (await pin.getAttribute("data-placement")) === "up"; step++) {
+    await pinAnimations(page, "finish");
+    before = await chipTop(page);
+    await slider.press("ArrowRight");
+  }
+  await expect(pin).toHaveAttribute("data-placement", "down");
+  await pinAnimations(page, "pause");
+  return before;
+}
+
 test.describe("the market pin's drop", () => {
   test.use({ viewport: { width: 375, height: 400 } });
 
-  test("moves the chip from where it stood, by transform, and eases out of the start", async ({ page }) => {
-    await open(page, { track: 311, market: MARKET, value: 50 });
-    const slider = page.getByRole("slider");
-    const pin = page.getByTestId("market-pin");
-    const chipTop = () => page.getByTestId("market-chip").evaluate((chip) => chip.getBoundingClientRect().top);
-    await slider.focus();
-
-    let before = await chipTop();
-    for (let value = 51; value <= MARKET && (await pin.getAttribute("data-placement")) === "up"; value++) {
-      before = await chipTop();
-      await slider.press("ArrowRight");
-    }
-    expect(await pin.getAttribute("data-placement")).toBe("down");
+  test("moves the chip from where it stood, by transform, over the structural duration", async ({ page }) => {
+    await open(page, { track: 311, market: MARKET, value: 20 });
+    const before = await stepUntilDropped(page);
 
     const moves = await pinAnimations(page, "pause");
-    expect(moves.every((property) => ["translate", "transform", "opacity"].includes(property))).toBe(true);
-    const seek = (ms: number) => pinAnimations(page, "seek", ms);
+    expect(moves.every((property) => ["transform", "opacity"].includes(property))).toBe(true);
+    const timing = await page.evaluate(() =>
+      document
+        .querySelector('[data-testid="market-pin"]')!
+        .getAnimations()
+        .map((animation) => animation.effect!.getComputedTiming()),
+    );
+    expect(timing[0]!.duration).toBe(400);
 
-    await seek(0);
-    expect(Math.abs((await chipTop()) - before), "the chip's first frame is where it stood").toBeLessThanOrEqual(1);
+    await pinAnimations(page, "seek", 0);
+    expect(Math.abs((await chipTop(page)) - before), "the chip's first frame is where it stood").toBeLessThanOrEqual(1);
+  });
+
+  test("settles with a spring, passing its resting place before it comes back", async ({ page }) => {
+    await open(page, { track: 311, market: MARKET, value: 20 });
+    await stepUntilDropped(page);
     await pinAnimations(page, "finish");
-    const after = await chipTop();
+    const rest = await chipTop(page);
     await pinAnimations(page, "cancel");
 
-    // replay the drop and read it a tenth of the way through
-    for (let step = 0; step < 10 && (await pin.getAttribute("data-placement")) === "down"; step++) {
-      await slider.press("ArrowLeft");
-      await pinAnimations(page, "finish");
+    // replay the drop from the raised pin
+    await page.getByRole("slider").press("Home");
+    await pinAnimations(page, "finish");
+    await stepUntilDropped(page);
+
+    let lowest = -Infinity;
+    for (let ms = 0; ms <= 400; ms += 20) {
+      await pinAnimations(page, "seek", ms);
+      lowest = Math.max(lowest, await chipTop(page));
     }
-    await expect(pin).toHaveAttribute("data-placement", "up");
-    for (let step = 0; step < 10 && (await pin.getAttribute("data-placement")) === "up"; step++) {
-      await slider.press("ArrowRight");
-    }
-    await expect(pin).toHaveAttribute("data-placement", "down");
-    await pinAnimations(page, "pause");
-    const duration = await page.evaluate(() =>
-      Math.max(
-        ...document
+    expect(lowest - rest, "the overshoot past its resting place").toBeGreaterThanOrEqual(1);
+  });
+
+  test.describe("with reduced motion", () => {
+    test.use({ contextOptions: { reducedMotion: "reduce" } });
+
+    test("lands at once, with no spring", async ({ page }) => {
+      await open(page, { track: 311, market: MARKET, value: 20 });
+      await stepUntilDropped(page);
+
+      const timing = await page.evaluate(() =>
+        document
           .querySelector('[data-testid="market-pin"]')!
-          .getAnimations({ subtree: true })
-          .map((animation) => Number(animation.effect!.getTiming().duration)),
-      ),
-    );
-    expect(duration).toBeGreaterThanOrEqual(250);
-    await seek(duration / 10);
-    expect((await chipTop()) - before, "a tenth of the way in").toBeLessThan((after - before) / 5);
+          .getAnimations()
+          .map((animation) => ({
+            duration: Number(animation.effect!.getComputedTiming().duration),
+            easing: animation.effect!.getComputedTiming().easing,
+          })),
+      );
+      expect(timing.every(({ duration }) => duration <= 1)).toBe(true);
+    });
   });
 });

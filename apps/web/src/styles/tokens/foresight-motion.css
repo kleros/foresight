@@ -11,7 +11,7 @@
   --fs-narrative-min: 2000ms;
   --fs-ease-spring: var(--fs-ease-structural);
 }
-/* A curve, not a duration: a settling spring (4.6 % overshoot) for a check popping in.
+/* A curve, not a duration: a settling spring (4.6 % overshoot) for a check popping in and the market pin landing.
    A var() is valid at parse time, so without linear() support it would compute to ease, hence the feature query. */
 @supports (animation-timing-function: linear(0, 1)) {
   :root {
