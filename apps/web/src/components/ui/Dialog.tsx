@@ -29,6 +29,8 @@ export function Dialog({ isOpen, onClose, title, hint, children, className, isDi
       onOpenChange={(open) => (open || !isDismissable ? undefined : onClose())}
       className={cn(
         "relative h-fit w-max max-w-[calc(100vw-2rem)] overflow-x-hidden p-6 py-8",
+        // centred, so 4.5rem clear above and below keeps the title out from under the sticky header
+        "max-h-[calc(100dvh-9rem)] overflow-y-auto",
         "shadow-default rounded-fs border-fs-border bg-fs-surface border",
         className,
       )}
