@@ -1,33 +1,27 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  PIN_CLEARANCE_PX,
-  PIN_PREFLIGHT_DROP,
-  PIN_PREFLIGHT_PX,
-  THUMB_RADIUS_PX,
-  chipLeft,
-  pinDrop,
-  pinGap,
-} from "../marketPin";
+import { chipLeft, pinDrop, pinGap } from "../marketPin";
 
 describe("pinDrop", () => {
-  it("stays up while the chip is a whole preflight band clear of the thumb's value", () => {
-    expect(pinDrop(PIN_CLEARANCE_PX + PIN_PREFLIGHT_PX)).toBe(0);
-    expect(pinDrop(PIN_CLEARANCE_PX + PIN_PREFLIGHT_PX + 100)).toBe(0);
+  // 4px of clearance and a 40px preflight band, dipping at most a fifth of the drop
+  it("stays up while the chip is 44px or more clear of the thumb's value", () => {
+    expect(pinDrop(44)).toBe(0);
+    expect(pinDrop(144)).toBe(0);
   });
 
   it("dips in step with the distance across the preflight band", () => {
-    expect(pinDrop(PIN_CLEARANCE_PX + PIN_PREFLIGHT_PX * 0.75)).toBeCloseTo(PIN_PREFLIGHT_DROP * 0.25);
-    expect(pinDrop(PIN_CLEARANCE_PX + PIN_PREFLIGHT_PX / 2)).toBeCloseTo(PIN_PREFLIGHT_DROP / 2);
-    expect(pinDrop(PIN_CLEARANCE_PX + PIN_PREFLIGHT_PX * 0.25)).toBeCloseTo(PIN_PREFLIGHT_DROP * 0.75);
+    expect(pinDrop(34)).toBeCloseTo(0.05);
+    expect(pinDrop(24)).toBeCloseTo(0.1);
+    expect(pinDrop(14)).toBeCloseTo(0.15);
   });
 
-  it("dips no further than the preflight share just outside the clearance", () => {
-    expect(pinDrop(PIN_CLEARANCE_PX + 0.01)).toBeLessThanOrEqual(PIN_PREFLIGHT_DROP);
+  it("dips a fifth of the drop just outside the clearance", () => {
+    expect(pinDrop(4.01)).toBeGreaterThan(0.19);
+    expect(pinDrop(4.01)).toBeLessThanOrEqual(0.2);
   });
 
   it("drops all the way once the chip is within the clearance, or overlaps", () => {
-    expect(pinDrop(PIN_CLEARANCE_PX)).toBe(1);
+    expect(pinDrop(4)).toBe(1);
     expect(pinDrop(0)).toBe(1);
     expect(pinDrop(-40)).toBe(1);
   });
@@ -56,8 +50,8 @@ describe("pinGap", () => {
   });
 
   it("counts the thumb where it reaches past the pill's edge", () => {
-    // the thumb at 0.1, its centre at 30: the pill spans 24 to 84, the thumb reaches to 30 - THUMB_RADIUS_PX
-    expect(pinGap(size, { thumb: 0.1, market: 0 })).toBe(30 - THUMB_RADIUS_PX - 40);
+    // the thumb at 0.1, its centre at 30: the pill spans 24 to 84, the thumb's 24px circle reaches to 18
+    expect(pinGap(size, { thumb: 0.1, market: 0 })).toBe(-22);
   });
 
   it("is negative when the chip and the pill overlap", () => {

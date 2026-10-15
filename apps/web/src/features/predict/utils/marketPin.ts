@@ -1,14 +1,14 @@
 /** Room kept between the market's chip and the thumb's value pill, in px. */
-export const PIN_CLEARANCE_PX = 4;
+const PIN_CLEARANCE_PX = 4;
 
 /** How far beyond the clearance the chip starts to dip, in px. */
-export const PIN_PREFLIGHT_PX = 40;
+const PIN_PREFLIGHT_PX = 40;
 
 /** The share of its full drop the chip dips before it drops, keeping it above the track. */
 export const PIN_PREFLIGHT_DROP = 0.2;
 
 /** Half the slider's 24px thumb. */
-export const THUMB_RADIUS_PX = 12;
+const THUMB_RADIUS_PX = 12;
 
 const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), high);
 

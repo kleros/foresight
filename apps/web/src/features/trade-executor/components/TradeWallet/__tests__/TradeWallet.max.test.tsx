@@ -147,4 +147,20 @@ describe("Max in the trade wallet's dialogs", () => {
 
     expect(within(dialog).getByRole("button", { name: "Max" })).toBeDisabled();
   });
+
+  it("offers no Max for a mint under the last shown decimal, which would cut to 0", async () => {
+    held.set(EXECUTOR, new Map([[COLLATERAL, units("0.00001")]]));
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <TradeWallet market={market} noun="city" />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Balances" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Mint" }));
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText("Balance: less than 0.0001 sDAI");
+
+    expect(within(dialog).getByRole("button", { name: "Max" })).toBeDisabled();
+  });
 });
