@@ -38,24 +38,34 @@ export function PredictList({
   /** Keyed by lower-case market; an option without an entry shows where its market is now. */
   preview?: Record<string, PriceMove>;
 }) {
-  const [leaving, setLeaving] = useState<string>();
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [leaving, setLeaving] = useState<string[]>([]);
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
   const readOnly = useRef(isReadOnly);
-  readOnly.current = isReadOnly;
-  useEffect(() => () => clearTimeout(timer.current), []);
+  useEffect(() => {
+    readOnly.current = isReadOnly;
+  }, [isReadOnly]);
+  useEffect(() => {
+    const pending = timers.current;
+    return () => pending.forEach(clearTimeout);
+  }, []);
 
   const remove = (market: string) => {
+    if (leaving.includes(market)) return;
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    setLeaving(market);
-    timer.current = setTimeout(
+    setLeaving((markets) => [...markets, market]);
+    const timer = setTimeout(
       () => {
-        setLeaving(undefined);
+        timers.current.delete(timer);
+        setLeaving((markets) => markets.filter((other) => other !== market));
         // a run that started during the exit has already taken this estimate in
         if (!readOnly.current) onRemove(market);
       },
       reduce ? 0 : EXIT_MS,
     );
+    timers.current.add(timer);
   };
+  // the last estimate is never removed, counting the ones on their way out
+  const removable = selected.length - leaving.length > 1;
 
   return (
     <ul
@@ -69,9 +79,9 @@ export function PredictList({
           key={estimate.scale.market}
           estimate={estimate}
           move={preview[estimate.scale.market.toLowerCase()]}
-          onRemove={selected.length > 1 ? () => !leaving && remove(estimate.scale.market) : undefined}
+          onRemove={removable ? () => remove(estimate.scale.market) : undefined}
           isLast={selected.length === 1}
-          isLeaving={leaving === estimate.scale.market}
+          isLeaving={leaving.includes(estimate.scale.market)}
           isReadOnly={isReadOnly}
         />
       ))}
@@ -163,7 +173,7 @@ function EstimateRow({
           text=""
           aria-label={`Remove ${scale.name}`}
           icon={<CloseIcon className="text-fs-text-secondary size-3" />}
-          isDisabled={isReadOnly}
+          isDisabled={isReadOnly || !onRemove}
           onPress={onRemove}
         />
       )}

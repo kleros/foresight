@@ -31,7 +31,9 @@ export function PredictSpineNode({
           <h3 className="text-fs-text-primary min-w-0 truncate text-sm leading-5 font-semibold">{title}</h3>
           {right}
         </div>
-        <div className="mt-1.5 pb-2 sm:pb-2.5">{children}</div>
+        <div data-spine-content className="mt-1.5 pb-2 sm:pb-2.5">
+          {children}
+        </div>
       </div>
     </div>
   );

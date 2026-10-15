@@ -168,9 +168,7 @@ describe("the amount behind them", () => {
   it("says a returning visitor's prediction adds nothing when no amount is typed", () => {
     render(<PredictDialog {...props()} amount={undefined} isFirstPrediction={false} />);
 
-    expect(
-      screen.getByText("You've predicted before, so you can change it without adding funds."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("You've predicted before, so you can change it without adding funds.")).toBeInTheDocument();
   });
 
   it("does not call a balance it has not read yet zero", () => {

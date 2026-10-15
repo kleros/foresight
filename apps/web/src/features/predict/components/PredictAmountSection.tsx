@@ -99,7 +99,7 @@ export function PredictAmountSection({
             onPress={() => max !== undefined && onAmountChange(max)}
             className={clsx(
               // a 44px target that takes no more height than its label
-              "-my-3 -mr-2 min-h-11 min-w-11 justify-center rounded-none! p-0 hover:bg-transparent!",
+              "-my-3 min-h-11 min-w-11 justify-end rounded-none! p-0 hover:bg-transparent!",
               "[&_.button-text]:text-fs-text-accent [&_.button-text]:text-xs [&_.button-text]:font-semibold",
               "data-disabled:[&_.button-text]:text-fs-text-secondary",
             )}

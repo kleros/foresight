@@ -203,7 +203,10 @@ describe("estimates removed in the popup are a draft until Predict", () => {
     const popup = await openPopup();
 
     for (const option of removed) await userEvent.click(popup.getByRole("button", { name: `Remove ${option.name}` }));
-    for (const option of removed) expect(popup.queryByText(option.name)).toBeNull();
+    // each row fades out before it leaves
+    await waitFor(() => {
+      for (const option of removed) expect(popup.queryByText(option.name)).toBeNull();
+    });
 
     await userEvent.click(popup.getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());

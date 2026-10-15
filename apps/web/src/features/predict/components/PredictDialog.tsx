@@ -118,25 +118,22 @@ export function PredictDialog({
     >
       <div className="flex min-h-0 w-full flex-col">
         <h2 className="text-fs-text-primary mb-2 text-xl font-semibold md:text-2xl">Predict</h2>
-        <div className="shrink-0">
+        {/* its line runs on through the body's top padding, which keeps the amount's 44px Max inside the scroll area */}
+        <div className="shrink-0 [&_.spine-line]:-mb-2.5! [&_[data-spine-content]]:pb-0!">
           <PredictSpineNode
             title={`${selected.length} ${selected.length === 1 ? "estimate" : "estimates"}`}
             done={isLocked}
           >
             {/* over four rows three and a half show, three on a phone over three: the cut row is the cue */}
             <ScrollFade
-              className={clsx(
-                "w-full",
-                selected.length > 4 && "max-h-28",
-                selected.length > 3 && "max-sm:max-h-27",
-              )}
+              className={clsx("w-full", selected.length > 4 && "max-h-28", selected.length > 3 && "max-sm:max-h-27")}
             >
               <PredictList selected={selected} onRemove={onRemove} isReadOnly={isLocked} preview={shownPreview} />
             </ScrollFade>
           </PredictSpineNode>
         </div>
         <ScrollFade className="min-h-32 w-full" cue="More below">
-          <div data-testid="predict-body">
+          <div data-testid="predict-body" className="pt-3">
             <PredictAmountSection
               amount={recovered ? recovered.deposit : amount}
               onAmountChange={onAmountChange}
