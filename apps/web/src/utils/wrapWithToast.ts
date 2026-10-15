@@ -15,6 +15,12 @@ const TX_ERROR_TOAST: Record<ReturnType<typeof classifyTxError>, string> = {
 /** Once a hash is back the transaction is out there and may still land. */
 const SENT_COPY = "Sent, not confirmed yet. Check your wallet before trying again.";
 
+/** wagmi throws once a mined transaction reverts, so only a network failure leaves it pending. */
+function afterSendCopy(error: unknown): string {
+  if (REVERTS.test(chainText(error))) return TX_ERROR_TOAST.unknown;
+  return classifyTxError(error) === "rpc" ? SENT_COPY : TX_ERROR_TOAST.unknown;
+}
+
 function errorCopy(error: unknown): string {
   const cause = classifyTxError(error);
   if (cause === "rejected") return TX_ERROR_TOAST.rejected;
@@ -37,7 +43,7 @@ export async function wrapWithToast(config: Config, send: () => Promise<Hash>): 
     hash = await send();
     receipt = await waitForTransactionReceipt(config, { hash });
   } catch (error) {
-    errorToast(hash ? SENT_COPY : errorCopy(error));
+    errorToast(hash ? afterSendCopy(error) : errorCopy(error));
     throw error;
   }
 

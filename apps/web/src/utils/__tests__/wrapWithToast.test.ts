@@ -1,5 +1,6 @@
 import { waitForTransactionReceipt, type Config } from "@wagmi/core";
 import {
+  CallExecutionError,
   ExecutionRevertedError,
   HttpRequestError,
   InsufficientFundsError,
@@ -46,7 +47,7 @@ describe("wrapWithToast", () => {
     expect(errorToast).not.toHaveBeenCalled();
   });
 
-  it("reports a revert and rejects", async () => {
+  it("reports a reverted receipt, should one be returned rather than thrown, and rejects", async () => {
     vi.mocked(waitForTransactionReceipt).mockResolvedValue(receipt("reverted"));
 
     await expect(wrapWithToast(config, () => Promise.resolve(HASH))).rejects.toThrow("Transaction reverted.");
@@ -109,5 +110,42 @@ describe("wrapWithToast", () => {
     expect(errorToast).toHaveBeenCalledExactlyOnceWith(
       "Sent, not confirmed yet. Check your wallet before trying again.",
     );
+  });
+
+  describe("with wagmi's own receipt wait, which throws once a mined transaction reverts", () => {
+    const actual = async () =>
+      (await vi.importActual<typeof import("@wagmi/core")>("@wagmi/core")).waitForTransactionReceipt;
+    /** A Error(string) revert of "nope", as `call` returns it when the transaction is replayed. */
+    const NOPE = `0x08c379a0${"0".repeat(62)}20${"0".repeat(62)}04${"6e6f7065".padEnd(64, "0")}`;
+
+    /** A client whose receipt is reverted; `replay` is what replaying the transaction answers. */
+    const revertedOn = (replay: () => Promise<{ data?: string }>) =>
+      ({
+        getClient: () => ({
+          chain: { id: 100 },
+          waitForTransactionReceipt: async () => ({ status: "reverted", transactionHash: HASH }),
+          getTransaction: async () => ({ from: `0x${"01".repeat(20)}`, input: "0x", type: "eip1559" }),
+          call: replay,
+        }),
+      }) as unknown as Config;
+
+    it.each([
+      ["with a reason", () => Promise.resolve({ data: NOPE })],
+      ["with no reason", () => Promise.resolve({})],
+      [
+        "whose replay itself reverts",
+        () =>
+          Promise.reject(
+            new CallExecutionError(new ExecutionRevertedError({ cause: rpcError("execution reverted") }), {}),
+          ),
+      ],
+    ])("reports a mined revert %s as failed, not as still pending", async (_name, replay) => {
+      vi.mocked(waitForTransactionReceipt).mockImplementation(await actual());
+
+      await expect(wrapWithToast(revertedOn(replay), () => Promise.resolve(HASH))).rejects.toThrow();
+
+      expect(errorToast).toHaveBeenCalledExactlyOnceWith("Transaction failed.");
+      expect(successToast).not.toHaveBeenCalled();
+    });
   });
 });
