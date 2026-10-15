@@ -115,17 +115,17 @@ export function EstimateSlider({
                 // up: caption, chip and stick end at the track's lower edge, the chip above the thumb's number;
                 // down: the chip sits 2px under the thumb with the caption beneath it
                 "pointer-events-none absolute -top-15.5 w-0",
-                "transition-transform duration-(--fs-dur-enter) ease-(--fs-ease-enter) motion-reduce:transition-none",
-                pinDown && "translate-y-22.5",
+                "transition-transform duration-(--fs-dur-enter) ease-(--fs-ease-structural) motion-reduce:transition-none",
+                pinDown && "translate-y-18.5",
               )}
               style={{ left: `${marketAt}%` }}
             >
+              {/* only the chip is in flow, so the caption changing sides never shifts it */}
               <div
                 ref={pin.chip}
-                className={clsx("absolute left-0 flex w-max items-center", pinDown ? "flex-col-reverse" : "flex-col")}
+                className="absolute top-4 left-0 flex w-max flex-col items-center"
                 style={{ transform: pin.chipShift === undefined ? "translateX(-50%)" : `translateX(${pin.chipShift}px)` }}
               >
-                <span className="text-fs-text-primary text-xs leading-4">Market</span>
                 <span
                   data-testid="market-chip"
                   className="rounded-fs px-2 py-0.5 text-center text-xs leading-4 whitespace-nowrap"
@@ -133,12 +133,32 @@ export function EstimateSlider({
                 >
                   {formatEstimate(marketEstimate!, scale.unit)}
                 </span>
+                {/* holds the chip at least as wide as its caption */}
+                <span className="invisible h-0 text-xs" aria-hidden>
+                  Market
+                </span>
+                {(["up", "down"] as const).map((side) => (
+                  <span
+                    key={side}
+                    aria-hidden={(side === "down") !== pinDown}
+                    className={clsx(
+                      "text-fs-text-primary absolute text-xs leading-4",
+                      side === "up" ? "bottom-full" : "top-full",
+                      "transition-opacity duration-(--fs-dur-echo) ease-(--fs-ease-enter)",
+                      // the arriving caption waits out the leaving one, so it never crosses the thumb's number
+                      (side === "down") === pinDown ? "opacity-100 delay-(--fs-dur-echo)" : "opacity-0",
+                    )}
+                  >
+                    Market
+                  </span>
+                ))}
               </div>
               <span
                 data-testid="market-stick"
                 className={clsx(
                   "bg-fs-text-primary absolute top-9 -left-[1.5px] block h-11 w-0.75 rounded-b-full",
-                  pinDown && "hidden",
+                  "transition-opacity duration-(--fs-dur-echo) ease-(--fs-ease-enter)",
+                  pinDown && "opacity-0",
                 )}
                 aria-hidden
               />

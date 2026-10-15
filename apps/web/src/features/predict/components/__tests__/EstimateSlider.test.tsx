@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { addresses } from "@/testing/fixtures";
@@ -88,7 +88,8 @@ describe("EstimateSlider market pin", () => {
   it("names the market's number on the pin", () => {
     renderSlider(400);
 
-    expect(pin()).toHaveTextContent(/^Market/);
+    const captions = within(pin()).getAllByText("Market");
+    expect(captions.filter((caption) => caption.getAttribute("aria-hidden") !== "true")).toHaveLength(1);
     expect(screen.getByTestId("market-chip")).toHaveTextContent("312 $M");
   });
 });

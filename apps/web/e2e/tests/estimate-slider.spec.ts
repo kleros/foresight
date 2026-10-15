@@ -187,3 +187,73 @@ test.describe("the fill's direction colour", () => {
     });
   }
 });
+
+/** Drives the transitions running on the market pin and inside it; returns what each animates. */
+function pinAnimations(page: Page, action: "pause" | "finish" | "cancel" | "seek", at = 0) {
+  return page.evaluate(
+    ([action, at]) =>
+      document
+        .querySelector('[data-testid="market-pin"]')!
+        .getAnimations({ subtree: true })
+        .map((animation) => {
+          if (action === "seek") animation.currentTime = at as number;
+          else animation[action as "pause" | "finish" | "cancel"]();
+          return (animation as CSSTransition).transitionProperty;
+        }),
+    [action, at] as const,
+  );
+}
+
+test.describe("the market pin's drop", () => {
+  test.use({ viewport: { width: 375, height: 400 } });
+
+  test("moves the chip from where it stood, by transform, and eases out of the start", async ({
+    page,
+  }) => {
+    await open(page, { track: 311, market: MARKET, value: 50 });
+    const slider = page.getByRole("slider");
+    const pin = page.getByTestId("market-pin");
+    const chipTop = () => page.getByTestId("market-chip").evaluate((chip) => chip.getBoundingClientRect().top);
+    await slider.focus();
+
+    let before = await chipTop();
+    for (let value = 51; value <= MARKET && (await pin.getAttribute("data-placement")) === "up"; value++) {
+      before = await chipTop();
+      await slider.press("ArrowRight");
+    }
+    expect(await pin.getAttribute("data-placement")).toBe("down");
+
+    const moves = await pinAnimations(page, "pause");
+    expect(moves.every((property) => ["translate", "transform", "opacity"].includes(property))).toBe(true);
+    const seek = (ms: number) => pinAnimations(page, "seek", ms);
+
+    await seek(0);
+    expect(Math.abs((await chipTop()) - before), "the chip's first frame is where it stood").toBeLessThanOrEqual(1);
+    await pinAnimations(page, "finish");
+    const after = await chipTop();
+    await pinAnimations(page, "cancel");
+
+    // replay the drop and read it a tenth of the way through
+    for (let step = 0; step < 10 && (await pin.getAttribute("data-placement")) === "down"; step++) {
+      await slider.press("ArrowLeft");
+      await pinAnimations(page, "finish");
+    }
+    await expect(pin).toHaveAttribute("data-placement", "up");
+    for (let step = 0; step < 10 && (await pin.getAttribute("data-placement")) === "up"; step++) {
+      await slider.press("ArrowRight");
+    }
+    await expect(pin).toHaveAttribute("data-placement", "down");
+    await pinAnimations(page, "pause");
+    const duration = await page.evaluate(() =>
+      Math.max(
+        ...document
+          .querySelector('[data-testid="market-pin"]')!
+          .getAnimations({ subtree: true })
+          .map((animation) => Number(animation.effect!.getTiming().duration)),
+      ),
+    );
+    expect(duration).toBeGreaterThanOrEqual(250);
+    await seek(duration / 10);
+    expect((await chipTop()) - before, "a tenth of the way in").toBeLessThan((after - before) / 5);
+  });
+});
