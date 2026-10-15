@@ -438,9 +438,8 @@ button[data-disabled]:has(> .button-text):not(.bg-transparent) {
   background-color: var(--fs-accent-disabled);
   cursor: not-allowed;
 }
-/* white in both themes: dark's own primary label, #220050, is 2.7:1 on the greyed fill */
 button[data-disabled]:has(> .button-text):not(.bg-transparent) > .button-text {
-  color: #ffffff;
+  color: var(--fs-accent-disabled-text);
 }
 button[data-disabled].border:has(> .button-text) {
   background-color: var(--klerosUIComponentsWhiteBackground);

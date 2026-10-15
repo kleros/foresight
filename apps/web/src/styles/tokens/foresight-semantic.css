@@ -31,6 +31,8 @@
   --fs-accent-hover: var(--klerosUIComponentsSecondaryBlue);
   /* A primary that cannot be pressed now: white on it is 4.76:1 */
   --fs-accent-disabled: color-mix(in srgb, var(--klerosUIComponentsPrimaryBlue) 55%, var(--fs-text-secondary));
+  /* white in both themes: dark's own primary label, #220050, is 2.7:1 on the greyed fill */
+  --fs-accent-disabled-text: #ffffff;
   --fs-accent-protocol: var(--klerosUIComponentsSecondaryPurple);
   --fs-accent-protocol-hover: var(--klerosUIComponentsPrimaryPurple);
   /* Tone: what the reader is being told, paired with its own background */
