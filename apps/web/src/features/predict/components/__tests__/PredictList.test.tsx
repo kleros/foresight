@@ -13,27 +13,36 @@ const estimate: ListedEstimate = {
   direction: "higher",
 };
 
-const list = (to: number) =>
+const list = (move?: { from: number; to: number }) =>
   render(
     <PredictList
       selected={[estimate]}
       onRemove={vi.fn()}
       isReadOnly={false}
-      preview={{ [market.toLowerCase()]: { from: 75, to } }}
+      preview={move ? { [market.toLowerCase()]: move } : {}}
     />,
   );
 
-describe("PredictList's market move", () => {
-  it("names where the market starts when the preview lands on the estimate itself", () => {
-    list(87);
+describe("PredictList's rows", () => {
+  it("reads each estimate as its name, its value and which side of the market it is on", () => {
+    list({ from: 75, to: 80 });
+    const row = screen.getByRole("listitem");
 
-    expect(within(screen.getByTestId("estimate-move")).getByText("from 75 %")).toBeInTheDocument();
+    expect(within(row).getByText("Movie A")).toBeInTheDocument();
+    expect(row).toHaveTextContent("Estimate 87 %");
+    expect(within(row).getByRole("img", { name: "above the market" })).toBeInTheDocument();
+    expect(row).toHaveTextContent("Higher than the market");
   });
 
-  it("names where the market lands when it stops short of the estimate", () => {
-    list(80);
+  it("says where the market moves from and to", () => {
+    list({ from: 75, to: 80 });
 
-    expect(within(screen.getByTestId("estimate-move")).queryByText(/^from/)).toBeNull();
-    expect(screen.getByTestId("estimate-move")).toHaveTextContent("→ 80 %");
+    expect(screen.getByTestId("estimate-move")).toHaveTextContent("Market moves from 75 % to 80 %");
+  });
+
+  it("holds the move's line with where the market is while the move is not known, so the row keeps its height", () => {
+    list();
+
+    expect(screen.getByTestId("estimate-move")).toHaveTextContent("Market at 75 %");
   });
 });

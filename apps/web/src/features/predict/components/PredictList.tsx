@@ -42,8 +42,8 @@ export function PredictList({
           {selected.length} {selected.length === 1 ? "estimate" : "estimates"}
         </span>
       </div>
-      {/* five rows before it scrolls */}
-      <ScrollFade className="max-h-[196px] w-full">
+      {/* three rows before it scrolls */}
+      <ScrollFade className="max-h-[calc(3*var(--estimate-row)+2*0.25rem)] w-full [--estimate-row:4rem] sm:[--estimate-row:5.5rem]">
         <ul className="flex w-full flex-col gap-1">
           {selected.map((estimate) => (
             <EstimateRow
@@ -75,52 +75,56 @@ function EstimateRow({
   const higher = estimate.direction === "higher";
   const Arrow = higher ? ArrowUp : ArrowDown;
   const format = (value: number) => formatEstimate(value, scale.unit);
-  // a move that rounds to nothing would read "51.22 % → 51.22 %"
+  // a move that rounds to nothing would read "from 51.22 % to 51.22 %"
   const moved = move && format(move.from) !== format(move.to) ? move : undefined;
-  const where = moved ? (
-    format(moved.to) === format(estimate.value) ? (
-      <>
-        {/* a destination equal to the estimate repeats it, so a phone names the origin instead */}
-        <span className="max-sm:hidden">
-          {formatEstimate(moved.from, null)} → {format(moved.to)}
-        </span>
-        <span className="sm:hidden">from {format(moved.from)}</span>
-      </>
-    ) : (
-      <>
-        {/* a phone keeps the destination, the one figure the preview adds */}
-        <span className="max-sm:hidden">{formatEstimate(moved.from, null)} </span>→ {format(moved.to)}
-      </>
-    )
-  ) : estimate.marketEstimate !== undefined ? (
-    `from ${format(estimate.marketEstimate)}`
-  ) : undefined;
+  const where = moved
+    ? `Market moves from ${format(moved.from)} to ${format(moved.to)}`
+    : estimate.marketEstimate !== undefined
+      ? `Market at ${format(estimate.marketEstimate)}`
+      : "";
 
   return (
-    <li className="bg-fs-surface-tint rounded-fs type-label flex h-9 w-full items-center gap-2.5 pr-1 pl-3">
-      <span className="size-2 flex-none rounded-full" style={{ backgroundColor: scale.color }} aria-hidden />
-      <span className="text-fs-text-primary min-w-0 truncate font-semibold" title={scale.name}>
-        {scale.name}
-      </span>
-      <span className="text-fs-text-primary shrink-0 font-semibold tabular-nums">{format(estimate.value)}</span>
-      {estimate.direction ? (
-        <Arrow
-          role="img"
-          aria-label={higher ? "above the market" : "below the market"}
-          className={clsx(
-            "size-3 shrink-0 [&_path]:fill-current",
-            higher ? "text-fs-tone-success-text" : "text-fs-tone-error-text",
-          )}
-        />
-      ) : null}
-      {where ? (
-        <span data-testid="estimate-move" className="text-fs-text-secondary shrink-0 whitespace-nowrap tabular-nums">
-          {where}
+    <li
+      className={clsx(
+        "bg-fs-surface-tint rounded-fs relative h-(--estimate-row) w-full px-9",
+        "flex flex-col items-center justify-center text-center",
+      )}
+    >
+      <div className="flex max-w-full min-w-0 items-center gap-2 text-sm leading-5 sm:text-base sm:leading-6">
+        <span className="size-2 flex-none rounded-full" style={{ backgroundColor: scale.color }} aria-hidden />
+        <span className="text-fs-text-primary min-w-0 truncate font-semibold" title={scale.name}>
+          {scale.name}
         </span>
-      ) : null}
+        <span className="text-fs-text-primary shrink-0 whitespace-nowrap">
+          Estimate <span className="font-semibold tabular-nums">{format(estimate.value)}</span>
+        </span>
+      </div>
+      <span
+        className={clsx(
+          "min-h-4 text-xs leading-4 sm:min-h-5 sm:text-sm sm:leading-5",
+          higher ? "text-fs-tone-success-text" : "text-fs-tone-error-text",
+        )}
+      >
+        {estimate.direction ? (
+          <>
+            <Arrow
+              role="img"
+              aria-label={higher ? "above the market" : "below the market"}
+              className="mr-1 inline size-3 [&_path]:fill-current"
+            />
+            {higher ? "Higher" : "Lower"} than the market
+          </>
+        ) : null}
+      </span>
+      <span
+        data-testid="estimate-move"
+        className="text-fs-text-secondary min-h-4 max-w-full text-xs leading-4 whitespace-nowrap tabular-nums sm:min-h-5 sm:text-sm sm:leading-5"
+      >
+        {where}
+      </span>
       {onRemove ? (
         <LightButton
-          className="hover:bg-fs-surface relative ml-auto size-7 shrink-0 justify-center p-0 before:absolute before:-inset-x-2 before:-inset-y-1 before:content-['']"
+          className="hover:bg-fs-surface absolute top-1/2 right-1 size-7 -translate-y-1/2 justify-center p-0 before:absolute before:-inset-x-2 before:-inset-y-1 before:content-['']"
           text=""
           aria-label={`Remove ${scale.name}`}
           icon={<CloseIcon className="text-fs-text-secondary size-3" />}

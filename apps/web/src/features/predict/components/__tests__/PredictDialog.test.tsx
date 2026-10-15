@@ -71,17 +71,15 @@ describe("the estimates going in", () => {
   it("says where each market would move", () => {
     render(<PredictDialog {...props()} preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 355 } }} />);
 
-    expect(
-      screen.getByText((_, element) => element?.tagName === "SPAN" && element.textContent === "312 → 355 $M"),
-    ).toBeInTheDocument();
-    expect(screen.getAllByText(/→/)).toHaveLength(1);
+    expect(screen.getByText("Market moves from 312 $M to 355 $M")).toBeInTheDocument();
+    expect(screen.getAllByText(/Market moves/)).toHaveLength(1);
   });
 
-  it("says nothing about a move too small to show", () => {
+  it("says where the market is, not a move too small to show", () => {
     render(<PredictDialog {...props()} preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 312.0001 } }} />);
 
-    expect(screen.queryByText(/→/)).toBeNull();
-    expect(screen.getByText("from 312 $M")).toBeInTheDocument();
+    expect(screen.queryByText(/Market moves/)).toBeNull();
+    expect(screen.getByText("Market at 312 $M")).toBeInTheDocument();
   });
 
   it("lists each estimate with which way it moves the market", () => {
@@ -91,6 +89,8 @@ describe("the estimates going in", () => {
     expect(screen.getByText("400 $M")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "above the market" })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "below the market" })).toBeInTheDocument();
+    expect(screen.getByText(/Higher than the market/)).toBeInTheDocument();
+    expect(screen.getByText(/Lower than the market/)).toBeInTheDocument();
   });
 
   it("counts the estimates beside the title", () => {
