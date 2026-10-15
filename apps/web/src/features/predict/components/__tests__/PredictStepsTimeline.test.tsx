@@ -76,6 +76,16 @@ describe("PredictStepsTimeline bullets", () => {
     expect(item("Trade wallet")).not.toHaveClass("opacity-50");
   });
 
+  it("keeps each bullet's element through a change of view, so its glyphs can cross-fade", () => {
+    const view = render(timeline(depositing("signing")));
+    const before = item("Add funds").querySelector("[data-bullet]");
+
+    view.rerender(timeline(halted));
+
+    expect(item("Add funds").querySelector("[data-bullet]")).toBe(before);
+    expect(before?.querySelectorAll("svg")).toHaveLength(3);
+  });
+
   it("crosses the step that stopped the run, in place, with no row added", () => {
     render(timeline(halted));
 

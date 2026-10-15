@@ -289,3 +289,75 @@
     transition-timing-function: var(--fs-ease-enter);
   }
 }
+
+/* The predict popup's spine: input nodes and the library timeline's rows on one 2px line that fills as they finish.
+   Unlayered, so it wins over the library's own margins and gaps on the timeline rows. */
+.spine-bullet > svg {
+  position: absolute;
+  inset: 0;
+  width: 24px;
+  height: 24px;
+  opacity: 0;
+  transform: scale(0.8);
+  transition:
+    opacity var(--fs-dur-enter) var(--fs-ease-enter),
+    transform var(--fs-dur-enter) var(--fs-ease-spring);
+}
+.spine-bullet > [data-glyph="circle"] {
+  opacity: 1;
+  transform: none;
+}
+.spine-bullet:is([data-bullet="done"], [data-bullet="failed"]) > [data-glyph="circle"] {
+  opacity: 0;
+  transition: opacity var(--fs-dur-echo) var(--fs-ease-exit);
+}
+.spine-bullet[data-bullet="done"] > [data-glyph="check"],
+.spine-bullet[data-bullet="failed"] > [data-glyph="cross"] {
+  opacity: 1;
+  transform: none;
+}
+.spine-line,
+.predict-spine > li > div:first-child > div:last-child {
+  position: relative;
+  flex: 1 1 0;
+  width: 0;
+  margin: 2px 0;
+  border-left: 2px solid var(--fs-border);
+}
+.spine-line::after,
+.predict-spine > li > div:first-child > div:last-child::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -2px;
+  border-left: 2px solid var(--fs-accent);
+  transform: scaleY(0);
+  transform-origin: top;
+  transition: transform var(--fs-dur-structural) var(--fs-ease-structural);
+}
+.spine-node:has(> div > [data-bullet="done"]) .spine-line::after,
+.predict-spine > li:has([data-bullet="done"]) > div:first-child > div:last-child::after {
+  transform: scaleY(1);
+}
+.spine-node[data-delayed]:has(> div > [data-bullet="done"]) .spine-bullet > svg,
+.spine-node[data-delayed]:has(> div > [data-bullet="done"]) .spine-line::after {
+  transition-delay: var(--fs-dur-echo);
+}
+.predict-spine > li > div:first-child {
+  min-height: 40px;
+}
+.predict-spine > li > div:nth-child(2) {
+  margin: 0 0 0 8px;
+  padding-top: 2px;
+  gap: 0;
+}
+.predict-spine small {
+  display: block;
+  min-height: 16px;
+  overflow: hidden;
+  font: var(--type-caption);
+  color: var(--fs-text-secondary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

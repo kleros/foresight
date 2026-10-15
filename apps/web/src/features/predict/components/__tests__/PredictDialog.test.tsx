@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -74,14 +74,14 @@ describe("the estimates going in", () => {
   it("says where each market would move", () => {
     render(<PredictDialog {...props()} preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 355 } }} />);
 
-    expect(screen.getByText("Market moves from 312 $M to 355 $M")).toBeInTheDocument();
-    expect(screen.getAllByText(/Market moves/)).toHaveLength(1);
+    expect(screen.getByText("Market 312 → 355 $M")).toBeInTheDocument();
+    expect(screen.getAllByText(/→/)).toHaveLength(1);
   });
 
   it("says where the market is, not a move too small to show", () => {
     render(<PredictDialog {...props()} preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 312.0001 } }} />);
 
-    expect(screen.queryByText(/Market moves/)).toBeNull();
+    expect(screen.queryByText(/→/)).toBeNull();
     expect(screen.getByText("Market at 312 $M")).toBeInTheDocument();
   });
 
@@ -92,8 +92,7 @@ describe("the estimates going in", () => {
     expect(screen.getByText("400 $M")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "above the market" })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "below the market" })).toBeInTheDocument();
-    expect(screen.getByText(/Higher than the market/)).toBeInTheDocument();
-    expect(screen.getByText(/Lower than the market/)).toBeInTheDocument();
+    expect(screen.queryByText(/than the market/)).toBeNull();
   });
 
   it("counts the estimates beside the title", () => {
@@ -108,7 +107,7 @@ describe("the estimates going in", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Remove Greta Gerwig" }));
 
-    expect(onRemove).toHaveBeenCalledWith(GERWIG);
+    await waitFor(() => expect(onRemove).toHaveBeenCalledWith(GERWIG));
   });
 
   it("keeps the last estimate in", () => {
@@ -169,7 +168,9 @@ describe("the amount behind them", () => {
   it("says a returning visitor's prediction adds nothing when no amount is typed", () => {
     render(<PredictDialog {...props()} amount={undefined} isFirstPrediction={false} />);
 
-    expect(screen.getByText("Trades from your trade wallet, nothing added")).toBeInTheDocument();
+    expect(
+      screen.getByText("You've predicted before, so you can change it without adding funds."),
+    ).toBeInTheDocument();
   });
 
   it("does not call a balance it has not read yet zero", () => {
@@ -182,7 +183,9 @@ describe("the amount behind them", () => {
   it("asks for optional extra funds once the visitor has predicted before", () => {
     render(<PredictDialog {...props()} isFirstPrediction={false} />);
 
-    expect(screen.getByText(/^Extra funds/)).toHaveTextContent("Extra funds (optional)");
+    expect(screen.getByText("Extra funds")).toBeInTheDocument();
+    expect(screen.getByText("optional")).toBeInTheDocument();
+    expect(screen.queryByText("You pay")).toBeNull();
   });
 
   it("offers no Max with nothing to spend", () => {
@@ -408,5 +411,64 @@ describe("the dialog's accessible name", () => {
 
     expect(screen.getByRole("dialog", { name: /predict/i })).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Modal" })).toBeNull();
+  });
+});
+
+describe("the spine's two input nodes", () => {
+  const nodeBullet = (title: string) =>
+    screen.getByText(title).closest("[data-spine-node]")?.querySelector("[data-bullet]")?.getAttribute("data-bullet");
+
+  it.each([
+    ["at rest", {}, "idle"],
+    ["while a run goes", { isRunning: true }, "done"],
+    ["when a stopped run can be picked up", { canRetry: true }, "done"],
+  ])("are %s %s", (_name, state, view) => {
+    render(<PredictDialog {...props()} {...state} />);
+
+    expect(nodeBullet("2 estimates")).toBe(view);
+    expect(nodeBullet("You pay")).toBe(view);
+  });
+
+  it("titles the estimates node with their count", () => {
+    render(<PredictDialog {...props()} selected={selected.slice(0, 1)} />);
+
+    expect(screen.getByText("1 estimate")).toBeInTheDocument();
+  });
+});
+
+describe("what a run shows while it goes", () => {
+  it("holds the balance, the summary and the market captions it locked with", () => {
+    const preview = { [GERWIG.toLowerCase()]: { from: 312, to: 355 } };
+    const view = render(<PredictDialog {...props()} preview={preview} isRunning />);
+
+    view.rerender(
+      <PredictDialog
+        {...props()}
+        isRunning
+        preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 340 } }}
+        funding={funding({ available: 30n * WAD, tradeWallet: 2n * WAD, fromTradeWallet: 2n * WAD, toAdd: 8n * WAD })}
+      />,
+    );
+
+    expect(screen.getByText("Balance: 25 sDAI")).toBeInTheDocument();
+    expect(screen.getByText("10 sDAI = 6 in your trade wallet + 4 from your wallet")).toBeInTheDocument();
+    expect(screen.getByText("Market 312 → 355 $M")).toBeInTheDocument();
+  });
+
+  it("reads them again once the run is over", () => {
+    const view = render(<PredictDialog {...props()} isRunning />);
+
+    view.rerender(<PredictDialog {...props()} funding={funding({ available: 30n * WAD })} />);
+
+    expect(screen.getByText("Balance: 30 sDAI")).toBeInTheDocument();
+  });
+
+  it("brings a failure in with the entrance motion", () => {
+    const view = render(<PredictDialog {...props()} />);
+    expect(within(screen.getByRole("status")).queryByText(/./)).toBeNull();
+
+    view.rerender(<PredictDialog {...props()} steps={{ ...steps, failure: "You declined in your wallet." }} />);
+
+    expect(within(screen.getByRole("status")).getByText("You declined in your wallet.")).toHaveClass("fs-enter");
   });
 });

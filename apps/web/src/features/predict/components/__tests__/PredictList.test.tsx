@@ -1,5 +1,6 @@
-import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { addresses } from "@/testing/fixtures";
 
@@ -13,10 +14,10 @@ const estimate: ListedEstimate = {
   direction: "higher",
 };
 
-const list = (move?: { from: number; to: number }) =>
+const list = (move?: { from: number; to: number }, selected: ListedEstimate[] = [estimate]) =>
   render(
     <PredictList
-      selected={[estimate]}
+      selected={selected}
       onRemove={vi.fn()}
       isReadOnly={false}
       preview={move ? { [market.toLowerCase()]: move } : {}}
@@ -24,25 +25,56 @@ const list = (move?: { from: number; to: number }) =>
   );
 
 describe("PredictList's rows", () => {
-  it("reads each estimate as its name, its value and which side of the market it is on", () => {
+  it("reads each estimate as its name, its value and an arrow for which side of the market it is on", () => {
     list({ from: 75, to: 80 });
     const row = screen.getByRole("listitem");
 
     expect(within(row).getByText("Movie A")).toBeInTheDocument();
-    expect(row).toHaveTextContent("Estimate 87 %");
+    expect(within(row).getByText("87 %")).toBeInTheDocument();
     expect(within(row).getByRole("img", { name: "above the market" })).toBeInTheDocument();
-    expect(row).toHaveTextContent("Higher than the market");
+    expect(row).not.toHaveTextContent(/than the market/);
   });
 
-  it("says where the market moves from and to", () => {
+  it("says where the market moves from and to, with the unit once", () => {
     list({ from: 75, to: 80 });
 
-    expect(screen.getByTestId("estimate-move")).toHaveTextContent("Market moves from 75 % to 80 %");
+    expect(screen.getByTestId("estimate-move")).toHaveTextContent(/^Market 75 → 80 %$/);
+  });
+
+  it("says only where the market starts when the move reaches the estimate", () => {
+    list({ from: 75, to: 87 });
+
+    expect(screen.getByTestId("estimate-move")).toHaveTextContent(/^from 75 %$/);
   });
 
   it("holds the move's line with where the market is while the move is not known, so the row keeps its height", () => {
     list();
 
     expect(screen.getByTestId("estimate-move")).toHaveTextContent("Market at 75 %");
+  });
+
+  it("carries the full name and caption in a title, for when they are cut short", () => {
+    list({ from: 75, to: 80 });
+
+    expect(screen.getByText("Movie A")).toHaveAttribute("title", "Movie A");
+    expect(screen.getByTestId("estimate-move")).toHaveAttribute("title", "Market 75 → 80 %");
+  });
+});
+
+describe("removing a row", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("lets the row fade out before it leaves the list", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const onRemove = vi.fn();
+    const other = { ...estimate, scale: { ...estimate.scale, market: addresses.childMarkets[1], name: "Movie B" } };
+    render(<PredictList selected={[estimate, other]} onRemove={onRemove} isReadOnly={false} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Remove Movie A" }));
+    expect(screen.getByText("Movie A").closest("li")).toHaveAttribute("data-leaving");
+    expect(onRemove).not.toHaveBeenCalled();
+
+    act(() => vi.advanceTimersByTime(100));
+    expect(onRemove).toHaveBeenCalledExactlyOnceWith(market);
   });
 });

@@ -11,6 +11,7 @@ import DaiIcon from "@/assets/svg/dai.svg";
 
 import { ownedAmount } from "@/utils/amount";
 
+import { PredictSpineNode } from "./PredictSpineNode";
 import type { PayToken } from "../types";
 import { fundingSummary, percentOf, roundToDisplay, shareOf, type Funding } from "../utils/funding";
 
@@ -37,6 +38,8 @@ interface PredictAmountSectionProps {
   note?: string;
 }
 
+const RETURNING_COPY = "You've predicted before, so you can change it without adding funds.";
+
 export function PredictAmountSection({
   amount,
   onAmountChange,
@@ -61,31 +64,34 @@ export function PredictAmountSection({
     : over && isReadOnly
       ? null
       : !isFirstPrediction && !isReadOnly && funding && !amount
-        ? { text: "Trades from your trade wallet, nothing added", tone: "neutral" }
+        ? { text: RETURNING_COPY, tone: "neutral" }
         : fundingSummary({ funding, amount, token, collateral });
 
+  const balance = note
+    ? ""
+    : isDisconnected
+      ? "No wallet connected"
+      : available === undefined
+        ? "Reading balance…"
+        : `Balance: ${ownedAmount(available, token.decimals)} ${token.symbol}`;
+
   return (
-    <div className="flex w-full flex-col">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <span className="type-label text-fs-text-secondary min-w-0 truncate">
-          {isFirstPrediction ? (
-            "You pay"
-          ) : (
-            <>
-              Extra funds<span className="max-sm:hidden"> (optional)</span>
-            </>
-          )}
-        </span>
-        <div className="flex items-center gap-2">
-          <span className="text-fs-text-secondary text-xs whitespace-nowrap">
-            {note
-              ? ""
-              : isDisconnected
-                ? "No wallet connected"
-                : available === undefined
-                  ? "Reading balance…"
-                  : `Balance: ${ownedAmount(available, token.decimals)} ${token.symbol}`}
-          </span>
+    <PredictSpineNode
+      done={isReadOnly}
+      delayed
+      title={
+        isFirstPrediction ? (
+          "You pay"
+        ) : (
+          <>
+            Extra funds
+            <span className="type-caption text-fs-text-secondary ml-1.5 font-normal max-sm:hidden">optional</span>
+          </>
+        )
+      }
+      right={
+        <div className="flex shrink-0 items-baseline gap-2">
+          <span className="type-caption text-fs-text-secondary whitespace-nowrap">{balance}</span>
           <LightButton
             small
             text="Max"
@@ -93,17 +99,21 @@ export function PredictAmountSection({
             onPress={() => max !== undefined && onAmountChange(max)}
             className={clsx(
               // a 44px target that takes no more height than its label
-              "-my-3 min-h-11 min-w-11 justify-center rounded-none! p-0 hover:bg-transparent!",
+              "-my-3 -mr-2 min-h-11 min-w-11 justify-center rounded-none! p-0 hover:bg-transparent!",
               "[&_.button-text]:text-fs-text-accent [&_.button-text]:text-xs [&_.button-text]:font-semibold",
               "data-disabled:[&_.button-text]:text-fs-text-secondary",
             )}
           />
         </div>
-      </div>
-
+      }
+    >
       <div
         data-testid="amount-input"
-        className={clsx("border-fs-border rounded-fs flex h-fit flex-row border", isReadOnly && "opacity-50")}
+        className={clsx(
+          "border-fs-border rounded-fs flex h-fit flex-row border",
+          "transition-opacity duration-(--fs-dur-enter) ease-(--fs-ease-enter)",
+          isReadOnly && "opacity-50",
+        )}
       >
         <BigNumberField
           isRequired
@@ -114,6 +124,7 @@ export function PredictAmountSection({
             "[&_input]:rounded-r-none [&_input]:border-none [&_input]:focus:shadow-none",
           )}
           minValue="0"
+          placeholder="0"
           variant={notEnough ? "error" : undefined}
           value={amount !== undefined ? formatUnits(amount, token.decimals) : undefined}
           // toString goes exponential below 1e-7, which parseUnits refuses
@@ -140,10 +151,10 @@ export function PredictAmountSection({
         />
       </div>
 
-      {/* a line's height held when empty, so the slider's floating label never lands on it; an amount wraps whole */}
+      {/* two lines held on a phone and one above, whatever it says, so no state moves the steps */}
       <p
         className={clsx(
-          "mt-1.5 min-h-5 text-xs leading-5 break-words",
+          "mt-1 min-h-10 text-xs leading-5 text-pretty wrap-anywhere sm:min-h-5",
           summary?.tone === "error" ? "text-fs-tone-error-text" : "text-fs-text-secondary",
         )}
       >
@@ -155,9 +166,7 @@ export function PredictAmountSection({
         isDisabled={isReadOnly || !max}
         onChange={(percent) => max !== undefined && onAmountChange(roundDown(shareOf(max, percent)))}
       />
-
-      <hr className="border-fs-border mt-4 w-full short:mt-2" />
-    </div>
+    </PredictSpineNode>
   );
 }
 
@@ -183,7 +192,12 @@ function AmountSlider({
     <div
       data-testid="amount-slider"
       // typing the amount stands in for it where the steps would otherwise sit under the fold
-      className={clsx("relative mt-4 w-[calc(100%-32px)] self-center short:hidden", isDisabled && "opacity-50")}
+      className={clsx(
+        // the library floats its label 25px above the thumb, outside this box
+        "relative mx-3 mt-7.5 -mb-2 w-[calc(100%-24px)] short:hidden",
+        "transition-opacity duration-(--fs-dur-enter) ease-(--fs-ease-enter)",
+        isDisabled && "opacity-50",
+      )}
       style={{ "--label-shift": `${percent}%` } as CSSProperties}
     >
       <Slider

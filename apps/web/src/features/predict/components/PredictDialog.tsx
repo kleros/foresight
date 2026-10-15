@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { Button, Modal } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
@@ -8,6 +10,7 @@ import { ScrollFade } from "@/components/ui/ScrollFade";
 import type { PayToken } from "../types";
 import { PredictAmountSection, type PayTokenChoice } from "./PredictAmountSection";
 import { PredictList, type ListedEstimate, type PriceMove } from "./PredictList";
+import { PredictSpineNode } from "./PredictSpineNode";
 import { PredictStepsTimeline } from "./PredictStepsTimeline";
 import type { Funding } from "../utils/funding";
 import { statusLine, type PredictSteps, type StatusLine } from "../utils/predictSteps";
@@ -52,9 +55,17 @@ const STATUS_TONE: Record<StatusLine["tone"], string> = {
   error: "text-fs-tone-error-text",
 };
 
+/** What `value` was when `locked` last turned on, held until it turns off. */
+function useHeldWhile<T>(value: T, locked: boolean): T {
+  const [held, setHeld] = useState<{ value: T } | null>(locked ? { value } : null);
+  if (locked && !held) setHeld({ value });
+  if (!locked && held) setHeld(null);
+  return locked && held ? held.value : value;
+}
+
 /**
- * Futarchy's predict popup with every region at a fixed height, so the dialog keeps one size
- * from the first look through signing, a failure and the end of the run.
+ * Futarchy's predict popup as one spine: the estimates, the amount, then the run's steps. Every region
+ * has a fixed height, so the dialog keeps one size from the first look through signing, a failure and the end of the run.
  */
 export function PredictDialog({
   isOpen,
@@ -86,6 +97,9 @@ export function PredictDialog({
   const nothingToTrade = isFirstPrediction && (funding?.collateralIn ?? 0n) === 0n;
   const status = statusLine({ steps, notice, skipped });
   const runToken = recovered?.token;
+  // a refreshed balance or re-priced preview would change what the visitor is reading mid-run
+  const shownFunding = useHeldWhile(funding, isLocked);
+  const shownPreview = useHeldWhile(preview, isLocked);
 
   return (
     <Modal
@@ -98,21 +112,38 @@ export function PredictDialog({
         "fixed top-18 left-1/2 -translate-x-1/2 transform md:top-20",
         "h-auto max-h-[calc(100dvh-5rem)] md:max-h-[calc(100dvh-7rem)]",
         "w-[calc(100vw-2rem)] max-w-[560px]",
-        "flex px-4 pt-4 pb-0! md:px-10 md:pt-8",
+        "flex px-4 pt-4 pb-0! md:px-10 md:pt-6",
         "rounded-fs border-fs-border bg-fs-surface border",
       )}
     >
       <div className="flex min-h-0 w-full flex-col">
-        <PredictList selected={selected} onRemove={onRemove} isReadOnly={isLocked} preview={preview} />
+        <h2 className="text-fs-text-primary mb-2 text-xl font-semibold md:text-2xl">Predict</h2>
+        <div className="shrink-0">
+          <PredictSpineNode
+            title={`${selected.length} ${selected.length === 1 ? "estimate" : "estimates"}`}
+            done={isLocked}
+          >
+            {/* over four rows three and a half show, three on a phone over three: the cut row is the cue */}
+            <ScrollFade
+              className={clsx(
+                "w-full",
+                selected.length > 4 && "max-h-28",
+                selected.length > 3 && "max-sm:max-h-27",
+              )}
+            >
+              <PredictList selected={selected} onRemove={onRemove} isReadOnly={isLocked} preview={shownPreview} />
+            </ScrollFade>
+          </PredictSpineNode>
+        </div>
         <ScrollFade className="min-h-32 w-full" cue="More below">
-          <div data-testid="predict-body" className="pt-3">
+          <div data-testid="predict-body">
             <PredictAmountSection
               amount={recovered ? recovered.deposit : amount}
               onAmountChange={onAmountChange}
               tokens={runToken ? [runToken] : tokens}
               token={runToken ?? token}
               onTokenChange={onTokenChange}
-              funding={funding}
+              funding={shownFunding}
               collateral={collateral}
               isFirstPrediction={isFirstPrediction}
               isReadOnly={isLocked}
@@ -123,19 +154,23 @@ export function PredictDialog({
           </div>
         </ScrollFade>
 
-        {/* outside the scroll area, so the reason a run stopped is never under the fold; three lines, two on a short window, held empty or not */}
+        {/* outside the scroll area, so the reason a run stopped is never under the fold; two lines, held empty or not */}
         <p
           role="status"
           aria-live="polite"
           className={clsx(
-            "type-label flex h-15 shrink-0 items-center justify-center px-2 text-center text-pretty short:h-10",
+            "type-label flex h-10 shrink-0 items-center justify-center px-2 text-center text-pretty",
             status && STATUS_TONE[status.tone],
           )}
         >
-          {status?.text}
+          {status ? (
+            <span key={status.text} className={clsx(status.tone === "error" && "fs-enter")}>
+              {status.text}
+            </span>
+          ) : null}
         </p>
 
-        <div className="bg-fs-surface sticky bottom-0 flex justify-center gap-3.5 py-4 md:pb-8 short:py-3">
+        <div className="bg-fs-surface sticky bottom-0 flex justify-center gap-3.5 py-4 md:pb-6 short:py-3">
           <Button text="Cancel" variant="secondary" onPress={onClose} isDisabled={isRunning} />
           <Button
             className="min-w-[170px]"

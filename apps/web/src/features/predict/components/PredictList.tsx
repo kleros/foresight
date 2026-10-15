@@ -1,7 +1,8 @@
+import { useEffect, useRef, useState } from "react";
+
 import clsx from "clsx";
 
 import LightButton from "@/components/ui/LightButton";
-import { ScrollFade } from "@/components/ui/ScrollFade";
 
 import CloseIcon from "@/assets/svg/close.svg";
 import ArrowDown from "@/assets/svg/long-arrow-down.svg";
@@ -21,7 +22,10 @@ export interface PriceMove {
   to: number;
 }
 
-/** The popup's title and the estimates going into it, one line each, removable while more than one is left. */
+/** --fs-dur-echo: the row's exit runs before the list drops it. */
+const EXIT_MS = 100;
+
+/** The estimates going into the popup, one row each, removable while more than one is left. */
 export function PredictList({
   selected,
   onRemove,
@@ -34,105 +38,135 @@ export function PredictList({
   /** Keyed by lower-case market; an option without an entry shows where its market is now. */
   preview?: Record<string, PriceMove>;
 }) {
+  const [leaving, setLeaving] = useState<string>();
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const readOnly = useRef(isReadOnly);
+  readOnly.current = isReadOnly;
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const remove = (market: string) => {
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    setLeaving(market);
+    timer.current = setTimeout(
+      () => {
+        setLeaving(undefined);
+        // a run that started during the exit has already taken this estimate in
+        if (!readOnly.current) onRemove(market);
+      },
+      reduce ? 0 : EXIT_MS,
+    );
+  };
+
   return (
-    <div className="mb-4 flex w-full shrink-0 flex-col gap-3 short:mb-2 short:gap-2">
-      <div className="flex items-baseline justify-between gap-4">
-        <h2 className="text-fs-text-primary text-xl font-semibold md:text-2xl">Predict</h2>
-        <span className="type-label text-fs-text-secondary">
-          {selected.length} {selected.length === 1 ? "estimate" : "estimates"}
-        </span>
-      </div>
-      {/* three rows before it scrolls */}
-      <ScrollFade className="max-h-[calc(3*var(--estimate-row)+2*0.25rem)] w-full [--estimate-row:4rem] sm:[--estimate-row:5.5rem] short:[--estimate-row:3rem]">
-        <ul className="flex w-full flex-col gap-1">
-          {selected.map((estimate) => (
-            <EstimateRow
-              key={estimate.scale.market}
-              estimate={estimate}
-              move={preview[estimate.scale.market.toLowerCase()]}
-              onRemove={selected.length > 1 ? () => onRemove(estimate.scale.market) : undefined}
-              isReadOnly={isReadOnly}
-            />
-          ))}
-        </ul>
-      </ScrollFade>
-    </div>
+    <ul
+      className={clsx(
+        "grid w-full gap-x-2.5",
+        "grid-cols-[8px_minmax(0,1fr)_max-content_28px] sm:grid-cols-[8px_minmax(96px,1fr)_max-content_minmax(0,max-content)_28px]",
+      )}
+    >
+      {selected.map((estimate) => (
+        <EstimateRow
+          key={estimate.scale.market}
+          estimate={estimate}
+          move={preview[estimate.scale.market.toLowerCase()]}
+          onRemove={selected.length > 1 ? () => !leaving && remove(estimate.scale.market) : undefined}
+          isLast={selected.length === 1}
+          isLeaving={leaving === estimate.scale.market}
+          isReadOnly={isReadOnly}
+        />
+      ))}
+    </ul>
   );
+}
+
+/** Where the market goes: `Market 75 → 80 %`, `from 75 %` once it reaches the estimate, `Market at 75 %` when it does not move. */
+export function marketCaption(estimate: ListedEstimate, move: PriceMove | undefined): string {
+  const { unit } = estimate.scale;
+  const format = (value: number) => formatEstimate(value, unit);
+  if (move && format(move.from) !== format(move.to)) {
+    return format(move.to) === format(estimate.value)
+      ? `from ${format(move.from)}`
+      : `Market ${formatEstimate(move.from, null)} → ${format(move.to)}`;
+  }
+  return estimate.marketEstimate !== undefined ? `Market at ${format(estimate.marketEstimate)}` : "";
 }
 
 function EstimateRow({
   estimate,
   move,
   onRemove,
+  isLast,
+  isLeaving,
   isReadOnly,
 }: {
   estimate: ListedEstimate;
   move: PriceMove | undefined;
   onRemove?: () => void;
+  isLast: boolean;
+  isLeaving: boolean;
   isReadOnly: boolean;
 }) {
   const { scale } = estimate;
   const higher = estimate.direction === "higher";
   const Arrow = higher ? ArrowUp : ArrowDown;
-  const format = (value: number) => formatEstimate(value, scale.unit);
-  // a move that rounds to nothing would read "from 51.22 % to 51.22 %"
-  const moved = move && format(move.from) !== format(move.to) ? move : undefined;
-  const where = moved
-    ? `Market moves from ${format(moved.from)} to ${format(moved.to)}`
-    : estimate.marketEstimate !== undefined
-      ? `Market at ${format(estimate.marketEstimate)}`
-      : "";
+  const where = marketCaption(estimate, move);
 
   return (
     <li
+      data-leaving={isLeaving || undefined}
       className={clsx(
-        "bg-fs-surface-tint rounded-fs relative h-(--estimate-row) w-full px-9",
-        "flex flex-col items-center justify-center text-center",
+        "col-span-full grid grid-cols-subgrid items-center text-sm leading-5",
+        "h-9 grid-rows-[20px_16px] sm:h-8 sm:grid-rows-1",
+        "transition-[opacity,transform] duration-(--fs-dur-echo) ease-(--fs-ease-exit)",
+        "data-leaving:scale-[.97] data-leaving:opacity-0 motion-reduce:data-leaving:scale-100",
       )}
     >
-      <div className="flex max-w-full min-w-0 items-center gap-2 text-sm leading-5 sm:text-base sm:leading-6 short:text-sm short:leading-4">
-        <span className="size-2 flex-none rounded-full" style={{ backgroundColor: scale.color }} aria-hidden />
-        <span className="text-fs-text-primary min-w-0 truncate font-semibold" title={scale.name}>
-          {scale.name}
-        </span>
-        <span className="text-fs-text-primary shrink-0 whitespace-nowrap">
-          Estimate <span className="font-semibold tabular-nums">{format(estimate.value)}</span>
-        </span>
-      </div>
       <span
-        className={clsx(
-          "min-h-4 text-xs leading-4 sm:min-h-5 sm:text-sm sm:leading-5 short:min-h-4 short:text-xs short:leading-4",
-          higher ? "text-fs-tone-success-text" : "text-fs-tone-error-text",
-        )}
+        className="size-2 rounded-full [grid-area:1/1] sm:[grid-area:auto]"
+        style={{ backgroundColor: scale.color }}
+        aria-hidden
+      />
+      <span
+        className="text-fs-text-primary min-w-0 truncate font-semibold [grid-area:1/2] sm:[grid-area:auto]"
+        title={scale.name}
       >
+        {scale.name}
+      </span>
+      <span className="text-fs-text-primary inline-flex items-center gap-1.5 justify-self-end font-semibold whitespace-nowrap tabular-nums [grid-area:1/3] sm:[grid-area:auto]">
+        {formatEstimate(estimate.value, scale.unit)}
         {estimate.direction ? (
-          <>
-            <Arrow
-              role="img"
-              aria-label={higher ? "above the market" : "below the market"}
-              className="mr-1 inline size-3 [&_path]:fill-current"
-            />
-            {higher ? "Higher" : "Lower"} than the market
-          </>
+          <Arrow
+            role="img"
+            aria-label={higher ? "above the market" : "below the market"}
+            className={clsx(
+              "size-3 shrink-0 [&_path]:fill-current",
+              higher ? "text-fs-tone-success-text" : "text-fs-tone-error-text",
+            )}
+          />
         ) : null}
       </span>
       <span
         data-testid="estimate-move"
         title={where || undefined}
-        className="text-fs-text-secondary min-h-4 max-w-full truncate text-xs leading-4 tabular-nums sm:min-h-5 sm:text-sm sm:leading-5 short:min-h-4 short:text-xs short:leading-4"
+        className="type-caption text-fs-text-secondary min-w-0 truncate tabular-nums [grid-area:2/2/3/4] sm:[grid-area:auto]"
       >
         {where}
       </span>
-      {onRemove ? (
+      {isLast ? null : (
         <LightButton
-          className="hover:bg-fs-surface absolute top-1/2 right-1 size-7 -translate-y-1/2 justify-center p-0 before:absolute before:-inset-x-2 before:-inset-y-1 before:content-['']"
+          className={clsx(
+            "relative size-7 justify-center justify-self-end p-0 [grid-area:1/4/3/5] sm:[grid-area:auto]",
+            "hover:bg-transparent [@media(pointer:fine)]:hover:bg-fs-surface-tint",
+            "before:absolute before:-inset-x-2 before:-inset-y-1 before:content-[''] sm:before:-inset-y-0.5",
+            "disabled:opacity-50",
+          )}
           text=""
           aria-label={`Remove ${scale.name}`}
           icon={<CloseIcon className="text-fs-text-secondary size-3" />}
           isDisabled={isReadOnly}
           onPress={onRemove}
         />
-      ) : null}
+      )}
     </li>
   );
 }
