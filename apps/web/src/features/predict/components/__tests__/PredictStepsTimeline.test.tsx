@@ -63,11 +63,12 @@ const item = (title: string) => screen.getByRole("listitem", { name: `Timeline i
 const bullet = (title: string) => item(title).querySelector("[data-bullet]")?.getAttribute("data-bullet");
 
 describe("PredictStepsTimeline bullets", () => {
-  it("draws the running step with futarchy's ring and a spinner", () => {
+  it("pulses the running step with the Kleros timeline's own loading state, and nothing beside it", () => {
     render(timeline(depositing("signing")));
 
     expect(bullet("Add funds to your trade wallet")).toBe("running");
-    expect(within(item("Add funds to your trade wallet")).getByTestId("step-spinner")).toBeInTheDocument();
+    expect(item("Add funds to your trade wallet")).toHaveClass("animate-loading");
+    expect(within(item("Add funds to your trade wallet")).queryByLabelText("Timeline item party element")).toBeNull();
   });
 
   it("checks a finished step and keeps it at full strength", () => {

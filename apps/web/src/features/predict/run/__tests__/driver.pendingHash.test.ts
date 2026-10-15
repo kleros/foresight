@@ -114,8 +114,8 @@ describe("createPredictRun while it checks a sent transaction again", () => {
       progress: driver.getProgress(),
     });
     expect(steps.rows.find((row) => row.key === "funds")?.view).toBe("running");
-    expect(statusLine({ steps, skipped: 0, isRecovered: false })).toEqual({
-      text: "Checking your last transaction on chain…",
+    expect(statusLine({ steps, skipped: 0 })).toEqual({
+      text: "Checking your last transaction…",
       tone: "neutral",
     });
 

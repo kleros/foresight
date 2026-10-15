@@ -3,8 +3,6 @@ import { useEffect, useRef } from "react";
 import { CustomTimeline } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
-import { Spinner } from "@/components/ui/Spinner";
-
 import CheckOutline from "@/assets/svg/check-outline.svg";
 import CircleOutline from "@/assets/svg/circle-outline.svg";
 import CloseCircle from "@/assets/svg/close-circle.svg";
@@ -49,7 +47,7 @@ export function PredictStepsTimeline({ steps }: { steps: PredictSteps }) {
 
   const items: TimelineItem[] = steps.rows.map((row) => ({
     title: row.title,
-    party: row.view === "running" ? <Spinner className="mb-1" data-testid="step-spinner" /> : "",
+    party: "",
     subtitle: row.subtitle,
     Icon: BULLETS[row.view],
     state: TIMELINE_STATE[row.view],

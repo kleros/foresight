@@ -333,6 +333,18 @@ test.describe("the popup's tones", () => {
   });
 });
 
+test.describe("the running step", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("pulses with the Kleros timeline's loading animation, and the status line stays empty", async ({ page }) => {
+    const dialog = await openPopup(page, 2, "signing");
+    const running = dialog.locator("li").filter({ has: page.locator('[data-bullet="running"]') });
+
+    expect(await running.evaluate((item) => getComputedStyle(item).animationName)).not.toBe("none");
+    await expect(dialog.getByRole("status")).toHaveText("");
+  });
+});
+
 test.describe("the popup under reduced motion", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 

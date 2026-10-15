@@ -49,9 +49,9 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
 const FEE_SHORT_COPY = "Your wallet does not have enough xDAI for the network fee. Add some, then try the rest.";
 
 /** A transaction is out there and nothing has said how it ended, so it is neither a success nor a failure. */
-const PENDING_COPY = "Your transaction was sent but has not confirmed yet. It is checked before anything else is sent.";
+const PENDING_COPY = "Sent, not confirmed yet. It is checked before anything else is sent.";
 
-const RECONCILING_COPY = "Checking your last transaction on chain…";
+const RECONCILING_COPY = "Checking your last transaction…";
 
 const STAGE_COPY: Partial<Record<PredictProgress["stage"], string>> = {
   quoting: "Finding the best prices…",
@@ -202,34 +202,23 @@ export function predictSteps(
 
 export interface StatusLine {
   text: string;
-  tone: "neutral" | "warning" | "error" | "success";
+  tone: "neutral" | "warning" | "error";
 }
 
 /**
  * The popup's one status line under the steps, most pressing first: what the visitor has to do,
- * why a run stopped, what a run is checking, what it left out, that it finished, that a stored run
- * is waiting, or, before a run, that nothing is signed until the prices are checked.
+ * why a run stopped, what a run is checking, or what it left out. Empty while things go normally.
  */
-export function statusLine(args: {
-  steps: PredictSteps;
-  notice?: string;
-  skipped: number;
-  isRecovered: boolean;
-}): StatusLine | null {
-  const { steps, notice, skipped, isRecovered } = args;
+export function statusLine(args: { steps: PredictSteps; notice?: string; skipped: number }): StatusLine | null {
+  const { steps, notice, skipped } = args;
   if (notice) return { text: notice, tone: "warning" };
   if (steps.failure) return { text: steps.failure, tone: steps.pending ? "warning" : "error" };
   if (steps.note) return { text: steps.note, tone: "neutral" };
   if (skipped > 0) {
     return {
-      text: `${skipped} of your estimates could not be traded right now and ${skipped === 1 ? "was" : "were"} left out.`,
+      text: `${skipped} of your estimates could not be traded and ${skipped === 1 ? "was" : "were"} left out.`,
       tone: "neutral",
     };
   }
-  if (steps.rows.some((row) => row.key === "predict" && row.view === "done")) {
-    return { text: "Prediction placed.", tone: "success" };
-  }
-  if (isRecovered) return { text: "This prediction did not finish.", tone: "neutral" };
-  if (steps.started || steps.rows.some((row) => row.view === "running")) return null;
-  return { text: "Prices are checked before anything is signed.", tone: "neutral" };
+  return null;
 }

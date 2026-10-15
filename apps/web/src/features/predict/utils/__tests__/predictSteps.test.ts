@@ -269,20 +269,48 @@ describe("statusLine", () => {
   const idle = steps();
   const halted = steps({ progress: progress({ stage: "halted", failure: { reason: "rpc", retryable: true } }) });
 
-  it("says before a run that nothing is signed until the prices are checked", () => {
-    expect(statusLine({ steps: idle, skipped: 0, isRecovered: false })).toEqual({
-      text: "Prices are checked before anything is signed.",
+  it("says nothing before a run, nor once it has placed the prediction", () => {
+    const placed = steps({
+      progress: progress({
+        stage: "complete",
+        steps: progress().steps.map((step) => ({ ...step, state: "success" as const })),
+      }),
+    });
+
+    expect(statusLine({ steps: idle, skipped: 0 })).toBeNull();
+    expect(placed.rows.find((row) => row.key === "predict")?.view).toBe("done");
+    expect(statusLine({ steps: placed, skipped: 0 })).toBeNull();
+  });
+
+  it("names the estimates a run left out, since they were not signed", () => {
+    expect(statusLine({ steps: idle, skipped: 2 })).toEqual({
+      text: "2 of your estimates could not be traded and were left out.",
       tone: "neutral",
     });
   });
 
+  it("says in a few words that a sent transaction is not confirmed yet", () => {
+    const pending = steps({
+      progress: progress({
+        stage: "halted",
+        failure: { reason: "rpc", retryable: true },
+        pendingHash: `0x${"ab".repeat(32)}`,
+      }),
+    });
+
+    expect(statusLine({ steps: pending, skipped: 0 })).toEqual({
+      text: "Sent, not confirmed yet. It is checked before anything else is sent.",
+      tone: "warning",
+    });
+  });
+
   it("says nothing while a step is running", () => {
-    expect(statusLine({ steps: steps({ progress: progress() }), skipped: 0, isRecovered: false })).toBeNull();
+    expect(statusLine({ steps: steps({ progress: progress() }), skipped: 0 })).toBeNull();
   });
 
   it("puts what the visitor has to do ahead of why the run stopped", () => {
     expect(
-      statusLine({ steps: halted, notice: "Switch your wallet to Gnosis.", skipped: 0, isRecovered: false }),
+      statusLine({ steps: halted, notice: "Switch your wallet to Gnosis.", skipped: 0 }),
     ).toEqual({ text: "Switch your wallet to Gnosis.", tone: "warning" });
   });
 
@@ -300,7 +328,6 @@ describe("statusLine", () => {
         steps: pending,
         notice: "Connect a wallet to make this prediction.",
         skipped: 0,
-        isRecovered: false,
       }),
     ).toEqual({ text: "Connect a wallet to make this prediction.", tone: "warning" });
   });
@@ -314,10 +341,10 @@ describe("statusLine", () => {
       }),
     });
 
-    expect(statusLine({ steps: pending, skipped: 0, isRecovered: false })?.tone).toBe("warning");
+    expect(statusLine({ steps: pending, skipped: 0 })?.tone).toBe("warning");
   });
 
-  it("keeps the line shown before a run for before a run", () => {
+  it("says nothing between steps of a run that is going normally", () => {
     const between = steps({
       progress: progress({
         stage: "confirming",
@@ -325,10 +352,10 @@ describe("statusLine", () => {
       }),
     });
 
-    expect(statusLine({ steps: between, skipped: 0, isRecovered: false })).toBeNull();
+    expect(statusLine({ steps: between, skipped: 0 })).toBeNull();
   });
 
   it("says why a run stopped when nothing else is asked of the visitor", () => {
-    expect(statusLine({ steps: halted, skipped: 0, isRecovered: false })?.tone).toBe("error");
+    expect(statusLine({ steps: halted, skipped: 0 })?.tone).toBe("error");
   });
 });
