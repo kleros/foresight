@@ -26,6 +26,8 @@ let held: Map<Address, bigint>;
 let ownerHeld: Map<Address, bigint>;
 /** What a balanceOf of a position token does instead of answering; undefined answers it */
 let positionRead: "pending" | "fail" | undefined;
+/** The same for a balanceOf of the collateral, by the owner or the trade wallet */
+let fundsRead: "pending" | "fail" | undefined;
 
 const balanceOf = (holder: Address) => (holder === EXECUTOR ? held : holder === OWNER ? ownerHeld : new Map());
 
@@ -36,6 +38,8 @@ vi.mock("@/lib/web3/public-client", () => ({
       const isPosition = [LISBON.up, LISBON.down, BERLIN.up, BERLIN.down].includes(address);
       if (isPosition && positionRead === "pending") return new Promise(() => {});
       if (isPosition && positionRead === "fail") return Promise.reject(new Error("balanceOf reverted"));
+      if (address === COLLATERAL && fundsRead === "pending") return new Promise(() => {});
+      if (address === COLLATERAL && fundsRead === "fail") return Promise.reject(new Error("balanceOf reverted"));
       return Promise.resolve(balanceOf(holder).get(address) ?? 0n);
     },
   },
@@ -104,6 +108,7 @@ beforeEach(() => {
   held = new Map();
   ownerHeld = new Map();
   positionRead = undefined;
+  fundsRead = undefined;
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 });
 
@@ -134,6 +139,33 @@ describe("TradeWallet's row", () => {
     await waitFor(() => expect(positionsOf("Lisbon")).toEqual(["UP 3", "DOWN 0"]));
     expect(screen.getByRole("button", { name: "Mint" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Merge" })).toBeInTheDocument();
+  });
+});
+
+describe("a collateral balance that is not read yet, or could not be", () => {
+  it("does not show the wallet's row as empty when its balance could not be read", async () => {
+    fundsRead = "fail";
+    renderWallet(market, { closed: true });
+    const wallet = screen.getByRole("region", { name: "Trade wallet" });
+
+    expect(await within(wallet).findByText("Could not read balance")).toBeInTheDocument();
+    expect(within(wallet).queryByText("0 sDAI")).toBeNull();
+  });
+
+  it.each([
+    ["pending", "Reading balance…"],
+    ["fail", "Could not read balance"],
+  ] as const)("says so in Mint and Deposit when the read is %s", async (read, text) => {
+    fundsRead = read;
+    renderWallet();
+
+    await userEvent.click(screen.getByRole("button", { name: "Mint" }));
+    expect(await within(await screen.findByRole("dialog")).findByText(text)).toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    await userEvent.click(screen.getByRole("button", { name: "Deposit" }));
+    expect(await within(await screen.findByRole("dialog")).findByText(text)).toBeInTheDocument();
   });
 });
 
