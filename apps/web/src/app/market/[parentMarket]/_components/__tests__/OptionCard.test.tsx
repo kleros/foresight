@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -82,19 +82,13 @@ describe("OptionCard", () => {
     expect(screen.queryByRole("img", { name: "Estimate set" })).toBeNull();
   });
 
-  it("says on the collapsed row that no estimate is set", () => {
-    renderCard();
-
-    expect(screen.getByText("Not set")).toBeInTheDocument();
-  });
-
-  it("reads a set estimate against the market on the collapsed row", () => {
+  it("keeps the collapsed row to the name and a tick once an estimate is set", () => {
     useEstimateStore.getState().setEstimate(PARENT, option.market, 400);
-    renderCard();
+    renderCard({ position: { up: 20n * WAD, down: 0n } });
 
     const row = screen.getByRole("button", { name: /Greta Gerwig/ });
-    expect(row).toHaveTextContent("400 $M");
-    expect(row).toHaveTextContent("market 312 $M");
+    expect(within(row).getByRole("img", { name: "Estimate set" })).toBeInTheDocument();
+    expect(row).toHaveTextContent(/^Greta Gerwig$/);
   });
 
   it("shows what the trade wallet holds of the option once it is opened", async () => {
@@ -103,13 +97,6 @@ describe("OptionCard", () => {
     await open();
 
     expect(screen.getByRole("region", { name: "Your position" })).toHaveTextContent("20 UP · 0 DOWN");
-  });
-
-  it("names the position's worth on the collapsed row", () => {
-    // 20 UP at 312 of 0-500
-    renderCard({ position: { up: 20n * WAD, down: 0n } });
-
-    expect(screen.getByRole("button", { name: /Greta Gerwig/ })).toHaveTextContent("Position ≈ 12.48 Greta Gerwig tokens");
   });
 
   it("says an estimate on the other side of the market from the position sells some of it", async () => {
