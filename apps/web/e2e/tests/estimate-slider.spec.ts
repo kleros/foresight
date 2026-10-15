@@ -138,6 +138,41 @@ for (const track of TRACKS) {
       });
     }
 
+    test("never draws the chip over the open field as the value nears the market", async ({ page }) => {
+      await open(page, { track, market: MARKET, value: 40 });
+      const slider = page.getByRole("slider");
+      const pill = page.getByRole("button", { name: "type your estimate for Movie A" });
+      for (let value = 41; value < MARKET; value++) {
+        await slider.focus();
+        await slider.press("ArrowRight");
+        await pill.click();
+        const shown = await geometry(page);
+        expect.soft(overlaps(shown.chip, shown.pill), `chip over the open field at ${value}`).toBe(false);
+        await page.getByRole("textbox").press("Escape");
+      }
+    });
+
+    test("takes a press just above the thumb's circle as the thumb's, and one just above the pill as the pill's", async ({
+      page,
+    }) => {
+      await open(page, { track, market: MARKET, value: 20 });
+      const { thumb, pill } = await geometry(page);
+      const hits = await page.evaluate(
+        (points) => {
+          const thumb = document.querySelector("#slider-label")!.parentElement!;
+          const pill = document.querySelector('[data-testid="value-pill"] button')!;
+          const [above, overPill] = points.map(([x, y]) => document.elementFromPoint(x!, y!));
+          return [thumb.contains(above!), pill.contains(overPill!)];
+        },
+        [
+          [(thumb!.left + thumb!.right) / 2, thumb!.top - 6],
+          [(pill!.left + pill!.right) / 2, pill!.top - 6],
+        ],
+      );
+
+      expect(hits).toEqual([true, true]);
+    });
+
     test("takes a press 9px beside the thumb as the thumb's", async ({ page }) => {
       await open(page, { track, market: MARKET, value: 50 });
       const { thumb } = await geometry(page);
@@ -163,7 +198,7 @@ for (const track of TRACKS) {
 test.describe("the value pill", () => {
   test.use({ viewport: { width: 375, height: 400 } });
 
-  const pill = (page: Page) => page.getByRole("button", { name: "Type your estimate for Movie A" });
+  const pill = (page: Page) => page.getByRole("button", { name: "type your estimate for Movie A" });
   const field = (page: Page) => page.getByRole("textbox", { name: "Your estimate for Movie A" });
 
   test("leaves the thumb where it is while a number is typed, and moves it on Enter", async ({ page }) => {
@@ -198,6 +233,39 @@ test.describe("the value pill", () => {
     await page.mouse.click(5, 380);
 
     await expect(page.getByRole("slider")).toHaveValue("62");
+  });
+
+  test("holds the unit beside the typed number", async ({ page }) => {
+    await open(page, { track: 311, market: MARKET, value: 40 });
+
+    await pill(page).click();
+    const gap = await page.evaluate(() => {
+      const input = document.querySelector<HTMLInputElement>('[data-testid="value-pill"] input')!;
+      const unit = input.nextElementSibling!;
+      const range = document.createRange();
+      range.selectNodeContents(unit);
+      // the input's text width, measured on a copy of its font
+      const probe = document.createElement("span");
+      probe.style.font = getComputedStyle(input).font;
+      probe.style.fontVariantNumeric = "tabular-nums";
+      probe.textContent = input.value;
+      document.body.append(probe);
+      const textRight = input.getBoundingClientRect().left + probe.getBoundingClientRect().width;
+      probe.remove();
+      return range.getBoundingClientRect().left - textRight;
+    });
+
+    expect(gap).toBeLessThanOrEqual(10);
+  });
+
+  test("shows the start of a long number in the field", async ({ page }) => {
+    await open(page, { track: 256, market: 3250000, lower: 0, upper: 5000000, unit: "$M", value: 4000000 });
+
+    await pill(page).click();
+    await page.getByRole("textbox").fill("4999999.99");
+    const input = page.getByRole("textbox");
+
+    expect(await input.evaluate((field) => field.scrollWidth - field.clientWidth)).toBeLessThanOrEqual(1);
   });
 
   test("is reached by Tab from the slider and opened by Enter", async ({ page }) => {

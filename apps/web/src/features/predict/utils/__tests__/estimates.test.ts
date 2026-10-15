@@ -3,7 +3,14 @@ import { describe, expect, it } from "vitest";
 import { addresses } from "@/testing/fixtures";
 import type { OptionScale } from "@/types/optionScale";
 
-import { estimateDigits, estimateDirection, estimateStep, selectedEstimates, snapEstimate } from "../estimates";
+import {
+  estimateDigits,
+  estimateDirection,
+  estimateStep,
+  readTypedEstimate,
+  selectedEstimates,
+  snapEstimate,
+} from "../estimates";
 
 const scale = (market: OptionScale["market"], name = "Option"): OptionScale => ({
   market,
@@ -90,5 +97,34 @@ describe("selectedEstimates", () => {
     const checksummed = { ...scale(FIRST), market: FIRST.replace("0xc", "0xC") as OptionScale["market"] };
 
     expect(selectedEstimates([checksummed], { [FIRST]: 250 }, markets)).toHaveLength(1);
+  });
+});
+
+describe("readTypedEstimate", () => {
+  it("reads a plain number, with or without the unit", () => {
+    expect(readTypedEstimate("250", "$M")).toBe(250);
+    expect(readTypedEstimate("250.5 $M", "$M")).toBe(250.5);
+    expect(readTypedEstimate(" -3 ", null)).toBe(-3);
+    expect(readTypedEstimate(".5", null)).toBe(0.5);
+    expect(readTypedEstimate("55.", null)).toBe(55);
+  });
+
+  it("reads commas that group thousands", () => {
+    expect(readTypedEstimate("1,500", "$M")).toBe(1500);
+    expect(readTypedEstimate("4,100,000 $M", "$M")).toBe(4100000);
+    expect(readTypedEstimate("1,234.5", null)).toBe(1234.5);
+  });
+
+  it("reads any other single comma as the decimal point", () => {
+    expect(readTypedEstimate("55,5", "%")).toBe(55.5);
+    expect(readTypedEstimate("0,5", "%")).toBe(0.5);
+    expect(readTypedEstimate("7,5", "%")).toBe(7.5);
+    expect(readTypedEstimate("0,45", null)).toBe(0.45);
+  });
+
+  it("refuses anything else", () => {
+    for (const text of ["", " ", "abc", "0x32", "1e1", "Infinity", "1,2,3", "12,34,567", "1.2.3", "1,234,5", "-"]) {
+      expect(readTypedEstimate(text, null), text).toBeNaN();
+    }
   });
 });

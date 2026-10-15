@@ -41,7 +41,7 @@ const fill = (container: HTMLElement) => container.querySelector<HTMLElement>("#
 // react-aria puts the thumb's id on its input, so the drawn thumb is found as the label's parent
 const thumb = (container: HTMLElement) => container.querySelector<HTMLElement>("#slider-label")!.parentElement!;
 const pin = () => screen.getByTestId("market-pin");
-const pill = () => screen.getByRole("button", { name: "Type your estimate for Greta Gerwig" });
+const pill = () => screen.getByRole("button", { name: /, type your estimate for Greta Gerwig$/ });
 const field = () => screen.getByRole("textbox", { name: "Your estimate for Greta Gerwig" });
 
 describe("EstimateSlider colours", () => {
@@ -123,7 +123,7 @@ describe("EstimateSlider value pill", () => {
   it("opens with the value ungrouped, so it reads back as a number", async () => {
     renderSlider(1234, { scale: { ...scale, upperBound: 5000 }, marketEstimate: 3000 });
 
-    await userEvent.click(screen.getByRole("button", { name: /^Type your estimate/ }));
+    await userEvent.click(screen.getByRole("button", { name: /type your estimate/ }));
 
     expect(field()).toHaveValue("1234");
   });
@@ -177,7 +177,7 @@ describe("EstimateSlider value pill", () => {
   it("takes the unit and grouping commas along with the number", async () => {
     const { onCommit } = renderSlider(400, { scale: { ...scale, upperBound: 5000 }, marketEstimate: 3000 });
 
-    await userEvent.click(screen.getByRole("button", { name: /^Type your estimate/ }));
+    await userEvent.click(screen.getByRole("button", { name: /type your estimate/ }));
     await userEvent.clear(field());
     await userEvent.type(field(), "1,250 $M{Enter}");
 
@@ -192,6 +192,29 @@ describe("EstimateSlider value pill", () => {
     await userEvent.type(field(), "250.4{Enter}");
 
     expect(onCommit).toHaveBeenCalledWith(250);
+    expect(screen.getByRole("status")).toHaveTextContent("Rounded to 250 $M.");
+  });
+
+  it("reads a lone comma as the decimal point", async () => {
+    const percent = { ...scale, unit: "%", upperBound: 100 };
+    const { onCommit } = renderSlider(40, { scale: percent, marketEstimate: 75 });
+
+    await userEvent.click(pill());
+    await userEvent.clear(field());
+    await userEvent.type(field(), "7,5{Enter}");
+
+    expect(onCommit).toHaveBeenCalledWith(8);
+    expect(screen.getByRole("status")).toHaveTextContent("Rounded to 8 %.");
+  });
+
+  it("says nothing when a typed number is already on the grid", async () => {
+    renderSlider(400);
+
+    await userEvent.click(pill());
+    await userEvent.clear(field());
+    await userEvent.type(field(), "250{Enter}");
+
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 
   it("holds a number above the range to the top and says so", async () => {
@@ -228,6 +251,44 @@ describe("EstimateSlider value pill", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Enter a number.");
   });
 
+  it("refuses hex and exponent notation", async () => {
+    const { onCommit } = renderSlider(400);
+
+    for (const text of ["0x32", "1e2"]) {
+      await userEvent.click(pill());
+      await userEvent.clear(field());
+      await userEvent.type(field(), `${text}{Enter}`);
+      expect(screen.getByRole("status")).toHaveTextContent("Enter a number.");
+      await userEvent.keyboard("{Escape}");
+    }
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it("is named by the value it shows, then what it does", () => {
+    renderSlider(400);
+
+    expect(screen.getByRole("button", { name: "400 $M, type your estimate for Greta Gerwig" })).toBeInTheDocument();
+  });
+
+  it("drops an open field when the slider locks, and does not reopen it when it unlocks", async () => {
+    const props = {
+      scale,
+      marketEstimate: MARKET,
+      isMarketPending: false,
+      value: 400,
+      onCommit: vi.fn(),
+      onClear: vi.fn(),
+    };
+    const { rerender } = render(<EstimateSlider {...props} />);
+
+    await userEvent.click(pill());
+    rerender(<EstimateSlider {...props} lockedReason="A prediction is running." />);
+    rerender(<EstimateSlider {...props} />);
+
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(pill()).toBeInTheDocument();
+  });
+
   it("keeps the estimate when the field loses focus holding no number", async () => {
     const { onCommit } = renderSlider(400);
 
@@ -255,7 +316,7 @@ describe("EstimateSlider value pill", () => {
     renderSlider(400, { lockedReason: "Trading has closed." });
 
     expect(screen.getByTestId("value-pill")).toHaveTextContent("400 $M");
-    expect(screen.queryByRole("button", { name: /^Type your estimate/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /type your estimate/ })).toBeNull();
   });
 
   it("shows no value on a slider whose option has no trading", () => {
@@ -267,7 +328,7 @@ describe("EstimateSlider value pill", () => {
   it("is not offered while the slider is locked", () => {
     renderSlider(400, { lockedReason: "Trading has closed." });
 
-    expect(screen.queryByRole("button", { name: /^Type your estimate/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /type your estimate/ })).toBeNull();
   });
 });
 

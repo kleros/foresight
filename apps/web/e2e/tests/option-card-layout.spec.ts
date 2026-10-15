@@ -16,6 +16,7 @@ test.afterAll(async () => {
 const CASES = {
   "a long name": "name=Movie%20A%2C%20the%20director's%20extended%20cut%20(2026)&value=20&up=3&down=2",
   "a scale in millions": "unit=%24M&lower=0&upper=5000000&market=3250000&value=4100000&up=12345.67&down=890.12",
+  "a scale in millions at its top": "unit=%24M&lower=0&upper=5000000&market=3250000&value=5000000",
   "a position nearly all UP": "value=90&up=1000000&down=0.01",
   "a narrow scale": "unit=&lower=0&upper=1&market=0.5&value=0.45",
 };

@@ -60,3 +60,17 @@ export function selectedEstimates(
 
   return selected;
 }
+
+const GROUPED = /^-?\d{1,3}(,\d{3})+(\.\d*)?$/;
+const DECIMAL_COMMA = /^-?\d*,\d+$/;
+const PLAIN = /^-?(\d+\.?\d*|\.\d+)$/;
+
+/**
+ * A typed estimate, unit and spaces allowed; NaN for anything but a decimal number. Commas
+ * before each group of three digits group thousands, and any other single comma is the decimal point.
+ */
+export function readTypedEstimate(text: string, unit: string | null): number {
+  const bare = (unit ? text.split(unit).join("") : text).replace(/\s/g, "");
+  const dotted = GROUPED.test(bare) ? bare.replace(/,/g, "") : DECIMAL_COMMA.test(bare) ? bare.replace(",", ".") : bare;
+  return PLAIN.test(dotted) ? Number(dotted) : Number.NaN;
+}

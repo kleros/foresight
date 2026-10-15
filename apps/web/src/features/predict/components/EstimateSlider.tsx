@@ -13,7 +13,7 @@ import { formatEstimate } from "@/utils/formatEstimate";
 import type { OptionScale } from "@/types/optionScale";
 
 import { useMarketPin } from "../hooks/useMarketPin";
-import { estimateDigits, estimateDirection, estimateStep, snapEstimate } from "../utils/estimates";
+import { estimateDigits, estimateDirection, estimateStep, readTypedEstimate, snapEstimate } from "../utils/estimates";
 import { chipLeft, pinDrop, pinGap } from "../utils/marketPin";
 
 interface EstimateSliderProps {
@@ -58,6 +58,10 @@ export function EstimateSlider({
     lockedReason ?? (marketEstimate === undefined && !isMarketPending ? "No trading on this option yet." : undefined);
   const isDisabled = reason !== undefined || isMarketPending;
   const [note, setNote] = useState<string>();
+  // held here, so the pin measures the open field's width
+  const [draft, setDraft] = useState<string>();
+  // a field open when the slider locks is dropped, not reopened once it unlocks
+  if (isDisabled && draft !== undefined) setDraft(undefined);
 
   const commit = (next: number) => {
     const snapped = snapEstimate(next, scale);
@@ -87,8 +91,8 @@ export function EstimateSlider({
           <Slider
             className={clsx(
               "w-full",
-              // the pill below shows the value; the library's label stays for the thumb's size
-              "[&_#slider-label]:invisible",
+              // the pill below shows the value
+              "[&_#slider-label]:hidden",
               // the library gives the thumb no id; it is the element holding #slider-label,
               // with a 44px target: the inset counts from inside its 3px border
               "[&_div:has(>#slider-label)]:z-10",
@@ -128,7 +132,7 @@ export function EstimateSlider({
             <span
               ref={pin.pill}
               data-testid="value-pill"
-              className="border-fs-border bg-fs-surface text-fs-text-primary absolute -top-8 z-20 inline-flex h-7 items-center rounded-full border px-2.5 text-sm font-semibold whitespace-nowrap tabular-nums opacity-50"
+              className="border-fs-border bg-fs-surface text-fs-text-primary absolute -top-8 z-9 inline-flex h-7 items-center rounded-full border px-2.5 text-sm font-semibold whitespace-nowrap tabular-nums opacity-50"
               style={{ left: `${thumbShare * 100}%`, transform: `translateX(-${thumbShare * 100}%)` }}
             >
               {formatEstimate(shown, scale.unit)}
@@ -140,17 +144,22 @@ export function EstimateSlider({
               share={thumbShare}
               shown={shown}
               scale={scale}
+              draft={draft}
+              onDraft={setDraft}
               onOpen={() => setNote(undefined)}
               onTyped={(typed) => {
                 const clamped = Math.min(scale.upperBound, Math.max(scale.lowerBound, typed));
+                const snapped = snapEstimate(clamped, scale);
                 setNote(
                   typed > scale.upperBound
                     ? `The most is ${formatEstimate(scale.upperBound, scale.unit)}.`
                     : typed < scale.lowerBound
                       ? `The least is ${formatEstimate(scale.lowerBound, scale.unit)}.`
-                      : undefined,
+                      : snapped !== clamped
+                        ? `Rounded to ${formatEstimate(snapped, scale.unit)}.`
+                        : undefined,
                 );
-                commit(clamped);
+                commit(snapped);
               }}
               onInvalid={setNote}
             />
@@ -251,27 +260,23 @@ export function EstimateSlider({
   );
 }
 
-/** Reads a typed estimate, allowing the unit and grouping commas; NaN when it is not a number. */
-function readTyped(text: string, unit: string | null): number {
-  const bare = (unit ? text.split(unit).join("") : text).replace(/[\s,]/g, "");
-  return bare === "" ? Number.NaN : Number(bare);
-}
-
 interface ValuePillProps {
   /** The thumb's place on the track, 0 to 1. */
   share: number;
   shown: number;
   scale: OptionScale;
+  /** The field's text while it is open. */
+  draft: string | undefined;
+  onDraft: (draft: string | undefined) => void;
   onOpen: () => void;
   onTyped: (value: number) => void;
   onInvalid: (message: string) => void;
 }
 
 const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill(
-  { share, shown, scale, onOpen, onTyped, onInvalid },
+  { share, shown, scale, draft, onDraft: setDraft, onOpen, onTyped, onInvalid },
   ref,
 ) {
-  const [draft, setDraft] = useState<string>();
   const button = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef(false);
   const editing = draft !== undefined;
@@ -289,7 +294,7 @@ const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill
 
   /** Enter keeps the field open on text that is not a number; a blur closes it unchanged. */
   const apply = (byEnter: boolean) => {
-    const typed = readTyped(draft ?? "", scale.unit);
+    const typed = readTypedEstimate(draft ?? "", scale.unit);
     if ((draft ?? "").trim() === "") return close(byEnter);
     if (!Number.isFinite(typed)) return byEnter ? onInvalid("Enter a number.") : close(false);
     onTyped(typed);
@@ -311,8 +316,9 @@ const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill
     <span
       ref={ref}
       data-testid="value-pill"
-      // slides across the track with the thumb, so the pill never leaves it and its foot stays over the thumb
-      className="absolute -top-8 z-20"
+      // slides across the track with the thumb, so the pill never leaves it and its foot stays over the thumb;
+      // under the thumb's z-10, so a press on the thumb's 44px target drags rather than opens the field
+      className="absolute -top-8 z-9"
       style={{ left: `${share * 100}%`, transform: `translateX(-${share * 100}%)` }}
     >
       {editing ? (
@@ -326,7 +332,9 @@ const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill
             onKeyDown={onKeyDown}
             onBlur={() => apply(false)}
             onFocus={(event) => event.target.select()}
-            className="text-fs-text-primary w-[7ch] bg-transparent font-semibold tabular-nums outline-none"
+            // as wide as what is typed, so the unit stays beside the number
+            style={{ width: `calc(${Math.min(Math.max((draft ?? "").length, 2), 14)}ch + 2px)` }}
+            className="text-fs-text-primary bg-transparent font-semibold tabular-nums outline-none"
           />
           {scale.unit ? <span className="text-fs-text-secondary">{scale.unit}</span> : null}
         </span>
@@ -334,13 +342,15 @@ const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill
         <button
           ref={button}
           type="button"
-          aria-label={`Type your estimate for ${scale.name}`}
+          aria-label={`${formatEstimate(shown, scale.unit)}, type your estimate for ${scale.name}`}
           onClick={() => {
             onOpen();
             setDraft(String(Number(shown.toFixed(estimateDigits(scale)))));
           }}
           className={clsx(
-            "border-fs-border bg-fs-surface text-fs-text-primary rounded-full fs-echo",
+            "border-fs-border bg-fs-surface text-fs-text-primary rounded-full fs-echo relative",
+            // reaches 8px up into the padding above, so the pill's target is taller than it draws
+            "before:absolute before:inset-x-0 before:-top-2 before:bottom-0 before:content-['']",
             "inline-flex h-7 cursor-pointer items-center gap-1.5 border px-2.5 text-sm font-semibold whitespace-nowrap tabular-nums",
             "hover:border-fs-accent focus-visible:ring-fs-accent focus-visible:ring-2 focus-visible:outline-none",
           )}

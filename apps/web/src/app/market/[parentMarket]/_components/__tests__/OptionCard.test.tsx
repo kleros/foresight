@@ -68,7 +68,7 @@ function estimateControls() {
   };
 }
 
-const pill = () => screen.getByRole("button", { name: `Type your estimate for ${option.name}` });
+const pill = () => screen.getByRole("button", { name: new RegExp(`, type your estimate for ${option.name}$`) });
 const field = () => screen.getByRole("textbox", { name: `Your estimate for ${option.name}` });
 
 async function typeEstimate(text: string) {
@@ -230,7 +230,7 @@ describe("OptionCard", () => {
     await open();
 
     expect(estimateControls().slider).toBeDisabled();
-    expect(screen.queryByRole("button", { name: /^Type your estimate/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /type your estimate/ })).toBeNull();
     expect(screen.getByText("Trading has closed.")).toBeInTheDocument();
   });
 
@@ -245,7 +245,7 @@ describe("OptionCard", () => {
     const { slider, sliderRoot } = estimateControls();
     expect(slider).toBeDisabled();
     expect(sliderRoot).toHaveClass(DIMMED);
-    expect(screen.queryByRole("button", { name: /^Type your estimate/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /type your estimate/ })).toBeNull();
   });
 
   it("leaves the slider undimmed while the session trades", async () => {
