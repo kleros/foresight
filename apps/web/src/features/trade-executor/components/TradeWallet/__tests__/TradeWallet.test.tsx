@@ -237,6 +237,37 @@ describe("TradeWallet positions", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Merge" }));
 
-    expect(await screen.findByText("Available: 5 sDAI")).toBeInTheDocument();
+    expect(await screen.findByText("Balance: 5 sDAI")).toBeInTheDocument();
+  });
+});
+
+describe("TradeWallet's amount dialogs", () => {
+  it("shows a merge's balance at four decimals and names the cap when the amount is over it", async () => {
+    held = new Map([
+      [LISBON.underlying, units("5.123456789")],
+      [BERLIN.underlying, units("9")],
+      [INVALID, units("6")],
+    ]);
+    renderWallet();
+    await screen.findByTitle(/^5\.1234/);
+
+    await userEvent.click(screen.getByRole("button", { name: "Merge" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(await within(dialog).findByText("Balance: 5.1234 sDAI")).toBeInTheDocument();
+    await userEvent.type(within(dialog).getByRole("spinbutton"), "6");
+    expect(await within(dialog).findByText("Not enough balance. Max 5.1234 sDAI.")).toBeInTheDocument();
+  });
+
+  it("shows a deposit's balance at four decimals with its token, and names the cap when the amount is over it", async () => {
+    ownerHeld = new Map([[COLLATERAL, units("2.56789")]]);
+    renderWallet(market, { closed: true });
+
+    await userEvent.click(screen.getByRole("button", { name: "Deposit" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(await within(dialog).findByText("Balance: 2.5678 sDAI")).toBeInTheDocument();
+    await userEvent.type(within(dialog).getByRole("spinbutton"), "3");
+    expect(await within(dialog).findByText("Not enough balance. Max 2.5678 sDAI.")).toBeInTheDocument();
   });
 });

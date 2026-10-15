@@ -29,8 +29,8 @@ export function AmountField({
     ? "Loading…"
     : // a balance we could not read must not read as an empty one
       available === undefined
-      ? "Balance unavailable"
-      : `Available: ${formatAmount(available, decimals)} ${symbol}`;
+      ? "Could not read balance"
+      : `Balance: ${formatAmount(available, decimals, 4)} ${symbol}`;
 
   return (
     <div className="relative w-full">

@@ -38,6 +38,8 @@ export function TokenAmountField({
   isLoadingBalance?: boolean;
   isReadOnly?: boolean;
 }) {
+  const symbol = tokens.find((token) => token.id === selected)?.symbol ?? "";
+
   return (
     <div className="relative mb-8 w-full md:min-w-lg">
       <div className="border-fs-border rounded-fs flex h-fit flex-row border">
@@ -88,8 +90,8 @@ export function TokenAmountField({
             ? "Loading…"
             : // a balance we could not read must not read as an empty one
               available === undefined
-              ? "Balance unavailable"
-              : `Available: ${formatAmount(available, decimals)}`}
+              ? "Could not read balance"
+              : `Balance: ${formatAmount(available, decimals, 4)} ${symbol}`}
         </span>
       )}
     </div>

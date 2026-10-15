@@ -2,6 +2,8 @@ import { Tooltip } from "@kleros/ui-components-library";
 import clsx from "clsx";
 import type { Address } from "viem";
 
+import WithHelpTooltip from "@/components/ui/WithHelpTooltip";
+
 import { formatAmount } from "@/utils/amount";
 
 import type { TradeWalletOption } from "../../types";
@@ -24,6 +26,7 @@ export function OptionBalances({
   balances: bigint[] | undefined;
   /** Balance per position token; undefined until the read lands. */
   positions: ReadonlyMap<Address, bigint | undefined> | undefined;
+  /** Singular, as in "movie tokens". */
   noun: string;
   decimals: number;
 }) {
@@ -77,26 +80,24 @@ function OptionBalance({
         </Tooltip>
       </div>
       {option.positions.length > 0 ? (
-        <ul
-          aria-label={`${option.name} positions`}
-          title="UP gains the higher this option resolves, DOWN the lower"
-          className="flex flex-wrap gap-x-4 gap-y-1 px-3 text-sm"
-        >
-          {option.positions.map(({ side, token }) => {
-            const held = positions?.get(token);
-            return (
-              <li key={token} className="flex min-w-0 gap-1.5">
-                <span className="text-fs-text-secondary">{side}</span>{" "}
-                <span
-                  className="text-fs-text-primary truncate"
-                  title={held === undefined ? undefined : formatAmount(held, decimals)}
-                >
-                  {held === undefined ? "—" : formatAmount(held, decimals, SHOWN_DIGITS)}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
+        <WithHelpTooltip tooltipMsg="UP pays more the higher it resolves, DOWN the lower.">
+          <ul aria-label={`${option.name} positions`} className="flex flex-wrap gap-x-4 gap-y-1 px-3 text-sm">
+            {option.positions.map(({ side, token }) => {
+              const held = positions?.get(token);
+              return (
+                <li key={token} className="flex min-w-0 gap-1.5">
+                  <span className="text-fs-text-secondary">{side}</span>{" "}
+                  <span
+                    className="text-fs-text-primary truncate"
+                    title={held === undefined ? undefined : formatAmount(held, decimals)}
+                  >
+                    {held === undefined ? "—" : formatAmount(held, decimals, SHOWN_DIGITS)}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </WithHelpTooltip>
       ) : null}
     </div>
   );

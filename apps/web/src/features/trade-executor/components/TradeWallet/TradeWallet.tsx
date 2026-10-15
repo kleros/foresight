@@ -32,7 +32,14 @@ type OpenDialog = "deposit" | "withdraw" | "mint" | "merge" | null;
  * The connected account's executor, shown once it exists on chain, as one row: its collateral
  * balance, Deposit and Withdraw, and behind Balances its outcome balances with Mint and Merge.
  */
-export function TradeWallet({ market, noun }: { market: TradeWalletMarket; noun: string }) {
+export function TradeWallet({
+  market,
+  noun,
+}: {
+  market: TradeWalletMarket;
+  /** Singular, as in "movie tokens". */
+  noun: string;
+}) {
   const [dialog, setDialog] = useState<OpenDialog>(null);
   const [showBalances, setShowBalances] = useState(false);
   const balancesId = useId();
@@ -153,7 +160,7 @@ export function TradeWallet({ market, noun }: { market: TradeWalletMarket; noun:
           isOpen
           onClose={close}
           title="Deposit"
-          hint="Deposit from your account to trade wallet"
+          hint="From your wallet to your trade wallet"
           actionText="Deposit"
           source={owner}
           collateral={collateral}
@@ -168,7 +175,7 @@ export function TradeWallet({ market, noun }: { market: TradeWalletMarket; noun:
           isOpen
           onClose={close}
           title="Withdraw"
-          hint="Withdraw from trade wallet to your account"
+          hint="From your trade wallet to your wallet"
           actionText="Withdraw"
           source={deployed}
           collateral={collateral}
@@ -183,7 +190,7 @@ export function TradeWallet({ market, noun }: { market: TradeWalletMarket; noun:
           isOpen
           onClose={close}
           title={`Mint ${noun} tokens`}
-          hint={`Mint ${noun} tokens to your trade wallet`}
+          hint={`Turns ${collateral.symbol} in your trade wallet into ${noun} tokens.`}
           actionText="Mint"
           available={funds.data?.token ?? undefined}
           isLoadingBalance={funds.isPending}
@@ -201,7 +208,7 @@ export function TradeWallet({ market, noun }: { market: TradeWalletMarket; noun:
           isOpen
           onClose={close}
           title={`Merge ${noun} tokens`}
-          hint={`Merge ${noun} tokens to your account`}
+          hint={`Turns a full set of ${noun} tokens back into ${collateral.symbol} in your trade wallet.`}
           actionText="Merge"
           available={mergeable}
           isLoadingBalance={balances.isPending}

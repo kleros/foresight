@@ -4,7 +4,7 @@ import { Button, Form } from "@kleros/ui-components-library";
 
 import { Dialog } from "@/components/ui/Dialog";
 
-import { parseAmount } from "@/utils/amount";
+import { formatAmount, parseAmount } from "@/utils/amount";
 
 import { AmountField } from "./AmountField";
 
@@ -57,7 +57,9 @@ export function AmountDialog({
           available={available}
           decimals={decimals}
           symbol={symbol}
-          error={exceedsAvailable ? "Not enough balance." : undefined}
+          error={
+            exceedsAvailable ? `Not enough balance. Max ${formatAmount(available, decimals, 4)} ${symbol}.` : undefined
+          }
           isLoadingBalance={isLoadingBalance}
           isReadOnly={isPending}
         />

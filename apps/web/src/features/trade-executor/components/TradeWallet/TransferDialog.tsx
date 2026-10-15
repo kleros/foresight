@@ -5,7 +5,7 @@ import type { Address } from "viem";
 
 import { Dialog } from "@/components/ui/Dialog";
 
-import { parseAmount } from "@/utils/amount";
+import { formatAmount, parseAmount } from "@/utils/amount";
 
 import type { Asset } from "@/lib/trade-executor/types";
 
@@ -82,7 +82,11 @@ export function TransferDialog({
           onSelectToken={setSelected}
           available={available}
           decimals={chosen.decimals}
-          error={exceedsAvailable ? "Not enough balance." : undefined}
+          error={
+            exceedsAvailable
+              ? `Not enough balance. Max ${formatAmount(available, chosen.decimals, 4)} ${chosen.symbol}.`
+              : undefined
+          }
           isLoadingBalance={funds.isPending}
           isReadOnly={isPending}
         />

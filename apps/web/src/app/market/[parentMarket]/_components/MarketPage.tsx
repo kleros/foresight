@@ -127,7 +127,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
           marketEstimates={marketEstimates}
           isMarketUnknown={chart.data === undefined}
         />
-        {walletMarket ? <TradeWallet market={walletMarket} noun={noun} /> : null}
+        {walletMarket ? <TradeWallet market={walletMarket} noun={(detail.itemName || "branch").toLowerCase()} /> : null}
         <AdvancedSection parentMarket={detail.parentMarket} />
       </section>
     </PageColumn>
