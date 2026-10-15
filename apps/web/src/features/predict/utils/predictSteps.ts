@@ -2,10 +2,10 @@ import type { Address } from "viem";
 
 import { shortenAddress } from "@/utils/address";
 
+import { shownAmount, type Funding } from "./funding";
 import { STEP_ID } from "../flow/stepIds";
 import type { PredictProgress } from "../run/types";
 import type { PayToken } from "../types";
-import { shownAmount, type Funding } from "./funding";
 
 export type StepView = "idle" | "running" | "done" | "inactive" | "failed";
 
