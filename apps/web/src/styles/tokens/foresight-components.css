@@ -432,15 +432,15 @@
   }
 }
 
-/* A disabled Kleros button keeps its enabled look on a faded fill: the library's grey label on
-   light grey is 1.25:1. The label stays solid; 80 % of the fill holds it at 3:1 on white.
+/* A disabled Kleros primary is a greyed blue with a solid label; the library's grey on light grey is 1.25:1.
    Unlayered, so it outranks the library's utilities. */
 button[data-disabled]:has(> .button-text):not(.bg-transparent) {
-  background-color: color-mix(in srgb, var(--klerosUIComponentsPrimaryBlue) 80%, transparent);
+  background-color: var(--fs-accent-disabled);
   cursor: not-allowed;
 }
+/* white in both themes: dark's own primary label, #220050, is 2.7:1 on the greyed fill */
 button[data-disabled]:has(> .button-text):not(.bg-transparent) > .button-text {
-  color: var(--klerosUIComponentsWhiteBackground);
+  color: #ffffff;
 }
 button[data-disabled].border:has(> .button-text) {
   background-color: var(--klerosUIComponentsWhiteBackground);

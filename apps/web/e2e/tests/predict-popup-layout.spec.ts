@@ -350,31 +350,62 @@ test.describe("the popup under reduced motion", () => {
 test.describe("a disabled Predict", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test("keeps its white label at 3:1 or more on its faded fill", async ({ page }) => {
-    const dialog = await openPopup(page, 2, "over");
-    const predict = dialog.getByRole("button", { name: "Predict" });
-    await expect(predict).toBeDisabled();
-
-    const ratio = await predict.evaluate((button) => {
-      const label = button.querySelector(".button-text")!;
+  /** The button's fill as 0-255 channels and its white label's contrast on it. */
+  const readFill = (predict: Locator) =>
+    predict.evaluate((button) => {
       const numbers = (css: string) => css.match(/[\d.]+/g)!.map(Number);
       // a color-mix() fill computes to color(srgb r g b / a), channels 0-1
-      const fill = getComputedStyle(button).backgroundColor;
-      const [r = 0, g = 0, b = 0, a = 1] = fill.startsWith("color(")
-        ? numbers(fill)
-        : numbers(fill).map((n, i) => (i < 3 ? n / 255 : n));
-      const opacity = Number(getComputedStyle(button).opacity);
-      // on the dialog's white surface
-      const over = (channel: number) => (channel * a + (1 - a)) * opacity + (1 - opacity);
-      const linear = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-      const luminance = 0.2126 * linear(over(r)) + 0.7152 * linear(over(g)) + 0.0722 * linear(over(b));
-      const text = numbers(getComputedStyle(label).color).map((n) => n / 255);
-      const textLuminance =
-        0.2126 * linear(over(text[0]!)) + 0.7152 * linear(over(text[1]!)) + 0.0722 * linear(over(text[2]!));
-      return (Math.max(luminance, textLuminance) + 0.05) / (Math.min(luminance, textLuminance) + 0.05);
+      const css = getComputedStyle(button).backgroundColor;
+      const [r = 0, g = 0, b = 0, alpha = 1] = css.startsWith("color(")
+        ? numbers(css).map((n, i) => (i < 3 ? n * 255 : n))
+        : numbers(css);
+      const linear = (c: number) => ((c /= 255) <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+      const luminance = ([x = 0, y = 0, z = 0]: number[]) => 0.2126 * linear(x) + 0.7152 * linear(y) + 0.0722 * linear(z);
+      const label = numbers(getComputedStyle(button.querySelector(".button-text")!).color).slice(0, 3);
+      const [fill, text] = [luminance([r, g, b]), luminance(label)];
+      return {
+        fill: [r, g, b].map(Math.round),
+        alpha,
+        opacity: Number(getComputedStyle(button).opacity),
+        ratio: (Math.max(fill, text) + 0.05) / (Math.min(fill, text) + 0.05),
+      };
     });
 
-    expect(ratio).toBeGreaterThanOrEqual(3);
+  // the accent mixed 55 % toward the secondary text in light and toward the border in dark
+  for (const [theme, fill] of [
+    ["light", [88, 111, 188]],
+    ["dark", [65, 82, 192]],
+  ] as const) {
+    test(`is a greyed blue with its white label at 3:1 or more in the ${theme} theme`, async ({ page }) => {
+      await page.goto(`${harness.url}?options=2&state=over&theme=${theme}`);
+      const predict = page.getByRole("dialog").getByRole("button", { name: "Predict" });
+      await expect(predict).toBeDisabled();
+
+      const shown = await readFill(predict);
+      expect(shown.alpha).toBe(1);
+      expect(shown.opacity).toBe(1);
+      shown.fill.forEach((channel, index) => expect.soft(Math.abs(channel - fill[index]!)).toBeLessThanOrEqual(2));
+      expect(shown.ratio).toBeGreaterThanOrEqual(3);
+    });
+  }
+
+  test("dims Max to the secondary text while it cannot be pressed", async ({ page }) => {
+    const dialog = await openPopup(page, 2, "signing");
+    const max = dialog.getByRole("button", { name: "Max" });
+    await expect(max).toBeDisabled();
+
+    const [label, secondary] = await Promise.all([
+      max.locator(".button-text").evaluate((element) => getComputedStyle(element).color),
+      dialog.evaluate((element) => {
+        const probe = element.ownerDocument.createElement("span");
+        probe.className = "text-fs-text-secondary";
+        element.append(probe);
+        const color = getComputedStyle(probe).color;
+        probe.remove();
+        return color;
+      }),
+    ]);
+    expect(label).toBe(secondary);
   });
 });
 
