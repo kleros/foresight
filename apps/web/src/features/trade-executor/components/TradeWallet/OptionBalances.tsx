@@ -1,4 +1,4 @@
-import { CustomAccordion, Tooltip } from "@kleros/ui-components-library";
+import { Tooltip } from "@kleros/ui-components-library";
 import clsx from "clsx";
 import type { Address } from "viem";
 
@@ -30,27 +30,20 @@ export function OptionBalances({
   if (options.length === 0) return null;
 
   return (
-    <CustomAccordion
-      className="w-full max-w-full [&_#body-wrapper]:px-0 [&_#expand-button]:px-4!"
-      items={[
-        {
-          title: <span className="text-fs-text-primary text-sm first-letter:uppercase">{noun} tokens</span>,
-          body: (
-            <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(11rem,16rem))] place-content-center gap-4 px-4">
-              {options.map((option, index) => (
-                <OptionBalance
-                  key={option.token}
-                  option={option}
-                  balance={balances?.[index]}
-                  positions={positions}
-                  decimals={decimals}
-                />
-              ))}
-            </div>
-          ),
-        },
-      ]}
-    />
+    <div className="flex flex-col gap-2">
+      <h4 className="type-label text-fs-text-secondary first-letter:uppercase">{noun} tokens</h4>
+      <div className="grid w-full grid-cols-[repeat(auto-fill,minmax(11rem,16rem))] gap-4">
+        {options.map((option, index) => (
+          <OptionBalance
+            key={option.token}
+            option={option}
+            balance={balances?.[index]}
+            positions={positions}
+            decimals={decimals}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 

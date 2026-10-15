@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { parseUnits, type Address } from "viem";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -81,12 +81,16 @@ const market: TradeWalletMarket = {
 
 let queryClient: QueryClient;
 
-const renderWallet = (shown: TradeWalletMarket = market) =>
-  render(
+/** Renders the wallet with its Balances disclosure open, where the option balances live. */
+const renderWallet = (shown: TradeWalletMarket = market, { closed = false } = {}) => {
+  const rendered = render(
     <QueryClientProvider client={queryClient}>
       <TradeWallet market={shown} noun="city" />
     </QueryClientProvider>,
   );
+  if (!closed) fireEvent.click(screen.getByRole("button", { name: "Balances" }));
+  return rendered;
+};
 
 const units = (amount: string) => parseUnits(amount, 18);
 
@@ -101,6 +105,36 @@ beforeEach(() => {
   ownerHeld = new Map();
   positionRead = undefined;
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+});
+
+describe("TradeWallet's row", () => {
+  it("is one line of the wallet, its address, its collateral balance, Deposit, Withdraw and Balances", async () => {
+    renderWallet(market, { closed: true });
+    const wallet = screen.getByRole("region", { name: "Trade wallet" });
+
+    expect(within(wallet).getByText("0x2222...2222")).toBeInTheDocument();
+    expect(await within(wallet).findByText("0 sDAI")).toBeInTheDocument();
+    for (const name of ["Deposit", "Withdraw", "Balances"]) {
+      expect(within(wallet).getByRole("button", { name })).toBeInTheDocument();
+    }
+  });
+
+  it("keeps the option balances and Mint and Merge behind Balances", async () => {
+    held = new Map([[LISBON.up, units("3")]]);
+    renderWallet(market, { closed: true });
+    const balances = screen.getByRole("button", { name: "Balances" });
+
+    expect(balances).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("list", { name: "Lisbon positions" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Mint" })).toBeNull();
+
+    await userEvent.click(balances);
+
+    expect(balances).toHaveAttribute("aria-expanded", "true");
+    await waitFor(() => expect(positionsOf("Lisbon")).toEqual(["UP 3", "DOWN 0"]));
+    expect(screen.getByRole("button", { name: "Mint" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Merge" })).toBeInTheDocument();
+  });
 });
 
 describe("TradeWallet positions", () => {
@@ -201,8 +235,7 @@ describe("TradeWallet positions", () => {
     renderWallet();
     await screen.findByTitle("5");
 
-    await userEvent.click(screen.getByRole("button", { name: /Advanced options/ }));
-    await userEvent.click(await screen.findByRole("option", { name: "Merge" }));
+    await userEvent.click(screen.getByRole("button", { name: "Merge" }));
 
     expect(await screen.findByText("Available: 5 sDAI")).toBeInTheDocument();
   });
