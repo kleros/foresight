@@ -116,7 +116,8 @@ async function openPopup(
       element
         .getAnimations({ subtree: true })
         .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
-        .map((animation) => animation.finished),
+        // a transition retargeted mid-flight is cancelled, which rejects its promise
+        .map((animation) => animation.finished.catch(() => undefined)),
     ),
   );
   return dialog;
