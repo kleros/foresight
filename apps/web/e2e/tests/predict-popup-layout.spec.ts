@@ -338,7 +338,7 @@ test.describe("an amount over a four-digit balance at 375 x 812", () => {
     const dialog = page.getByRole("dialog");
     const summary = dialog.getByText(/^Not enough balance/);
 
-    await expect(summary).toContainText("6839.9596 sDAI");
+    await expect(summary).toContainText("6,839.9596 sDAI");
     expect(await summary.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     // one line, so the body keeps the idle popup's height
     expect((await summary.boundingBox())!.height).toBeLessThanOrEqual(21);
