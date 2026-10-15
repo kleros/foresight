@@ -8,7 +8,7 @@ import type { TradeWalletOption } from "@/features/trade-executor/types";
 
 import "@/styles/global.css";
 
-/** The longest is one unbroken run past any card; the rest are the shapes a creator types. */
+/** From a name wider than any card to a two-letter one, in Latin, German compound and CJK text. */
 const NAMES = [
   "Greater Metropolitan Region of São Paulo and Surrounding Areas",
   "Lisbon metropolitan area",

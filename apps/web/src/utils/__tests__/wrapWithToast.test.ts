@@ -115,7 +115,7 @@ describe("wrapWithToast", () => {
   describe("with wagmi's own receipt wait, which throws once a mined transaction reverts", () => {
     const actual = async () =>
       (await vi.importActual<typeof import("@wagmi/core")>("@wagmi/core")).waitForTransactionReceipt;
-    /** A Error(string) revert of "nope", as `call` returns it when the transaction is replayed. */
+    /** An Error(string) revert of "nope", as `call` returns it when the transaction is replayed. */
     const NOPE = `0x08c379a0${"0".repeat(62)}20${"0".repeat(62)}04${"6e6f7065".padEnd(64, "0")}`;
 
     /** A client whose receipt is reverted; `replay` is what replaying the transaction answers. */
