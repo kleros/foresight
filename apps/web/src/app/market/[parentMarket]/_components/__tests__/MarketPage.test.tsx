@@ -19,7 +19,7 @@ vi.mock("@/lib/graphql/batcher", () => ({ fetchGraphql: vi.fn() }));
 vi.mock("@/config/ipfs", () => ({ IPFS_GATEWAY: "https://cdn.example.link/ipfs" }));
 /* The wallet reaches wagmi and the RPC config, neither of which this page's tests supply. */
 vi.mock("@/features/trade-executor/components/TradeWallet/TradeWallet", () => ({
-  TradeWallet: () => null,
+  TradeWallet: ({ noun }: { noun: string }) => <p data-testid="trade-wallet-noun">{noun}</p>,
 }));
 vi.mock("../useOptionPositions", () => ({ useOptionPositions: () => ({}) }));
 vi.mock("@/components/wallet/EnsureChain", () => ({ default: ({ children }: { children: ReactNode }) => children }));
@@ -143,6 +143,31 @@ describe("MarketPage", () => {
     await screen.findByRole("heading", { name: "Denis Villeneuve" });
 
     expect(document.querySelectorAll("#expand-button").length).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("MarketPage's trade wallet", () => {
+  function answerItemName(itemName: string) {
+    fetchMock.mockImplementation(async (document) => {
+      if (queryName(document) === "SessionDetail") {
+        return { Session: [{ ...sessionDetailColumns, itemName, children: [sessionChildRow()] }] };
+      }
+      return { Prediction: [], Pool: [], SessionChart: [] };
+    });
+  }
+
+  it("names the options in the singular, lower-cased, as in Mint director tokens", async () => {
+    answerItemName("Director");
+    renderPage();
+
+    expect(await screen.findByTestId("trade-wallet-noun")).toHaveTextContent(/^director$/);
+  });
+
+  it("falls back to branch when the session names no item", async () => {
+    answerItemName("");
+    renderPage();
+
+    expect(await screen.findByTestId("trade-wallet-noun")).toHaveTextContent(/^branch$/);
   });
 });
 

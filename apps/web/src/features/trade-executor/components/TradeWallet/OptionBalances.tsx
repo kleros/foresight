@@ -34,7 +34,9 @@ export function OptionBalances({
 
   return (
     <div className="flex flex-col gap-2">
-      <h4 className="type-label text-fs-text-secondary first-letter:uppercase">{noun} tokens</h4>
+      <WithHelpTooltip tooltipMsg="UP gains if it resolves high, DOWN if low.">
+        <h4 className="type-label text-fs-text-secondary first-letter:uppercase">{noun} tokens</h4>
+      </WithHelpTooltip>
       <div className="grid w-full grid-cols-[repeat(auto-fill,minmax(11rem,16rem))] gap-4">
         {options.map((option, index) => (
           <OptionBalance
@@ -66,7 +68,7 @@ function OptionBalance({
       <div className="bg-fs-surface-tint flex h-min min-w-0 items-center">
         <span
           className={clsx(
-            "mr-4 w-28 shrink-0 truncate px-3 py-2 tabular-nums",
+            "mr-4 min-w-28 shrink-0 px-3 py-2 tabular-nums",
             "rounded-fs border-fs-border rounded-r-none border border-r-0",
             "bg-fs-surface text-fs-text-secondary text-sm",
           )}
@@ -75,29 +77,28 @@ function OptionBalance({
           {balance === undefined ? "—" : formatAmount(balance, decimals, SHOWN_DIGITS)}
         </span>
         <span className="mr-2 size-2 flex-none rounded-full" style={{ backgroundColor: option.color }} aria-hidden />
-        <Tooltip text={option.name} closeDelay={125}>
+        {/* the Tooltip's trigger div is the flex child, so it takes the min-w-0 the name needs to truncate */}
+        <Tooltip text={option.name} closeDelay={125} wrapperProps={{ className: "min-w-0" }}>
           <span className="text-fs-text-primary min-w-0 truncate text-sm">{option.name}</span>
         </Tooltip>
       </div>
       {option.positions.length > 0 ? (
-        <WithHelpTooltip tooltipMsg="UP pays more the higher it resolves, DOWN the lower.">
-          <ul aria-label={`${option.name} positions`} className="flex flex-wrap gap-x-4 gap-y-1 px-3 text-sm">
-            {option.positions.map(({ side, token }) => {
-              const held = positions?.get(token);
-              return (
-                <li key={token} className="flex min-w-0 gap-1.5">
-                  <span className="text-fs-text-secondary">{side}</span>{" "}
-                  <span
-                    className="text-fs-text-primary truncate"
-                    title={held === undefined ? undefined : formatAmount(held, decimals)}
-                  >
-                    {held === undefined ? "—" : formatAmount(held, decimals, SHOWN_DIGITS)}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </WithHelpTooltip>
+        <ul aria-label={`${option.name} positions`} className="flex flex-wrap gap-x-4 gap-y-1 px-3 text-sm">
+          {option.positions.map(({ side, token }) => {
+            const held = positions?.get(token);
+            return (
+              <li key={token} className="flex min-w-0 gap-1.5">
+                <span className="text-fs-text-secondary">{side}</span>{" "}
+                <span
+                  className="text-fs-text-primary truncate"
+                  title={held === undefined ? undefined : formatAmount(held, decimals)}
+                >
+                  {held === undefined ? "—" : formatAmount(held, decimals, SHOWN_DIGITS)}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
       ) : null}
     </div>
   );

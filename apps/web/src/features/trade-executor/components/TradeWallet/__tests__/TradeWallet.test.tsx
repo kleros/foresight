@@ -237,7 +237,16 @@ describe("TradeWallet positions", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Merge" }));
 
-    expect(await screen.findByText("Balance: 5 sDAI")).toBeInTheDocument();
+    expect(await screen.findByText("Full sets: 5")).toBeInTheDocument();
+  });
+
+  it("explains UP and DOWN once, beside the tokens heading, not once per option", async () => {
+    renderWallet();
+    const panel = document.getElementById(
+      screen.getByRole("button", { name: "Balances" }).getAttribute("aria-controls") ?? "",
+    );
+
+    expect(within(panel!).getAllByRole("button", { name: "" })).toHaveLength(1);
   });
 });
 
@@ -254,9 +263,48 @@ describe("TradeWallet's amount dialogs", () => {
     await userEvent.click(screen.getByRole("button", { name: "Merge" }));
     const dialog = await screen.findByRole("dialog");
 
-    expect(await within(dialog).findByText("Balance: 5.1234 sDAI")).toBeInTheDocument();
+    expect(await within(dialog).findByText("Full sets: 5.1234")).toBeInTheDocument();
     await userEvent.type(within(dialog).getByRole("spinbutton"), "6");
-    expect(await within(dialog).findByText("Not enough balance. Max 5.1234 sDAI.")).toBeInTheDocument();
+    expect(await within(dialog).findByText("Not enough sets. Max 5.1234.")).toBeInTheDocument();
+  });
+
+  it("opens Mint's amount without marking it invalid before anything is typed", async () => {
+    renderWallet();
+
+    await userEvent.click(screen.getByRole("button", { name: "Mint" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(within(dialog).getByRole("spinbutton")).not.toBeRequired();
+    expect(within(dialog).getByRole("spinbutton")).toBeValid();
+  });
+
+  it("words Mint's hint with the market's own collateral", async () => {
+    renderWallet({ ...market, collateral: { ...market.collateral, symbol: "wstETH" } });
+
+    await userEvent.click(screen.getByRole("button", { name: "Mint" }));
+
+    expect(await screen.findByText("Turns wstETH in your trade wallet into city tokens.")).toBeInTheDocument();
+  });
+
+  it("names a balance under the last shown decimal rather than showing it as 0", async () => {
+    ownerHeld = new Map([[COLLATERAL, units("0.00001")]]);
+    renderWallet(market, { closed: true });
+
+    await userEvent.click(screen.getByRole("button", { name: "Deposit" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(await within(dialog).findByText("Balance: less than 0.0001 sDAI")).toBeInTheDocument();
+  });
+
+  it("does not offer a Max of 0 over an empty balance", async () => {
+    renderWallet(market, { closed: true });
+
+    await userEvent.click(screen.getByRole("button", { name: "Deposit" }));
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText("Balance: 0 sDAI");
+    await userEvent.type(within(dialog).getByRole("spinbutton"), "1");
+
+    expect(await within(dialog).findByText("Not enough balance.")).toBeInTheDocument();
   });
 
   it("shows a deposit's balance at four decimals with its token, and names the cap when the amount is over it", async () => {

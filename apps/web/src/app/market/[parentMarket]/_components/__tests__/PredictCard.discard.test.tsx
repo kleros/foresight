@@ -110,16 +110,16 @@ it("says a transaction may still be pending while the run's transaction awaits i
   ).toBeInTheDocument();
 });
 
-it("shows the interrupted deposit at four decimals, not every wei", async () => {
+it("shows the interrupted deposit cut to four decimals, as the trade wallet shows it", async () => {
   saveRun({ status: "pending" }, { status: "running" }, undefined, 4_123456789012345678n);
   render(<PredictCard session={session()} status="trading" marketEstimates={{}} />);
 
-  expect(await screen.findByText("A prediction with a deposit of 4.1235 sDAI did not finish.")).toBeInTheDocument();
+  expect(await screen.findByText("A prediction with a deposit of 4.1234 sDAI did not finish.")).toBeInTheDocument();
 });
 
 it("shows an interrupted xDAI deposit at four decimals in xDAI", async () => {
   saveRun({ status: "pending" }, { status: "running" }, undefined, 8_123456789012345678n, true);
   render(<PredictCard session={session()} status="trading" marketEstimates={{}} />);
 
-  expect(await screen.findByText("A prediction with a deposit of 8.1235 xDAI did not finish.")).toBeInTheDocument();
+  expect(await screen.findByText("A prediction with a deposit of 8.1234 xDAI did not finish.")).toBeInTheDocument();
 });

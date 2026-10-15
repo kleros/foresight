@@ -1,13 +1,12 @@
 import { useId, useState } from "react";
 
 import { Button } from "@kleros/ui-components-library";
-import clsx from "clsx";
 import { useAccount } from "wagmi";
 
 import WithHelpTooltip from "@/components/ui/WithHelpTooltip";
 
 import { shortenAddress } from "@/utils/address";
-import { formatAmount } from "@/utils/amount";
+import { ownedAmount } from "@/utils/amount";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
 import { gnosisRouterAddress, sDaiDepositRoute } from "@/config/contracts";
@@ -104,10 +103,10 @@ export function TradeWallet({
               {funds.isPending ? (
                 <span className="fs-skeleton inline-block h-5 w-16 align-middle" />
               ) : funds.data ? (
-                `${formatAmount(funds.data.token ?? 0n, collateral.decimals, 4)} ${collateral.symbol}`
+                `${ownedAmount(funds.data.token ?? 0n, collateral.decimals)} ${collateral.symbol}`
               ) : (
                 // a balance we could not read must not read as an empty wallet
-                <span className="text-fs-text-secondary font-normal">Could not read</span>
+                <span className="text-fs-text-secondary font-normal">Could not read balance</span>
               )}
             </span>
           </div>
@@ -123,16 +122,13 @@ export function TradeWallet({
               className="text-fs-text-secondary hover:text-fs-text-primary fs-echo flex min-h-11 cursor-pointer items-center gap-1 px-2 text-sm"
             >
               Balances
-              <svg
-                viewBox="0 0 16 16"
-                aria-hidden
-                className={clsx(
-                  "size-3 fill-none stroke-current stroke-2",
-                  "transition-transform duration-(--fs-dur-enter) ease-(--fs-ease-enter)",
-                  showBalances && "rotate-180",
+              {/* Disclosure's plus and minus, so every collapsible on the page reads alike */}
+              <svg viewBox="0 0 16 16" aria-hidden className="size-3 shrink-0 fill-current">
+                {showBalances ? (
+                  <path d="M0 7.2h16v1.6H0z" />
+                ) : (
+                  <path d="M7.2 0h1.6v7.2H16v1.6H8.8V16H7.2V8.8H0V7.2h7.2z" />
                 )}
-              >
-                <path d="M3 6l5 5 5-5" />
               </svg>
             </button>
           </div>
@@ -213,7 +209,8 @@ export function TradeWallet({
           available={mergeable}
           isLoadingBalance={balances.isPending}
           decimals={collateral.decimals}
-          symbol={collateral.symbol}
+          availableLabel="Full sets"
+          overText="Not enough sets."
           onSubmit={(amount) =>
             merge.mutate({
               executor: deployed,

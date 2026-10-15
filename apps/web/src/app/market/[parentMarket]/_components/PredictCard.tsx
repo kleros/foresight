@@ -13,7 +13,6 @@ import { discardRun, findInterruptedRun, hasPendingTransaction } from "@/feature
 import { useSessionEstimates } from "@/features/predict/stores/estimateStore";
 import type { SelectedEstimate } from "@/features/predict/types";
 import { selectedEstimates } from "@/features/predict/utils/estimates";
-import { shownAmount } from "@/features/predict/utils/funding";
 import type { SessionDetail, SessionStatus } from "@/features/sessions/types";
 import { optionNoun } from "@/features/sessions/utils/optionNoun";
 
@@ -21,6 +20,8 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import EnsureChain from "@/components/wallet/EnsureChain";
 
 import CheckOutline from "@/assets/svg/check-outline-button.svg";
+
+import { ownedAmount } from "@/utils/amount";
 
 import { createRunStore } from "@/lib/flowRunStore";
 
@@ -79,8 +80,8 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
 
   const depositShown = (run: PredictSnapshot) =>
     run.depositNative
-      ? `${shownAmount(run.deposit, 18)} xDAI`
-      : `${shownAmount(run.deposit, session.collateralDecimals ?? 18)} ${session.collateralSymbol ?? "sDAI"}`;
+      ? `${ownedAmount(run.deposit, 18)} xDAI`
+      : `${ownedAmount(run.deposit, session.collateralDecimals ?? 18)} ${session.collateralSymbol ?? "sDAI"}`;
 
   const estimates = useSessionEstimates(session.parentMarket);
   const selected = selectedEstimates(session.options, estimates, marketEstimates);

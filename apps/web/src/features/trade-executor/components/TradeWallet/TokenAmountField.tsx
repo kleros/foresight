@@ -7,7 +7,7 @@ import { Select } from "@/components/ui/Select";
 
 import DaiIcon from "@/assets/svg/dai.svg";
 
-import { formatAmount } from "@/utils/amount";
+import { ownedAmount } from "@/utils/amount";
 
 export interface TokenChoice {
   id: string;
@@ -44,7 +44,6 @@ export function TokenAmountField({
     <div className="relative mb-8 w-full md:min-w-lg">
       <div className="border-fs-border rounded-fs flex h-fit flex-row border">
         <BigNumberField
-          isRequired
           name="amount"
           className={clsx(
             "inline-block flex-1 max-md:w-max",
@@ -87,11 +86,11 @@ export function TokenAmountField({
       ) : (
         <span className="text-fs-text-primary absolute mt-1 text-xs">
           {isLoadingBalance
-            ? "Loading…"
+            ? "Reading balance…"
             : // a balance we could not read must not read as an empty one
               available === undefined
               ? "Could not read balance"
-              : `Balance: ${formatAmount(available, decimals, 4)} ${symbol}`}
+              : `Balance: ${ownedAmount(available, decimals)} ${symbol}`}
         </span>
       )}
     </div>

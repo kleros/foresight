@@ -5,10 +5,11 @@ import type { Address } from "viem";
 
 import { Dialog } from "@/components/ui/Dialog";
 
-import { formatAmount, parseAmount } from "@/utils/amount";
+import { parseAmount } from "@/utils/amount";
 
 import type { Asset } from "@/lib/trade-executor/types";
 
+import { overCap } from "./AmountDialog";
 import { TokenAmountField } from "./TokenAmountField";
 import { useFunds } from "../../api/getFunds";
 
@@ -83,9 +84,7 @@ export function TransferDialog({
           available={available}
           decimals={chosen.decimals}
           error={
-            exceedsAvailable
-              ? `Not enough balance. Max ${formatAmount(available, chosen.decimals, 4)} ${chosen.symbol}.`
-              : undefined
+            exceedsAvailable ? overCap("Not enough balance.", available, chosen.decimals, chosen.symbol) : undefined
           }
           isLoadingBalance={funds.isPending}
           isReadOnly={isPending}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatAmount, parseAmount } from "../amount";
+import { formatAmount, ownedAmount, parseAmount } from "../amount";
 
 describe("parseAmount", () => {
   it("scales a decimal by the token's precision", () => {
@@ -44,5 +44,16 @@ describe("formatAmount", () => {
   it("cuts to fewer decimals when asked", () => {
     // 1.23456789 at 18 decimals
     expect(formatAmount(1_234567890000000000n, 18, 2)).toBe("1.23");
+  });
+});
+
+describe("ownedAmount", () => {
+  it("cuts to four decimals rather than rounding up past what is held", () => {
+    expect(ownedAmount(4_123456789012345678n, 18)).toBe("4.1234");
+  });
+
+  it("names a non-zero amount below the fourth decimal, and shows nothing held as 0", () => {
+    expect(ownedAmount(10_000_000_000_000n, 18)).toBe("less than 0.0001");
+    expect(ownedAmount(0n, 18)).toBe("0");
   });
 });
