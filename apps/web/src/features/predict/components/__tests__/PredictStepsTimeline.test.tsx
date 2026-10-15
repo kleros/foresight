@@ -33,10 +33,10 @@ const timeline = (progress: PredictProgress) => (
 );
 
 describe("PredictStepsTimeline while adding funds", () => {
-  it("says nothing while the deposit waits on a signature, then says it is confirming", () => {
+  it("says to confirm in the wallet while the deposit waits on a signature, then says it is confirming", () => {
     const { rerender } = render(timeline(depositing("signing")));
 
-    expect(item("Add funds").querySelector("small")?.textContent ?? "").toBe("");
+    expect(item("Add funds").querySelector("small")?.textContent).toBe("Confirm in your wallet");
 
     rerender(timeline(depositing("confirming")));
 
@@ -61,11 +61,11 @@ const item = (title: string) => screen.getByRole("listitem", { name: `Timeline i
 const bullet = (title: string) => item(title).querySelector("[data-bullet]")?.getAttribute("data-bullet");
 
 describe("PredictStepsTimeline bullets", () => {
-  it("pulses the running step with the Kleros timeline's own loading state, and nothing beside it", () => {
+  // the pulse itself is checked in a browser: e2e/tests/predict-popup-layout.spec.ts, "the running step"
+  it("marks the running step's bullet, and adds nothing beside it", () => {
     render(timeline(depositing("signing")));
 
     expect(bullet("Add funds")).toBe("running");
-    expect(item("Add funds")).toHaveClass("animate-loading");
     expect(within(item("Add funds")).queryByLabelText("Timeline item party element")).toBeNull();
   });
 

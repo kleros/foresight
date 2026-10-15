@@ -62,7 +62,9 @@ export function PredictStepsTimeline({ steps }: { steps: PredictSteps }) {
       <CustomTimeline
         items={[first, ...rest]}
         className={clsx(
-          "w-full motion-reduce:[&_li]:animate-none [&_small]:truncate",
+          "w-full [&_small]:truncate",
+          // the library pulses the whole row; only the bullet pulses, so the subtitle stays legible
+          "[&_li]:animate-none [&_[data-bullet=running]]:animate-loading motion-reduce:[&_[data-bullet=running]]:animate-none",
           // every row keeps its subtitle line, empty or not, so a state change never moves the rows
           "[&_li>div:nth-child(1)]:min-h-11 [&_small]:min-h-4 [&_small]:text-fs-text-secondary",
           "[&_li>div:nth-child(2)]:ml-2 [&_li>div:nth-child(2)]:pt-0.5",

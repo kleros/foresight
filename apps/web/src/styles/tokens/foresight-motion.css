@@ -153,6 +153,10 @@
   .fs-skeleton {
     animation: none;
   }
+  /* the library's loading Button scales its symbol */
+  .animate-breathing {
+    animation: none;
+  }
   * {
     scroll-behavior: auto !important;
   }

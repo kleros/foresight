@@ -110,11 +110,11 @@ describe("predictSteps during a run", () => {
     expect(rows[2]).toMatchObject({ view: "running", subtitle: "Finding prices…" });
   });
 
-  it("shows the prediction running with no words while the wallet asks for a signature", () => {
+  it("says to confirm in the wallet while it asks for a signature", () => {
     const rows = steps({ progress: progress({ stage: "signing" }) }).rows;
 
     expect(rows.map((row) => row.view)).toEqual(["done", "done", "running"]);
-    expect(rows[2]?.subtitle).toBe("");
+    expect(rows[2]?.subtitle).toBe("Confirm in your wallet");
   });
 
   it("counts the batches when a prediction takes more than one", () => {
@@ -226,7 +226,7 @@ describe("predictSteps while adding funds", () => {
     });
 
   it.each([
-    ["signing", ""],
+    ["signing", "Confirm in your wallet"],
     ["confirming", "Confirming…"],
   ] as const)("shows Add funds running, without the amount, while %s", (stage, copy) => {
     const funds = steps({ progress: depositing(stage), toAdd: 4n * WAD }).rows[1];

@@ -42,7 +42,7 @@ const fundsRow = (run: PredictDriver) =>
   }).rows.find((row) => row.key === "funds");
 
 describe("createPredictRun while the deposit is out with the wallet", () => {
-  it("shows Add funds running with no words while signing, then confirming once the hash is known", async () => {
+  it("shows Add funds running with the wallet prompt while signing, then confirming once the hash is known", async () => {
     const held = heldGateway();
     const reader = { ...fakeReader({ deployed: true }), collateralBalance: async () => WAD * 2n };
     driver = createPredictRun({
@@ -60,7 +60,7 @@ describe("createPredictRun while the deposit is out with the wallet", () => {
 
     const signing = fundsRow(driver);
     expect(signing?.view).toBe("running");
-    expect(signing?.subtitle).toBe("");
+    expect(signing?.subtitle).toBe("Confirm in your wallet");
 
     const hash = `0x${"1".padStart(64, "0")}` as Hash;
     held.sign(hash);

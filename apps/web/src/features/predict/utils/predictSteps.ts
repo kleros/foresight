@@ -54,6 +54,7 @@ const RECONCILING_COPY = "Checking your last transaction…";
 
 const STAGE_COPY: Partial<Record<PredictProgress["stage"], string>> = {
   quoting: "Finding prices…",
+  signing: "Confirm in your wallet",
   confirming: "Confirming…",
 };
 

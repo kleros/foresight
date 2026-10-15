@@ -395,11 +395,13 @@ test.describe("the popup's tones", () => {
 test.describe("the running step", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test("pulses with the Kleros timeline's loading animation, and the status line stays empty", async ({ page }) => {
+  test("pulses its bullet, not its words, and the status line stays empty", async ({ page }) => {
     const dialog = await openPopup(page, 2, "signing");
     const running = dialog.locator("li").filter({ has: page.locator('[data-bullet="running"]') });
+    const animationOf = (element: Locator) => element.evaluate((node) => getComputedStyle(node).animationName);
 
-    expect(await running.evaluate((item) => getComputedStyle(item).animationName)).not.toBe("none");
+    expect(await animationOf(dialog.locator('[data-bullet="running"]'))).toBe("loading");
+    expect(await animationOf(running)).toBe("none");
     await expect(dialog.getByRole("status")).toHaveText("");
   });
 });
@@ -407,11 +409,11 @@ test.describe("the running step", () => {
 test.describe("the popup under reduced motion", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test("keeps the running step still", async ({ page }) => {
+  test("keeps the running step and the loading Predict still", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     const dialog = await openPopup(page, 2, "signing");
     const animations = await dialog
-      .locator("li")
+      .locator("li, li *, button svg")
       .evaluateAll((items) => items.map((item) => getComputedStyle(item).animationName));
 
     expect(animations.every((name) => name === "none")).toBe(true);
