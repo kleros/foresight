@@ -321,7 +321,7 @@ describe("predicting", () => {
     // the form's balance is in the form's token, not necessarily the stored run's
     expect(screen.queryByText(/^Balance: /)).toBeNull();
     expect(screen.getByText("410 $M")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Max" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Max" }).classList.contains("invisible")).toBe(true);
     expect(screen.queryByRole("button", { name: "Predict" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Resume" }));
     expect(onPredict).toHaveBeenCalled();

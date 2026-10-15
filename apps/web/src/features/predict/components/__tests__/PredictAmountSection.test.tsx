@@ -233,3 +233,49 @@ describe("an amount over the balance", () => {
     expect(screen.getByLabelText("Amount").classList.contains("border-klerosUIComponentsError")).toBe(isError);
   });
 });
+
+function renderReturning(extra: { isReadOnly?: boolean; note?: string; isDisconnected?: boolean } = {}) {
+  render(
+    <PredictAmountSection
+      amount={undefined}
+      onAmountChange={vi.fn()}
+      tokens={[sDai]}
+      token={sDai}
+      onTokenChange={vi.fn()}
+      funding={extra.isDisconnected ? null : planFunding({ amount: 0n, ownWallet: 10n * WAD, tradeWallet: 6n * WAD })}
+      collateral={{ symbol: "sDAI", decimals: 18 }}
+      isFirstPrediction={false}
+      isReadOnly={extra.isReadOnly ?? false}
+      isDisconnected={extra.isDisconnected}
+      note={extra.note}
+    />,
+  );
+}
+
+describe("a returning predictor", () => {
+  it.each([false, true])("is told they can change it without adding funds (running: %s)", (isReadOnly) => {
+    renderReturning({ isReadOnly });
+
+    expect(screen.getByText("You've predicted before, so you can change it without adding funds.")).toBeInTheDocument();
+  });
+});
+
+describe("Max", () => {
+  it("is offered beside a balance, and held while a run is locked", () => {
+    renderReturning({ isReadOnly: true });
+
+    expect(screen.getByRole("button", { name: "Max" })).toBeDisabled();
+  });
+
+  it.each([
+    ["a stored run's note", { note: "What this run started with." }],
+    ["no wallet", { isDisconnected: true }],
+  ])("is not offered with %s in place of a balance", (_, extra) => {
+    renderReturning(extra);
+
+    // jsdom computes no Tailwind, so the hidden button is read from its class
+    const max = screen.getByRole("button", { name: "Max" });
+    expect(max).toBeDisabled();
+    expect(max.classList.contains("invisible")).toBe(true);
+  });
+});

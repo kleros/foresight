@@ -33,6 +33,7 @@ const FAILURE_REASONS = [
   "wrong-chain",
 ];
 const VIEWPORTS = [
+  { width: 320, height: 568 },
   { width: 375, height: 812 },
   { width: 375, height: 667 },
   { width: 820, height: 1180 },
@@ -235,8 +236,9 @@ for (const viewport of VIEWPORTS) {
 
         const idleDialog = await openPopup(page, options, "idle");
         const idle = await footprint(page, idleDialog);
-        // the spine fits the window: every step is in view as the popup opens, with nothing to scroll to
-        for (const title of STEPS) {
+        // the spine fits the window: every step is in view as the popup opens, with nothing to scroll to;
+        // 320 x 568 is too short for that and scrolls
+        for (const title of viewport.width > 320 ? STEPS : []) {
           expect
             .soft(await isFullyShown(idleDialog.getByText(title, { exact: true })), `"${title}" is in view at open`)
             .toBe(true);
@@ -262,13 +264,19 @@ for (const viewport of VIEWPORTS) {
           // a run's form is locked, and the popup scrolls to its running or failed step instead
           const isEditable = state === "idle" || state === "over" || state === "disconnected";
           for (const control of isEditable
-            ? [dialog.getByRole("button", { name: "Max" }), dialog.getByRole("button", { name: /sDAI/ })]
+            ? [
+                ...(state === "disconnected" ? [] : [dialog.getByRole("button", { name: "Max" })]),
+                dialog.getByRole("button", { name: /sDAI/ }),
+              ]
             : []) {
             expect
               .soft(await isFullyShown(control), `${state}: ${await control.textContent()} is reachable`)
               .toBe(true);
           }
-          if (isEditable) {
+          if (state === "disconnected" || state === "recovered") {
+            await expect.soft(dialog.getByRole("button", { name: "Max" }), `${state}: Max is not offered`).toBeHidden();
+          }
+          if (isEditable && state !== "disconnected") {
             const max = (await dialog.getByRole("button", { name: "Max" }).boundingBox())!;
             expect.soft(Math.min(max.width, max.height), `${state}: Max is a 44px target`).toBeGreaterThanOrEqual(44);
           }
@@ -393,6 +401,44 @@ test.describe("an amount over a four-digit balance at 375 x 812", () => {
     const [labelBox, track] = await Promise.all([label.boundingBox(), dialog.locator("#slider-track").boundingBox()]);
     expect(labelBox!.x).toBeGreaterThanOrEqual(track!.x);
     expect(labelBox!.x + labelBox!.width).toBeLessThanOrEqual(track!.x + track!.width);
+  });
+});
+
+test.describe("the amount's title and balance on a narrow screen", () => {
+  for (const { width, height, query } of [
+    { width: 375, height: 812, query: "options=2&first=0&held=6833.959612" },
+    { width: 320, height: 568, query: "options=2&first=0&held=6833.959612" },
+    { width: 320, height: 568, query: "options=10&held=98765432109.12345" },
+  ]) {
+    test.describe(`${query} at ${width} x ${height}`, () => {
+      test.use({ viewport: { width, height } });
+
+      test("shows the title whole, Max whole, and the balance inside the dialog", async ({ page }) => {
+        await page.goto(`${harness.url}?${query}`);
+        const dialog = page.getByRole("dialog");
+        const node = dialog.locator("[data-spine-node]").filter({ has: page.getByLabel("Amount") });
+        const title = node.locator("h3");
+        await expect(title).toBeVisible();
+
+        expect(await title.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+        expect(await isFullyShown(dialog.getByRole("button", { name: "Max" }))).toBe(true);
+        const balance = node.getByText(/^Balance: /);
+        const [balanceBox, dialogBox] = [(await balance.boundingBox())!, (await dialog.boundingBox())!];
+        expect(balanceBox.x + balanceBox.width).toBeLessThanOrEqual(dialogBox.x + dialogBox.width);
+      });
+    });
+  }
+});
+
+test.describe("a locked share slider", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("keeps its percent above the thumb", async ({ page }) => {
+    const dialog = await openPopup(page, 2, "signing");
+
+    const label = dialog.getByTestId("amount-slider").locator("#slider-label");
+    await expect(label).toBeVisible();
+    await expect(label).toHaveText(/^\d+%$/);
   });
 });
 

@@ -63,10 +63,11 @@ export function PredictAmountSection({
     ? { text: note, tone: "neutral" }
     : over && isReadOnly
       ? null
-      : !isFirstPrediction && !isReadOnly && funding && !amount
+      : !isFirstPrediction && funding && !amount
         ? { text: RETURNING_COPY, tone: "neutral" }
         : fundingSummary({ funding, amount, token, collateral });
 
+  const noBalance = Boolean(note) || isDisconnected;
   const balance = note
     ? ""
     : isDisconnected
@@ -90,18 +91,21 @@ export function PredictAmountSection({
         )
       }
       right={
-        <div className="flex shrink-0 items-baseline gap-2">
-          <span className="type-caption text-fs-text-secondary whitespace-nowrap">{balance}</span>
+        // under the title when both do not fit, and always below 240px, so every state of a narrow popup has one height
+        <div className="ml-auto flex min-w-0 items-baseline gap-2 @max-[15rem]:basis-full @max-[15rem]:justify-between">
+          <span className="type-caption text-fs-text-secondary min-w-0 truncate">{balance}</span>
           <LightButton
             small
             text="Max"
-            isDisabled={isReadOnly || !max}
+            isDisabled={isReadOnly || !max || noBalance}
             onPress={() => max !== undefined && onAmountChange(max)}
             className={clsx(
               // a 44px target that takes no more height than its label
-              "-my-3 min-h-11 min-w-11 justify-end rounded-none! p-0 hover:bg-transparent!",
+              "-my-3 min-h-11 min-w-11 shrink-0 justify-end rounded-none! p-0 hover:bg-transparent!",
               "[&_.button-text]:text-fs-text-accent [&_.button-text]:text-xs [&_.button-text]:font-semibold",
               "data-disabled:[&_.button-text]:text-fs-text-secondary",
+              // hidden, not removed: its baseline sets the title row's height
+              noBalance && "invisible",
             )}
           />
         </div>
@@ -209,6 +213,8 @@ function AmountSlider({
           "[&_#slider-label]:text-fs-text-primary! [&_#slider-label]:font-semibold",
           // the field above already says the amount; at 0 the floating label is noise
           percent === 0 && "[&_#slider-label]:invisible",
+          // the library hides the label on a disabled slider; a locked run still shows its share
+          "[&_#slider-label]:block!",
           "[&_div:has(>#slider-label)[data-focus-visible]]:ring-fs-accent",
           "[&_div:has(>#slider-label)[data-focus-visible]]:ring-2",
           "[&_div:has(>#slider-label)[data-focus-visible]]:ring-offset-fs-surface",

@@ -26,8 +26,8 @@ export function PredictSpineNode({
         <SpineBullet view={done ? "done" : "idle"} />
         <div className="spine-line" />
       </div>
-      <div className="ml-2 min-w-0 flex-1 pt-0.5">
-        <div className="flex min-h-5 items-baseline justify-between gap-3">
+      <div className="@container ml-2 min-w-0 flex-1 pt-0.5">
+        <div className="flex min-h-5 flex-wrap items-baseline justify-between gap-x-3">
           <h3 className="text-fs-text-primary min-w-0 truncate text-sm leading-5 font-semibold">{title}</h3>
           {right}
         </div>
