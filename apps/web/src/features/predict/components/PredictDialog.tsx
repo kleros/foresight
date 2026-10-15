@@ -104,7 +104,7 @@ export function PredictDialog({
     >
       <div className="flex min-h-0 w-full flex-col">
         <PredictList selected={selected} onRemove={onRemove} isReadOnly={isLocked} preview={preview} />
-        <ScrollFade className="min-h-32 w-full">
+        <ScrollFade className="min-h-32 w-full" cue="More below">
           <div data-testid="predict-body" className="pt-3">
             <PredictAmountSection
               amount={recovered ? recovered.deposit : amount}
@@ -128,14 +128,14 @@ export function PredictDialog({
           role="status"
           aria-live="polite"
           className={clsx(
-            "type-label flex h-15 shrink-0 items-center justify-center px-2 text-center text-pretty",
+            "type-label flex h-15 shrink-0 items-center justify-center px-2 text-center text-pretty short:h-10",
             status && STATUS_TONE[status.tone],
           )}
         >
           {status?.text}
         </p>
 
-        <div className="bg-fs-surface sticky bottom-0 flex justify-center gap-3.5 py-4 md:pb-8">
+        <div className="bg-fs-surface sticky bottom-0 flex justify-center gap-3.5 py-4 md:pb-8 short:py-3">
           <Button text="Cancel" variant="secondary" onPress={onClose} isDisabled={isRunning} />
           <Button
             className="min-w-[170px]"

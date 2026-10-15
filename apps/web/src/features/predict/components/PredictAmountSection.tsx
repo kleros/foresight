@@ -157,7 +157,7 @@ export function PredictAmountSection({
         onChange={(percent) => max !== undefined && onAmountChange(roundDown(shareOf(max, percent)))}
       />
 
-      <hr className="border-fs-border mt-4 w-full" />
+      <hr className="border-fs-border mt-4 w-full short:mt-2" />
     </div>
   );
 }
@@ -183,7 +183,8 @@ function AmountSlider({
   return (
     <div
       data-testid="amount-slider"
-      className={clsx("relative mt-4 w-[calc(100%-32px)] self-center", isDisabled && "opacity-50")}
+      // typing the amount stands in for it where the steps would otherwise sit under the fold
+      className={clsx("relative mt-4 w-[calc(100%-32px)] self-center short:hidden", isDisabled && "opacity-50")}
       style={{ "--label-shift": `${percent}%` } as CSSProperties}
     >
       <Slider

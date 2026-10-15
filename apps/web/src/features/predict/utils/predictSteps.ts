@@ -35,10 +35,9 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
   reverted: "The trade could not go through at these prices.",
   rpc: "The network did not answer in time.",
   unknown: "Something went wrong.",
-  "no-route": "No trade moves these markets toward your estimates. Try a larger amount or a different estimate.",
+  "no-route": "No trade moves these markets toward your estimates. Try a larger amount.",
   quote: "Prices could not be fetched. Try again in a moment.",
-  funds:
-    "Your wallet does not have enough to cover this and the network fee. Lower the amount or add funds, then try again.",
+  funds: "Not enough for this and the network fee. Lower the amount or add funds.",
   balance: "Your trade wallet balance is lower than shown. Check the amount and try again.",
   "deposit-unconfirmed": "Your last deposit may still be confirming. Check your wallet's activity, then try again.",
   "wrong-wallet": "This prediction was started from another wallet. Connect that wallet to finish it.",
@@ -46,7 +45,7 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
 };
 
 /** Once the deposit is in the amount is fixed, so the only thing short is the fee in the wallet. */
-const FEE_SHORT_COPY = "Your wallet does not have enough xDAI for the network fee. Add some, then try the rest.";
+const FEE_SHORT_COPY = "Not enough xDAI for the network fee. Add some, then try the rest.";
 
 /** A transaction is out there and nothing has said how it ended, so it is neither a success nor a failure. */
 const PENDING_COPY = "Sent, not confirmed yet. It is checked before anything else is sent.";

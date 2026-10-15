@@ -151,6 +151,16 @@ for (const height of [812, 667]) {
             ["Cancel", "Predict"].map(async (name) => (await dialog.getByRole("button", { name }).boundingBox())!.y),
           )),
         );
+        const cue = await dialog.getByTestId("more-below").evaluate((element) =>
+          getComputedStyle(element).opacity === "0" ? Infinity : element.getBoundingClientRect().top,
+        );
+        // the short-window rules exist for this: a phone at 375 x 667 opens with every step in view
+        for (const title of height === 667 ? STEPS : []) {
+          const step = dialog.getByText(title, { exact: true });
+          expect.soft(await isFullyShown(step), `"${title}" is in view as the popup opens`).toBe(true);
+          const box = await step.boundingBox();
+          expect.soft(box && box.y + box.height, `"${title}" ends above the more-below cue`).toBeLessThanOrEqual(cue);
+        }
         for (const title of STEPS) {
           const step = dialog.getByText(title, { exact: true });
           await step.evaluate((element) => element.scrollIntoView({ block: "nearest" }));
@@ -183,9 +193,8 @@ for (const height of [812, 667]) {
 
         // A baseline is only ever taken of a layout that passes the checks above; Harman signs it off.
         if (testInfo.errors.length > 0) return;
-        await page.evaluate(() =>
-          document.querySelector('[data-testid="predict-body"]')?.parentElement?.scrollTo(0, 0),
-        );
+        // the estimate list and the body each scroll; the baseline is both at rest
+        await dialog.evaluate((element) => element.querySelectorAll("*").forEach((child) => child.scrollTo(0, 0)));
         await expect(page).toHaveScreenshot(`predict-popup-375x${height}-${options}-options.png`, {
           animations: "disabled",
           caret: "hide",
@@ -252,6 +261,54 @@ for (const viewport of VIEWPORTS) {
   });
 }
 
+test.describe("the popup's scroll area", () => {
+  for (const viewport of [
+    { width: 1280, height: 800 },
+    { width: 375, height: 667 },
+  ]) {
+    test(`says there is more below until it is scrolled to the end at ${viewport.width} x ${viewport.height}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      const dialog = await openPopup(page, 5);
+      const scroller = page.getByTestId("predict-body").locator("..");
+      const cue = dialog.getByTestId("more-below");
+      const overflows = await scroller.evaluate((element) => element.scrollHeight > element.clientHeight + 2);
+
+      if (overflows) {
+        await expect(cue).toHaveCSS("opacity", "1");
+        expect(await cue.evaluate((element) => getComputedStyle(element).pointerEvents)).toBe("none");
+        await scroller.evaluate((element) => element.scrollTo(0, element.scrollHeight));
+      }
+      await expect(cue).toHaveCSS("opacity", "0");
+    });
+  }
+
+  test("caps the estimate list at three rows, with five listed", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    const dialog = await openPopup(page, 5);
+    const list = dialog.getByRole("list").first();
+    const [box, row] = await Promise.all([
+      list.locator("..").boundingBox(),
+      list.getByRole("listitem").first().boundingBox(),
+    ]);
+
+    expect(box!.height).toBeLessThan(row!.height * 3.5);
+    expect(box!.height).toBeGreaterThan(row!.height * 2.9);
+  });
+});
+
+test.describe("a popup on a short screen", () => {
+  test.use({ viewport: { width: 375, height: 667 } });
+
+  test("leaves out the share slider and keeps a two-line status slot", async ({ page }) => {
+    const dialog = await openPopup(page, 2, "failed", "funds");
+
+    await expect(dialog.getByTestId("amount-slider")).toBeHidden();
+    expect((await dialog.getByRole("status").boundingBox())!.height).toBeLessThanOrEqual(40);
+  });
+});
+
 test.describe("every failure at the narrowest popup", () => {
   test.use({ viewport: { width: 375, height: 667 } });
 
@@ -271,8 +328,8 @@ test.describe("every failure at the narrowest popup", () => {
   });
 });
 
-test.describe("an amount over a four-digit balance at 375 x 667", () => {
-  test.use({ viewport: { width: 375, height: 667 } });
+test.describe("an amount over a four-digit balance at 375 x 812", () => {
+  test.use({ viewport: { width: 375, height: 812 } });
 
   test("shows the balance and its token whole, and keeps the slider's 100% on the track", async ({ page }) => {
     await page.goto(`${harness.url}?options=2&state=over&held=6833.959612`);

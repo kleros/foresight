@@ -58,7 +58,7 @@ export function PredictStepsTimeline({ steps }: { steps: PredictSteps }) {
 
   return (
     // a fixed column, so a longer subtitle in one state does not re-centre the rows
-    <div ref={timeline} className="mx-auto mt-4 w-full max-w-75">
+    <div ref={timeline} className="mx-auto mt-4 w-full max-w-75 short:mt-2">
       <CustomTimeline
         items={[first, ...rest]}
         className={clsx(
@@ -67,6 +67,8 @@ export function PredictStepsTimeline({ steps }: { steps: PredictSteps }) {
           "[&_li>div:nth-child(1)]:min-h-11 [&_small]:min-h-4 [&_small]:text-fs-text-secondary",
           "[&_li>div:nth-child(2)]:ml-2 [&_li>div:nth-child(2)]:pt-0.5",
           "[&_li>div:nth-child(1)>div]:border-l-fs-accent [&_li>div:nth-child(1)>div]:my-2",
+          // 36px rows where the window is short
+          "short:[&_li>div:nth-child(1)]:min-h-9 short:[&_li>div:nth-child(2)]:mb-0 short:[&_li>div:nth-child(1)>div]:my-1",
         )}
       />
     </div>

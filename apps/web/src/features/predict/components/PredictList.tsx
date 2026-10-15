@@ -35,7 +35,7 @@ export function PredictList({
   preview?: Record<string, PriceMove>;
 }) {
   return (
-    <div className="mb-4 flex w-full shrink-0 flex-col gap-3">
+    <div className="mb-4 flex w-full shrink-0 flex-col gap-3 short:mb-2 short:gap-2">
       <div className="flex items-baseline justify-between gap-4">
         <h2 className="text-fs-text-primary text-xl font-semibold md:text-2xl">Predict</h2>
         <span className="type-label text-fs-text-secondary">
@@ -43,7 +43,7 @@ export function PredictList({
         </span>
       </div>
       {/* three rows before it scrolls */}
-      <ScrollFade className="max-h-[calc(3*var(--estimate-row)+2*0.25rem)] w-full [--estimate-row:4rem] sm:[--estimate-row:5.5rem]">
+      <ScrollFade className="max-h-[calc(3*var(--estimate-row)+2*0.25rem)] w-full [--estimate-row:4rem] sm:[--estimate-row:5.5rem] short:[--estimate-row:3rem]">
         <ul className="flex w-full flex-col gap-1">
           {selected.map((estimate) => (
             <EstimateRow
@@ -90,7 +90,7 @@ function EstimateRow({
         "flex flex-col items-center justify-center text-center",
       )}
     >
-      <div className="flex max-w-full min-w-0 items-center gap-2 text-sm leading-5 sm:text-base sm:leading-6">
+      <div className="flex max-w-full min-w-0 items-center gap-2 text-sm leading-5 sm:text-base sm:leading-6 short:text-sm short:leading-4">
         <span className="size-2 flex-none rounded-full" style={{ backgroundColor: scale.color }} aria-hidden />
         <span className="text-fs-text-primary min-w-0 truncate font-semibold" title={scale.name}>
           {scale.name}
@@ -101,7 +101,7 @@ function EstimateRow({
       </div>
       <span
         className={clsx(
-          "min-h-4 text-xs leading-4 sm:min-h-5 sm:text-sm sm:leading-5",
+          "min-h-4 text-xs leading-4 sm:min-h-5 sm:text-sm sm:leading-5 short:min-h-4 short:text-xs short:leading-4",
           higher ? "text-fs-tone-success-text" : "text-fs-tone-error-text",
         )}
       >
@@ -118,7 +118,8 @@ function EstimateRow({
       </span>
       <span
         data-testid="estimate-move"
-        className="text-fs-text-secondary min-h-4 max-w-full text-xs leading-4 whitespace-nowrap tabular-nums sm:min-h-5 sm:text-sm sm:leading-5"
+        title={where || undefined}
+        className="text-fs-text-secondary min-h-4 max-w-full truncate text-xs leading-4 tabular-nums sm:min-h-5 sm:text-sm sm:leading-5 short:min-h-4 short:text-xs short:leading-4"
       >
         {where}
       </span>

@@ -3,17 +3,21 @@ import React, { useEffect, useRef, useState } from "react";
 
 import clsx from "clsx";
 
+import ArrowDown from "@/assets/svg/long-arrow-down.svg";
+
 type ScrollFadeProps = {
   children: React.ReactNode;
   className?: string;
   fadeSize?: number; // px
+  /** Said at the foot while there is more to scroll to. */
+  cue?: string;
 };
 
 /**
  * Self-contained scrollable wrapper with automatic top/bottom fades.
  * Manages its own overflow and shrink behavior; requires a bounded height.
  */
-export const ScrollFade: React.FC<ScrollFadeProps> = ({ children, className, fadeSize = 24 }) => {
+export const ScrollFade: React.FC<ScrollFadeProps> = ({ children, className, fadeSize = 24, cue }) => {
   const ref = useRef<HTMLDivElement>(null);
   const [showTop, setShowTop] = useState(false);
   const [showBottom, setShowBottom] = useState(false);
@@ -90,6 +94,22 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({ children, className, fad
           }}
         />
       )}
+
+      {cue ? (
+        <span
+          data-testid="more-below"
+          aria-hidden
+          className={clsx(
+            "pointer-events-none absolute right-0 bottom-0 left-0 z-20 flex h-4 items-center justify-center gap-1",
+            "border-fs-border bg-fs-surface text-fs-text-secondary type-caption border-t",
+            "transition-opacity duration-(--fs-dur-enter) ease-(--fs-ease-enter)",
+            showBottom ? "opacity-100" : "opacity-0",
+          )}
+        >
+          <ArrowDown className="size-2.5 [&_path]:fill-current" />
+          {cue}
+        </span>
+      ) : null}
     </div>
   );
 };
