@@ -132,7 +132,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
       {interrupted ? (
         <div className="flex w-full flex-wrap items-center justify-between gap-3">
           <p className="text-fs-text-secondary text-sm">
-            {`A prediction with a ${depositShown(interrupted)} deposit did not finish.`}
+            {`A prediction with a deposit of ${depositShown(interrupted)} did not finish.`}
             {isPending ? " A transaction from it may still be pending." : null}
           </p>
           <div className="flex gap-3">

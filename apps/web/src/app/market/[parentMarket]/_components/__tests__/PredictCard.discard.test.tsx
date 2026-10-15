@@ -38,11 +38,17 @@ const halted: PersistedPhase = {
   error: { stepId: "deposit", message: "RPC unavailable", cause: "rpc", hash: HASH },
 };
 
-function saveRun(deposit: StepOutcome, phase: PersistedPhase, flowId = predictFlowId("7", OWNER), amount = WAD * 3n) {
+function saveRun(
+  deposit: StepOutcome,
+  phase: PersistedPhase,
+  flowId = predictFlowId("7", OWNER),
+  amount = WAD * 3n,
+  depositNative = false,
+) {
   createRunStore().save({
     flowId,
     adapterId: "predict-flow",
-    snapshot: snapshot({ deposit: amount }),
+    snapshot: snapshot({ deposit: amount, depositNative }),
     ctx: ctx({ owner: OWNER, chainId: DEFAULT_CHAIN_ID }),
     steps: [
       { stepId: "deposit", label: "Add funds", outcome: deposit },
@@ -99,7 +105,7 @@ it("says a transaction may still be pending while the run's transaction awaits i
 
   expect(
     await screen.findByText(
-      "A prediction with a 3 sDAI deposit did not finish. A transaction from it may still be pending.",
+      "A prediction with a deposit of 3 sDAI did not finish. A transaction from it may still be pending.",
     ),
   ).toBeInTheDocument();
 });
@@ -108,5 +114,12 @@ it("shows the interrupted deposit at four decimals, not every wei", async () => 
   saveRun({ status: "pending" }, { status: "running" }, undefined, 4_123456789012345678n);
   render(<PredictCard session={session()} status="trading" marketEstimates={{}} />);
 
-  expect(await screen.findByText("A prediction with a 4.1235 sDAI deposit did not finish.")).toBeInTheDocument();
+  expect(await screen.findByText("A prediction with a deposit of 4.1235 sDAI did not finish.")).toBeInTheDocument();
+});
+
+it("shows an interrupted xDAI deposit at four decimals in xDAI", async () => {
+  saveRun({ status: "pending" }, { status: "running" }, undefined, 8_123456789012345678n, true);
+  render(<PredictCard session={session()} status="trading" marketEstimates={{}} />);
+
+  expect(await screen.findByText("A prediction with a deposit of 8.1235 xDAI did not finish.")).toBeInTheDocument();
 });
