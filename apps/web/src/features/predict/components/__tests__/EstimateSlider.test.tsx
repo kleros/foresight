@@ -271,6 +271,14 @@ describe("EstimateSlider value pill", () => {
   });
 });
 
+describe("EstimateSlider note", () => {
+  it("keeps an empty live region in place before any note", () => {
+    renderSlider(400);
+
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+  });
+});
+
 describe("EstimateSlider hint", () => {
   it("says how far above the market the estimate sits", () => {
     renderSlider(400);

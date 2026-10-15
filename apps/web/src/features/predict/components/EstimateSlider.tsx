@@ -235,9 +235,9 @@ export function EstimateSlider({
       </div>
 
       <p className="type-label text-fs-text-secondary min-h-5">
-        {note ? (
-          <span role="status">{note}</span>
-        ) : reason ? (
+        {/* mounted empty, so a screen reader hears the note when it arrives */}
+        <span role="status">{note}</span>
+        {note ? null : reason ? (
           <span className={lockedReason ? "text-fs-tone-warning-text" : undefined}>{reason}</span>
         ) : isMarketPending ? (
           "Loading the market…"
