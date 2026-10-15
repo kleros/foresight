@@ -30,11 +30,14 @@ export function PredictList({
   selected,
   onRemove,
   isReadOnly,
+  isFixed = false,
   preview = {},
 }: {
   selected: ListedEstimate[];
   onRemove: (market: string) => void;
   isReadOnly: boolean;
+  /** A stored run's estimates, which offer no remove at all. */
+  isFixed?: boolean;
   /** Keyed by lower-case market; an option without an entry shows where its market is now. */
   preview?: Record<string, PriceMove>;
 }) {
@@ -80,7 +83,7 @@ export function PredictList({
           estimate={estimate}
           move={preview[estimate.scale.market.toLowerCase()]}
           onRemove={removable ? () => remove(estimate.scale.market) : undefined}
-          isLast={selected.length === 1}
+          hasRemove={selected.length > 1 && !isFixed}
           isLeaving={leaving.includes(estimate.scale.market)}
           isReadOnly={isReadOnly}
         />
@@ -105,14 +108,14 @@ function EstimateRow({
   estimate,
   move,
   onRemove,
-  isLast,
+  hasRemove,
   isLeaving,
   isReadOnly,
 }: {
   estimate: ListedEstimate;
   move: PriceMove | undefined;
   onRemove?: () => void;
-  isLast: boolean;
+  hasRemove: boolean;
   isLeaving: boolean;
   isReadOnly: boolean;
 }) {
@@ -162,7 +165,7 @@ function EstimateRow({
       >
         {where}
       </span>
-      {isLast ? null : (
+      {hasRemove ? (
         <LightButton
           className={clsx(
             "relative size-7 justify-center justify-self-end p-0 [grid-area:1/4/3/5] sm:[grid-area:auto]",
@@ -176,7 +179,7 @@ function EstimateRow({
           isDisabled={isReadOnly || !onRemove}
           onPress={onRemove}
         />
-      )}
+      ) : null}
     </li>
   );
 }

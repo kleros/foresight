@@ -128,7 +128,13 @@ export function PredictDialog({
             <ScrollFade
               className={clsx("w-full", selected.length > 4 && "max-h-28", selected.length > 3 && "max-sm:max-h-27")}
             >
-              <PredictList selected={selected} onRemove={onRemove} isReadOnly={isLocked} preview={shownPreview} />
+              <PredictList
+                selected={selected}
+                onRemove={onRemove}
+                isReadOnly={isLocked}
+                isFixed={recovered !== undefined}
+                preview={shownPreview}
+              />
             </ScrollFade>
           </PredictSpineNode>
         </div>

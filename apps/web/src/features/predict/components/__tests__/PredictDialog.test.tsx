@@ -327,6 +327,12 @@ describe("predicting", () => {
     expect(onPredict).toHaveBeenCalled();
   });
 
+  it("offers no remove on a stored run's estimates", () => {
+    render(<PredictDialog {...props()} recovered={{ deposit: WAD, token: sDai }} canRetry />);
+
+    expect(screen.queryByRole("button", { name: /Remove/ })).toBeNull();
+  });
+
   it("will not resume a stored run that cannot be picked up", () => {
     render(<PredictDialog {...props()} recovered={{ deposit: WAD, token: sDai }} canRetry={false} />);
 
