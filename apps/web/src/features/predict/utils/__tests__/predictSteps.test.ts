@@ -309,9 +309,10 @@ describe("statusLine", () => {
   });
 
   it("puts what the visitor has to do ahead of why the run stopped", () => {
-    expect(
-      statusLine({ steps: halted, notice: "Switch your wallet to Gnosis.", skipped: 0 }),
-    ).toEqual({ text: "Switch your wallet to Gnosis.", tone: "warning" });
+    expect(statusLine({ steps: halted, notice: "Switch your wallet to Gnosis.", skipped: 0 })).toEqual({
+      text: "Switch your wallet to Gnosis.",
+      tone: "warning",
+    });
   });
 
   it("puts what the visitor has to do ahead of a transaction still out", () => {

@@ -11,7 +11,6 @@ export function Select({
   value,
   onChange,
   placeholder,
-  variant = "field",
   isDisabled,
   className,
 }: {
@@ -22,7 +21,6 @@ export function Select({
   value: string;
   onChange: (id: string) => void;
   placeholder?: string;
-  variant?: "field" | "menu";
   isDisabled?: boolean;
   className?: string;
 }) {
@@ -33,8 +31,6 @@ export function Select({
       selectedKey={value}
       callback={(item) => onChange(String(item.id))}
       placeholder={placeholder}
-      simpleButton={variant === "menu"}
-      smallButton={variant === "menu"}
       isDisabled={isDisabled}
       className={clsx(hideLabel && "*:first:sr-only", className)}
     />

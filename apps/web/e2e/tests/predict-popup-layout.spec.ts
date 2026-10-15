@@ -151,9 +151,11 @@ for (const height of [812, 667]) {
             ["Cancel", "Predict"].map(async (name) => (await dialog.getByRole("button", { name }).boundingBox())!.y),
           )),
         );
-        const cue = await dialog.getByTestId("more-below").evaluate((element) =>
-          getComputedStyle(element).opacity === "0" ? Infinity : element.getBoundingClientRect().top,
-        );
+        const cue = await dialog
+          .getByTestId("more-below")
+          .evaluate((element) =>
+            getComputedStyle(element).opacity === "0" ? Infinity : element.getBoundingClientRect().top,
+          );
         // the short-window rules exist for this: a phone at 375 x 667 opens with every step in view
         for (const title of height === 667 ? STEPS : []) {
           const step = dialog.getByText(title, { exact: true });
@@ -429,7 +431,8 @@ test.describe("a disabled Predict", () => {
         ? numbers(css).map((n, i) => (i < 3 ? n * 255 : n))
         : numbers(css);
       const linear = (c: number) => ((c /= 255) <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-      const luminance = ([x = 0, y = 0, z = 0]: number[]) => 0.2126 * linear(x) + 0.7152 * linear(y) + 0.0722 * linear(z);
+      const luminance = ([x = 0, y = 0, z = 0]: number[]) =>
+        0.2126 * linear(x) + 0.7152 * linear(y) + 0.0722 * linear(z);
       const label = numbers(getComputedStyle(button.querySelector(".button-text")!).color).slice(0, 3);
       const [fill, text] = [luminance([r, g, b]), luminance(label)];
       return {

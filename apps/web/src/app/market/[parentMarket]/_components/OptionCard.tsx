@@ -48,10 +48,7 @@ export function OptionCard({
     value !== undefined && marketEstimate !== undefined ? estimateDirection(value, marketEstimate) : null;
 
   return (
-    <Disclosure
-      className="bg-fs-surface-sunken w-full"
-      title={<TitleRow option={option} isSet={direction !== null} />}
-    >
+    <Disclosure className="bg-fs-surface-sunken w-full" title={<TitleRow option={option} isSet={direction !== null} />}>
       <div className="flex w-full flex-col gap-4">
         {option.upperBound > option.lowerBound ? (
           <EstimateSlider

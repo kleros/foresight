@@ -123,7 +123,7 @@ export function PredictDialog({
           </div>
         </ScrollFade>
 
-        {/* outside the scroll area, so the reason a run stopped is never under the fold; three lines, held empty or not */}
+        {/* outside the scroll area, so the reason a run stopped is never under the fold; three lines, two on a short window, held empty or not */}
         <p
           role="status"
           aria-live="polite"

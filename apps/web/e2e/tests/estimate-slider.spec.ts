@@ -62,9 +62,7 @@ for (const track of TRACKS) {
     // the pin's drop is a transition; geometry is read where it lands
     test.use({ viewport: { width: track + 64, height: 400 }, contextOptions: { reducedMotion: "reduce" } });
 
-    test("stands up with no estimate set, in place of the thumb's number, and prints both bounds", async ({
-      page,
-    }) => {
+    test("stands up with no estimate set, in place of the thumb's number, and prints both bounds", async ({ page }) => {
       await open(page, { track, market: MARKET });
       const shown = await geometry(page);
 
@@ -89,9 +87,7 @@ for (const track of TRACKS) {
       }
     });
 
-    test("never draws the chip over the thumb's number, and drops the stick before it crosses it", async ({
-      page,
-    }) => {
+    test("never draws the chip over the thumb's number, and drops the stick before it crosses it", async ({ page }) => {
       await open(page, { track, market: MARKET, value: 0 });
       const slider = page.getByRole("slider");
       await slider.focus();
@@ -207,9 +203,7 @@ function pinAnimations(page: Page, action: "pause" | "finish" | "cancel" | "seek
 test.describe("the market pin's drop", () => {
   test.use({ viewport: { width: 375, height: 400 } });
 
-  test("moves the chip from where it stood, by transform, and eases out of the start", async ({
-    page,
-  }) => {
+  test("moves the chip from where it stood, by transform, and eases out of the start", async ({ page }) => {
     await open(page, { track: 311, market: MARKET, value: 50 });
     const slider = page.getByRole("slider");
     const pin = page.getByTestId("market-pin");

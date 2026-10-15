@@ -116,7 +116,9 @@ describe("OptionCard", () => {
 
     await open();
 
-    expect(screen.getByRole("region", { name: "Your position" })).toHaveTextContent("Predicting 400 $M adds to your UP.");
+    expect(screen.getByRole("region", { name: "Your position" })).toHaveTextContent(
+      "Predicting 400 $M adds to your UP.",
+    );
   });
 
   it("shows no position for an option the trade wallet holds none of", async () => {

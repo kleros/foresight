@@ -124,7 +124,9 @@ export function EstimateSlider({
               <div
                 ref={pin.chip}
                 className="absolute top-4 left-0 flex w-max flex-col items-center"
-                style={{ transform: pin.chipShift === undefined ? "translateX(-50%)" : `translateX(${pin.chipShift}px)` }}
+                style={{
+                  transform: pin.chipShift === undefined ? "translateX(-50%)" : `translateX(${pin.chipShift}px)`,
+                }}
               >
                 <span
                   data-testid="market-chip"
