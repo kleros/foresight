@@ -477,7 +477,11 @@ test.describe("the popup's tones", () => {
     const color = (locator: Locator) => locator.evaluate((element) => getComputedStyle(element).color);
 
     // --fs-tone-success and --fs-tone-error-text in the light theme
-    expect(await color(dialog.locator('[data-bullet="done"]').first())).toBe("rgb(0, 196, 43)");
+    expect(await color(dialog.locator('[data-bullet="done"] [data-glyph="check"]').first())).toBe("rgb(0, 196, 43)");
+    // the circle leaving a finished bullet keeps its own tone, so the bullet never shows an empty green ring
+    expect(await color(dialog.locator('[data-bullet="done"] [data-glyph="circle"]').first())).not.toBe(
+      "rgb(0, 196, 43)",
+    );
     expect(await color(dialog.getByRole("status"))).toBe("rgb(196, 0, 42)");
   });
 });
