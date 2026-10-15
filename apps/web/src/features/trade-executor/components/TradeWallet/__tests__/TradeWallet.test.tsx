@@ -307,6 +307,30 @@ describe("TradeWallet's amount dialogs", () => {
     expect(await within(dialog).findByText("Not enough balance.")).toBeInTheDocument();
   });
 
+  it("names no Max when a deposit is over a balance under the last shown decimal", async () => {
+    ownerHeld = new Map([[COLLATERAL, units("0.00001")]]);
+    renderWallet(market, { closed: true });
+
+    await userEvent.click(screen.getByRole("button", { name: "Deposit" }));
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText("Balance: less than 0.0001 sDAI");
+    await userEvent.type(within(dialog).getByRole("spinbutton"), "1");
+
+    expect(await within(dialog).findByText("Not enough balance.")).toBeInTheDocument();
+  });
+
+  it("names no Max when a mint is over a balance under the last shown decimal", async () => {
+    held = new Map([[COLLATERAL, units("0.00001")]]);
+    renderWallet();
+
+    await userEvent.click(screen.getByRole("button", { name: "Mint" }));
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText("Balance: less than 0.0001 sDAI");
+    await userEvent.type(within(dialog).getByRole("spinbutton"), "1");
+
+    expect(await within(dialog).findByText("Not enough balance.")).toBeInTheDocument();
+  });
+
   it("shows a deposit's balance at four decimals with its token, and names the cap when the amount is over it", async () => {
     ownerHeld = new Map([[COLLATERAL, units("2.56789")]]);
     renderWallet(market, { closed: true });

@@ -9,9 +9,8 @@ import { Select } from "@/components/ui/Select";
 
 import DaiIcon from "@/assets/svg/dai.svg";
 
-import { formatAmount } from "@/utils/amount";
+import { ownedAmount } from "@/utils/amount";
 
-import { AMOUNT_DISPLAY_DECIMALS } from "../oracle/tolerances";
 import type { PayToken } from "../types";
 import { fundingSummary, percentOf, roundToDisplay, shareOf, type Funding } from "../utils/funding";
 
@@ -85,12 +84,12 @@ export function PredictAmountSection({
                 ? "No wallet connected"
                 : available === undefined
                   ? "Reading balance…"
-                  : `Balance: ${formatAmount(available, token.decimals, AMOUNT_DISPLAY_DECIMALS)} ${token.symbol}`}
+                  : `Balance: ${ownedAmount(available, token.decimals)} ${token.symbol}`}
           </span>
           <LightButton
             small
             text="Max"
-            isDisabled={isReadOnly || !available}
+            isDisabled={isReadOnly || !max}
             onPress={() => max !== undefined && onAmountChange(max)}
             className={clsx(
               // a 44px target that takes no more height than its label

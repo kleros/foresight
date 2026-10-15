@@ -148,6 +148,17 @@ describe("the amount behind them", () => {
     expect(screen.getByRole("button", { name: "Predict" })).toBeDisabled();
   });
 
+  it.each([
+    ["an empty balance", 0n, "Balance: 0 sDAI"],
+    ["a balance under the last shown decimal", WAD / 100_000n, "Balance: less than 0.0001 sDAI"],
+  ])("names no Max over %s", (_name, available, balance) => {
+    render(<PredictDialog {...props()} amount={WAD} funding={funding({ available })} />);
+
+    expect(screen.getByText(balance)).toBeInTheDocument();
+    expect(screen.getByText("Not enough balance.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Max" })).toBeDisabled();
+  });
+
   it("does not ask for more money while a stopped run waits on the amount it started with", () => {
     render(<PredictDialog {...props()} amount={26n * WAD} canRetry />);
 

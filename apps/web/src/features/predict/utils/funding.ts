@@ -103,10 +103,12 @@ export function fundingSummary(args: {
   const { funding, amount, token, collateral } = args;
   if (!funding || amount === undefined || amount === 0n) return null;
   if (amount > funding.available) {
-    return {
-      text: `Not enough balance. Max ${shownAmount(roundToDisplay(funding.available, token.decimals), token.decimals)} ${token.symbol}.`,
-      tone: "error",
-    };
+    const max = roundToDisplay(funding.available, token.decimals);
+    const text =
+      max === 0n
+        ? "Not enough balance."
+        : `Not enough balance. Max ${shownAmount(max, token.decimals)} ${token.symbol}.`;
+    return { text, tone: "error" };
   }
 
   const total = `${token.id === "native" ? "≈ " : ""}${shownAmount(funding.collateralIn, collateral.decimals)} ${collateral.symbol}`;

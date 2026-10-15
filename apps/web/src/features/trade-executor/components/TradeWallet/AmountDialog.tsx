@@ -4,7 +4,7 @@ import { Button, Form } from "@kleros/ui-components-library";
 
 import { Dialog } from "@/components/ui/Dialog";
 
-import { ownedAmount, parseAmount } from "@/utils/amount";
+import { OWNED_DECIMALS, ownedAmount, parseAmount } from "@/utils/amount";
 
 import { AmountField } from "./AmountField";
 
@@ -81,8 +81,8 @@ export function AmountDialog({
   );
 }
 
-/** The cap is named only when there is one to go back to. */
+/** The cap is named only when it shows as more than 0. */
 export function overCap(overText: string, available: bigint, decimals: number, symbol?: string): string {
-  if (available === 0n) return overText;
+  if (available < 10n ** BigInt(Math.max(decimals - OWNED_DECIMALS, 0))) return overText;
   return `${overText} Max ${ownedAmount(available, decimals)}${symbol ? ` ${symbol}` : ""}.`;
 }

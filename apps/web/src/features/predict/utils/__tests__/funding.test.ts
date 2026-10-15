@@ -287,6 +287,18 @@ describe("fundingSummary", () => {
     });
   });
 
+  it.each([
+    ["empty", 0n],
+    ["under the last shown decimal", WAD / 100_000n],
+  ])("over a balance that is %s, names no Max", (_name, ownWallet) => {
+    const funding = planFunding({ amount: WAD, ownWallet, tradeWallet: 0n });
+
+    expect(fundingSummary({ funding, amount: WAD, token: sDai, collateral })).toEqual({
+      text: "Not enough balance.",
+      tone: "error",
+    });
+  });
+
   it("says nothing before an amount is typed", () => {
     const funding = planFunding({ amount: 0n, ownWallet: 20n * WAD, tradeWallet: 0n });
 
