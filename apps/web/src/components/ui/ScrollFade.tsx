@@ -26,12 +26,14 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({ children, className, fad
     const el = ref.current;
     if (!el) return;
     const EPSILON = 2; // px tolerance for sub-pixel / animation noise
+    // under one 16px line out of view is padding, not content worth a cue
+    const MIN_OVERFLOW = 16;
 
     const update = () => {
       const { scrollTop, scrollHeight, clientHeight } = el;
 
       const maxScrollable = scrollHeight - clientHeight;
-      const hasOverflow = maxScrollable > EPSILON;
+      const hasOverflow = maxScrollable >= MIN_OVERFLOW;
 
       const atTop = scrollTop <= EPSILON;
       const atBottom = scrollTop >= maxScrollable - EPSILON;

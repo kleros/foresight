@@ -275,7 +275,7 @@ test.describe("the popup's scroll area", () => {
       const dialog = await openPopup(page, 5);
       const scroller = page.getByTestId("predict-body").locator("..");
       const cue = dialog.getByTestId("more-below");
-      const overflows = await scroller.evaluate((element) => element.scrollHeight > element.clientHeight + 2);
+      const overflows = await scroller.evaluate((element) => element.scrollHeight >= element.clientHeight + 16);
 
       if (overflows) {
         await expect(cue).toHaveCSS("opacity", "1");
