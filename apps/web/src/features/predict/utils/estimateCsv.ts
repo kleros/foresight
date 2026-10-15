@@ -68,9 +68,9 @@ export function parseEstimateCsv(text: string, scales: OptionScale[]): ParsedEst
   const nameAt = columns.indexOf(CSV_COLUMNS[0]);
   const estimateAt = columns.indexOf(CSV_COLUMNS[1]);
   if (columns.length !== 2 || nameAt === -1 || estimateAt === -1) {
-    throw new Error(`The first row must name exactly two columns: ${CSV_COLUMNS.join(",")}`);
+    throw new Error(`The first row must be: ${CSV_COLUMNS.join(",")}`);
   }
-  if (rows.length === 0) throw new Error("There are no rows under the header.");
+  if (rows.length === 0) throw new Error("No rows under the header.");
 
   const byName = new Map(scales.map((scale) => [scale.name.trim().toLowerCase(), scale]));
   const parsed = new Map<string, ParsedEstimate>();
@@ -90,9 +90,7 @@ export function parseEstimateCsv(text: string, scales: OptionScale[]): ParsedEst
       throw new Error(`Row ${line}: ${scale.name} takes ${scale.lowerBound} to ${scale.upperBound}, not ${raw}.`);
     }
     if (snapEstimate(value, scale) !== value) {
-      throw new Error(
-        `Row ${line}: ${scale.name} moves in steps of ${estimateStep(scale)}, so ${raw} is not a value it can take.`,
-      );
+      throw new Error(`Row ${line}: ${scale.name} moves in steps of ${estimateStep(scale)}, so ${raw} is not allowed.`);
     }
 
     parsed.set(scale.market.toLowerCase(), { scale, value });

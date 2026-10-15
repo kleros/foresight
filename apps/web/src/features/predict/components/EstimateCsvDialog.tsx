@@ -77,7 +77,7 @@ export function EstimateCsvDialog({ parentMarket, scales, marketEstimates, noun,
         isOpen={isOpen}
         onClose={close}
         title="Upload estimates (CSV)"
-        hint="One row per option, each with your estimate for it."
+        hint="Each row is a name and your estimate for it."
         className="w-full md:w-162"
       >
         <div className="bg-fs-surface-tint rounded-fs flex flex-col gap-2 px-4 pt-3 pb-4">
@@ -88,7 +88,7 @@ export function EstimateCsvDialog({ parentMarket, scales, marketEstimates, noun,
             {templateRows.length > 2 ? <span className="text-fs-text-secondary">{"\n…"}</span> : null}
           </pre>
           <p className="text-fs-text-primary text-sm">
-            Names must match the {noun} on this page. An estimate outside its scale is refused.
+            Names must match the {noun} on this page. An estimate outside its range is refused.
           </p>
         </div>
 
