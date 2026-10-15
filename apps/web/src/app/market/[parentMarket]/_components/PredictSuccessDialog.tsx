@@ -68,14 +68,9 @@ export function PredictSuccessDialog({
         </div>
       ) : (
         <div className="flex w-full flex-col items-center gap-8">
-          <div>
-            <h2 className="text-fs-text-primary w-full text-center text-base font-semibold">
-              Get an email when it resolves
-            </h2>
-            <p className="text-fs-text-secondary w-full text-center text-sm">
-              Add your email to hear when this market resolves.
-            </p>
-          </div>
+          <h2 className="text-fs-text-primary w-full text-center text-base font-semibold">
+            Get an email when it resolves
+          </h2>
           <EnsureAuth text="Sign in to subscribe">
             <ContactDetailsForm />
           </EnsureAuth>
