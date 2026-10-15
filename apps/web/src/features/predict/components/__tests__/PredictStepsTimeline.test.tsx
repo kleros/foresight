@@ -87,6 +87,31 @@ describe("PredictStepsTimeline bullets", () => {
 describe("the timeline's place in the popup", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  /** jsdom has no matchMedia; this one answers only the reduced-motion query, as `reduce` says. */
+  const prefersReducedMotion = (reduce: boolean) =>
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: reduce && query === "(prefers-reduced-motion: reduce)",
+      media: query,
+    }));
+
+  it.each([
+    [false, "smooth"],
+    [true, "auto"],
+  ])("with reduced motion %s, scrolls to a running step with behaviour %s", (reduce, behavior) => {
+    prefersReducedMotion(reduce);
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+
+    render(
+      <PredictStepsTimeline
+        steps={{ rows: [{ key: "predict", title: "Place prediction", subtitle: "", view: "running" }] }}
+      />,
+    );
+
+    expect(scroll).toHaveBeenCalledExactlyOnceWith({ block: "nearest", behavior });
   });
 
   it("scrolls itself into view when a run stops with a failure", () => {

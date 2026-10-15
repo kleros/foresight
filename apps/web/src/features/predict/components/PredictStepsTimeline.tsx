@@ -42,7 +42,9 @@ export function PredictStepsTimeline({ steps }: { steps: PredictSteps }) {
   // the timeline sits below the amount, often past the fold of the popup's scroll area
   useEffect(() => {
     if (steps.failure === undefined && running === undefined) return;
-    timeline.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+    // a behaviour passed here overrides the stylesheet's reduced-motion scroll-behavior
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    timeline.current?.scrollIntoView?.({ block: "nearest", behavior: reduce ? "auto" : "smooth" });
   }, [steps.failure, running]);
 
   const items: TimelineItem[] = steps.rows.map((row) => ({
