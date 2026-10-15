@@ -40,7 +40,7 @@ export function PredictSuccessDialog({
       <CheckIcon className="size-32" />
       {leftOut.length > 0 ? (
         <p className="text-fs-text-secondary text-center text-sm">
-          These estimates could not be traded right now and were left out: {leftOut.join(", ")}.
+          Could not be traded, so left out: {leftOut.join(", ")}.
         </p>
       ) : null}
 
@@ -48,7 +48,7 @@ export function PredictSuccessDialog({
       {userExists ? (
         <div className="flex w-full flex-col items-center gap-8">
           <p className="text-fs-text-secondary w-full text-center text-sm">
-            You will receive a notification on the following email once the market resolves.
+            You&apos;ll get an email when the market resolves.
           </p>
           <div className="space-y-2">
             {user?.email ? (
@@ -61,7 +61,7 @@ export function PredictSuccessDialog({
             ) : null}
             <InfoCard
               className="w-fit text-sm wrap-break-word"
-              msg="You can update your subscription preference at any time on Settings. Please make sure that you have confirmed your email."
+              msg="Change this in Settings. Make sure your email is confirmed."
             />
           </div>
           <Button small text="Close" onPress={onClose} />
@@ -70,10 +70,10 @@ export function PredictSuccessDialog({
         <div className="flex w-full flex-col items-center gap-8">
           <div>
             <h2 className="text-fs-text-primary w-full text-center text-base font-semibold">
-              Subscribe for Email Notifications
+              Get an email when it resolves
             </h2>
             <p className="text-fs-text-secondary w-full text-center text-sm">
-              We advise you to subscribe to receive notifications about the progress of your predictions.
+              Add your email to hear when this market resolves.
             </p>
           </div>
           <EnsureAuth text="Sign in to subscribe">

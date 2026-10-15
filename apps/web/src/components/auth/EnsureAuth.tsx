@@ -20,7 +20,7 @@ const EnsureAuth: React.FC<{ children: React.ReactNode; text?: string; className
     infoToast("Signing in...");
     authoriseUser()
       .then(() => successToast("Signed in successfully!"))
-      .catch((err: Error) => errorToast(`Sign-in failed: ${err?.message}`));
+      .catch(() => errorToast("Sign-in failed. Try again."));
   }, [authoriseUser]);
 
   return isVerified ? (
