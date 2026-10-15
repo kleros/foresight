@@ -167,3 +167,23 @@ test.describe("the market chip's text", () => {
     });
   }
 });
+
+test.describe("the fill's direction colour", () => {
+  test.use({ viewport: { width: 375, height: 400 } });
+
+  // light: the darker tones that hold 3:1 on the sunken surface; dark: futarchy's pastels
+  for (const [theme, up, down] of [
+    ["light", "rgb(22, 163, 74)", "rgb(224, 64, 95)"],
+    ["dark", "rgb(210, 255, 220)", "rgb(255, 210, 219)"],
+  ] as const) {
+    test(`is ${up} above and ${down} below the market in the ${theme} theme`, async ({ page }) => {
+      for (const [value, colour] of [
+        [90, up],
+        [40, down],
+      ] as const) {
+        await open(page, { track: 311, market: MARKET, value, theme });
+        await expect(page.locator("#slider-fill")).toHaveCSS("background-color", colour);
+      }
+    });
+  }
+});
