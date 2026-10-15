@@ -251,6 +251,19 @@ describe("EstimateSlider value pill", () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
+  it("still shows a saved estimate on a locked slider, without offering to type it", () => {
+    renderSlider(400, { lockedReason: "Trading has closed." });
+
+    expect(screen.getByTestId("value-pill")).toHaveTextContent("400 $M");
+    expect(screen.queryByRole("button", { name: /^Type your estimate/ })).toBeNull();
+  });
+
+  it("shows no value on a slider whose option has no trading", () => {
+    renderSlider(undefined, { marketEstimate: undefined });
+
+    expect(screen.queryByTestId("value-pill")).toBeNull();
+  });
+
   it("is not offered while the slider is locked", () => {
     renderSlider(400, { lockedReason: "Trading has closed." });
 

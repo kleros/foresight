@@ -124,6 +124,16 @@ export function EstimateSlider({
                 : undefined
             }
           />
+          {isDisabled && value !== undefined ? (
+            <span
+              ref={pin.pill}
+              data-testid="value-pill"
+              className="border-fs-border bg-fs-surface text-fs-text-primary absolute -top-8 z-20 inline-flex h-7 items-center rounded-full border px-2.5 text-sm font-semibold whitespace-nowrap tabular-nums opacity-50"
+              style={{ left: `${thumbShare * 100}%`, transform: `translateX(-${thumbShare * 100}%)` }}
+            >
+              {formatEstimate(shown, scale.unit)}
+            </span>
+          ) : null}
           {!isDisabled ? (
             <ValuePill
               ref={pin.pill}
