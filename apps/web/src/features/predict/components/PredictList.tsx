@@ -22,8 +22,12 @@ export interface PriceMove {
   to: number;
 }
 
-/** --fs-dur-echo: the row's exit runs before the list drops it. */
-const EXIT_MS = 100;
+/** --fs-dur-echo in ms, the length of a row's exit; 0 where no stylesheet sets it. */
+function exitMs(): number {
+  const token = getComputedStyle(document.documentElement).getPropertyValue("--fs-dur-echo").trim();
+  const ms = token.endsWith("ms") ? parseFloat(token) : token.endsWith("s") ? parseFloat(token) * 1000 : NaN;
+  return Number.isFinite(ms) ? ms : 0;
+}
 
 /** The estimates going into the popup, one row each, removable while more than one is left. */
 export function PredictList({
@@ -54,17 +58,14 @@ export function PredictList({
 
   const remove = (market: string) => {
     if (leaving.includes(market)) return;
-    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     setLeaving((markets) => [...markets, market]);
-    const timer = setTimeout(
-      () => {
-        timers.current.delete(timer);
-        setLeaving((markets) => markets.filter((other) => other !== market));
-        // a run that started during the exit has already taken this estimate in
-        if (!readOnly.current) onRemove(market);
-      },
-      reduce ? 0 : EXIT_MS,
-    );
+    // the token is 1ms under reduced motion
+    const timer = setTimeout(() => {
+      timers.current.delete(timer);
+      setLeaving((markets) => markets.filter((other) => other !== market));
+      // a run that started during the exit has already taken this estimate in
+      if (!readOnly.current) onRemove(market);
+    }, exitMs());
     timers.current.add(timer);
   };
   // the last estimate is never removed, counting the ones on their way out

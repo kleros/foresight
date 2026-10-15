@@ -1,6 +1,6 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { addresses } from "@/testing/fixtures";
 
@@ -62,12 +62,17 @@ describe("PredictList's rows", () => {
 });
 
 describe("removing a row", () => {
-  afterEach(() => vi.useRealTimers());
+  const other = { ...estimate, scale: { ...estimate.scale, market: addresses.childMarkets[1], name: "Movie B" } };
+  // jsdom loads no stylesheet, so the exit's duration token is set where the list reads it
+  beforeEach(() => document.documentElement.style.setProperty("--fs-dur-echo", "100ms"));
+  afterEach(() => {
+    vi.useRealTimers();
+    document.documentElement.style.removeProperty("--fs-dur-echo");
+  });
 
   it("lets the row fade out before it leaves the list", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const onRemove = vi.fn();
-    const other = { ...estimate, scale: { ...estimate.scale, market: addresses.childMarkets[1], name: "Movie B" } };
     render(<PredictList selected={[estimate, other]} onRemove={onRemove} isReadOnly={false} />);
 
     await userEvent.click(screen.getByRole("button", { name: "Remove Movie A" }));
@@ -76,5 +81,44 @@ describe("removing a row", () => {
 
     act(() => vi.advanceTimersByTime(100));
     expect(onRemove).toHaveBeenCalledExactlyOnceWith(market);
+  });
+
+  it("takes the exit's length from the motion token", () => {
+    vi.useFakeTimers();
+    document.documentElement.style.setProperty("--fs-dur-echo", "0.25s");
+    const onRemove = vi.fn();
+    render(<PredictList selected={[estimate, other]} onRemove={onRemove} isReadOnly={false} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove Movie A" }));
+    act(() => vi.advanceTimersByTime(249));
+    expect(onRemove).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(1));
+    expect(onRemove).toHaveBeenCalledExactlyOnceWith(market);
+  });
+
+  it("keeps the last row when both are removed within one exit", () => {
+    vi.useFakeTimers();
+    const onRemove = vi.fn();
+    render(<PredictList selected={[estimate, other]} onRemove={onRemove} isReadOnly={false} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove Movie A" }));
+    act(() => vi.advanceTimersByTime(50));
+    expect(screen.getByRole("button", { name: "Remove Movie B" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Remove Movie B" }));
+    act(() => vi.advanceTimersByTime(200));
+
+    expect(onRemove).toHaveBeenCalledExactlyOnceWith(market);
+  });
+
+  it("keeps a row whose exit is overtaken by a run starting", () => {
+    vi.useFakeTimers();
+    const onRemove = vi.fn();
+    const { rerender } = render(<PredictList selected={[estimate, other]} onRemove={onRemove} isReadOnly={false} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove Movie A" }));
+    rerender(<PredictList selected={[estimate, other]} onRemove={onRemove} isReadOnly />);
+    act(() => vi.advanceTimersByTime(200));
+
+    expect(onRemove).not.toHaveBeenCalled();
   });
 });
