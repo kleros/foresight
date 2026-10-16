@@ -75,11 +75,12 @@ const summaryHead = () => within(screen.getByTestId("predict-summary")).getByRol
 describe("the estimates going in", () => {
   it("says where each market would move, once the summary is opened", async () => {
     render(<PredictDialog {...props()} preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 355 } }} />);
-    expect(screen.queryByText(/→/)).toBeNull();
+    const moves = () => within(screen.getByTestId("predict-summary")).queryAllByRole("listitem");
+    expect(moves()).toEqual([]);
 
     await userEvent.click(summaryHead());
 
-    expect(screen.getByText("312 → 355 $M")).toBeInTheDocument();
+    expect(moves()[0]).toHaveTextContent("312 → 355 $M");
     expect(screen.getAllByText(/→/)).toHaveLength(1);
   });
 
@@ -517,12 +518,12 @@ describe("the summary under the amount", () => {
     await userEvent.click(summaryHead());
     const summary = screen.getByTestId("predict-summary");
 
+    expect(summaryHead().textContent).toBe("1 market moves");
     expect(
       within(summary)
-        .getAllByTestId("market-move")
-        .map((move) => move.textContent),
-    ).toEqual(["312 → 355 $M", "Now 296 $M"]);
-    expect(summary).not.toHaveTextContent(/fee|xDAI|receive|minimum|~|≈|\bs\b|min/i);
+        .getAllByRole("listitem")
+        .map((row) => row.textContent),
+    ).toEqual(["Greta Gerwig312 → 355 $M", "Ryan CooglerNow 296 $M"]);
   });
 
   it("stays open or closed as the visitor left it, whatever the run does", async () => {
@@ -546,6 +547,19 @@ describe("the summary under the amount", () => {
 
     await userEvent.click(summaryHead());
     view.rerender(<PredictDialog {...props()} preview={preview} isRunning />);
+    expect(summaryHead()).toHaveAttribute("aria-expanded", "false");
+    view.rerender(
+      <PredictDialog
+        {...props()}
+        preview={preview}
+        canRetry
+        steps={{ ...steps, failure: "You declined in your wallet." }}
+      />,
+    );
+    expect(summaryHead()).toHaveAttribute("aria-expanded", "false");
+    view.rerender(<PredictDialog {...props()} preview={preview} canRetry isPending />);
+    expect(summaryHead()).toHaveAttribute("aria-expanded", "false");
+    view.rerender(<PredictDialog {...props()} preview={preview} recovered={{ deposit: 4n * WAD, token: sDai }} />);
     expect(summaryHead()).toHaveAttribute("aria-expanded", "false");
   });
 
