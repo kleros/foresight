@@ -226,7 +226,7 @@ export function PredictAmountSection({
 }
 
 function grouped(decimal: string): string {
-  const [whole, fraction] = decimal.split(".");
+  const [whole = "", fraction] = decimal.split(".");
   const withCommas = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   return fraction === undefined ? withCommas : `${withCommas}.${fraction}`;
 }

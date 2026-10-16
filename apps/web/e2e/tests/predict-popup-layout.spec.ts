@@ -632,7 +632,9 @@ for (const viewport of [
               [element.parentElement!.offsetHeight, footer.offsetHeight],
             ];
           });
-          expect.soft(padding, `${options} options: scroll padding as tall as the sticky header and footer`).toEqual(bars);
+          expect
+            .soft(padding, `${options} options: scroll padding as tall as the sticky header and footer`)
+            .toEqual(bars);
           expect.soft(await isFullyShown(close), `${options} options: the close button at open`).toBe(true);
         }
       });
@@ -801,7 +803,7 @@ test.describe("the pay token's open menu", () => {
           line: [getComputedStyle(popover).borderTopColor, resolve("border-top-color", "var(--fs-popup-line)")],
           heights: rows.map((row) => row.getBoundingClientRect().height),
           sizes: rows.map((row) => label(row).fontSize),
-          text: [label(rows[1]).color, resolve("color", "var(--fs-popup-text)")],
+          text: [label(rows[1]!).color, resolve("color", "var(--fs-popup-text)")],
           chosen: [getComputedStyle(chosen).backgroundColor, resolve("background-color", "var(--fs-popup-chip)")],
           bar: getComputedStyle(chosen).borderLeftWidth,
         };

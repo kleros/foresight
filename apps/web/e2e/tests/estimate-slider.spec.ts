@@ -783,13 +783,9 @@ test.describe("the market pin's drop", () => {
 });
 
 test.describe("a value whose label changes width", () => {
-  for (const viewport of [
-    { width: 375, height: 400 },
-    { width: 1280, height: 400 },
-  ]) {
-    test.describe(`at ${viewport.width} wide`, () => {
-      test.use({ viewport });
-      const track = viewport.width === 375 ? TRACKS[0] : TRACKS[1];
+  for (const track of TRACKS) {
+    test.describe(`on a ${track}px track`, () => {
+      test.use({ viewport: { width: track + 64, height: 400 } });
 
       for (const [name, query, act] of [
         [
