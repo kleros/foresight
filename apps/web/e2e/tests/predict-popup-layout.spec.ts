@@ -600,6 +600,23 @@ for (const viewport of [
   test.describe(`a landscape phone at ${viewport.width} x ${viewport.height}`, () => {
     test.use({ viewport });
 
+    for (const state of ["idle"] as const) {
+      test(`opens ${state} with its close button whole and nothing to scroll sideways`, async ({ page }) => {
+        await page.emulateMedia({ reducedMotion: "reduce" });
+        for (const options of [2, 10]) {
+          const dialog = await openPopup(page, options, state);
+          const close = dialog.getByRole("button", { name: "Close" });
+          const sideways = await close.evaluate((element) => {
+            let scroller = element.parentElement;
+            while (scroller && getComputedStyle(scroller).overflowY !== "auto") scroller = scroller.parentElement;
+            return scroller ? scroller.scrollWidth - scroller.clientWidth : 0;
+          });
+          expect.soft(sideways, `${options} options: sideways scroll`).toBe(0);
+          expect.soft(await isFullyShown(close), `${options} options: the close button at open`).toBe(true);
+        }
+      });
+    }
+
     for (const state of ["idle", "failed"] as const) {
       test(`keeps the button inside the dialog and every part reachable above it, ${state}`, async ({ page }) => {
         // the open's scroll then lands at once

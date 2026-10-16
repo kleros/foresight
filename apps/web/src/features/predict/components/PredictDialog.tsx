@@ -132,8 +132,15 @@ export function PredictDialog({
         "rounded-fs-popup bg-fs-surface border border-(--fs-popup-edge) shadow-(--fs-popup-shadow)",
       )}
     >
-      {/* on a phone on its side the whole popup scrolls, padded by the sticky button's 72px */}
-      <div className="landscape-phone:overflow-y-auto landscape-phone:scroll-pb-18 flex min-h-0 w-full flex-col">
+      {/* on a phone on its side the whole popup scrolls, padded by the sticky button's 72px,
+          and reaches 12px into the dialog's padding, room for the close button's overhang and its target */}
+      <div
+        className={clsx(
+          "flex min-h-0 w-full flex-col",
+          "landscape-phone:overflow-y-auto landscape-phone:scroll-pb-18",
+          "landscape-phone:-mr-3 landscape-phone:w-[calc(100%+12px)] landscape-phone:pr-3",
+        )}
+      >
         <div className="mb-2 flex h-8 shrink-0 items-center justify-between">
           <h2 className="text-fs-popup-text text-lg font-semibold tracking-[-0.01em]">Predict</h2>
           <LightButton
