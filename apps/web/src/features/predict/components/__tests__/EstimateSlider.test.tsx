@@ -45,17 +45,19 @@ const pill = () => screen.getByRole("button", { name: /, type your estimate for 
 const field = () => screen.getByRole("textbox", { name: "Your estimate for Greta Gerwig" });
 
 describe("EstimateSlider colours", () => {
-  it("fills the track and rims the thumb in the up colour above the market", () => {
+  it("colours the gap to the market and rims the thumb in the up colour above the market", () => {
     const { container } = renderSlider(400);
 
-    expect(fill(container).style.backgroundColor).toBe("var(--fs-estimate-up)");
+    expect(screen.getByTestId("estimate-span").style.backgroundColor).toBe("var(--fs-estimate-up)");
+    expect(fill(container).style.backgroundColor).toBe("transparent");
     expect(thumb(container).style.borderColor).toBe("var(--fs-estimate-up)");
   });
 
-  it("fills the track and rims the thumb in the down colour below the market", () => {
+  it("colours the gap to the market and rims the thumb in the down colour below the market", () => {
     const { container } = renderSlider(200);
 
-    expect(fill(container).style.backgroundColor).toBe("var(--fs-estimate-down)");
+    expect(screen.getByTestId("estimate-span").style.backgroundColor).toBe("var(--fs-estimate-down)");
+    expect(fill(container).style.backgroundColor).toBe("transparent");
     expect(thumb(container).style.borderColor).toBe("var(--fs-estimate-down)");
   });
 

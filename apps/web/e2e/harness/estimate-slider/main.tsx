@@ -16,6 +16,8 @@ const marketEstimate = number("market", 75);
 /** `?value=` a saved estimate; without it the slider rests at the market. */
 const initial = params.has("value") ? number("value", 0) : undefined;
 if (params.get("theme") === "dark") document.documentElement.classList.add("dark");
+/** `?locked=1` a session that takes no estimates, as a closed one. */
+const lockedReason = params.get("locked") === "1" ? "Trading has closed." : undefined;
 
 function Harness() {
   const [value, setValue] = useState(initial);
@@ -35,6 +37,7 @@ function Harness() {
         value={value}
         onCommit={setValue}
         onClear={() => setValue(undefined)}
+        lockedReason={lockedReason}
       />
     </div>
   );

@@ -41,7 +41,7 @@ const PIN_DROP_PX = 52;
 const STICK_PX = 14;
 
 /**
- * An estimate on the option's own scale, drawn as futarchy-ui draws it: the fill and thumb take
+ * An estimate on the option's own scale: the gap between the market and the thumb, and the thumb, take
  * the direction's colour, and the market's pin dips as the thumb's value nears it and drops under the track once it is close.
  * The value above the thumb is a pill that opens as a field; a typed number is applied on Enter or blur.
  */
@@ -125,7 +125,7 @@ export function EstimateSlider({
               "[&_div:has(>#slider-label)[data-focus-visible]]:ring-2",
               "[&_div:has(>#slider-label)[data-focus-visible]]:ring-offset-2",
               "[&_div:has(>#slider-label)[data-focus-visible]]:ring-offset-fs-surface",
-              // at the market the fill is the brand axis; a direction paints it solid
+              // at the market the fill is the brand axis
               !tone && !isDisabled && "[&_#slider-fill]:bg-(image:--fs-popup-axis)",
               isDisabled && "opacity-50",
             )}
@@ -144,15 +144,34 @@ export function EstimateSlider({
             isDisabled={isDisabled}
             theme={
               isDisabled
-                ? undefined
+                ? {
+                    sliderColor: "var(--fs-popup-track-dot)",
+                    thumbColor: "var(--fs-popup-track-dot)",
+                    trackColor: "var(--fs-popup-track)",
+                    labelColor: "var(--fs-text-primary)",
+                  }
                 : {
-                    sliderColor: tone ?? "var(--fs-popup-axis-from)",
+                    // with a direction the span below draws the gap to the market, so the library's fill from 0 steps aside
+                    sliderColor: tone ? "transparent" : "var(--fs-popup-axis-from)",
                     thumbColor: tone ?? "var(--fs-popup-axis-to)",
                     trackColor: "var(--fs-popup-track)",
                     labelColor: "var(--fs-text-primary)",
                   }
             }
           />
+          {tone && marketShare !== undefined ? (
+            <span
+              data-testid="estimate-span"
+              aria-hidden
+              // on the library's track, 8px tall and centred in its 28px row; under the thumb's z-10
+              className="fs-echo pointer-events-none absolute top-3.5 z-1 h-2 -translate-y-1/2 rounded-full"
+              style={{
+                left: `${Math.min(marketShare, thumbShare) * 100}%`,
+                width: `${Math.abs(thumbShare - marketShare) * 100}%`,
+                backgroundColor: tone,
+              }}
+            />
+          ) : null}
           {isDisabled && value !== undefined ? (
             <span
               ref={pin.pill}
@@ -264,7 +283,7 @@ export function EstimateSlider({
               />
             </div>
           ) : null}
-          <div className="type-caption text-fs-text-secondary flex justify-between tabular-nums">
+          <div className="type-caption text-fs-text-secondary flex justify-between">
             {/* a dropped chip that cannot slide clear of a bound covers it, so the bound steps aside */}
             <span data-bound="lower" className={clsx(isDown && covers.lower && "invisible")}>
               {formatEstimate(snapEstimate(scale.lowerBound, scale), scale.unit)}

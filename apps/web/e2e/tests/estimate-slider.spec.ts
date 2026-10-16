@@ -416,6 +416,18 @@ test.describe("the value pill", () => {
     expect(await motion(page), "after Enter").toEqual([
       { name: "fsPillCommit", properties: ["opacity", "transform"], duration: 250 },
     ]);
+    await page.waitForFunction(() => document.getAnimations().length === 0);
+    await page.evaluate(() => (window as unknown as { started: unknown[] }).started.splice(0));
+
+    await pill(page).click();
+    await field(page).fill("60");
+    // a press outside the pill blurs the field, which applies what it holds
+    await page.mouse.click(5, 5);
+    await expect(pill(page)).toContainText("60");
+    await expect.poll(() => page.evaluate(() => (window as unknown as { started: unknown[] }).started.length)).toBe(1);
+    expect(await motion(page), "after a click away").toEqual([
+      { name: "fsPillCommit", properties: ["opacity", "transform"], duration: 250 },
+    ]);
   });
 
   test.describe("with reduced motion", () => {
@@ -563,7 +575,18 @@ test.describe("the value pill's tint", () => {
 
     test(`is neutral, at AA, at the market in the ${theme} theme`, async ({ page }) => {
       await open(page, { track: 311, market: MARKET, theme });
+      const [text, chip] = await page.locator(PILL).evaluate((pill) => {
+        const probe = document.createElement("span");
+        probe.style.color = "var(--fs-popup-text)";
+        probe.style.backgroundColor = "var(--fs-popup-chip)";
+        pill.append(probe);
+        const tones = [getComputedStyle(probe).color, getComputedStyle(probe).backgroundColor];
+        probe.remove();
+        return tones;
+      });
 
+      await expect(page.locator(PILL)).toHaveCSS("color", text!);
+      await expect(page.locator(PILL)).toHaveCSS("background-color", chip!);
       expect(await contrast(page, PILL)).toBeGreaterThanOrEqual(4.5);
     });
   }
@@ -572,27 +595,68 @@ test.describe("the value pill's tint", () => {
 test.describe("the fill's direction colour", () => {
   test.use({ viewport: { width: 375, height: 400 } });
 
+  /** The coloured span's ends and the track's points for the market and the thumb, in page px. */
+  const spanAgainst = (page: Page, value: number) =>
+    page.evaluate(
+      ([market, value]: [number, number]) => {
+        const track = document.querySelector("#slider-track")!.getBoundingClientRect();
+        const span = document.querySelector('[data-testid="estimate-span"]')!.getBoundingClientRect();
+        const at = (share: number) => track.left + (share / 100) * track.width;
+        return {
+          span: [span.left, span.right],
+          ends: [at(Math.min(market, value)), at(Math.max(market, value))],
+          centre: [span.top + span.height / 2, track.top + track.height / 2],
+        };
+      },
+      [MARKET, value] as [number, number],
+    );
+
   // light: the darker tones that hold 3:1 on the card's surface; dark: futarchy's pastels
   for (const [theme, up, down] of [
     ["light", "rgb(22, 163, 74)", "rgb(224, 64, 95)"],
     ["dark", "rgb(210, 255, 220)", "rgb(255, 210, 219)"],
   ] as const) {
-    test(`is ${up} above and ${down} below the market in the ${theme} theme`, async ({ page }) => {
+    test(`paints only the gap to the market, ${up} above and ${down} below, in the ${theme} theme`, async ({
+      page,
+    }) => {
       for (const [value, colour] of [
         [90, up],
         [40, down],
       ] as const) {
         await open(page, { track: 311, market: MARKET, value, theme });
-        await expect(page.locator("#slider-fill")).toHaveCSS("background-color", colour);
+        await expect(page.getByTestId("estimate-span")).toHaveCSS("background-color", colour);
+        await expect(page.locator("#slider-fill")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
         await expect(page.locator("#slider-fill")).toHaveCSS("background-image", "none");
+
+        const { span, ends, centre } = await spanAgainst(page, value);
+        expect(span[0], `the span's start at ${value}`).toBeCloseTo(ends[0]!, 0);
+        expect(span[1], `the span's end at ${value}`).toBeCloseTo(ends[1]!, 0);
+        expect(centre[0], "the span sits on the track").toBeCloseTo(centre[1]!, 0);
       }
     });
   }
 
-  test("is the brand gradient at the market", async ({ page }) => {
+  test("is the brand gradient at the market, with no span", async ({ page }) => {
     await open(page, { track: 311, market: MARKET });
 
     await expect(page.locator("#slider-fill")).toHaveCSS("background-image", /^linear-gradient/);
+    await expect(page.getByTestId("estimate-span")).toHaveCount(0);
+  });
+
+  test("dims a locked slider in the popup's track tones, not the library's blue", async ({ page }) => {
+    await open(page, { track: 311, market: MARKET, value: 90, locked: 1 });
+    const tone = (css: string) =>
+      page.evaluate((css) => {
+        const probe = document.createElement("span");
+        probe.style.backgroundColor = css;
+        document.body.append(probe);
+        const resolved = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return resolved;
+      }, css);
+
+    await expect(page.locator("#slider-track")).toHaveCSS("background-color", await tone("var(--fs-popup-track)"));
+    await expect(page.locator("#slider-fill")).toHaveCSS("background-color", await tone("var(--fs-popup-track-dot)"));
   });
 });
 
@@ -691,11 +755,4 @@ test.describe("the market pin's drop", () => {
       expect(timing.every(({ duration }) => duration <= 1)).toBe(true);
     });
   });
-});
-
-test("sets the bounds in tabular figures, through the caption role's font shorthand", async ({ page }) => {
-  await open(page, { track: 311, market: MARKET });
-  for (const side of ["lower", "upper"]) {
-    await expect(page.locator(`[data-bound="${side}"]`)).toHaveCSS("font-variant-numeric", "tabular-nums");
-  }
 });
