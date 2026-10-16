@@ -171,8 +171,8 @@ for (const track of TRACKS) {
     test("moves the pin only when the committed value changes, not as the pill opens or takes typing", async ({
       page,
     }) => {
-      // a dropped chip near its clearance, where a wider pill would raise it
-      const value = track === 311 ? 56 : 71;
+      // a raised chip in its dip, where a wider pill would drop it
+      const value = track === 311 ? 54 : 69;
       await open(page, { track, market: MARKET, value });
       const pin = async () => {
         const { placement, drop } = await geometry(page);
@@ -180,12 +180,19 @@ for (const track of TRACKS) {
       };
       const field = page.getByRole("textbox");
       const resting = await pin();
+      expect(resting.drop, "the pin rests in its dip").toBeGreaterThan(0);
+      expect(resting.drop).toBeLessThan(1);
+      const closed = (await geometry(page)).pill!;
 
       await page.getByRole("button", { name: "type your estimate for Movie A" }).click();
       expect.soft(await pin(), "the field opened").toEqual(resting);
-      for (const typed of ["5", "55", "555", "5555", "55555", "555555"]) {
+      for (const typed of ["5", "55", "5555", "5555555", "555555555", "55555555555555"]) {
         await field.fill(typed);
         expect.soft(await pin(), `"${typed}" typed`).toEqual(resting);
+        const { pill } = await geometry(page);
+        expect
+          .soft(pill!.right - pill!.left, `the field's width with "${typed}"`)
+          .toBeGreaterThanOrEqual(closed.right - closed.left - 0.5);
       }
       await field.press("Escape");
       expect.soft(await pin(), "Escape").toEqual(resting);
