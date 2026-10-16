@@ -11,13 +11,21 @@ type ScrollFadeProps = {
   fadeSize?: number; // px
   /** Said at the foot while there is more to scroll to. */
   cue?: string;
+  /** The least overflow, in px, that raises the fades and the cue; by default a 16px line, as less is usually padding. */
+  minOverflow?: number;
 };
 
 /**
  * Self-contained scrollable wrapper with automatic top/bottom fades.
  * Manages its own overflow and shrink behavior; requires a bounded height.
  */
-export const ScrollFade: React.FC<ScrollFadeProps> = ({ children, className, fadeSize = 24, cue }) => {
+export const ScrollFade: React.FC<ScrollFadeProps> = ({
+  children,
+  className,
+  fadeSize = 24,
+  cue,
+  minOverflow = 16,
+}) => {
   const ref = useRef<HTMLDivElement>(null);
   const [showTop, setShowTop] = useState(false);
   const [showBottom, setShowBottom] = useState(false);
@@ -26,17 +34,17 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({ children, className, fad
     const el = ref.current;
     if (!el) return;
     const EPSILON = 2; // px tolerance for sub-pixel / animation noise
-    // under one 16px line out of view is padding, not content worth a cue
-    const MIN_OVERFLOW = 16;
 
     const update = () => {
       const { scrollTop, scrollHeight, clientHeight } = el;
 
       const maxScrollable = scrollHeight - clientHeight;
-      const hasOverflow = maxScrollable >= MIN_OVERFLOW;
+      const hasOverflow = maxScrollable >= Math.max(minOverflow, 1);
 
-      const atTop = scrollTop <= EPSILON;
-      const atBottom = scrollTop >= maxScrollable - EPSILON;
+      // the tolerance never swallows the whole of a 1-2px overflow
+      const tolerance = Math.min(EPSILON, maxScrollable - 1);
+      const atTop = scrollTop <= tolerance;
+      const atBottom = scrollTop >= maxScrollable - tolerance;
 
       setShowTop(hasOverflow && !atTop);
       setShowBottom(hasOverflow && !atBottom);
@@ -56,7 +64,7 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({ children, className, fad
       window.removeEventListener("resize", update);
       observer.disconnect();
     };
-  }, []);
+  }, [minOverflow]);
 
   return (
     <div className={clsx("relative min-h-0", "flex flex-1 flex-col", className)}>

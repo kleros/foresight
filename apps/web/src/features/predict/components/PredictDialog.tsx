@@ -138,7 +138,8 @@ export function PredictDialog({
             </ScrollFade>
           </PredictSpineNode>
         </div>
-        <ScrollFade className="min-h-32 w-full" cue="More below">
+        {/* the steps end flush with the body, so any overflow hides some of them */}
+        <ScrollFade className="min-h-32 w-full" cue="More below" minOverflow={1}>
           <div data-testid="predict-body" className="pt-3">
             <PredictAmountSection
               amount={recovered ? recovered.deposit : amount}
@@ -158,12 +159,12 @@ export function PredictDialog({
         </ScrollFade>
 
         {/* outside the scroll area, so the reason a run stopped is never under the fold; held empty or not,
-            two lines from 375px wide and three below, where the longest reasons wrap to three */}
+            two lines from 360px wide and three below, where the longest reasons wrap to three */}
         <p
           role="status"
           aria-live="polite"
           className={clsx(
-            "type-label flex h-10 shrink-0 items-center max-[375px]:h-15 justify-center px-2 text-center text-pretty",
+            "type-label flex h-10 shrink-0 items-center max-[360px]:h-15 justify-center px-2 text-center text-pretty",
             status && STATUS_TONE[status.tone],
           )}
         >

@@ -33,4 +33,18 @@ describe("ScrollFade's cue", () => {
 
     expect(screen.getByTestId("more-below")).toHaveClass("opacity-100");
   });
+
+  it("shows for an overflow of 1px or 2px where the least overflow is set to 1px", () => {
+    for (const scrollHeight of [301, 302]) {
+      sized(scrollHeight, 300);
+      const { unmount } = render(
+        <ScrollFade cue="More below" minOverflow={1}>
+          <p>body</p>
+        </ScrollFade>,
+      );
+
+      expect(screen.getByTestId("more-below")).toHaveClass("opacity-100");
+      unmount();
+    }
+  });
 });

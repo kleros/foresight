@@ -299,7 +299,7 @@ describe("statusLine", () => {
 
   it.each([
     ["cancelled", "Your wallet cancelled or replaced the request."],
-    ["funds", "Not enough in your wallet for this and the network fee. Lower the amount or add funds."],
+    ["funds", "Not enough for this and the network fee. Lower the amount or add funds."],
   ] as const)("names a %s stop in words with a referent", (reason, text) => {
     const stopped = steps({ progress: progress({ stage: "halted", failure: { reason, retryable: true } }) });
 

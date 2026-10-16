@@ -34,6 +34,8 @@ const FAILURE_REASONS = [
 ];
 const VIEWPORTS = [
   { width: 320, height: 568 },
+  { width: 360, height: 640 },
+  { width: 360, height: 740 },
   { width: 375, height: 812 },
   { width: 375, height: 667 },
   { width: 820, height: 1180 },
@@ -41,6 +43,8 @@ const VIEWPORTS = [
   { width: 1280, height: 800 },
 ];
 const SIDE_MARGIN = 16;
+/** Windows too short for every step at rest, where the body scrolls with its cue. */
+const SCROLLING = ["320x568", "360x640"];
 
 let harness: Awaited<ReturnType<typeof startHarness>>;
 
@@ -236,9 +240,8 @@ for (const viewport of VIEWPORTS) {
 
         const idleDialog = await openPopup(page, options, "idle");
         const idle = await footprint(page, idleDialog);
-        // the spine fits the window: every step is in view as the popup opens, with nothing to scroll to;
-        // 320 x 568 is too short for that and scrolls
-        for (const title of viewport.width > 320 ? STEPS : []) {
+        // the spine fits the window: every step is in view as the popup opens, with nothing to scroll to
+        for (const title of SCROLLING.includes(`${viewport.width}x${viewport.height}`) ? [] : STEPS) {
           expect
             .soft(await isFullyShown(idleDialog.getByText(title, { exact: true })), `"${title}" is in view at open`)
             .toBe(true);
@@ -317,7 +320,7 @@ test.describe("the popup's scroll area", () => {
       const dialog = await openPopup(page, 10);
       const scroller = page.getByTestId("predict-body").locator("..");
       const cue = dialog.getByTestId("more-below");
-      const overflows = await scroller.evaluate((element) => element.scrollHeight >= element.clientHeight + 16);
+      const overflows = await scroller.evaluate((element) => element.scrollHeight > element.clientHeight);
 
       if (overflows) {
         await expect(cue).toHaveCSS("opacity", "1");
@@ -326,6 +329,38 @@ test.describe("the popup's scroll area", () => {
       }
       await expect(cue).toHaveCSS("opacity", "0");
     });
+  }
+
+  // 360 x 716 leaves the body a few px short of its steps
+  for (const viewport of [
+    { width: 360, height: 640 },
+    { width: 360, height: 716 },
+    { width: 360, height: 740 },
+    { width: 320, height: 568 },
+  ]) {
+    for (const options of [2, 3, 10]) {
+      test(`scrolls to a run's steps only where it said there was more below, ${options} estimates at ${viewport.width} x ${viewport.height}`, async ({
+        page,
+      }) => {
+        await page.setViewportSize(viewport);
+        const idle = await openPopup(page, options);
+        const scroller = page.getByTestId("predict-body").locator("..");
+        const cued =
+          (await idle.getByTestId("more-below").evaluate((element) => getComputedStyle(element).opacity)) === "1";
+        const canScroll = await scroller.evaluate((element) => element.scrollHeight > element.clientHeight);
+        expect.soft(canScroll, "the body scrolls only with its cue").toBe(cued);
+
+        const titleTop = async () => (await page.getByText("You pay", { exact: true }).boundingBox())!.y;
+        const atRest = await titleTop();
+        await openPopup(page, options, "signing");
+        if (!cued) {
+          expect
+            .soft(await scroller.evaluate((element) => element.scrollTop), "the body's scroll once signing")
+            .toBe(0);
+          expect.soft(await titleTop(), "the amount's title once signing").toBe(atRest);
+        }
+      });
+    }
   }
 
   // the cut row and its fade say there is more; four rows on a wide popup would overflow by a fade's worth for nothing
@@ -349,16 +384,21 @@ test.describe("the popup's scroll area", () => {
   }
 });
 
-test.describe("a popup on a short screen", () => {
-  test.use({ viewport: { width: 375, height: 667 } });
+for (const viewport of [
+  { width: 375, height: 667 },
+  { width: 360, height: 640 },
+]) {
+  test.describe(`a popup on a short screen at ${viewport.width} x ${viewport.height}`, () => {
+    test.use({ viewport });
 
-  test("leaves out the share slider and keeps a two-line status slot", async ({ page }) => {
-    const dialog = await openPopup(page, 2, "failed", "funds");
+    test("leaves out the share slider and keeps a two-line status slot", async ({ page }) => {
+      const dialog = await openPopup(page, 2, "failed", "funds");
 
-    await expect(dialog.getByTestId("amount-slider")).toBeHidden();
-    expect((await dialog.getByRole("status").boundingBox())!.height).toBeLessThanOrEqual(40);
+      await expect(dialog.getByTestId("amount-slider")).toBeHidden();
+      expect((await dialog.getByRole("status").boundingBox())!.height).toBeLessThanOrEqual(40);
+    });
   });
-});
+}
 
 for (const viewport of [
   { width: 375, height: 667 },
