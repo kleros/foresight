@@ -650,9 +650,18 @@ for (const viewport of [
       await page.emulateMedia({ reducedMotion: "reduce" });
       const dialog = await openPopup(page, 10, "idle");
       const header = dialog.getByRole("heading", { name: "Predict", exact: true, level: 2 }).locator("..");
-      await header.evaluate((element) => {
-        element.parentElement!.scrollTop = 40;
-      });
+      // a scroll-driven opacity is drawn on the next frame
+      const fadeAt = (scrollTop: number) =>
+        header.evaluate(async (element, top) => {
+          element.parentElement!.scrollTop = top;
+          await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+          return getComputedStyle(element, "::after").opacity;
+        }, scrollTop);
+      // without scroll-driven animations the fade always shows
+      if (await page.evaluate(() => CSS.supports("animation-timeline: scroll()"))) {
+        expect(await fadeAt(0), "no fade over the first estimate at rest").toBe("0");
+      }
+      expect(await fadeAt(40), "the fade shows once the body has scrolled").toBe("1");
       const look = await header.evaluate((element) => {
         const own = getComputedStyle(element);
         const fade = getComputedStyle(element, "::after");
