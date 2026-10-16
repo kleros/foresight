@@ -733,9 +733,7 @@ test.describe("an amount over a four-digit balance at 375 x 812", () => {
 test.describe("the amount field with a long number at 375 x 812", () => {
   test.use({ viewport: { width: 375, height: 812 } });
 
-  test("steps its size down as the number grows, shows its start after a blur, and has no stepper", async ({
-    page,
-  }) => {
+  test("steps its size down as the number grows and has no stepper", async ({ page }) => {
     const dialog = await openPopup(page, 2, "idle");
     const input = dialog.getByLabel("Amount");
     const size = () => input.evaluate((element) => getComputedStyle(element).fontSize);
@@ -751,11 +749,6 @@ test.describe("the amount field with a long number at 375 x 812", () => {
     await input.hover();
     const steppers = dialog.getByTestId("amount-input").locator(".input-wrapper button");
     for (const stepper of await steppers.all()) await expect(stepper).toBeHidden();
-
-    await input.fill("100.123456789012345678");
-    await input.press("End");
-    await dialog.getByRole("heading", { name: "Predict", exact: true }).click();
-    expect(await input.evaluate((element) => (element as HTMLInputElement).scrollLeft)).toBe(0);
   });
 });
 

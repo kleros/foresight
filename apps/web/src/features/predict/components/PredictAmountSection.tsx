@@ -135,15 +135,12 @@ export function PredictAmountSection({
 
       <div
         data-testid="amount-input"
-        // a number as wide as the field steps the digits down rather than scroll; a blur shows its start again
+        // a number as wide as the field steps the digits down rather than scroll
         data-length={digits > 9 ? "long" : digits > 6 ? "mid" : undefined}
         onInput={(event) => {
           if (event.target instanceof HTMLInputElement) setTyped(event.target.value);
         }}
-        onBlur={(event) => {
-          setTyped(undefined);
-          if (event.target instanceof HTMLInputElement) event.target.scrollLeft = 0;
-        }}
+        onBlur={() => setTyped(undefined)}
         className={clsx(
           "mt-2 flex h-11 flex-row items-center gap-3 short:mt-1.5 short:h-10",
           "transition-opacity duration-(--fs-dur-enter) ease-(--fs-ease-enter)",
