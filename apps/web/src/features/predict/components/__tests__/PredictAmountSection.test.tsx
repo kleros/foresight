@@ -82,7 +82,7 @@ describe.each(wallets)("Max and 50% with only $name in the wallet", ({ token, he
 
   it("Max fills exactly the balance it shows", async () => {
     const onAmountChange = renderSection(token, held);
-    const shown = screen.getByText(/^Balance: /).textContent!.match(/^Balance: ([\d,.]+) /)![1]!;
+    const shown = screen.getByTitle(/^Balance: /).textContent!.match(/^Balance: ([\d,.]+) /)![1]!;
 
     await userEvent.click(screen.getByRole("button", { name: "Max" }));
 

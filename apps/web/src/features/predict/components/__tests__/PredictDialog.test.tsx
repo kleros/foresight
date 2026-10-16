@@ -128,7 +128,7 @@ describe("the amount behind them", () => {
   it("counts the trade wallet into the balance", () => {
     render(<PredictDialog {...props()} />);
 
-    expect(screen.getByText("Balance: 25 sDAI")).toBeInTheDocument();
+    expect(screen.getByTitle("Balance: 25 sDAI")).toBeInTheDocument();
   });
 
   it("says once what the total is and where it comes from", () => {
@@ -160,7 +160,7 @@ describe("the amount behind them", () => {
   ])("names no Max over %s", (_name, available, balance) => {
     render(<PredictDialog {...props()} amount={WAD} funding={funding({ available })} />);
 
-    expect(screen.getByText(balance)).toBeInTheDocument();
+    expect(screen.getByTitle(balance)).toHaveTextContent(balance);
     expect(screen.getByText("Not enough balance.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Max" })).toBeDisabled();
   });
@@ -185,12 +185,13 @@ describe("the amount behind them", () => {
     expect(screen.getByRole("button", { name: "Predict" })).toBeDisabled();
   });
 
-  it("asks for optional extra funds once the visitor has predicted before", () => {
-    render(<PredictDialog {...props()} isFirstPrediction={false} />);
+  it("asks for extra funds once the visitor has predicted before, its summary line saying they are optional", () => {
+    render(<PredictDialog {...props()} isFirstPrediction={false} amount={undefined} />);
 
-    expect(screen.getByText("Extra funds")).toBeInTheDocument();
-    expect(screen.getByText("optional")).toBeInTheDocument();
-    expect(screen.queryByText("You pay")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Extra funds" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "You pay" })).toBeNull();
+    expect(screen.getByText(/without adding funds/)).toBeInTheDocument();
+    expect(screen.queryByText("optional")).toBeNull();
   });
 
   it("offers no Max with nothing to spend", () => {
@@ -330,7 +331,7 @@ describe("predicting", () => {
     expect(screen.getByLabelText("Amount")).toHaveValue("7.250000000000000001");
     expect(screen.getByText("Locked to the amount this prediction started with.")).toBeInTheDocument();
     // the form's balance is in the form's token, not necessarily the stored run's
-    expect(screen.queryByText(/^Balance: /)).toBeNull();
+    expect(screen.queryByTitle(/^Balance: /)).toBeNull();
     expect(screen.getByText("410 $M")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Max" }).classList.contains("invisible")).toBe(true);
     expect(screen.queryByRole("button", { name: "Predict" })).not.toBeInTheDocument();
@@ -571,7 +572,7 @@ describe("what a run shows while it goes", () => {
       />,
     );
 
-    expect(screen.getByText("Balance: 25 sDAI")).toBeInTheDocument();
+    expect(screen.getByTitle("Balance: 25 sDAI")).toBeInTheDocument();
     expect(screen.getByText("10 sDAI = 6 in your trade wallet + 4 from your wallet")).toBeInTheDocument();
     await userEvent.click(summaryHead());
     expect(screen.getByText("312 → 355 $M")).toBeInTheDocument();
@@ -582,7 +583,7 @@ describe("what a run shows while it goes", () => {
 
     view.rerender(<PredictDialog {...props()} funding={funding({ available: 30n * WAD })} />);
 
-    expect(screen.getByText("Balance: 30 sDAI")).toBeInTheDocument();
+    expect(screen.getByTitle("Balance: 30 sDAI")).toBeInTheDocument();
   });
 
   it("brings a failure in with the entrance motion", () => {

@@ -150,25 +150,25 @@ describe("the balance line when the wallet disconnects with the popup open", () 
   it("asks for a wallet instead of checking the balance forever", async () => {
     renderPage();
     const popup = await openPopup();
-    expect(await popup.findByText("Balance: 10 sDAI")).toBeInTheDocument();
+    expect(await popup.findByTitle("Balance: 10 sDAI")).toBeInTheDocument();
 
     act(() => account.set(undefined));
 
     expect(await popup.findByText("No wallet connected")).toBeInTheDocument();
     expect(popup.queryByText("Reading balance…")).toBeNull();
-    expect(popup.queryByText(/^Balance: /)).toBeNull();
+    expect(popup.queryByTitle(/^Balance: /)).toBeNull();
   });
 
   it("shows the balance again once a wallet reconnects", async () => {
     renderPage();
     const popup = await openPopup();
-    await popup.findByText("Balance: 10 sDAI");
+    await popup.findByTitle("Balance: 10 sDAI");
 
     act(() => account.set(undefined));
     await popup.findByText("No wallet connected");
     act(() => account.set(OWNER));
 
-    expect(await popup.findByText("Balance: 10 sDAI")).toBeInTheDocument();
+    expect(await popup.findByTitle("Balance: 10 sDAI")).toBeInTheDocument();
     expect(popup.queryByText("No wallet connected")).toBeNull();
   });
 });

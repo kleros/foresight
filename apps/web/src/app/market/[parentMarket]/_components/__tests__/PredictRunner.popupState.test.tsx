@@ -163,7 +163,7 @@ async function openPopup() {
 
 /** The pay token the popup's balance line is quoted in. */
 async function balanceToken(popup: ReturnType<typeof within>) {
-  const line = await popup.findByText(/^Balance: /);
+  const line = await popup.findByTitle(/^Balance: /);
   return line.textContent?.trim().split(" ").at(-1);
 }
 
@@ -248,12 +248,12 @@ describe("switching the pay token keeps the typed amount, clamped to the new bal
 
     // 5 xDAI is 4 sDAI at 1.25 xDAI per sDAI
     await chooseToken(popup, "xDAI");
-    await waitFor(() => expect(popup.getByText(/^Balance: 8 xDAI/)).toBeInTheDocument());
+    await waitFor(() => expect(popup.getByTitle(/^Balance: 8 xDAI/)).toBeInTheDocument());
     expect(amountField(popup)).toHaveValue("5");
     expect(popup.getByText("≈ 4 sDAI from your wallet")).toBeInTheDocument();
 
     await chooseToken(popup, "sDAI");
-    await waitFor(() => expect(popup.getByText(/^Balance: 10 sDAI/)).toBeInTheDocument());
+    await waitFor(() => expect(popup.getByTitle(/^Balance: 10 sDAI/)).toBeInTheDocument());
     expect(amountField(popup)).toHaveValue("5");
     expect(popup.getByText("5 sDAI from your wallet")).toBeInTheDocument();
   });
@@ -269,7 +269,7 @@ describe("switching the pay token keeps the typed amount, clamped to the new bal
     await waitFor(() => expect(amountField(popup)).toHaveValue("10"));
 
     await chooseToken(popup, "xDAI");
-    await waitFor(() => expect(popup.getByText(/^Balance: 5 xDAI/)).toBeInTheDocument());
+    await waitFor(() => expect(popup.getByTitle(/^Balance: 5 xDAI/)).toBeInTheDocument());
     expect(amountField(popup)).toHaveValue("5");
     // 5 xDAI is 4 sDAI at 1.25 xDAI per sDAI
     expect(popup.getByText("≈ 4 sDAI from your wallet")).toBeInTheDocument();

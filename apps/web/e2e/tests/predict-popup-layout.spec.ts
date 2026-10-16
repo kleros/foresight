@@ -572,8 +572,19 @@ test.describe("a balance that wraps under the amount's title", () => {
         page,
       }) => {
         await page.setViewportSize(viewport);
-        const idle = await footprint(page, await openPopup(page, 2, "idle", undefined, `&held=${held}`));
-        for (const state of ["idle", "recovered", "disconnected"] as const) {
+        const idleDialog = await openPopup(page, 2, "idle", undefined, `&held=${held}`);
+        const idle = await footprint(page, idleDialog);
+        const [title, balance] = await Promise.all([
+          idleDialog.locator('[data-panel="amount"] h3').boundingBox(),
+          idleDialog.getByTestId("balance-figure").boundingBox(),
+        ]);
+        // under 375px the row always wraps; wider, a disconnected row has no balance to wrap, so it matches only an unwrapped one
+        const wraps = balance!.y > title!.y + title!.height - 1;
+        const states =
+          wraps && viewport.width >= 375
+            ? (["idle", "recovered"] as const)
+            : (["idle", "recovered", "disconnected"] as const);
+        for (const state of states) {
           for (const first of ["1", "0"]) {
             const dialog = await openPopup(page, 2, state, undefined, `&held=${held}&first=${first}`);
             expect.soft(await footprint(page, dialog), `${state}, first=${first}`).toEqual(idle);
@@ -608,6 +619,59 @@ test.describe("the amount's title and balance on a narrow screen", () => {
       });
     });
   }
+});
+
+test.describe("the amount's balance", () => {
+  for (const viewport of [
+    { width: 320, height: 568 },
+    { width: 360, height: 640 },
+    { width: 360, height: 740 },
+    { width: 375, height: 667 },
+    { width: 375, height: 812 },
+  ]) {
+    for (const held of ["1234.5678", "6833.959612", "98765432109.12345"]) {
+      for (const first of ["1", "0"]) {
+        test(`shows ${held} and its token whole under ${first === "1" ? "You pay" : "Extra funds"} at ${viewport.width} x ${viewport.height}`, async ({
+          page,
+        }) => {
+          await page.setViewportSize(viewport);
+          const dialog = await openPopup(page, 2, "idle", undefined, `&held=${held}&first=${first}`);
+          const figure = dialog.getByTestId("balance-figure");
+          await expect(figure).toHaveText(/^[\d,.]+ sDAI$/);
+          expect(await figure.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+          expect(await isFullyShown(figure)).toBe(true);
+          // only a figure too long for the line gives up the label
+          if (held !== "98765432109.12345") {
+            expect(await isFullyShown(dialog.getByText("Balance:", { exact: true }))).toBe(true);
+          }
+        });
+      }
+    }
+  }
+
+  test.describe("at 320 x 568, disconnected", () => {
+    test.use({ viewport: { width: 320, height: 568 } });
+
+    test("says no wallet is connected in full", async ({ page }) => {
+      const dialog = await openPopup(page, 2, "disconnected");
+      const figure = dialog.getByTestId("balance-figure");
+      await expect(figure).toHaveText("No wallet connected");
+      expect(await figure.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    });
+  });
+
+  test.describe("at 375 x 812", () => {
+    test.use({ viewport: { width: 375, height: 812 } });
+
+    test("sits on the title's line when it fits there", async ({ page }) => {
+      const dialog = await openPopup(page, 2);
+      const [title, balance] = await Promise.all([
+        dialog.locator('[data-panel="amount"] h3').boundingBox(),
+        dialog.getByText(/^Balance: /).boundingBox(),
+      ]);
+      expect(Math.abs(title!.y + title!.height / 2 - (balance!.y + balance!.height / 2))).toBeLessThanOrEqual(1);
+    });
+  });
 });
 
 test.describe("a locked share slider", () => {

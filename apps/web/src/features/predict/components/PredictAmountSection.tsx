@@ -65,13 +65,12 @@ export function PredictAmountSection({
         : fundingSummary({ funding, amount, token, collateral });
 
   const noBalance = Boolean(note) || isDisconnected;
-  const balance = note
-    ? ""
-    : isDisconnected
-      ? "No wallet connected"
-      : available === undefined
-        ? "Reading balance…"
-        : `Balance: ${ownedAmount(available, token.decimals)} ${token.symbol}`;
+  const isRead = !isDisconnected && available !== undefined;
+  const figure = isDisconnected
+    ? "No wallet connected"
+    : available === undefined
+      ? "Reading balance…"
+      : `${ownedAmount(available, token.decimals)} ${token.symbol}`;
 
   return (
     <section
@@ -81,21 +80,33 @@ export function PredictAmountSection({
         "[background-image:var(--fs-popup-wash)]",
       )}
     >
-      {/* below 384px the balance takes its own line whatever its digits; above, or on a short window, it shortens beside the title */}
-      <div className="flex min-h-5 flex-wrap items-center justify-between gap-x-3 @min-[24rem]:flex-nowrap short:flex-nowrap">
-        <h3 className="type-label text-fs-popup-text-2 min-w-0 shrink-0 truncate font-medium">
+      {/* the balance wraps under the title only when the two do not fit one line, and always on a phone under 375px */}
+      <div className="flex min-h-5 flex-wrap items-center justify-between gap-x-3">
+        <h3 className="type-label text-fs-popup-text-2 grid min-w-0 shrink-0 font-medium">
+          <span className="col-start-1 row-start-1 truncate">{isFirstPrediction ? "You pay" : "Extra funds"}</span>
+          {/* either title takes the wider one's room, so a returning predictor's row wraps where a first one's does */}
           {isFirstPrediction ? (
-            "You pay"
-          ) : (
-            <>
+            <span aria-hidden className="invisible col-start-1 row-start-1">
               Extra funds
-              <span className="text-fs-popup-text-3 ml-1.5 font-normal @max-[28rem]:hidden">optional</span>
-            </>
-          )}
+            </span>
+          ) : null}
         </h3>
-        <div className="ml-auto flex h-5 min-w-0 items-center gap-2 @max-[24rem]:basis-full @max-[24rem]:justify-between short:basis-auto! short:justify-end!">
-          <span className="type-label text-fs-popup-text-2 min-w-0 truncate tabular-nums" title={balance || undefined}>
-            {balance}
+        <div className="ml-auto flex h-5 min-w-0 items-center justify-end gap-2 @max-[17rem]:basis-full @max-[17rem]:justify-between">
+          {/* a note stands in for the balance, which keeps its room so the row wraps as it would;
+              where the figure does not fit beside "Balance:", the label wraps onto a hidden second line */}
+          <span
+            aria-hidden={note ? true : undefined}
+            title={note ? undefined : isRead ? `Balance: ${figure}` : figure}
+            className={clsx(
+              "flex h-5 min-w-0 flex-row-reverse flex-wrap content-start gap-x-1 overflow-hidden",
+              "text-fs-popup-text-2 text-[13px] leading-5 tabular-nums",
+              note && "invisible",
+            )}
+          >
+            {isRead ? <span className="shrink-0">Balance: </span> : null}
+            <span data-testid="balance-figure" className="order-first min-w-0 truncate">
+              {figure}
+            </span>
           </span>
           <LightButton
             small
@@ -103,8 +114,8 @@ export function PredictAmountSection({
             isDisabled={isReadOnly || !max || noBalance}
             onPress={() => max !== undefined && onAmountChange(max)}
             className={clsx(
-              // a 44px target that takes no more height than its label
-              "-my-3 min-h-11 min-w-11 shrink-0 justify-end rounded-none! p-0 hover:bg-transparent!",
+              // a 44px target that takes no more height than its label, reaching into the gap before it
+              "-my-3 -ml-2 min-h-11 min-w-11 shrink-0 justify-end rounded-none! p-0 hover:bg-transparent!",
               "[&_.button-text]:text-fs-popup-accent-text [&_.button-text]:text-xs [&_.button-text]:font-semibold",
               "[&_.button-text]:tracking-wide [&_.button-text]:uppercase",
               "data-disabled:[&_.button-text]:text-fs-popup-text-3",
