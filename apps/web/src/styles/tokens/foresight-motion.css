@@ -73,6 +73,11 @@
     transform: none;
   }
 }
+@keyframes fsFadeIn {
+  from {
+    opacity: 0;
+  }
+}
 @keyframes fsFadeOut {
   from {
     opacity: 1;
@@ -208,12 +213,14 @@
     --fs-ease-spring: linear;
   }
   .fs-enter,
-  .fs-exit,
   .fs-spawn,
   .fs-rise,
   .fs-icon-draw path,
   .fs-icon-draw polyline {
-    animation: fsFadeUp 150ms linear both;
+    animation: fsFadeIn 150ms linear both;
+  }
+  .fs-exit {
+    animation: fsFadeOut 150ms linear both;
   }
   .fs-spawn {
     transform: none;

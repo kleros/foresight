@@ -69,7 +69,10 @@ export function PredictSuccessView({
               <TextField
                 isDisabled
                 value={email}
-                className="w-full [&_input]:rounded-fs-control [&_input]:text-sm [&>label]:hidden"
+                className={clsx(
+                  "w-full [&>label]:hidden [&_input]:rounded-fs-control [&_input]:text-sm",
+                  "[&_input]:bg-fs-surface [&_input]:border-(--fs-popup-line)",
+                )}
                 label="Email"
               />
             ) : null}

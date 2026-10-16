@@ -322,35 +322,42 @@
   height: 24px;
   flex: none;
   border-radius: 999px;
-  border: 1.5px solid var(--fs-popup-line-strong);
   background: var(--fs-surface);
   color: var(--fs-popup-text-2);
   font: 600 12px/1 var(--font-sans);
   font-variant-numeric: tabular-nums;
-  transition:
-    border-color var(--fs-dur-echo) var(--fs-ease-enter),
-    color var(--fs-dur-echo) var(--fs-ease-enter);
 }
-.step-bullet::before {
+/* the axis disc and the ring cross-fade by opacity, so no colour is animated */
+.step-bullet::before,
+.step-bullet::after {
   content: "";
   position: absolute;
-  inset: -1.5px;
-  z-index: -1;
+  inset: 0;
   border-radius: inherit;
-  background: var(--fs-popup-axis);
-  opacity: 0;
   transition: opacity var(--fs-dur-enter) var(--fs-ease-enter);
 }
+.step-bullet::before {
+  z-index: -1;
+  background: var(--fs-popup-axis);
+  opacity: 0;
+}
+.step-bullet::after {
+  border: 1.5px solid var(--fs-popup-line-strong);
+}
 .step-bullet:is([data-bullet="running"], [data-bullet="done"]) {
-  border-color: transparent;
   color: var(--fs-popup-on-axis);
 }
 .step-bullet:is([data-bullet="running"], [data-bullet="done"])::before {
   opacity: 1;
 }
+.step-bullet:is([data-bullet="running"], [data-bullet="done"])::after {
+  opacity: 0;
+}
 .step-bullet[data-bullet="failed"] {
-  border-color: var(--fs-tone-error);
   color: var(--fs-tone-error-text);
+}
+.step-bullet[data-bullet="failed"]::after {
+  border-color: var(--fs-tone-error);
 }
 .step-bullet > [data-glyph] {
   grid-area: 1 / 1;
@@ -601,7 +608,9 @@ button.predict-cta.predict-cta[data-busy]:has(> .button-text) > .button-text {
   .predict-cta[data-pressed] {
     transform: none;
   }
+  /* a ring that cannot turn reads as a stray glyph; the busy label says the state */
   .predict-spinner {
+    display: none;
     animation: none;
   }
 }
@@ -625,6 +634,6 @@ button.predict-cta.predict-cta[data-busy]:has(> .button-text) > .button-text {
 }
 @media (prefers-reduced-motion: reduce) {
   .predict-success-mark {
-    animation: fsFadeUp 150ms linear both;
+    animation: fsFadeIn 150ms linear both;
   }
 }

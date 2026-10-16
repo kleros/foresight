@@ -854,7 +854,9 @@ test.describe("the popup under reduced motion", () => {
     test(`keeps the running step, the busy button and the price check still while ${state}`, async ({ page }) => {
       await page.emulateMedia({ reducedMotion: "reduce" });
       const dialog = await openPopup(page, 2, state);
-      await expect(dialog.getByTestId("predict-spinner")).toBeVisible();
+      // a ring that cannot turn reads as a stray glyph, so the busy label stands alone
+      await expect(dialog.getByTestId("predict-spinner")).toBeHidden();
+      await expect(dialog.locator(".predict-cta")).toHaveAttribute("data-busy");
       const animations = await dialog
         .locator("li, li *, button svg, [data-testid=predict-spinner], [data-testid=pricing-sweep] *")
         .evaluateAll((items) => items.map((item) => getComputedStyle(item).animationName));
@@ -1076,5 +1078,69 @@ test.describe("the summary opening and closing", () => {
     );
     await settle(dialog);
     expect(await bulletTop()).toBeCloseTo(closed, 0);
+  });
+});
+
+test.describe("a step's bullet", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("changes state by opacity and transform alone", async ({ page }) => {
+    const dialog = await openPopup(page, 2, "signing");
+    const properties = await dialog.locator("[data-bullet], [data-bullet] *").evaluateAll((nodes) =>
+      nodes.flatMap((node) =>
+        [null, "::before", "::after"].flatMap((pseudo) =>
+          getComputedStyle(node, pseudo)
+            .transitionProperty.split(", ")
+            .filter((property) => property !== "all" || getComputedStyle(node, pseudo).transitionDuration !== "0s"),
+        ),
+      ),
+    );
+
+    expect([...new Set(properties)].sort()).toEqual(["opacity", "transform"]);
+  });
+});
+
+/** Resolves a colour or length token to its computed value, through a probe in the page. */
+function tokenValue(page: Page, property: "color" | "borderRadius", value: string) {
+  return page.evaluate(
+    ([property, value]) => {
+      const probe = document.createElement("span");
+      probe.style[property as "color"] = value;
+      document.body.append(probe);
+      const resolved = getComputedStyle(probe)[property as "color"];
+      probe.remove();
+      return resolved;
+    },
+    [property, value] as const,
+  );
+}
+
+test.describe("the success dialog", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("draws the email in a field of the panel's tones", async ({ page }) => {
+    await openHarness(page, `${harness.url}?options=2&state=success&dialog=success`);
+    const email = page.getByRole("dialog", { name: "Prediction placed" }).getByRole("textbox");
+
+    await expect(email).toHaveCSS("background-color", await tokenValue(page, "color", "var(--fs-surface)"));
+    await expect(email).toHaveCSS("border-top-color", await tokenValue(page, "color", "var(--fs-popup-line)"));
+    await expect(email).toHaveCSS(
+      "border-top-left-radius",
+      await tokenValue(page, "borderRadius", "var(--fs-radius-control)"),
+    );
+  });
+
+  test("brings its mark in by opacity alone under reduced motion", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await openHarness(page, `${harness.url}?options=2&state=success&dialog=success`);
+    const keys = await page.getByTestId("success-mark").evaluate((mark) =>
+      mark
+        .getAnimations()
+        .flatMap((animation) => (animation.effect as KeyframeEffect).getKeyframes())
+        .flatMap((frame) => Object.keys(frame))
+        .filter((key) => !["offset", "easing", "composite", "computedOffset"].includes(key)),
+    );
+
+    expect([...new Set(keys)]).toEqual(["opacity"]);
   });
 });
