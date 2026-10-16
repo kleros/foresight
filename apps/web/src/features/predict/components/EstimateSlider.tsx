@@ -73,7 +73,7 @@ export function EstimateSlider({
   const tone = direction && !isDisabled ? ESTIMATE_COLOR[direction] : undefined;
   const thumbShare = (shown - scale.lowerBound) / range;
   const marketShare = marketEstimate === undefined ? undefined : (marketEstimate - scale.lowerBound) / range;
-  const pin = useMarketPin();
+  const pin = useMarketPin({ holdPill: draft !== undefined });
   const drop = marketShare === undefined ? 0 : pinDrop(pinGap(pin.sizes, { thumb: thumbShare, market: marketShare }));
   const isDown = drop === 1;
   const chipAt = marketShare === undefined ? 0 : chipLeft(pin.sizes, marketShare);
@@ -145,6 +145,7 @@ export function EstimateSlider({
               shown={shown}
               scale={scale}
               draft={draft}
+              minWidth={pin.sizes.pill}
               onDraft={setDraft}
               onOpen={() => setNote(undefined)}
               onTyped={(typed) => {
@@ -268,6 +269,8 @@ interface ValuePillProps {
   scale: OptionScale;
   /** The field's text while it is open. */
   draft: string | undefined;
+  /** The closed pill's width in px; the open field is never narrower, so opening it moves nothing. */
+  minWidth: number;
   onDraft: (draft: string | undefined) => void;
   onOpen: () => void;
   onTyped: (value: number) => void;
@@ -275,7 +278,7 @@ interface ValuePillProps {
 }
 
 const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill(
-  { share, shown, scale, draft, onDraft: setDraft, onOpen, onTyped, onInvalid },
+  { share, shown, scale, draft, minWidth, onDraft: setDraft, onOpen, onTyped, onInvalid },
   ref,
 ) {
   const button = useRef<HTMLButtonElement>(null);
@@ -323,7 +326,10 @@ const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill
       style={{ left: `${share * 100}%`, transform: `translateX(-${share * 100}%)` }}
     >
       {editing ? (
-        <span className="border-fs-accent bg-fs-surface rounded-full inline-flex h-7 items-center gap-1 border px-2.5 text-sm">
+        <span
+          className="border-fs-accent bg-fs-surface rounded-full inline-flex h-7 items-center gap-1 border px-2.5 text-sm"
+          style={{ minWidth }}
+        >
           <input
             autoFocus
             aria-label={`Your estimate for ${scale.name}`}

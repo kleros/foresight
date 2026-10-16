@@ -152,6 +152,34 @@ for (const track of TRACKS) {
       }
     });
 
+    test("moves the pin only when the committed value changes, not as the pill opens or takes typing", async ({
+      page,
+    }) => {
+      // where opening the field used to raise a dropped chip
+      const value = track === 311 ? 56 : 71;
+      await open(page, { track, market: MARKET, value });
+      const pin = async () => {
+        const { placement, drop } = await geometry(page);
+        return { placement, drop };
+      };
+      const field = page.getByRole("textbox");
+      const resting = await pin();
+
+      await page.getByRole("button", { name: "type your estimate for Movie A" }).click();
+      expect.soft(await pin(), "the field opened").toEqual(resting);
+      for (const typed of ["5", "55", "555", "5555", "55555", "555555"]) {
+        await field.fill(typed);
+        expect.soft(await pin(), `"${typed}" typed`).toEqual(resting);
+      }
+      await field.press("Escape");
+      expect.soft(await pin(), "Escape").toEqual(resting);
+
+      await page.getByRole("button", { name: "type your estimate for Movie A" }).click();
+      await field.fill(String(value));
+      await field.press("Enter");
+      expect.soft(await pin(), "the same value committed").toEqual(resting);
+    });
+
     test("takes a press just above the thumb's circle as the thumb's, and one just above the pill as the pill's", async ({
       page,
     }) => {

@@ -18,11 +18,13 @@ const same = (a: PinSizes, b: PinSizes) =>
 /**
  * Measures the slider track, the value pill, the market's chip and the bound labels (`[data-bound]`)
  * after every render. `ready` turns on a frame after the first measurement, so the pin's first placement does not animate.
+ * While `holdPill` is on, the pill keeps the width it had, so an open field moves nothing.
  */
-export function useMarketPin() {
+export function useMarketPin({ holdPill = false }: { holdPill?: boolean } = {}) {
   const track = useRef<HTMLDivElement>(null);
   const chip = useRef<HTMLDivElement>(null);
   const pill = useRef<HTMLSpanElement>(null);
+  const holding = useRef(holdPill);
   const [sizes, setSizes] = useState<PinSizes>(NONE);
   const [ready, setReady] = useState(false);
 
@@ -30,19 +32,25 @@ export function useMarketPin() {
     const root = track.current;
     if (!root) return;
     const widthOf = (selector: string) => root.querySelector(selector)?.getBoundingClientRect().width ?? 0;
-    const next: PinSizes =
-      root.clientWidth === 0
-        ? NONE
-        : {
-            track: root.clientWidth,
-            pill: pill.current?.offsetWidth ?? 0,
-            chip: chip.current?.offsetWidth ?? 0,
-            lower: widthOf('[data-bound="lower"]'),
-            upper: widthOf('[data-bound="upper"]'),
-          };
-    setSizes((current) => (same(current, next) ? current : next));
+    setSizes((current) => {
+      const next: PinSizes =
+        root.clientWidth === 0
+          ? NONE
+          : {
+              track: root.clientWidth,
+              pill: holding.current && current.pill > 0 ? current.pill : (pill.current?.offsetWidth ?? 0),
+              chip: chip.current?.offsetWidth ?? 0,
+              lower: widthOf('[data-bound="lower"]'),
+              upper: widthOf('[data-bound="upper"]'),
+            };
+      return same(current, next) ? current : next;
+    });
   };
 
+  // before the measure below, which the ResizeObserver also calls from its first render's closure
+  useLayoutEffect(() => {
+    holding.current = holdPill;
+  });
   // the pill's text, and so its width, follows the thumb
   useLayoutEffect(measure);
 
