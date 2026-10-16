@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import { Button } from "@kleros/ui-components-library";
@@ -44,6 +45,8 @@ const held = parseUnits(params.get("held") ?? "19", 18);
 if (params.get("theme") === "dark") document.documentElement.classList.add("dark");
 /** `?dialog=success` the dialog a finished run opens; `&subscribed=0` for a visitor without resolution emails. */
 const dialog = params.get("dialog");
+/** `?skipped=N` estimates the run left out, said on the status line; a `harness-skipped` event changes it after open. */
+const initialSkipped = Number(params.get("skipped") ?? "0");
 
 const selected: ListedEstimate[] = CITIES.slice(0, count).map((name, index) => ({
   scale: {
@@ -99,7 +102,8 @@ type State =
 
 const PROGRESS: Partial<Record<State, PredictProgress>> = {
   quoting: run("quoting", []),
-  signing: run("signing", ["success", "running"]),
+  // `&step=1` signs the first step, creating the trade wallet
+  signing: run("signing", params.get("step") === "1" ? ["running"] : ["success", "running"]),
   confirming: run("confirming", ["success", "success", "success", "running"], { batchesDone: 1 }),
   failed: run("halted", ["success", "success", "success", "error"], {
     batchesDone: 1,
@@ -137,34 +141,44 @@ const success = (
   />
 );
 
-createRoot(document.getElementById("root")!).render(
-  <>
-    <header className="fs-header sticky top-0 z-30 flex h-16 w-full" />
-    {dialog === "success" ? success : null}
-    <PredictDialog
-      isOpen={dialog !== "success"}
-      onClose={() => {}}
-      selected={selected}
-      onRemove={() => {}}
-      preview={state === "recovered" ? undefined : preview}
-      amount={amount}
-      onAmountChange={() => {}}
-      tokens={tokens}
-      token={sDai}
-      onTokenChange={() => {}}
-      funding={funding}
-      collateral={collateral}
-      isFirstPrediction={isFirstPrediction}
-      isDisconnected={state === "disconnected"}
-      steps={steps}
-      skipped={0}
-      isRunning={isRunning}
-      isPricing={state === "quoting"}
-      canRetry={state === "failed" || state === "pending" || state === "recovered"}
-      isPending={state === "pending"}
-      recovered={state === "recovered" ? { deposit: 4n * WAD, token: sDai } : undefined}
-      notice={state === "disconnected" ? "Connect a wallet to predict." : undefined}
-      onPredict={() => {}}
-    />
-  </>,
-);
+function Harness() {
+  const [skipped, setSkipped] = useState(initialSkipped);
+  useEffect(() => {
+    const onSkipped = (event: Event) => setSkipped((event as CustomEvent<number>).detail);
+    window.addEventListener("harness-skipped", onSkipped);
+    return () => window.removeEventListener("harness-skipped", onSkipped);
+  }, []);
+  return (
+    <>
+      <header className="fs-header sticky top-0 z-30 flex h-16 w-full" />
+      {dialog === "success" ? success : null}
+      <PredictDialog
+        isOpen={dialog !== "success"}
+        onClose={() => {}}
+        selected={selected}
+        onRemove={() => {}}
+        preview={state === "recovered" ? undefined : preview}
+        amount={amount}
+        onAmountChange={() => {}}
+        tokens={tokens}
+        token={sDai}
+        onTokenChange={() => {}}
+        funding={funding}
+        collateral={collateral}
+        isFirstPrediction={isFirstPrediction}
+        isDisconnected={state === "disconnected"}
+        steps={steps}
+        skipped={skipped}
+        isRunning={isRunning}
+        isPricing={state === "quoting"}
+        canRetry={state === "failed" || state === "pending" || state === "recovered"}
+        isPending={state === "pending"}
+        recovered={state === "recovered" ? { deposit: 4n * WAD, token: sDai } : undefined}
+        notice={state === "disconnected" ? "Connect a wallet to predict." : undefined}
+        onPredict={() => {}}
+      />
+    </>
+  );
+}
+
+createRoot(document.getElementById("root")!).render(<Harness />);

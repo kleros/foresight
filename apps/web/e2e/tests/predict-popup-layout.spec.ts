@@ -640,6 +640,34 @@ for (const viewport of [
       });
     }
 
+    for (const [state, extra] of [
+      ["signing", "&step=1"],
+      ["signing", ""],
+      ["confirming", ""],
+    ] as const) {
+      test(`keeps the running step below the header when a note shows mid-run, ${state}${extra}`, async ({ page }) => {
+        await page.emulateMedia({ reducedMotion: "reduce" });
+        for (const options of [2, 10]) {
+          const dialog = await openPopup(page, options, state, undefined, extra);
+          await page.evaluate(() => window.dispatchEvent(new CustomEvent("harness-skipped", { detail: 2 })));
+          await expect(dialog.getByRole("status")).toHaveText("2 estimates could not be traded.");
+          // a scroll waits a frame after the render
+          await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+          const row = dialog.locator(".predict-steps > li").filter({ has: page.locator('[data-bullet="running"]') });
+          const title = row.getByText(new RegExp(`^(${STEPS.join("|")})$`));
+          const header = (await dialog
+            .getByRole("heading", { name: "Predict", exact: true, level: 2 })
+            .locator("..")
+            .boundingBox())!;
+          const bullet = (await dialog.locator('[data-bullet="running"]').boundingBox())!;
+          expect
+            .soft(bullet.y, `${options} options: the running bullet's top below the header`)
+            .toBeGreaterThanOrEqual(header.y + header.height);
+          expect.soft(await isFullyShown(title), `${options} options: its title`).toBe(true);
+        }
+      });
+    }
+
     for (const state of ["idle", "failed"] as const) {
       test(`keeps the button inside the dialog and every part reachable above it, ${state}`, async ({ page }) => {
         // the open's scroll then lands at once
