@@ -940,8 +940,16 @@ test.describe("the amount field reached by keyboard", () => {
     }
     await expect(input).toBeFocused();
 
+    const accent = await panel.evaluate((element) => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--fs-accent)";
+      element.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    });
     expect(await shadow()).not.toBe(atRest);
-    expect(await shadow()).toContain("inset");
+    expect(await shadow()).toContain(`${accent} 0px 0px 0px 2px inset`);
     expect(await panel.boundingBox()).toEqual(box);
   });
 });
