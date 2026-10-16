@@ -67,7 +67,8 @@ export function PredictStepsTimeline({ steps }: { steps: PredictSteps }) {
   if (!first) return null;
 
   return (
-    <div ref={timeline} className="@container w-full">
+    // on a phone on its side the popup's 40px status line scrolls with the steps, so it lands in view too
+    <div ref={timeline} className="@container landscape-phone:scroll-mb-10 w-full">
       <Views.Provider value={views}>
         <CustomTimeline
           items={[first, ...rest]}

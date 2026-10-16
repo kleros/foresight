@@ -578,11 +578,17 @@ for (const viewport of [
 
     for (const state of ["idle", "failed"] as const) {
       test(`keeps the button inside the dialog and every part reachable above it, ${state}`, async ({ page }) => {
+        // the open's scroll then lands at once
+        await page.emulateMedia({ reducedMotion: "reduce" });
         const dialog = await openPopup(page, 10, state);
         const box = (await dialog.boundingBox())!;
         const button = dialog.locator(".predict-cta");
         const buttonBox = (await button.boundingBox())!;
         expect(buttonBox.y + buttonBox.height, "the button's foot").toBeLessThanOrEqual(box.y + box.height);
+        if (state === "failed") {
+          expect(await isFullyShown(dialog.getByRole("status")), "the failure's reason at open").toBe(true);
+          expect(await isFullyShown(dialog.locator('[data-bullet="failed"]')), "the failed step at open").toBe(true);
+        }
 
         for (const part of [
           dialog.locator('[data-panel="amount"]'),
