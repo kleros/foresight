@@ -660,7 +660,7 @@ for (const viewport of [
           gap: parseFloat(own.marginBottom),
           fade: parseFloat(fade.height),
           gradient: fade.backgroundImage.startsWith("linear-gradient"),
-          below: parseFloat(fade.top) >= element.offsetHeight - 1,
+          below: parseFloat(fade.top) >= (element as HTMLElement).offsetHeight - 1,
         };
       });
       expect(look.gap, "no see-through margin under the header").toBe(0);
