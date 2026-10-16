@@ -454,6 +454,20 @@
 .predict-steps small {
   display: none;
 }
+/* the token select's caret: the summary's 1.5px chevron in place of the library's filled triangle */
+.predict-token-select > button > svg:last-child {
+  display: none;
+}
+.predict-token-select > button::after {
+  content: "";
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-left: 4px;
+  background: var(--fs-popup-text-2);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6l4 4 4-4' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
 /* an indeterminate line under the summary while a run prices its routes */
 .predict-sweep {
   position: absolute;

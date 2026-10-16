@@ -115,7 +115,7 @@ export function PredictAmountSection({
             onPress={() => max !== undefined && onAmountChange(max)}
             className={clsx(
               // a 44px target that takes no more height than its label, reaching into the gap before it
-              "-my-3 -ml-2 min-h-11 min-w-11 shrink-0 justify-end rounded-none! p-0 hover:bg-transparent!",
+              "-my-3 -ml-2 min-h-11 min-w-11 shrink-0 justify-end rounded-md! p-0 hover:bg-transparent!",
               "[&_.button-text]:text-fs-popup-accent-text [&_.button-text]:text-xs [&_.button-text]:font-semibold",
               "[&_.button-text]:tracking-wide [&_.button-text]:uppercase",
               "data-disabled:[&_.button-text]:text-fs-popup-text-3",
@@ -171,8 +171,7 @@ export function PredictAmountSection({
           className={clsx(
             "shrink-0 [&>button]:bg-fs-popup-chip [&>button]:h-10 [&>button]:w-fit [&>button]:rounded-full",
             "[&>button]:border-none [&>button]:pr-2.5 [&>button]:pl-1.5 [&>button]:focus:shadow-none",
-            "[&>button]:text-fs-popup-text [&>button]:font-semibold",
-            "[&>button>svg:last-child]:fill-fs-popup-text-2 [&>button>svg:last-child]:ml-1 [&>button>svg:last-child]:size-3",
+            "[&>button]:text-fs-popup-text [&>button]:font-semibold predict-token-select",
           )}
         />
       </div>

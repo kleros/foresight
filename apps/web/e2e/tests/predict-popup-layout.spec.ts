@@ -578,6 +578,26 @@ test.describe("an amount over the balance", () => {
   });
 });
 
+test.describe("the amount panel's controls", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("round Max's focus ring to the panel's corners and draw the token's caret as a 1.5px chevron", async ({
+    page,
+  }) => {
+    const dialog = await openPopup(page, 2);
+    const token = dialog.getByRole("button", { name: /sDAI/ });
+
+    await expect(dialog.getByRole("button", { name: "Max" })).toHaveCSS("border-top-left-radius", "6px");
+    await expect(token.locator("> svg").last()).toBeHidden();
+    expect(
+      await token.evaluate((button) => {
+        const caret = getComputedStyle(button, "::after");
+        return [caret.content, caret.width, caret.maskImage.startsWith("url(")];
+      }),
+    ).toEqual(['""', "14px", true]);
+  });
+});
+
 test.describe("a balance that wraps under the amount's title", () => {
   for (const viewport of [
     { width: 360, height: 640 },
