@@ -269,6 +269,53 @@ for (const track of PHONE_TRACKS) {
   });
 }
 
+/** The grid value nearest the market on `side` of it at which the pin still stands raised, if any. */
+async function lastRaised(
+  page: Page,
+  query: { track: number; market: number; upper: number; unit: string },
+  side: "below" | "above",
+) {
+  const step = 10 ** (Math.floor(Math.log10(query.upper)) - 2);
+  const raisedAt = async (index: number) => {
+    await open(page, { ...query, value: index * step });
+    return (await geometry(page)).placement === "up";
+  };
+  const marketIndex = query.market / step;
+  // `far` starts at the scale's end, `near` at the market, where the pin is dropped
+  let [far, near] = side === "below" ? [0, marketIndex] : [query.upper / step, marketIndex];
+  while (Math.abs(far - near) > 1) {
+    const middle = Math.round((far + near) / 2);
+    if (await raisedAt(middle)) far = middle;
+    else near = middle;
+  }
+  return (await raisedAt(far)) ? far * step : undefined;
+}
+
+for (const track of [...PHONE_TRACKS, ...TRACKS]) {
+  test.describe(`an open field beside a raised chip on a ${track}px track`, () => {
+    test.use({ viewport: { width: track + 64, height: 400 }, contextOptions: { reducedMotion: "reduce" } });
+
+    for (const [name, query, drafts] of [
+      ["a millions scale", { market: 3250000, upper: 5000000, unit: "$M" }, ["4 999 999", "4999999.99"]],
+      ["a percent scale", { market: 75, upper: 100, unit: "%" }, ["55.555", "100.00"]],
+    ] as const) {
+      for (const side of ["below", "above"] as const) {
+        test(`never runs under the chip on ${name}, typed into ${side} the market`, async ({ page }) => {
+          const value = await lastRaised(page, { track, ...query }, side);
+          test.skip(value === undefined, `the pin drops for every value ${side} the market`);
+          await page.getByRole("button", { name: "type your estimate for Movie A" }).click();
+          for (const draft of drafts) {
+            await page.getByRole("textbox").fill(draft);
+            const shown = await geometry(page);
+            expect.soft(shown.placement, `the pin with "${draft}" at ${value}`).toBe("up");
+            expect.soft(overlaps(shown.chip, shown.pill), `"${draft}" under the chip at ${value}`).toBe(false);
+          }
+        });
+      }
+    }
+  });
+}
+
 test.describe("the value pill", () => {
   test.use({ viewport: { width: 375, height: 400 } });
 

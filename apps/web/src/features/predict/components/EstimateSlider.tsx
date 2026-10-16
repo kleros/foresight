@@ -14,7 +14,7 @@ import type { OptionScale } from "@/types/optionScale";
 
 import { useMarketPin } from "../hooks/useMarketPin";
 import { estimateDigits, estimateDirection, estimateStep, readTypedEstimate, snapEstimate } from "../utils/estimates";
-import { chipLeft, droppedChipLeft, pinDrop, pinGap } from "../utils/marketPin";
+import { chipLeft, droppedChipLeft, fieldMaxWidth, pinDrop, pinGap } from "../utils/marketPin";
 
 interface EstimateSliderProps {
   scale: OptionScale;
@@ -96,6 +96,11 @@ export function EstimateSlider({
     upper: pin.sizes.track > 0 && chipAt + pin.sizes.chip > pin.sizes.track - pin.sizes.upper,
   };
   const dipPx = drop * PIN_DROP_PX;
+  // the pin holds still while the field is open, so a long draft is held short of a raised chip instead
+  const fieldMax =
+    marketShare === undefined || isDown
+      ? undefined
+      : Math.max(fieldMaxWidth(pin.sizes, { thumb: thumbShare, market: marketShare }), pin.sizes.pill);
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -160,6 +165,7 @@ export function EstimateSlider({
               scale={scale}
               draft={draft}
               minWidth={pin.sizes.pill}
+              maxWidth={fieldMax}
               onDraft={setDraft}
               onOpen={() => setNote(undefined)}
               onTyped={(typed) => {
@@ -290,6 +296,8 @@ interface ValuePillProps {
   draft: string | undefined;
   /** The closed pill's width in px; the open field is never narrower, so opening it moves nothing. */
   minWidth: number;
+  /** The open field's widest, in px; past it the typed number scrolls inside the field. */
+  maxWidth: number | undefined;
   onDraft: (draft: string | undefined) => void;
   onOpen: () => void;
   onTyped: (value: number) => void;
@@ -297,7 +305,7 @@ interface ValuePillProps {
 }
 
 const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill(
-  { share, shown, scale, draft, minWidth, onDraft: setDraft, onOpen, onTyped, onInvalid },
+  { share, shown, scale, draft, minWidth, maxWidth, onDraft: setDraft, onOpen, onTyped, onInvalid },
   ref,
 ) {
   const button = useRef<HTMLButtonElement>(null);
@@ -347,7 +355,7 @@ const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill
       {editing ? (
         <span
           className="border-fs-accent bg-fs-surface rounded-full inline-flex h-7 items-center gap-1 border px-2.5 text-sm"
-          style={{ minWidth }}
+          style={{ minWidth, maxWidth }}
         >
           <input
             autoFocus
@@ -360,9 +368,9 @@ const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill
             onFocus={(event) => event.target.select()}
             // as wide as what is typed, so the unit stays beside the number
             style={{ width: `calc(${Math.min(Math.max((draft ?? "").length, 2), 14)}ch + 2px)` }}
-            className="text-fs-text-primary bg-transparent font-semibold tabular-nums outline-none"
+            className="text-fs-text-primary min-w-0 bg-transparent font-semibold tabular-nums outline-none"
           />
-          {scale.unit ? <span className="text-fs-text-secondary">{scale.unit}</span> : null}
+          {scale.unit ? <span className="text-fs-text-secondary shrink-0">{scale.unit}</span> : null}
         </span>
       ) : (
         <button

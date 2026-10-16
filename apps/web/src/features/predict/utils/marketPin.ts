@@ -53,6 +53,19 @@ export function pinGap(
   return Math.max(chip - right, left - (chip + size.chip));
 }
 
+/**
+ * The widest the open field can be with its edge `PIN_CLEARANCE_PX` short of the raised chip, in px. The field's
+ * left edge sits at `thumb` of the track it does not cover, so it grows towards the chip by `1 - thumb` of its width.
+ */
+export function fieldMaxWidth(size: { track: number; chip: number }, share: { thumb: number; market: number }): number {
+  if (size.track === 0) return Number.POSITIVE_INFINITY;
+  const centre = share.thumb * size.track;
+  const chip = chipLeft(size, share.market);
+  return chip > centre
+    ? (chip - PIN_CLEARANCE_PX - centre) / (1 - share.thumb)
+    : (centre - chip - size.chip - PIN_CLEARANCE_PX) / share.thumb;
+}
+
 /** How far down the pin sits, 0 to 1: a shallow dip across the preflight band, then the whole drop. */
 export function pinDrop(gap: number): number {
   if (gap <= PIN_CLEARANCE_PX) return 1;

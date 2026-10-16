@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { chipLeft, droppedChipLeft, pinDrop, pinGap } from "../marketPin";
+import { chipLeft, droppedChipLeft, fieldMaxWidth, pinDrop, pinGap } from "../marketPin";
 
 describe("pinDrop", () => {
   // 4px of clearance and a 40px preflight band, dipping at most a fifth of the drop
@@ -90,5 +90,26 @@ describe("droppedChipLeft", () => {
   it("stays centred where clearing the bound would leave the market's point outside it", () => {
     expect(droppedChipLeft(size, 0.98)).toBe(chipLeft(size, 0.98));
     expect(droppedChipLeft(size, 0)).toBe(0);
+  });
+});
+
+describe("fieldMaxWidth", () => {
+  // a 300px track and a 40px chip
+  const size = { track: 300, chip: 40 };
+
+  it("keeps the field's edge 4px short of a raised chip on its right", () => {
+    // the chip spans 250 to 290; the field's right edge sits at 150 + half its width
+    expect(fieldMaxWidth(size, { thumb: 0.5, market: 0.9 })).toBe(192);
+    expect(fieldMaxWidth(size, { thumb: 0, market: 0.9 })).toBe(246);
+  });
+
+  it("keeps the field's edge 4px short of a raised chip on its left", () => {
+    // the chip spans 10 to 50; the field's left edge sits at 150 less half its width
+    expect(fieldMaxWidth(size, { thumb: 0.5, market: 0.1 })).toBe(192);
+    expect(fieldMaxWidth(size, { thumb: 1, market: 0.1 })).toBe(246);
+  });
+
+  it("sets no cap before the track is measured", () => {
+    expect(fieldMaxWidth({ track: 0, chip: 0 }, { thumb: 0.5, market: 0.9 })).toBe(Number.POSITIVE_INFINITY);
   });
 });
