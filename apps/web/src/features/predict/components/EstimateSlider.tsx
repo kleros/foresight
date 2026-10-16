@@ -162,7 +162,6 @@ export function EstimateSlider({
               minWidth={pin.sizes.pill}
               onDraft={setDraft}
               onOpen={() => setNote(undefined)}
-              onCancel={() => setNote(undefined)}
               onTyped={(typed) => {
                 const clamped = Math.min(scale.upperBound, Math.max(scale.lowerBound, typed));
                 const snapped = snapEstimate(clamped, scale);
@@ -293,14 +292,12 @@ interface ValuePillProps {
   minWidth: number;
   onDraft: (draft: string | undefined) => void;
   onOpen: () => void;
-  /** The field closed without a number applied. */
-  onCancel: () => void;
   onTyped: (value: number) => void;
   onInvalid: (message: string) => void;
 }
 
 const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill(
-  { share, shown, scale, draft, minWidth, onDraft: setDraft, onOpen, onCancel, onTyped, onInvalid },
+  { share, shown, scale, draft, minWidth, onDraft: setDraft, onOpen, onTyped, onInvalid },
   ref,
 ) {
   const button = useRef<HTMLButtonElement>(null);
@@ -318,16 +315,11 @@ const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill
     setDraft(undefined);
   };
 
-  const cancel = (refocus: boolean) => {
-    onCancel();
-    close(refocus);
-  };
-
   /** Enter keeps the field open on text that is not a number; a blur closes it unchanged. */
   const apply = (byEnter: boolean) => {
     const typed = readTypedEstimate(draft ?? "", scale.unit);
-    if ((draft ?? "").trim() === "") return cancel(byEnter);
-    if (!Number.isFinite(typed)) return byEnter ? onInvalid("Enter a number.") : cancel(false);
+    if ((draft ?? "").trim() === "") return close(byEnter);
+    if (!Number.isFinite(typed)) return byEnter ? onInvalid("Enter a number.") : close(false);
     onTyped(typed);
     close(byEnter);
   };
@@ -339,7 +331,7 @@ const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill
     } else if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
-      cancel(true);
+      close(true);
     }
   };
 
