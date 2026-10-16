@@ -156,9 +156,10 @@ export function PredictDialog({
           <h3 className="type-label text-fs-popup-text-2 font-medium tabular-nums">
             {`${selected.length} ${selected.length === 1 ? "estimate" : "estimates"}`}
           </h3>
-          {/* over four rows three and a half show, three on a phone: the cut row is the cue */}
+          {/* over four rows three and a half show, three on a phone: the cut row, under a row-tall fade, is the cue */}
           <ScrollFade
             fadeFrom="from-fs-popup-panel"
+            fadeSize={32}
             className={clsx("mt-1 w-full", selected.length > 4 && "max-h-28", selected.length > 3 && "max-sm:max-h-24")}
           >
             <PredictList
@@ -171,7 +172,8 @@ export function PredictDialog({
         </section>
 
         {/* the steps end flush with the body, so any overflow hides some of them */}
-        <ScrollFade className="min-h-32 w-full" cue="More below" minOverflow={1}>
+        {/* a step row's height of fade, so a bullet half under it never shows a hard edge */}
+        <ScrollFade className="min-h-32 w-full" cue="More below" minOverflow={1} fadeSize={40}>
           <div data-testid="predict-body" className="pt-2 short:pt-1.5">
             <PredictAmountSection
               amount={recovered ? recovered.deposit : amount}

@@ -456,8 +456,25 @@ test.describe("the popup's scroll area", () => {
       ]);
 
       expect(box!.height / row!.height).toBeCloseTo(rows, 1);
+      if (!Number.isInteger(rows)) {
+        // the cut row lies wholly under the fade, which reaches the panel's tone at the edge, so no glyph shows a hard cut
+        const fade = (await list.locator("xpath=../following-sibling::div[1]").boundingBox())!;
+        expect(fade.height).toBeGreaterThanOrEqual(row!.height);
+      }
     });
   }
+
+  test("fades a whole step row over the body's foot while it scrolls, so no bullet shows cut", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    const dialog = await openPopup(page, 10, "idle", undefined, "&first=0");
+    await dialog.getByRole("button", { name: /markets? move|Market prices/ }).click();
+    await settle(dialog);
+    const body = page.getByTestId("predict-body");
+    const fade = body.locator("xpath=../following-sibling::div[1]");
+
+    await expect(fade).toBeVisible();
+    expect((await fade.boundingBox())!.height).toBeGreaterThanOrEqual(40);
+  });
 });
 
 for (const viewport of [
