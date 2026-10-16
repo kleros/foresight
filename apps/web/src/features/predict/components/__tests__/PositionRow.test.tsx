@@ -119,4 +119,10 @@ describe("PositionRow", () => {
 
     expect(screen.queryByText(/your UP|some UP|your DOWN|some DOWN/)).toBeNull();
   });
+
+  it("holds an empty line where the estimate's effect goes while no estimate is set", () => {
+    render(<PositionRow scale={scale} position={{ up: 214n * WAD, down: WAD }} marketEstimate={75} decimals={18} />);
+
+    expect(screen.getByTestId("position-consequence")).toBeEmptyDOMElement();
+  });
 });

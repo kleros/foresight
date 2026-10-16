@@ -68,20 +68,25 @@ for (const width of [320, 375, 1280]) {
       }
     });
 
-    test("keeps one height at rest, above, below and near the market", async ({ page }) => {
-      const heights: number[] = [];
-      for (const query of ["", "value=87", "value=20", "market=85&value=88"]) {
-        await openCard(page, query);
-        heights.push(
-          await page
-            .locator("#root > div > div")
-            .first()
-            .evaluate((card) => (card as HTMLElement).offsetHeight),
-        );
-      }
+    for (const [held, position] of [
+      ["", ""],
+      [" with a position", "&up=214.08&down=1.43"],
+    ]) {
+      test(`keeps one height${held} at rest, above, below, at and near the market`, async ({ page }) => {
+        const heights: number[] = [];
+        for (const query of ["", "value=87", "value=20", "value=75", "market=85&value=88"]) {
+          await openCard(page, query + position);
+          heights.push(
+            await page
+              .locator("#root > div > div")
+              .first()
+              .evaluate((card) => (card as HTMLElement).offsetHeight),
+          );
+        }
 
-      expect(new Set(heights).size, heights.join(", ")).toBe(1);
-    });
+        expect(new Set(heights).size, heights.join(", ")).toBe(1);
+      });
+    }
 
     test("gives Details a bordered bar at least 44px tall", async ({ page }) => {
       await openCard(page, "");

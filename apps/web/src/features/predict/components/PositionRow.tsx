@@ -81,21 +81,27 @@ export function PositionRow({
         <span className="text-fs-tone-success-text">{`${amount(position.up)} UP`}</span>
         <span className="text-fs-tone-error-text">{`${amount(position.down)} DOWN`}</span>
       </div>
-      {leaning && estimate ? (
+      {/* held empty without an estimate, so the card keeps one height as the slider crosses the market */}
+      {leaning ? (
         <p
+          data-testid="position-consequence"
           className={clsx(
-            "inline-flex items-center gap-1",
-            estimate.direction === "higher" ? "text-fs-tone-success-text" : "text-fs-tone-error-text",
+            "inline-flex min-h-5 items-center gap-1",
+            estimate?.direction === "higher" ? "text-fs-tone-success-text" : "text-fs-tone-error-text",
           )}
         >
-          {estimate.direction === "higher" ? (
-            <ArrowUp className="size-3 shrink-0 [&_path]:fill-current" aria-hidden />
-          ) : (
-            <ArrowDown className="size-3 shrink-0 [&_path]:fill-current" aria-hidden />
-          )}
-          {estimate.direction === leaning
-            ? `${formatEstimate(estimate.value, scale.unit)} adds to your ${side}`
-            : `${formatEstimate(estimate.value, scale.unit)} sells some ${side}`}
+          {estimate ? (
+            <>
+              {estimate.direction === "higher" ? (
+                <ArrowUp className="size-3 shrink-0 [&_path]:fill-current" aria-hidden />
+              ) : (
+                <ArrowDown className="size-3 shrink-0 [&_path]:fill-current" aria-hidden />
+              )}
+              {estimate.direction === leaning
+                ? `${formatEstimate(estimate.value, scale.unit)} adds to your ${side}`
+                : `${formatEstimate(estimate.value, scale.unit)} sells some ${side}`}
+            </>
+          ) : null}
         </p>
       ) : null}
     </section>
