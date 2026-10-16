@@ -1172,10 +1172,14 @@ test.describe("the popup opening focused", () => {
               ? element.closest<HTMLElement>("div:has(>#slider-label)")!
               : element;
           const style = getComputedStyle(drawn);
-          // a ring's offset is a band of the surface under it
-          const surface = getComputedStyle(element.closest("[role=dialog]")!).backgroundColor;
+          // a ring's offset is a band of the nearest painted box under it; any other band is a second mark
+          let under = "";
+          for (let parent = drawn.parentElement; parent && !under; parent = parent.parentElement) {
+            const fill = getComputedStyle(parent).backgroundColor;
+            if (fill !== "rgba(0, 0, 0, 0)") under = fill;
+          }
           const rings = (style.boxShadow.match(/rgb\([^)]*\) 0px 0px 0px [1-9]\d*px/g) ?? []).filter(
-            (shadow) => !shadow.startsWith(surface),
+            (shadow) => !shadow.startsWith(under),
           );
           // the panel rings for the amount field alone
           const panel = element.closest("[data-panel=amount]");

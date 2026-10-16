@@ -289,7 +289,7 @@ function AmountSlider({
             "[&_div:has(>#slider-label)]:border-(--fs-popup-axis-to) [&_div:has(>#slider-label)]:bg-fs-surface",
             "[&_div:has(>#slider-label)[data-focus-visible]]:ring-fs-focus-ring",
             "[&_div:has(>#slider-label)[data-focus-visible]]:ring-2",
-            "[&_div:has(>#slider-label)[data-focus-visible]]:ring-offset-fs-surface",
+            "[&_div:has(>#slider-label)[data-focus-visible]]:ring-offset-fs-popup-panel",
             "[&_div:has(>#slider-label)[data-focus-visible]]:ring-offset-2",
           )}
           minValue={0}
