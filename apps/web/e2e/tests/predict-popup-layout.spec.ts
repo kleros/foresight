@@ -415,8 +415,11 @@ test.describe("a balance that wraps under the amount's title", () => {
     { width: 360, height: 640 },
     { width: 375, height: 667 },
     { width: 414, height: 896 },
+    { width: 520, height: 900 },
+    { width: 640, height: 900 },
+    { width: 1280, height: 800 },
   ]) {
-    for (const held of ["1234.5678", "12345678.9"]) {
+    for (const held of ["1234.5678", "12345678.9", "98765432109.12345"]) {
       test(`keeps one footprint across states with ${held} held at ${viewport.width} x ${viewport.height}`, async ({
         page,
       }) => {
