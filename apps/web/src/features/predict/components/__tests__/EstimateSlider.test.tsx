@@ -239,6 +239,30 @@ describe("EstimateSlider value pill", () => {
     expect(screen.getByRole("status")).toHaveTextContent("The least is 0 $M.");
   });
 
+  it("names the saved value in the scale's own digits", async () => {
+    const fine = { ...scale, unit: null, lowerBound: 0.1, upperBound: 0.6 };
+    const { onCommit } = renderSlider(0.2, { scale: fine, marketEstimate: 0.3 });
+
+    await userEvent.click(pill());
+    await userEvent.clear(field());
+    await userEvent.type(field(), "0.4567{Enter}");
+
+    expect(onCommit).toHaveBeenCalledWith(0.457);
+    expect(screen.getByRole("status")).toHaveTextContent("Rounded to 0.457.");
+  });
+
+  it("names the last point on the grid as the most, where the bound is between two", async () => {
+    const ragged = { ...scale, upperBound: 123.456 };
+    const { onCommit } = renderSlider(40, { scale: ragged, marketEstimate: 60 });
+
+    await userEvent.click(pill());
+    await userEvent.clear(field());
+    await userEvent.type(field(), "999{Enter}");
+
+    expect(onCommit).toHaveBeenCalledWith(123);
+    expect(screen.getByRole("status")).toHaveTextContent("The most is 123 $M.");
+  });
+
   it("refuses text that is not a number on Enter and keeps the field open", async () => {
     const { onCommit } = renderSlider(400);
 

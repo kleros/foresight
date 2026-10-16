@@ -150,13 +150,14 @@ export function EstimateSlider({
               onTyped={(typed) => {
                 const clamped = Math.min(scale.upperBound, Math.max(scale.lowerBound, typed));
                 const snapped = snapEstimate(clamped, scale);
+                const named = (point: number) => formatEstimate(point, scale.unit, estimateDigits(scale));
                 setNote(
                   typed > scale.upperBound
-                    ? `The most is ${formatEstimate(scale.upperBound, scale.unit)}.`
+                    ? `The most is ${named(snapped)}.`
                     : typed < scale.lowerBound
-                      ? `The least is ${formatEstimate(scale.lowerBound, scale.unit)}.`
+                      ? `The least is ${named(snapped)}.`
                       : snapped !== clamped
-                        ? `Rounded to ${formatEstimate(snapped, scale.unit)}.`
+                        ? `Rounded to ${named(snapped)}.`
                         : undefined,
                 );
                 commit(snapped);
@@ -234,10 +235,10 @@ export function EstimateSlider({
           <div className="type-caption text-fs-text-secondary flex justify-between">
             {/* a dropped pin names its own point, so the bound under its chip steps aside */}
             <span data-bound="lower" className={clsx(isDown && covers.lower && "invisible")}>
-              {formatEstimate(scale.lowerBound, scale.unit)}
+              {formatEstimate(snapEstimate(scale.lowerBound, scale), scale.unit)}
             </span>
             <span data-bound="upper" className={clsx(isDown && covers.upper && "invisible")}>
-              {formatEstimate(scale.upperBound, scale.unit)}
+              {formatEstimate(snapEstimate(scale.upperBound, scale), scale.unit)}
             </span>
           </div>
         </div>

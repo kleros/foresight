@@ -49,6 +49,15 @@ describe("snapEstimate", () => {
     expect(String(snapEstimate(3.3, { lowerBound: 0, upperBound: 10 }))).toBe("3.3");
   });
 
+  it("rounds a half step up, whatever the division leaves behind", () => {
+    expect(snapEstimate(0.35, { lowerBound: 0, upperBound: 10 })).toBe(0.4);
+  });
+
+  it("stays on the grid under a bound that is not on it", () => {
+    expect(snapEstimate(999, { lowerBound: 0, upperBound: 123.456 })).toBe(123);
+    expect(snapEstimate(123.7, { lowerBound: 0, upperBound: 123.8 })).toBe(123);
+  });
+
   it("falls to the lower bound on a scale with no width", () => {
     expect(snapEstimate(3, { lowerBound: 0, upperBound: 0 })).toBe(0);
   });

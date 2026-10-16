@@ -18,4 +18,8 @@ describe("formatEstimate", () => {
   it("rounds long fractions to two places", () => {
     expect(formatEstimate(33.3333, "%")).toBe("33.33 %");
   });
+
+  it("shows as many places as it is asked for", () => {
+    expect(formatEstimate(0.4567, null, 3)).toBe("0.457");
+  });
 });

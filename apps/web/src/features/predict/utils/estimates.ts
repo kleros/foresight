@@ -18,16 +18,18 @@ export function estimateDigits(scale: Pick<OptionScale, "lowerBound" | "upperBou
 }
 
 /**
- * Puts a value on the option's grid and inside its bounds. Applied to the market's number as
+ * Puts a value on the option's grid, at or inside its bounds. Applied to the market's number as
  * well as the visitor's, so "at the market" means the same thing however the value arrived.
  */
 export function snapEstimate(value: number, scale: Pick<OptionScale, "lowerBound" | "upperBound">): number {
   const step = estimateStep(scale);
   if (step <= 0) return scale.lowerBound;
 
-  const snapped = scale.lowerBound + Math.round((value - scale.lowerBound) / step) * step;
-  // the multiply leaves binary debris (0.35019999999999996) that would reach a CSV as-is
-  return Number(Math.min(scale.upperBound, Math.max(scale.lowerBound, snapped)).toPrecision(12));
+  // a division leaves binary debris (0.35 / 0.1 = 3.4999999999999996), and so does the multiply back
+  const steps = (span: number) => Number((span / step).toPrecision(12));
+  const last = Math.floor(steps(scale.upperBound - scale.lowerBound));
+  const index = Math.min(last, Math.max(0, Math.round(steps(value - scale.lowerBound))));
+  return Number((scale.lowerBound + index * step).toPrecision(12));
 }
 
 export function estimateDirection(value: number, marketEstimate: number): SelectedEstimate["direction"] | null {
