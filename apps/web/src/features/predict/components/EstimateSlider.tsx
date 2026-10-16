@@ -100,7 +100,7 @@ export function EstimateSlider({
   const fieldMax =
     marketShare === undefined || isDown
       ? undefined
-      : Math.max(fieldMaxWidth(pin.sizes, { thumb: thumbShare, market: marketShare }), pin.sizes.pill);
+      : fieldMaxWidth(pin.sizes, { thumb: thumbShare, market: marketShare });
 
   return (
     <div className="flex w-full flex-col gap-4">

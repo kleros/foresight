@@ -109,6 +109,19 @@ describe("fieldMaxWidth", () => {
     expect(fieldMaxWidth(size, { thumb: 1, market: 0.1 })).toBe(246);
   });
 
+  it("is never narrower than the closed pill while the chip is raised", () => {
+    // tracks from a 320px phone to a 1280px window, pills and chips from a short value to a long unit
+    for (const track of [256, 311, 1112])
+      for (const pill of [40, 72, 120])
+        for (const chip of [46, 90])
+          for (let thumb = 0; thumb <= 1; thumb += 0.02)
+            for (let market = 0; market <= 1; market += 0.02) {
+              const share = { thumb, market };
+              if (pinDrop(pinGap({ track, pill, chip }, share)) === 1) continue;
+              expect(fieldMaxWidth({ track, chip }, share)).toBeGreaterThan(pill);
+            }
+  });
+
   it("sets no cap before the track is measured", () => {
     expect(fieldMaxWidth({ track: 0, chip: 0 }, { thumb: 0.5, market: 0.9 })).toBe(Number.POSITIVE_INFINITY);
   });

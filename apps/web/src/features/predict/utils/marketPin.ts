@@ -56,6 +56,7 @@ export function pinGap(
 /**
  * The widest the open field can be with its edge `PIN_CLEARANCE_PX` short of the raised chip, in px. The field's
  * left edge sits at `thumb` of the track it does not cover, so it grows towards the chip by `1 - thumb` of its width.
+ * Wider than the closed pill wherever `pinGap` leaves the chip raised, as the pill then already clears it.
  */
 export function fieldMaxWidth(size: { track: number; chip: number }, share: { thumb: number; market: number }): number {
   if (size.track === 0) return Number.POSITIVE_INFINITY;
