@@ -1,3 +1,5 @@
+import clsx from "clsx";
+
 import { EstimateSlider } from "@/features/predict/components/EstimateSlider";
 import { PositionRow } from "@/features/predict/components/PositionRow";
 import { useEstimate, useEstimateStore } from "@/features/predict/stores/estimateStore";
@@ -48,7 +50,16 @@ export function OptionCard({
     value !== undefined && marketEstimate !== undefined ? estimateDirection(value, marketEstimate) : null;
 
   return (
-    <Disclosure className="bg-fs-surface-sunken w-full" title={<TitleRow option={option} isSet={direction !== null} />}>
+    <Disclosure
+      className="border-gradient-purple-blue bg-fs-surface w-full rounded-(--fs-radius-panel)!"
+      // the 1px transparent border keeps the hover tint off the gradient hairline beneath it
+      buttonClassName={clsx(
+        "rounded-(--fs-radius-panel) border-transparent bg-transparent bg-clip-padding",
+        "aria-expanded:rounded-b-none aria-expanded:border-b-(--fs-popup-line)",
+      )}
+      bodyClassName="fs-rise"
+      title={<TitleRow option={option} isSet={direction !== null} />}
+    >
       <div className="flex w-full flex-col gap-4">
         {option.upperBound > option.lowerBound ? (
           <EstimateSlider
@@ -76,8 +87,12 @@ export function OptionCard({
         ) : null}
         <Disclosure
           className="w-full"
-          bodyClassName="px-0 pt-4 pb-0 md:px-0 md:pt-4 md:pb-0"
-          title={<span className="text-fs-text-primary text-base">Details</span>}
+          buttonClassName={clsx(
+            "rounded-none border-0 py-3 border-t border-t-(--fs-popup-line) bg-transparent px-0 md:px-0",
+            "hover:bg-transparent [&:hover>span]:text-fs-text-secondary",
+          )}
+          bodyClassName="fs-rise px-0 pt-2 pb-0 md:px-0 md:pt-2 md:pb-0"
+          title={<span className="text-fs-text-primary fs-echo text-sm font-medium">Details</span>}
         >
           <div className="flex w-full min-w-0 flex-col gap-3">
             <p className="type-caption text-fs-text-secondary text-pretty">{option.question}</p>

@@ -94,12 +94,48 @@ for (const width of [320, 375, 1280]) {
       });
     }
 
-    test("gives Details a bordered bar at least 44px tall", async ({ page }) => {
+    test("gives Details a row at least 44px tall under a hairline", async ({ page }) => {
       await openCard(page, "");
 
       const details = page.getByRole("button", { name: "Details" });
       expect((await details.boundingBox())!.height).toBeGreaterThanOrEqual(44);
       expect(await details.evaluate((bar) => getComputedStyle(bar).borderTopWidth)).toBe("1px");
+    });
+
+    test("rounds the card to the popup's panel radius, its header following it while closed", async ({ page }) => {
+      await page.goto(`${harness.url}?`);
+      const card = page.locator("#root > div > div").first();
+      const header = page.locator("#root button").first();
+
+      await expect(card).toHaveCSS("border-radius", "16px");
+      await expect(header).toHaveCSS("border-bottom-left-radius", "16px");
+      await header.click();
+      await expect(header).toHaveCSS("border-bottom-left-radius", "0px");
+    });
+
+    test("reveals what opens by opacity and transform alone", async ({ page }) => {
+      await page.goto(`${harness.url}?up=3&down=2`);
+      await page.evaluate(() => {
+        const started: string[][] = [];
+        (window as unknown as { started: string[][] }).started = started;
+        document.addEventListener("animationstart", (event) => {
+          const animation = (event.target as Element)
+            .getAnimations()
+            .find((running) => (running as CSSAnimation).animationName === event.animationName)!;
+          const keys = (animation.effect as KeyframeEffect).getKeyframes().flatMap((frame) => Object.keys(frame));
+          started.push(
+            [...new Set(keys)]
+              .filter((key) => !["offset", "easing", "composite", "computedOffset"].includes(key))
+              .sort(),
+          );
+        });
+      });
+      const started = () => page.evaluate(() => (window as unknown as { started: string[][] }).started.splice(0));
+
+      await page.locator("#root button").first().click();
+      await expect.poll(started).toEqual([["opacity", "transform"]]);
+      await page.getByRole("button", { name: "Details" }).click();
+      await expect.poll(started).toEqual([["opacity", "transform"]]);
     });
   });
 }

@@ -1,5 +1,5 @@
-/* The predict popup and its success dialog ("Aurora"): an explicit exception to the 3px system,
-   scoped to those two dialogs. Each token says why it departs from the semantic layer. */
+/* "Aurora": an explicit exception to the 3px system, scoped to the predict popup, its success dialog
+   and the option cards. Each token says why it departs from the semantic layer. */
 :root {
   /* nested surfaces read as depth: modal 24 > panel 16 (8px inset) > control 10 > pill */
   --fs-radius-popup: 24px;

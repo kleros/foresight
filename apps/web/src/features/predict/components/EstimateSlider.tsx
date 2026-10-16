@@ -7,7 +7,6 @@ import ArrowDown from "@/assets/svg/long-arrow-down.svg";
 import ArrowUp from "@/assets/svg/long-arrow-up.svg";
 import PencilIcon from "@/assets/svg/pencil.svg";
 
-import { getReadableTextColor } from "@/utils/branchColor";
 import { formatEstimate } from "@/utils/formatEstimate";
 
 import type { OptionScale } from "@/types/optionScale";
@@ -30,6 +29,11 @@ interface EstimateSliderProps {
 }
 
 const ESTIMATE_COLOR = { higher: "var(--fs-estimate-up)", lower: "var(--fs-estimate-down)" } as const;
+/** The pill's text, in the hint's colour, on a 12% wash of the fill's. */
+const PILL_TONE = {
+  higher: { color: "var(--fs-tone-success-text)", wash: "var(--fs-estimate-up)" },
+  lower: { color: "var(--fs-tone-error-text)", wash: "var(--fs-estimate-down)" },
+} as const;
 
 /** The chip's travel from its place above the track to 2px under the thumb, in px. */
 const PIN_DROP_PX = 52;
@@ -120,7 +124,9 @@ export function EstimateSlider({
               "[&_div:has(>#slider-label)[data-focus-visible]]:ring-fs-accent",
               "[&_div:has(>#slider-label)[data-focus-visible]]:ring-2",
               "[&_div:has(>#slider-label)[data-focus-visible]]:ring-offset-2",
-              "[&_div:has(>#slider-label)[data-focus-visible]]:ring-offset-fs-surface-sunken",
+              "[&_div:has(>#slider-label)[data-focus-visible]]:ring-offset-fs-surface",
+              // at the market the fill is the brand axis; a direction paints it solid
+              !tone && !isDisabled && "[&_#slider-fill]:bg-(image:--fs-popup-axis)",
               isDisabled && "opacity-50",
             )}
             aria-label={`Your estimate for ${scale.name}`}
@@ -137,14 +143,14 @@ export function EstimateSlider({
             }}
             isDisabled={isDisabled}
             theme={
-              tone
-                ? {
-                    sliderColor: tone,
-                    thumbColor: tone,
-                    trackColor: "var(--fs-border)",
+              isDisabled
+                ? undefined
+                : {
+                    sliderColor: tone ?? "var(--fs-popup-axis-from)",
+                    thumbColor: tone ?? "var(--fs-popup-axis-to)",
+                    trackColor: "var(--fs-popup-track)",
                     labelColor: "var(--fs-text-primary)",
                   }
-                : undefined
             }
           />
           {isDisabled && value !== undefined ? (
@@ -162,6 +168,7 @@ export function EstimateSlider({
               ref={pin.pill}
               share={thumbShare}
               shown={shown}
+              direction={direction}
               scale={scale}
               draft={draft}
               minWidth={pin.sizes.pill}
@@ -217,8 +224,7 @@ export function EstimateSlider({
               >
                 <span
                   data-testid="market-chip"
-                  className="rounded-fs px-2 py-0.5 text-center text-xs leading-4 whitespace-nowrap"
-                  style={{ backgroundColor: scale.color, color: getReadableTextColor(scale.color) }}
+                  className="rounded-full bg-(--fs-popup-chip) px-2 py-0.5 text-center text-xs leading-4 font-medium whitespace-nowrap text-(--fs-popup-text) tabular-nums"
                 >
                   {formatEstimate(marketEstimate!, scale.unit)}
                 </span>
@@ -292,6 +298,8 @@ interface ValuePillProps {
   share: number;
   shown: number;
   scale: OptionScale;
+  /** Which side of the market the value is on; null at the market. */
+  direction: "higher" | "lower" | null;
   /** The field's text while it is open. */
   draft: string | undefined;
   /** The closed pill's width in px; the open field is never narrower, so opening it moves nothing. */
@@ -305,11 +313,13 @@ interface ValuePillProps {
 }
 
 const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill(
-  { share, shown, scale, draft, minWidth, maxWidth, onDraft: setDraft, onOpen, onTyped, onInvalid },
+  { share, shown, scale, direction, draft, minWidth, maxWidth, onDraft: setDraft, onOpen, onTyped, onInvalid },
   ref,
 ) {
   const button = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef(false);
+  const [landed, setLanded] = useState(false);
+  const tone = direction ? PILL_TONE[direction] : undefined;
   const editing = draft !== undefined;
 
   useEffect(() => {
@@ -329,6 +339,7 @@ const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill
     if ((draft ?? "").trim() === "") return close(byEnter);
     if (!Number.isFinite(typed)) return byEnter ? onInvalid("Enter a number.") : close(false);
     onTyped(typed);
+    setLanded(true);
     close(byEnter);
   };
 
@@ -378,11 +389,19 @@ const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill
           type="button"
           aria-label={`${formatEstimate(shown, scale.unit)}, type your estimate for ${scale.name}`}
           onClick={() => {
+            setLanded(false);
             onOpen();
             setDraft(String(Number(shown.toFixed(estimateDigits(scale)))));
           }}
+          onAnimationEnd={() => setLanded(false)}
+          style={
+            tone
+              ? { color: tone.color, backgroundColor: `color-mix(in srgb, ${tone.wash} 12%, var(--fs-surface))` }
+              : { color: "var(--fs-popup-text)", backgroundColor: "var(--fs-popup-chip)" }
+          }
           className={clsx(
-            "border-fs-border bg-fs-surface text-fs-text-primary rounded-full fs-echo relative",
+            "fs-echo relative rounded-full border-transparent",
+            landed && "fs-pill-commit",
             // reaches 8px up into the padding above, so the pill's target is taller than it draws
             "before:absolute before:inset-x-0 before:-top-2 before:bottom-0 before:content-['']",
             "inline-flex h-7 cursor-pointer items-center gap-1.5 border px-2.5 text-sm font-semibold whitespace-nowrap tabular-nums",
@@ -390,7 +409,7 @@ const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill
           )}
         >
           {formatEstimate(shown, scale.unit)}
-          <PencilIcon className="text-fs-text-secondary size-3" aria-hidden />
+          <PencilIcon className="size-3 opacity-70" aria-hidden />
         </button>
       )}
     </span>

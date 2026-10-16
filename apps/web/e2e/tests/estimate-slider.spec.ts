@@ -371,6 +371,74 @@ test.describe("the value pill", () => {
     });
   }
 
+  /** Records every animation that starts from here on: its name, what it animates and for how long. */
+  const recordMotion = (page: Page) =>
+    page.evaluate(() => {
+      const started: { name: string; properties: string[]; duration: number }[] = [];
+      (window as unknown as { started: typeof started }).started = started;
+      document.addEventListener("animationstart", (event) => {
+        const animation = (event.target as Element)
+          .getAnimations()
+          .find((running) => (running as CSSAnimation).animationName === event.animationName)!;
+        const properties = (animation.effect as KeyframeEffect)
+          .getKeyframes()
+          .flatMap((frame) => Object.keys(frame))
+          .filter((key) => !["offset", "easing", "composite", "computedOffset"].includes(key));
+        started.push({
+          name: event.animationName,
+          properties: [...new Set(properties)].sort(),
+          duration: Number(animation.effect!.getComputedTiming().duration),
+        });
+      });
+    });
+  const motion = (page: Page) =>
+    page.evaluate(() =>
+      (window as unknown as { started: { name: string; properties: string[]; duration: number }[] }).started.splice(0),
+    );
+
+  test("settles into place by transform when a typed number is applied, and not when the field is cancelled", async ({
+    page,
+  }) => {
+    await open(page, { track: 311, market: MARKET, value: 40 });
+    await recordMotion(page);
+
+    await pill(page).click();
+    await field(page).fill("90");
+    await field(page).press("Escape");
+    await expect(pill(page)).toBeFocused();
+    expect(await motion(page), "after Escape").toEqual([]);
+
+    await pill(page).click();
+    await field(page).fill("90");
+    await field(page).press("Enter");
+    await expect(pill(page)).toBeFocused();
+    await expect.poll(() => page.evaluate(() => (window as unknown as { started: unknown[] }).started.length)).toBe(1);
+    expect(await motion(page), "after Enter").toEqual([
+      { name: "fsPillCommit", properties: ["opacity", "transform"], duration: 250 },
+    ]);
+  });
+
+  test.describe("with reduced motion", () => {
+    test.use({ contextOptions: { reducedMotion: "reduce" } });
+
+    test("applies a typed number with no settling motion", async ({ page }) => {
+      await open(page, { track: 311, market: MARKET, value: 40 });
+      await recordMotion(page);
+
+      await pill(page).click();
+      await field(page).fill("90");
+      await field(page).press("Enter");
+      await expect(page.getByRole("slider")).toHaveValue("90");
+      await settle(page);
+
+      const started = await motion(page);
+      expect(
+        started.every(({ duration }) => duration <= 1),
+        JSON.stringify(started),
+      ).toBe(true);
+    });
+  });
+
   test("keeps the value on Escape", async ({ page }) => {
     await open(page, { track: 311, market: MARKET, value: 40 });
 
@@ -437,17 +505,68 @@ test.describe("the value pill", () => {
   });
 });
 
+/** The WCAG contrast of an element's text on its own background, both resolved through a canvas to sRGB. */
+function contrast(page: Page, selector: string) {
+  return page.evaluate((selector) => {
+    const element = document.querySelector(selector)!;
+    const style = getComputedStyle(element);
+    const context = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
+    const luminance = (css: string) => {
+      context.clearRect(0, 0, 1, 1);
+      context.fillStyle = css;
+      context.fillRect(0, 0, 1, 1);
+      const [r, g, b] = Array.from(context.getImageData(0, 0, 1, 1).data.slice(0, 3), (channel) => {
+        const c = channel / 255;
+        return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+    };
+    const [light, dark] = [luminance(style.color), luminance(style.backgroundColor)].sort((a, b) => b - a);
+    return (light! + 0.05) / (dark! + 0.05);
+  }, selector);
+}
+
 test.describe("the market chip's text", () => {
   test.use({ viewport: { width: 375, height: 400 } });
 
-  for (const [color, text] of [
-    ["#009aff", "rgb(0, 0, 0)"],
-    ["#7e1bd4", "rgb(255, 255, 255)"],
-  ] as const) {
-    test(`reads at AA on ${color}`, async ({ page }) => {
-      await open(page, { track: 311, market: MARKET, color });
+  for (const theme of ["light", "dark"]) {
+    for (const color of ["#009aff", "#7e1bd4"]) {
+      test(`reads at AA in the ${theme} theme whatever the option's colour, here ${color}`, async ({ page }) => {
+        await open(page, { track: 311, market: MARKET, color, theme });
 
-      await expect(page.getByTestId("market-chip")).toHaveCSS("color", text);
+        expect(await contrast(page, '[data-testid="market-chip"]')).toBeGreaterThanOrEqual(4.5);
+      });
+    }
+  }
+});
+
+test.describe("the value pill's tint", () => {
+  test.use({ viewport: { width: 375, height: 400 } });
+  const PILL = '[data-testid="value-pill"] button';
+
+  for (const theme of ["light", "dark"]) {
+    test(`speaks in the hint's direction colour, at AA, above and below the market in the ${theme} theme`, async ({
+      page,
+    }) => {
+      const backgrounds = new Set<string>();
+      for (const value of [90, 40]) {
+        await open(page, { track: 311, market: MARKET, value, theme });
+        const hint = await page
+          .getByRole("status")
+          .locator("xpath=following-sibling::span")
+          .evaluate((span) => getComputedStyle(span).color);
+
+        await expect(page.locator(PILL)).toHaveCSS("color", hint);
+        expect(await contrast(page, PILL), `at ${value}`).toBeGreaterThanOrEqual(4.5);
+        backgrounds.add(await page.locator(PILL).evaluate((pill) => getComputedStyle(pill).backgroundColor));
+      }
+      expect(backgrounds.size, "a tint per direction").toBe(2);
+    });
+
+    test(`is neutral, at AA, at the market in the ${theme} theme`, async ({ page }) => {
+      await open(page, { track: 311, market: MARKET, theme });
+
+      expect(await contrast(page, PILL)).toBeGreaterThanOrEqual(4.5);
     });
   }
 });
@@ -455,7 +574,7 @@ test.describe("the market chip's text", () => {
 test.describe("the fill's direction colour", () => {
   test.use({ viewport: { width: 375, height: 400 } });
 
-  // light: the darker tones that hold 3:1 on the sunken surface; dark: futarchy's pastels
+  // light: the darker tones that hold 3:1 on the card's surface; dark: futarchy's pastels
   for (const [theme, up, down] of [
     ["light", "rgb(22, 163, 74)", "rgb(224, 64, 95)"],
     ["dark", "rgb(210, 255, 220)", "rgb(255, 210, 219)"],
@@ -467,9 +586,16 @@ test.describe("the fill's direction colour", () => {
       ] as const) {
         await open(page, { track: 311, market: MARKET, value, theme });
         await expect(page.locator("#slider-fill")).toHaveCSS("background-color", colour);
+        await expect(page.locator("#slider-fill")).toHaveCSS("background-image", "none");
       }
     });
   }
+
+  test("is the brand gradient at the market", async ({ page }) => {
+    await open(page, { track: 311, market: MARKET });
+
+    await expect(page.locator("#slider-fill")).toHaveCSS("background-image", /^linear-gradient/);
+  });
 });
 
 /** Drives the transitions running on the market pin and inside it; returns what each animates. */

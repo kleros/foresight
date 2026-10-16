@@ -15,7 +15,33 @@
    A var() is valid at parse time, so without linear() support it would compute to ease, hence the feature query. */
 @supports (animation-timing-function: linear(0, 1)) {
   :root {
-    --fs-ease-spring: linear(0, 0.043, 0.148, 0.283, 0.428, 0.567, 0.691, 0.795, 0.878, 0.942, 0.987, 1.017, 1.035, 1.044, 1.046, 1.044, 1.039, 1.032, 1.026, 1.019, 1.014, 1.009, 1.005, 1.002, 1);
+    --fs-ease-spring: linear(
+      0,
+      0.043,
+      0.148,
+      0.283,
+      0.428,
+      0.567,
+      0.691,
+      0.795,
+      0.878,
+      0.942,
+      0.987,
+      1.017,
+      1.035,
+      1.044,
+      1.046,
+      1.044,
+      1.039,
+      1.032,
+      1.026,
+      1.019,
+      1.014,
+      1.009,
+      1.005,
+      1.002,
+      1
+    );
   }
 }
 .fs-echo {
@@ -83,6 +109,21 @@
 }
 .fs-rise {
   animation: fsRise var(--fs-dur-enter) var(--fs-ease-enter) both;
+}
+/* A typed estimate landing: the value pill settles into its new place over the thumb. */
+@keyframes fsPillCommit {
+  from {
+    opacity: 0.6;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fs-pill-commit {
+  transform-origin: 50% 100%;
+  animation: fsPillCommit var(--fs-dur-enter) var(--fs-ease-spring) both;
 }
 /* A colour swatch is small, so it grows on hover rather than lifting. */
 .fs-swatch {

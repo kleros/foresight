@@ -19,7 +19,7 @@ if (params.get("theme") === "dark") document.documentElement.classList.add("dark
 function Harness() {
   const [value, setValue] = useState(initial);
   return (
-    <div className="bg-fs-surface-sunken p-4" style={{ width: track + 32 }}>
+    <div className="bg-fs-surface p-4" style={{ width: track + 32 }}>
       <EstimateSlider
         scale={{
           market: "0x1111111111111111111111111111111111111111",

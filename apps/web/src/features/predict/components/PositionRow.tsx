@@ -35,12 +35,18 @@ export function PositionRow({
   const side = leaning === "higher" ? "UP" : "DOWN";
 
   return (
-    <section aria-label="Your position" className="border-fs-border type-label flex flex-col gap-1 border-t pt-3">
+    <section
+      aria-label="Your position"
+      className="type-label flex flex-col gap-1 border-t border-t-(--fs-popup-line) pt-3"
+    >
       <div className="flex flex-wrap items-center justify-between gap-x-4">
-        <span data-testid="position-held" className="whitespace-nowrap tabular-nums">
-          <span className="text-fs-tone-success-text">{`${amount(position.up)} UP`}</span>
-          <span className="text-fs-text-secondary">{" · "}</span>
-          <span className="text-fs-tone-error-text">{`${amount(position.down)} DOWN`}</span>
+        <span className="whitespace-nowrap">
+          <span className="text-fs-text-secondary">{"You hold "}</span>
+          <span data-testid="position-held" className="tabular-nums">
+            <span className="text-fs-tone-success-text font-semibold">{`${amount(position.up)} UP`}</span>
+            <span className="text-fs-text-secondary">{" · "}</span>
+            <span className="text-fs-tone-error-text font-semibold">{`${amount(position.down)} DOWN`}</span>
+          </span>
         </span>
         {marketEstimate !== undefined ? (
           <WithHelpTooltip
