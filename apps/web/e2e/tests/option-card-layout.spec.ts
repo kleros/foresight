@@ -49,7 +49,11 @@ for (const width of [320, 375, 1280]) {
     test("keeps the position's worth and its help inside the card under a long unbroken option name", async ({
       page,
     }) => {
-      await openCard(page, "name=Benachrichtigungseinstellungenverwaltung%20(revised%202026)&up=1234567.89&down=0");
+      // a 233px worth at 320, wider than its 228px line beside the help, so only a nowrap figure keeps one line
+      await openCard(
+        page,
+        "name=Benachrichtigungseinstellungenverwaltung%20(revised%202026)&up=1234567890123456.5&down=0",
+      );
       const card = (await page.locator("#root > div > div").first().boundingBox())!;
       const help = page.getByLabel("How this is worked out");
       const worth = page.getByText(/^≈ /);
