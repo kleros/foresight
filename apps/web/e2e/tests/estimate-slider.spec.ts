@@ -406,7 +406,10 @@ test.describe("the value pill", () => {
     await field(page).fill("90");
     await field(page).press("Escape");
     await expect(pill(page)).toBeFocused();
+    // an animation the cancel started would show by the second frame
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     expect(await motion(page), "after Escape").toEqual([]);
+    await expect(pill(page)).not.toHaveClass(/fs-pill-commit/);
 
     await pill(page).click();
     await field(page).fill("90");
