@@ -351,6 +351,28 @@ test.describe("the value pill", () => {
     await expect(page.getByText("19 % below the market")).toBeVisible();
   });
 
+  for (const [typed, said] of [
+    ["33.333", "Rounded to 33 %."],
+    ["5000", "The most is 100 %."],
+  ] as const) {
+    test(`says "${said}" for ${typed} entered after a note that it was not a number`, async ({ page }) => {
+      await open(page, { track: 311, market: MARKET, value: 40 });
+      const status = page.getByRole("status");
+
+      await pill(page).click();
+      await field(page).fill("abc");
+      await field(page).press("Enter");
+      await expect(status).toHaveText("Enter a number.");
+      await field(page).fill(typed);
+      await field(page).press("Enter");
+
+      await expect(status).toHaveText(said);
+      await settle(page);
+      await page.waitForTimeout(300);
+      await expect(status).toHaveText(said);
+    });
+  }
+
   for (const [how, close] of [
     ["Tab", (page: Page) => page.keyboard.press("Tab")],
     ["Shift+Tab", (page: Page) => page.keyboard.press("Shift+Tab")],

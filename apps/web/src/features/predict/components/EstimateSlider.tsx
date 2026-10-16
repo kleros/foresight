@@ -61,7 +61,9 @@ export function EstimateSlider({
   const reason =
     lockedReason ?? (marketEstimate === undefined && !isMarketPending ? "No trading on this option yet." : undefined);
   const isDisabled = reason !== undefined || isMarketPending;
-  const [note, setNote] = useState<string>();
+  // an object, so each note is its own: a listener armed for one never clears the next
+  const [note, setNote] = useState<{ text: string }>();
+  const say = (text: string | undefined) => setNote(text === undefined ? undefined : { text });
   // held here, so the pin measures the open field's width
   const [draft, setDraft] = useState<string>();
   // a field open when the slider locks is dropped, not reopened once it unlocks
@@ -71,7 +73,7 @@ export function EstimateSlider({
   // listening from the next task leaves out the focus and press that delivered it
   useEffect(() => {
     if (!note) return;
-    const clear = () => setNote(undefined);
+    const clear = () => setNote((current) => (current === note ? undefined : current));
     const events = ["focusin", "focusout", "pointerdown"] as const;
     const timer = setTimeout(() => events.forEach((name) => document.addEventListener(name, clear)));
     return () => {
@@ -198,7 +200,7 @@ export function EstimateSlider({
                 const clamped = Math.min(scale.upperBound, Math.max(scale.lowerBound, typed));
                 const snapped = snapEstimate(clamped, scale);
                 const named = (point: number) => formatEstimate(point, scale.unit, estimateDigits(scale));
-                setNote(
+                say(
                   typed > scale.upperBound
                     ? `The most is ${named(snapped)}.`
                     : typed < scale.lowerBound
@@ -209,7 +211,7 @@ export function EstimateSlider({
                 );
                 commit(snapped);
               }}
-              onInvalid={setNote}
+              onInvalid={say}
             />
           ) : null}
           {marketShare !== undefined ? (
@@ -297,7 +299,7 @@ export function EstimateSlider({
 
       <p className="type-label text-fs-text-secondary min-h-5">
         {/* mounted empty, so a screen reader hears the note when it arrives */}
-        <span role="status">{note}</span>
+        <span role="status">{note?.text}</span>
         {note ? null : reason ? (
           <span className={lockedReason ? "text-fs-tone-warning-text" : undefined}>{reason}</span>
         ) : isMarketPending ? (
