@@ -138,6 +138,22 @@ for (const track of TRACKS) {
       });
     }
 
+    for (const [name, query] of [
+      ["a millions scale", { market: 3250000, upper: 5000000, unit: "$M" }],
+      ["a percent scale near its top", { market: 85 }],
+    ] as const) {
+      test(`names both ends of ${name} beside a dropped chip`, async ({ page }) => {
+        await open(page, { track, ...query });
+        const shown = await geometry(page);
+
+        expect(shown.placement).toBe("down");
+        for (const side of ["lower", "upper"] as const) {
+          expect.soft(shown[side].hidden, `${side} bound hidden`).toBe(false);
+          expect.soft(overlaps(shown.chip, shown[side].box), `chip over the ${side} bound`).toBe(false);
+        }
+      });
+    }
+
     test("never draws the chip over the open field as the value nears the market", async ({ page }) => {
       await open(page, { track, market: MARKET, value: 40 });
       const slider = page.getByRole("slider");

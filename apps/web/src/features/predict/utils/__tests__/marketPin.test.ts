@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { chipLeft, pinDrop, pinGap } from "../marketPin";
+import { chipLeft, droppedChipLeft, pinDrop, pinGap } from "../marketPin";
 
 describe("pinDrop", () => {
   // 4px of clearance and a 40px preflight band, dipping at most a fifth of the drop
@@ -64,5 +64,24 @@ describe("pinGap", () => {
 
   it("reads the thumb away from the market as clear before anything is measured", () => {
     expect(pinDrop(pinGap({ track: 0, pill: 0, chip: 0 }, { thumb: 0.6, market: 0.4 }))).toBe(0);
+  });
+});
+
+describe("droppedChipLeft", () => {
+  const size = { track: 311, chip: 90, lower: 30, upper: 80 };
+
+  it("centres the chip where no bound is in its way", () => {
+    expect(droppedChipLeft(size, 0.5)).toBe(chipLeft(size, 0.5));
+  });
+
+  it("slides the chip clear of a bound, 4px off it, while it still spans the market's point", () => {
+    // centred at 202, the chip would run to 247 over the upper bound from 231
+    expect(droppedChipLeft(size, 0.65)).toBe(311 - 80 - 4 - 90);
+    expect(droppedChipLeft({ ...size, upper: 120 }, 0.55)).toBe(311 - 120 - 4 - 90);
+  });
+
+  it("stays centred where clearing the bound would leave the market's point outside it", () => {
+    expect(droppedChipLeft(size, 0.98)).toBe(chipLeft(size, 0.98));
+    expect(droppedChipLeft(size, 0)).toBe(0);
   });
 });

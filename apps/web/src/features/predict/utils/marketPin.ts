@@ -18,6 +18,21 @@ export function chipLeft(size: { track: number; chip: number }, market: number):
 }
 
 /**
+ * A dropped chip's left edge: centred as `chipLeft` places it, slid clear of the bound labels while it
+ * still spans the market's point; centred where it cannot do both.
+ */
+export function droppedChipLeft(
+  size: { track: number; chip: number; lower: number; upper: number },
+  market: number,
+): number {
+  const centred = chipLeft(size, market);
+  const point = market * size.track;
+  const low = Math.max(size.lower + PIN_CLEARANCE_PX, point - size.chip);
+  const high = Math.min(size.track - size.upper - PIN_CLEARANCE_PX - size.chip, point);
+  return low > high ? centred : clamp(centred, low, high);
+}
+
+/**
  * Px between the chip and what the thumb draws, the pill and the thumb itself; negative when
  * they overlap. The pill's left edge sits at `thumb` of the track it does not cover, as its CSS places it.
  */

@@ -14,7 +14,7 @@ import type { OptionScale } from "@/types/optionScale";
 
 import { useMarketPin } from "../hooks/useMarketPin";
 import { estimateDigits, estimateDirection, estimateStep, readTypedEstimate, snapEstimate } from "../utils/estimates";
-import { chipLeft, pinDrop, pinGap } from "../utils/marketPin";
+import { chipLeft, droppedChipLeft, pinDrop, pinGap } from "../utils/marketPin";
 
 interface EstimateSliderProps {
   scale: OptionScale;
@@ -89,7 +89,12 @@ export function EstimateSlider({
   const pin = useMarketPin({ holdPill: draft !== undefined });
   const drop = marketShare === undefined ? 0 : pinDrop(pinGap(pin.sizes, { thumb: thumbShare, market: marketShare }));
   const isDown = drop === 1;
-  const chipAt = marketShare === undefined ? 0 : chipLeft(pin.sizes, marketShare);
+  const chipAt =
+    marketShare === undefined
+      ? 0
+      : isDown
+        ? droppedChipLeft(pin.sizes, marketShare)
+        : chipLeft(pin.sizes, marketShare);
   const covers = {
     lower: pin.sizes.track > 0 && chipAt < pin.sizes.lower,
     upper: pin.sizes.track > 0 && chipAt + pin.sizes.chip > pin.sizes.track - pin.sizes.upper,
@@ -196,7 +201,11 @@ export function EstimateSlider({
               {/* only the chip is in flow, so the caption changing sides never shifts it */}
               <div
                 ref={pin.chip}
-                className="absolute top-0 left-0 flex w-max flex-col items-center"
+                className={clsx(
+                  "absolute top-0 left-0 flex w-max flex-col items-center",
+                  pin.ready &&
+                    "transition-transform duration-(--fs-dur-structural) ease-(--fs-ease-spring) motion-reduce:transition-none",
+                )}
                 style={{
                   transform:
                     pin.sizes.track > 0
@@ -248,7 +257,7 @@ export function EstimateSlider({
             </div>
           ) : null}
           <div className="type-caption text-fs-text-secondary flex justify-between">
-            {/* a dropped pin names its own point, so the bound under its chip steps aside */}
+            {/* a dropped chip that cannot slide clear of a bound covers it, so the bound steps aside */}
             <span data-bound="lower" className={clsx(isDown && covers.lower && "invisible")}>
               {formatEstimate(snapEstimate(scale.lowerBound, scale), scale.unit)}
             </span>
