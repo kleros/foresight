@@ -196,7 +196,7 @@ for (const track of TRACKS) {
       expect.soft(await pin(), "the same value committed").toEqual(resting);
     });
 
-    test("takes a press just above the thumb's circle as the thumb's, and one just above the pill as the pill's", async ({
+    test("takes a press 9px above the thumb's circle, inside its 44px target, as the thumb's, and one just above the pill as the pill's", async ({
       page,
     }) => {
       await open(page, { track, market: MARKET, value: 20 });
@@ -209,7 +209,8 @@ for (const track of TRACKS) {
           return [thumb.contains(above!), pill.contains(overPill!)];
         },
         [
-          [(thumb!.left + thumb!.right) / 2, thumb!.top - 6],
+          // the target reaches 10px past the 24px circle; the pill's foot lies over that band
+          [(thumb!.left + thumb!.right) / 2, thumb!.top - 9],
           [(pill!.left + pill!.right) / 2, pill!.top - 6],
         ],
       );
