@@ -46,6 +46,27 @@ for (const width of [320, 375, 1280]) {
       });
     }
 
+    test("keeps the position's worth and its help inside the card under a long unbroken option name", async ({
+      page,
+    }) => {
+      await openCard(page, "name=Benachrichtigungseinstellungenverwaltung%20(revised%202026)&up=1234567.89&down=0");
+      const card = (await page.locator("#root > div > div").first().boundingBox())!;
+      const help = page.getByLabel("How this is worked out");
+      const worth = page.getByText(/^≈ /);
+
+      for (const part of [help, worth]) {
+        const box = (await part.boundingBox())!;
+        expect(box.x).toBeGreaterThanOrEqual(card.x);
+        expect(box.x + box.width).toBeLessThanOrEqual(card.x + card.width);
+      }
+      const hit = await help.evaluate((element) => {
+        const { left, top, width, height } = element.getBoundingClientRect();
+        const found = document.elementFromPoint(left + width / 2, top + height / 2);
+        return found !== null && (found === element || element.contains(found));
+      });
+      expect(hit, "the help icon takes a press").toBe(true);
+    });
+
     test("never scrolls sideways while it opens, with the market at the top of a millions scale", async ({ page }) => {
       await page.addInitScript(() => {
         const spills: number[] = [];

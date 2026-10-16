@@ -54,7 +54,8 @@ export function PositionRow({
             label="How this is worked out"
             tooltipMsg={`What UP and DOWN would pay at today's market, in ${scale.name} tokens (made from sDAI). Not a sale price.`}
           >
-            <span className="text-fs-text-primary tabular-nums">
+            {/* an option's name can be one long word, so the line breaks anywhere rather than push the help out */}
+            <span className="text-fs-text-primary min-w-0 tabular-nums wrap-anywhere">
               {`≈ ${amount(positionWorth(position, marketEstimate, scale))} ${scale.name} tokens`}
             </span>
           </WithHelpTooltip>
