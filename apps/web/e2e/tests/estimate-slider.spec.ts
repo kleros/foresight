@@ -759,3 +759,47 @@ test.describe("the market pin's drop", () => {
     });
   });
 });
+
+test.describe("a value whose label changes width", () => {
+  for (const viewport of [
+    { width: 375, height: 400 },
+    { width: 1280, height: 400 },
+  ]) {
+    test.describe(`at ${viewport.width} wide`, () => {
+      test.use({ viewport });
+      const track = viewport.width === 375 ? TRACKS[0] : TRACKS[1];
+
+      for (const [name, query, act] of [
+        [
+          "End from 87 on 0 to 100",
+          { track, market: MARKET, value: 87 },
+          async (page: Page) => {
+            await page.getByRole("slider").focus();
+            await page.keyboard.press("End");
+          },
+        ],
+        [
+          "a typed 0 from 87 on 0 to 100",
+          { track, market: MARKET, value: 87 },
+          async (page: Page) => {
+            await page.getByRole("button", { name: "type your estimate for Movie A" }).click();
+            await page.getByRole("textbox", { name: "Your estimate for Movie A" }).fill("0");
+            await page.keyboard.press("Enter");
+          },
+        ],
+      ] as const) {
+        test(`keeps the card mounted after ${name}, three runs`, async ({ page }) => {
+          const errors: string[] = [];
+          page.on("pageerror", (error) => errors.push(error.message));
+          for (let run = 0; run < 3; run++) {
+            await open(page, query);
+            await act(page);
+            await settle(page);
+            await expect(page.getByTestId("value-pill"), `run ${run + 1}`).toBeVisible();
+            expect(errors, `run ${run + 1}`).toEqual([]);
+          }
+        });
+      }
+    });
+  }
+});

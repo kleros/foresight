@@ -17,7 +17,7 @@ const same = (a: PinSizes, b: PinSizes) =>
 
 /**
  * Measures the slider track, the value pill, the market's chip and the bound labels (`[data-bound]`)
- * after every render. `ready` turns on a frame after the first measurement, so the pin's first placement does not animate.
+ * after every render, and sets them only when one has changed. `ready` turns on a frame after the first measurement, so the pin's first placement does not animate.
  * While `holdPill` is on, the pill keeps the width it had, so an open field moves nothing.
  */
 export function useMarketPin({ holdPill = false }: { holdPill?: boolean } = {}) {
@@ -26,25 +26,28 @@ export function useMarketPin({ holdPill = false }: { holdPill?: boolean } = {}) 
   const pill = useRef<HTMLSpanElement>(null);
   const holding = useRef(holdPill);
   const [sizes, setSizes] = useState<PinSizes>(NONE);
+  const applied = useRef<PinSizes>(NONE);
   const [ready, setReady] = useState(false);
 
+  // a dispatch from a layout effect re-renders even when its updater returns the same state
   const measure = () => {
     const root = track.current;
     if (!root) return;
     const widthOf = (selector: string) => root.querySelector(selector)?.getBoundingClientRect().width ?? 0;
-    setSizes((current) => {
-      const next: PinSizes =
-        root.clientWidth === 0
-          ? NONE
-          : {
-              track: root.clientWidth,
-              pill: holding.current && current.pill > 0 ? current.pill : (pill.current?.offsetWidth ?? 0),
-              chip: chip.current?.offsetWidth ?? 0,
-              lower: widthOf('[data-bound="lower"]'),
-              upper: widthOf('[data-bound="upper"]'),
-            };
-      return same(current, next) ? current : next;
-    });
+    const last = applied.current;
+    const next: PinSizes =
+      root.clientWidth === 0
+        ? NONE
+        : {
+            track: root.clientWidth,
+            pill: holding.current && last.pill > 0 ? last.pill : (pill.current?.offsetWidth ?? 0),
+            chip: chip.current?.offsetWidth ?? 0,
+            lower: widthOf('[data-bound="lower"]'),
+            upper: widthOf('[data-bound="upper"]'),
+          };
+    if (same(last, next)) return;
+    applied.current = next;
+    setSizes(next);
   };
 
   // before the measure below, which the ResizeObserver also calls from its first render's closure
