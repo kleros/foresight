@@ -34,10 +34,17 @@ export async function startHarness(name: string): Promise<{ url: string; close: 
 /** Opens a harness page once its Inter faces have loaded, so a layout is measured in the shipped font. */
 export async function openHarness(page: Page, url: string): Promise<void> {
   await page.goto(url);
-  const loaded = await page.evaluate(() =>
-    Promise.all(["400", "500", "600", "700"].map((weight) => document.fonts.load(`${weight} 16px Inter`))).then(
-      (faces) => faces.map((found) => found.length),
-    ),
-  );
-  expect(loaded, "each Inter weight loads from e2e/harness/inter.css").toEqual([1, 1, 1, 1]);
+  // Vite reloads a page whose first request makes it optimise a dependency, which drops this evaluation
+  await expect
+    .poll(
+      () =>
+        page
+          .evaluate(() =>
+            Promise.all(["400", "500", "600", "700"].map((weight) => document.fonts.load(`${weight} 16px Inter`))),
+          )
+          .then((faces) => faces.map((found) => found.length))
+          .catch(() => []),
+      { message: "each Inter weight loads from e2e/harness/inter.css" },
+    )
+    .toEqual([1, 1, 1, 1]);
 }

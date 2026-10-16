@@ -54,10 +54,10 @@ export function OptionCard({
       className="border-gradient-purple-blue bg-fs-surface w-full rounded-(--fs-radius-panel)!"
       // the 1px transparent border keeps the hover tint off the gradient hairline beneath it
       buttonClassName={clsx(
-        "rounded-(--fs-radius-panel) border-transparent bg-transparent bg-clip-padding",
+        "rounded-(--fs-radius-panel) border-transparent bg-transparent bg-clip-padding hover:bg-fs-popup-panel",
         "aria-expanded:rounded-b-none aria-expanded:border-b-(--fs-popup-line)",
       )}
-      bodyClassName="fs-rise"
+      glyph="chevron"
       title={<TitleRow option={option} isSet={direction !== null} />}
     >
       <div className="flex w-full flex-col gap-4">
@@ -91,7 +91,8 @@ export function OptionCard({
             "rounded-none border-0 py-3 border-t border-t-(--fs-popup-line) bg-transparent px-0 md:px-0",
             "hover:bg-transparent [&:hover>span]:text-fs-text-secondary",
           )}
-          bodyClassName="fs-rise px-0 pt-2 pb-0 md:px-0 md:pt-2 md:pb-0"
+          bodyClassName="px-0 pt-2 pb-0 md:px-0 md:pt-2 md:pb-0"
+          glyph="chevron"
           title={<span className="text-fs-text-primary fs-echo text-sm font-medium">Details</span>}
         >
           <div className="flex w-full min-w-0 flex-col gap-3">

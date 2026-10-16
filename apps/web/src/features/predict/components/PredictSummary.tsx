@@ -2,7 +2,10 @@ import { useId } from "react";
 
 import clsx from "clsx";
 
+import { ChevronIcon } from "@/components/ui/ChevronIcon";
+
 import { formatEstimate } from "@/utils/formatEstimate";
+import { INERT } from "@/utils/inert";
 
 import type { ListedEstimate, PriceMove } from "./PredictList";
 
@@ -64,7 +67,7 @@ export function PredictSummary({
           <TrendIcon />
           <span className="truncate tabular-nums">{isPricing ? "Checking prices…" : headline(selected, preview)}</span>
         </span>
-        <ChevronIcon className={clsx("predict-summary-chevron size-4 shrink-0", isOpen && "rotate-180")} />
+        <ChevronIcon className={clsx("fs-chevron size-4 shrink-0", isOpen && "rotate-180")} />
         {isPricing ? (
           <span data-testid="pricing-sweep" aria-hidden className="predict-sweep">
             <i />
@@ -72,12 +75,12 @@ export function PredictSummary({
         ) : null}
       </button>
       {/* mounted while closed, so the toggle's aria-controls always names it; inert keeps its rows out of reach */}
-      <div data-open={isOpen || undefined} className="predict-summary-body">
+      <div data-open={isOpen || undefined} className="fs-disclosure">
         <div className="min-h-0 overflow-hidden">
           <ul
             id={body}
             aria-hidden={isOpen ? undefined : true}
-            {...(isOpen ? {} : { inert: "" })}
+            {...(isOpen ? {} : INERT)}
             className="mb-1 flex flex-col border-b border-(--fs-popup-line) px-1 pt-1 pb-2"
           >
             {selected.map((estimate) => (
@@ -116,14 +119,6 @@ function TrendIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-    </svg>
-  );
-}
-
-function ChevronIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden className={className}>
-      <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

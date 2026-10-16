@@ -25,6 +25,10 @@ async function openCard(page: Page, query: string) {
   await openHarness(page, `${harness.url}?${query}`);
   await page.locator("#root button").first().click();
   await expect(page.getByRole("slider")).toBeVisible();
+  // the body opens by a transition, so the card's height is read once it has finished
+  await page.evaluate(() =>
+    Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined))),
+  );
 }
 
 for (const width of [320, 375, 1280]) {
@@ -113,29 +117,57 @@ for (const width of [320, 375, 1280]) {
       await expect(header).toHaveCSS("border-bottom-left-radius", "0px");
     });
 
-    test("reveals what opens by opacity and transform alone", async ({ page }) => {
+    test("opens the card and its Details by grid rows as the body rises in, each turning one chevron", async ({
+      page,
+    }) => {
       await openHarness(page, `${harness.url}?up=3&down=2`);
-      await page.evaluate(() => {
-        const started: string[][] = [];
-        (window as unknown as { started: string[][] }).started = started;
-        document.addEventListener("animationstart", (event) => {
-          const animation = (event.target as Element)
+      const motion = () =>
+        page.evaluate(() =>
+          document
             .getAnimations()
-            .find((running) => (running as CSSAnimation).animationName === event.animationName)!;
-          const keys = (animation.effect as KeyframeEffect).getKeyframes().flatMap((frame) => Object.keys(frame));
-          started.push(
-            [...new Set(keys)]
-              .filter((key) => !["offset", "easing", "composite", "computedOffset"].includes(key))
-              .sort(),
-          );
-        });
-      });
-      const started = () => page.evaluate(() => (window as unknown as { started: string[][] }).started.splice(0));
+            .map((animation) =>
+              animation instanceof CSSTransition
+                ? animation.transitionProperty
+                : (animation as CSSAnimation).animationName,
+            )
+            .sort(),
+        );
+      const chevrons = page.locator('button[aria-expanded] svg path[d="M4 6l4 4 4-4"]');
 
       await page.locator("#root button").first().click();
-      await expect.poll(started).toEqual([["opacity", "transform"]]);
+      expect(await motion()).toEqual(expect.arrayContaining(["grid-template-rows", "opacity", "transform"]));
       await page.getByRole("button", { name: "Details" }).click();
-      await expect.poll(started).toEqual([["opacity", "transform"]]);
+      expect(await motion()).toEqual(expect.arrayContaining(["grid-template-rows", "opacity", "transform"]));
+      await expect(chevrons).toHaveCount(2);
+    });
+
+    test("sets the Details text no larger than its label, with the question under it as a caption", async ({
+      page,
+    }) => {
+      await openCard(page, "");
+      await page.getByRole("button", { name: "Details" }).click();
+      const size = (text: RegExp) =>
+        page.getByText(text).evaluate((element) => parseFloat(getComputedStyle(element).fontSize));
+
+      expect(await size(/^Resolves to the score/)).toBeLessThanOrEqual(await size(/^Details$/));
+      expect(await size(/^What percentile score/)).toBe(12);
+    });
+
+    test("tints its header on hover with the popup's panel tone", async ({ page }) => {
+      await openHarness(page, `${harness.url}?`);
+      const header = page.locator("#root button").first();
+      await header.hover();
+      await page.waitForTimeout(200);
+
+      const [background, panel] = await header.evaluate((element) => {
+        const probe = document.createElement("span");
+        probe.style.backgroundColor = "var(--fs-popup-panel)";
+        element.append(probe);
+        const tone = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return [getComputedStyle(element).backgroundColor, tone];
+      });
+      expect(background).toBe(panel);
     });
   });
 }

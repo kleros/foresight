@@ -22,6 +22,38 @@ describe("Disclosure", () => {
     expect(screen.getByRole("textbox", { name: "Inside" })).toBeInTheDocument();
   });
 
+  it("keeps the collapsed body on the page, inert, for the button to point at", async () => {
+    render(
+      <Disclosure title="Details">
+        <input aria-label="Inside" />
+      </Disclosure>,
+    );
+    const button = screen.getByRole("button", { name: "Details" });
+    const body = document.getElementById(button.getAttribute("aria-controls")!)!;
+    const inside = () => body.querySelector("[aria-hidden], [inert]");
+
+    expect(body).toContainElement(screen.getByLabelText("Inside"));
+    expect(inside()).toHaveAttribute("inert");
+
+    await userEvent.click(button);
+
+    expect(inside()).toBeNull();
+  });
+
+  it("turns a chevron rather than a plus when asked", async () => {
+    render(
+      <Disclosure title="Details" glyph="chevron">
+        a
+      </Disclosure>,
+    );
+    const glyph = screen.getByRole("button", { name: "Details" }).querySelector("svg")!;
+
+    expect(glyph).toHaveClass("fs-chevron");
+    expect(glyph).not.toHaveClass("rotate-180");
+    await userEvent.click(screen.getByRole("button", { name: "Details" }));
+    expect(glyph).toHaveClass("rotate-180");
+  });
+
   it("gives each disclosure its own id for the body it controls", () => {
     render(
       <>

@@ -110,6 +110,32 @@
 .fs-rise {
   animation: fsRise var(--fs-dur-enter) var(--fs-ease-enter) both;
 }
+/* A disclosure opens by grid rows, the one height-class animation allowed, as its content rises in;
+   closing, the content fades first and the rows then fold. Markup: .fs-disclosure > div (min-h-0, overflow hidden) > content. */
+.fs-disclosure {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--fs-dur-enter) var(--fs-ease-structural) var(--fs-dur-echo);
+}
+.fs-disclosure[data-open] {
+  grid-template-rows: 1fr;
+  transition-delay: 0s;
+}
+.fs-disclosure > div > * {
+  transition:
+    opacity var(--fs-dur-enter) var(--fs-ease-enter),
+    transform var(--fs-dur-enter) var(--fs-ease-enter);
+}
+.fs-disclosure:not([data-open]) > div > * {
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity var(--fs-dur-echo) var(--fs-ease-exit),
+    transform var(--fs-dur-echo) var(--fs-ease-exit);
+}
+.fs-chevron {
+  transition: transform var(--fs-dur-enter) var(--fs-ease-structural);
+}
 /* A typed estimate landing: the value pill settles into its new place over the thumb. */
 @keyframes fsPillCommit {
   from {

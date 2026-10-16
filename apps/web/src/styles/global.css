@@ -454,32 +454,6 @@
 .predict-steps small {
   display: none;
 }
-.predict-summary-chevron {
-  transition: transform var(--fs-dur-enter) var(--fs-ease-structural);
-}
-/* the summary opens by grid rows, the one height-class animation the popup allows, as its rows rise in;
-   closing, the rows fade out first and the body then folds */
-.predict-summary-body {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows var(--fs-dur-enter) var(--fs-ease-structural) var(--fs-dur-echo);
-}
-.predict-summary-body[data-open] {
-  grid-template-rows: 1fr;
-  transition-delay: 0s;
-}
-.predict-summary-body ul {
-  transition:
-    opacity var(--fs-dur-enter) var(--fs-ease-enter),
-    transform var(--fs-dur-enter) var(--fs-ease-enter);
-}
-.predict-summary-body:not([data-open]) ul {
-  opacity: 0;
-  transform: translateY(4px);
-  transition:
-    opacity var(--fs-dur-echo) var(--fs-ease-exit),
-    transform var(--fs-dur-echo) var(--fs-ease-exit);
-}
 /* an indeterminate line under the summary while a run prices its routes */
 .predict-sweep {
   position: absolute;
