@@ -225,7 +225,7 @@ export function PredictDialog({
           </div>
         </ScrollFade>
 
-        {/* outside the scroll area, so the reason a run stopped is never under the fold; two lines held empty or not */}
+        {/* outside the body's scroll area, so the reason a run stopped shows with the button; two lines held empty or not */}
         <p
           ref={statusRef}
           role="status"
