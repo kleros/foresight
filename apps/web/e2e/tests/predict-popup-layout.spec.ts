@@ -143,6 +143,8 @@ async function settle(dialog: Locator) {
       element
         .getAnimations({ subtree: true })
         .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
+        // a scroll-driven animation finishes only at the end of its scroll
+        .filter((animation) => animation.timeline === document.timeline)
         // a transition retargeted mid-flight is cancelled, which rejects its promise
         .map((animation) => animation.finished.catch(() => undefined)),
     ),
@@ -643,6 +645,29 @@ for (const viewport of [
         }
       });
     }
+
+    test("covers what scrolls under its header with the surface and a fade, not a hard cut", async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      const dialog = await openPopup(page, 10, "idle");
+      const header = dialog.getByRole("heading", { name: "Predict", exact: true, level: 2 }).locator("..");
+      await header.evaluate((element) => {
+        element.parentElement!.scrollTop = 40;
+      });
+      const look = await header.evaluate((element) => {
+        const own = getComputedStyle(element);
+        const fade = getComputedStyle(element, "::after");
+        return {
+          gap: parseFloat(own.marginBottom),
+          fade: parseFloat(fade.height),
+          gradient: fade.backgroundImage.startsWith("linear-gradient"),
+          below: parseFloat(fade.top) >= element.offsetHeight - 1,
+        };
+      });
+      expect(look.gap, "no see-through margin under the header").toBe(0);
+      expect(look.fade, "a fade at least 12px tall").toBeGreaterThanOrEqual(12);
+      expect(look.gradient, "the fade is a gradient").toBe(true);
+      expect(look.below, "the fade hangs below the header").toBe(true);
+    });
 
     for (const [state, extra] of [
       ["signing", "&step=1"],

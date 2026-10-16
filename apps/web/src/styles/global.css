@@ -494,6 +494,31 @@
 .predict-token-select-single > button::after {
   display: none;
 }
+/* the landscape-phone variant's query: content scrolling under the sticky header fades in under its edge */
+@media (max-height: 480px) {
+  .predict-header::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 100%;
+    height: 12px;
+    background: linear-gradient(var(--fs-surface), transparent);
+    pointer-events: none;
+  }
+  /* shown only once the body has scrolled, so at rest it lays nothing over the estimates */
+  @supports (animation-timeline: scroll()) {
+    .predict-header::after {
+      animation: predict-header-fade linear both;
+      animation-timeline: scroll(nearest);
+      animation-range: 0 12px;
+    }
+  }
+}
+@keyframes predict-header-fade {
+  from {
+    opacity: 0;
+  }
+}
 /* an indeterminate line under the summary while a run prices its routes */
 .predict-sweep {
   position: absolute;

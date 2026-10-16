@@ -143,17 +143,24 @@ export function PredictDialog({
         "rounded-fs-popup bg-fs-surface border border-(--fs-popup-edge) shadow-(--fs-popup-shadow)",
       )}
     >
-      {/* on a phone on its side the whole popup scrolls between its sticky 32px header and its sticky button,
+      {/* on a phone on its side the whole popup scrolls between its sticky 40px header and its sticky button,
           and reaches 12px into the dialog's padding, room for the close button's overhang and its target */}
       <div
         className={clsx(
           "flex min-h-0 w-full flex-col",
-          "landscape-phone:overflow-y-auto landscape-phone:scroll-pt-8 landscape-phone:scroll-pb-16",
+          "landscape-phone:overflow-y-auto landscape-phone:scroll-pt-10 landscape-phone:scroll-pb-16",
           "short:landscape-phone:scroll-pb-14",
           "landscape-phone:-mr-3 landscape-phone:w-[calc(100%+12px)] landscape-phone:pr-3",
         )}
       >
-        <div className="landscape-phone:sticky landscape-phone:top-0 landscape-phone:z-20 bg-fs-surface mb-2 flex h-8 shrink-0 items-center justify-between">
+        <div
+          className={clsx(
+            "predict-header bg-fs-surface mb-2 flex h-8 shrink-0 items-center justify-between",
+            "landscape-phone:sticky landscape-phone:top-0 landscape-phone:z-20",
+            // the gap under the title is the header's own surface there, so nothing shows through it
+            "landscape-phone:mb-0 landscape-phone:box-content landscape-phone:pb-2",
+          )}
+        >
           <h2 className="text-fs-popup-text text-lg font-semibold tracking-[-0.01em]">Predict</h2>
           <LightButton
             text=""
