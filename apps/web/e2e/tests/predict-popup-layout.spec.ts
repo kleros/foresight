@@ -1581,7 +1581,6 @@ test.describe("a step's bullet", () => {
   });
 });
 
-/** Resolves a colour or length token to its computed value, through a probe in the page. */
 /** WCAG contrast between two computed rgb() colours. */
 function contrast(first: string, second: string) {
   const luminance = (css: string) => {
@@ -1593,6 +1592,7 @@ function contrast(first: string, second: string) {
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
 
+/** Resolves a colour or length token to its computed value, through a probe in the page. */
 function tokenValue(page: Page, property: "color" | "borderRadius", value: string) {
   return page.evaluate(
     ([property, value]) => {
