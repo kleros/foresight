@@ -410,6 +410,29 @@ test.describe("an amount over a four-digit balance at 375 x 812", () => {
   });
 });
 
+test.describe("a balance that wraps under the amount's title", () => {
+  for (const viewport of [
+    { width: 360, height: 640 },
+    { width: 375, height: 667 },
+    { width: 414, height: 896 },
+  ]) {
+    for (const held of ["1234.5678", "12345678.9"]) {
+      test(`keeps one footprint across states with ${held} held at ${viewport.width} x ${viewport.height}`, async ({
+        page,
+      }) => {
+        await page.setViewportSize(viewport);
+        const idle = await footprint(page, await openPopup(page, 2, "idle", undefined, `&held=${held}`));
+        for (const state of ["idle", "recovered", "disconnected"] as const) {
+          for (const first of ["1", "0"]) {
+            const dialog = await openPopup(page, 2, state, undefined, `&held=${held}&first=${first}`);
+            expect.soft(await footprint(page, dialog), `${state}, first=${first}`).toEqual(idle);
+          }
+        }
+      });
+    }
+  }
+});
+
 test.describe("the amount's title and balance on a narrow screen", () => {
   for (const { width, height, query } of [
     { width: 375, height: 812, query: "options=2&first=0&held=6833.959612" },

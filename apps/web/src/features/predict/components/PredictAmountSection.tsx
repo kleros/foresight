@@ -91,8 +91,9 @@ export function PredictAmountSection({
         )
       }
       right={
-        // under the title when both do not fit, and always below 240px, so every state of a narrow popup has one height
-        <div className="ml-auto flex min-w-0 items-baseline gap-2 @max-[15rem]:basis-full @max-[15rem]:justify-between">
+        // always under the title below 416px, where whether it fits beside the title depends on the balance's digits;
+        // above, the title, an 11-digit balance and Max fit on one line
+        <div className="ml-auto flex min-w-0 items-baseline gap-2 @max-[26rem]:basis-full @max-[26rem]:justify-between">
           <span className="type-caption text-fs-text-secondary min-w-0 truncate">{balance}</span>
           <LightButton
             small
