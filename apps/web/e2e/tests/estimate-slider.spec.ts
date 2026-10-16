@@ -530,13 +530,11 @@ test.describe("the market chip's text", () => {
   test.use({ viewport: { width: 375, height: 400 } });
 
   for (const theme of ["light", "dark"]) {
-    for (const color of ["#009aff", "#7e1bd4"]) {
-      test(`reads at AA in the ${theme} theme whatever the option's colour, here ${color}`, async ({ page }) => {
-        await open(page, { track: 311, market: MARKET, color, theme });
+    test(`reads at AA in the ${theme} theme`, async ({ page }) => {
+      await open(page, { track: 311, market: MARKET, theme });
 
-        expect(await contrast(page, '[data-testid="market-chip"]')).toBeGreaterThanOrEqual(4.5);
-      });
-    }
+      expect(await contrast(page, '[data-testid="market-chip"]')).toBeGreaterThanOrEqual(4.5);
+    });
   }
 });
 

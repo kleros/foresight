@@ -17,7 +17,7 @@ const scale: OptionScale = {
 };
 
 describe("PositionRow", () => {
-  it("names the UP and DOWN held on one line, with no bar", () => {
+  it('names the UP and DOWN held on one line after "You hold", with no bar', () => {
     render(
       <PositionRow
         scale={scale}
@@ -28,6 +28,7 @@ describe("PositionRow", () => {
     );
 
     expect(screen.getByTestId("position-held")).toHaveTextContent(/^214\.09 UP · 1\.44 DOWN$/);
+    expect(screen.getByTestId("position-held").parentElement).toHaveTextContent(/^You hold 214\.09 UP · 1\.44 DOWN$/);
     expect(screen.queryByTestId("position-bar-up")).toBeNull();
     expect(screen.queryByTestId("position-bar-down")).toBeNull();
   });
