@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 
+import { Button } from "@kleros/ui-components-library";
 import { parseUnits } from "viem";
 
 import { PredictDialog } from "@/features/predict/components/PredictDialog";
@@ -7,6 +8,8 @@ import type { ListedEstimate } from "@/features/predict/components/PredictList";
 import type { PredictFailureReason, PredictProgress } from "@/features/predict/run/types";
 import { planFunding } from "@/features/predict/utils/funding";
 import { fundsToAdd, predictSteps } from "@/features/predict/utils/predictSteps";
+
+import { PredictSuccessView } from "@/app/market/[parentMarket]/_components/PredictSuccessView";
 
 import "@/styles/global.css";
 
@@ -38,6 +41,8 @@ const isFirstPrediction = params.get("first") !== "0";
 /** `?held=` the sDAI in the visitor's own wallet, as a decimal. */
 const held = parseUnits(params.get("held") ?? "19", 18);
 if (params.get("theme") === "dark") document.documentElement.classList.add("dark");
+/** `?dialog=success` the dialog a finished run opens; `&subscribed=0` for a visitor without resolution emails. */
+const dialog = params.get("dialog");
 
 const selected: ListedEstimate[] = CITIES.slice(0, count).map((name, index) => ({
   scale: {
@@ -117,11 +122,24 @@ const steps = predictSteps({
   progress,
 });
 
+const success = (
+  <PredictSuccessView
+    isOpen
+    leftOut={count > 2 ? CITIES.slice(2, count) : []}
+    onClose={() => {}}
+    subscribed={params.get("subscribed") !== "0"}
+    email="visitor@example.com"
+    // the app's sign-in needs a wallet; this stands in for its button
+    signUp={<Button small text="Sign in to subscribe" />}
+  />
+);
+
 createRoot(document.getElementById("root")!).render(
   <>
     <header className="fs-header sticky top-0 z-30 flex h-16 w-full" />
+    {dialog === "success" ? success : null}
     <PredictDialog
-      isOpen
+      isOpen={dialog !== "success"}
       onClose={() => {}}
       selected={selected}
       onRemove={() => {}}
