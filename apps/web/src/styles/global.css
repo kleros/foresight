@@ -391,7 +391,8 @@
   position: relative;
   flex: 1 1 0;
   width: 0;
-  margin: 4px 0 -4px;
+  /* through the next row's 8px top padding to its bullet */
+  margin: 0 0 -8px;
   border-left: 2px dotted var(--fs-popup-line-strong);
 }
 .predict-steps > li > div:first-child > div:last-child:not([style])::after {

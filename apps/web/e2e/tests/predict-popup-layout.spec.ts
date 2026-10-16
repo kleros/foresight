@@ -980,6 +980,23 @@ test.describe("the steps' connector", () => {
     expect(await fills(await openPopup(page, 2, "signing"))).toEqual([true, false]);
   });
 
+  test("runs from one bullet to the next", async ({ page }) => {
+    const dialog = await openPopup(page, 2, "idle");
+    const [bullets, lines] = await Promise.all([
+      dialog
+        .locator(".predict-steps [data-bullet]")
+        .evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect())),
+      dialog
+        .locator(".predict-steps > li > div:first-child > div:last-child:not([style])")
+        .evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect())),
+    ]);
+
+    for (const [index, line] of lines.entries()) {
+      expect(line.top, `connector ${index + 1}'s top`).toBeCloseTo(bullets[index]!.bottom, 0);
+      expect(line.bottom, `connector ${index + 1}'s foot`).toBeCloseTo(bullets[index + 1]!.top, 0);
+    }
+  });
+
   test("numbers a step until it finishes or fails, then shows the check or the cross alone", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     const shown = (dialog: Locator, view: string) =>
