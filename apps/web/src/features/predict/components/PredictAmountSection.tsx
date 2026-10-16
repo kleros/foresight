@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 
 import { BigNumberField, Slider } from "@kleros/ui-components-library";
 import clsx from "clsx";
@@ -38,6 +38,8 @@ interface PredictAmountSectionProps {
 }
 
 const RETURNING_COPY = "You've predicted before, so you can change it without adding funds.";
+/** The amount's font sizes, largest first; below 16px a phone zooms the page into the focused field. */
+const AMOUNT_SIZES = [30, 24, 20, 16];
 
 export function PredictAmountSection({
   amount,
@@ -66,9 +68,7 @@ export function PredictAmountSection({
         ? { text: RETURNING_COPY, tone: "neutral" }
         : fundingSummary({ funding, amount, token, collateral });
 
-  // the field's own text while typing; at rest the library groups the integer part in threes
-  const [typed, setTyped] = useState<string>();
-  const digits = (typed ?? (amount === undefined ? "" : grouped(formatUnits(amount, token.decimals)))).length;
+  const { field, fit } = useFittedAmount();
   const noBalance = Boolean(note) || isDisconnected;
   const isRead = !isDisconnected && available !== undefined;
   const figure = isDisconnected
@@ -134,13 +134,11 @@ export function PredictAmountSection({
       </div>
 
       <div
+        ref={field}
         data-testid="amount-input"
-        // a number as wide as the field steps the digits down rather than scroll
-        data-length={digits > 9 ? "long" : digits > 6 ? "mid" : undefined}
-        onInput={(event) => {
-          if (event.target instanceof HTMLInputElement) setTyped(event.target.value);
-        }}
-        onBlur={() => setTyped(undefined)}
+        onInput={fit}
+        // the library rewrites the value after a blur, in its own render
+        onBlur={() => requestAnimationFrame(fit)}
         className={clsx(
           "mt-2 flex h-11 flex-row items-center gap-3 short:mt-1.5 short:h-10",
           "transition-opacity duration-(--fs-dur-enter) ease-(--fs-ease-enter)",
@@ -155,7 +153,6 @@ export function PredictAmountSection({
             "inline-block min-w-0 flex-1 [&>label]:sr-only",
             "[&_input]:h-11 [&_input]:border-none [&_input]:bg-transparent [&_input]:px-0 [&_input]:shadow-none!",
             "[&_input]:text-[30px] [&_input]:leading-9 [&_input]:font-medium",
-            "in-data-[length=mid]:[&_input]:text-2xl in-data-[length=long]:[&_input]:text-xl",
             // the library's stepper arrows would sit over the last digits
             "[&_.input-wrapper>div:has(>button)]:hidden!",
             "[&_input]:tracking-[-0.02em] [&_input]:tabular-nums [&_input]:placeholder:text-fs-popup-text-3",
@@ -222,10 +219,29 @@ export function PredictAmountSection({
   );
 }
 
-function grouped(decimal: string): string {
-  const [whole = "", fraction] = decimal.split(".");
-  const withCommas = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return fraction === undefined ? withCommas : `${withCommas}.${fraction}`;
+/** Sets the amount field's input to the largest size its number fits at, rather than scroll, down to the floor. */
+function useFittedAmount() {
+  const field = useRef<HTMLDivElement>(null);
+  const fit = useCallback(() => {
+    const input = field.current?.querySelector("input");
+    if (!input) return;
+    for (const size of AMOUNT_SIZES) {
+      input.style.fontSize = `${size}px`;
+      if (input.scrollWidth <= input.clientWidth) return;
+    }
+  }, []);
+  // every render, since the amount, the token chip and the panel's width all move the fit
+  useLayoutEffect(fit);
+  useEffect(() => {
+    const input = field.current?.querySelector("input");
+    if (!input) return;
+    const observer = new ResizeObserver(fit);
+    observer.observe(input);
+    // Inter's digits are narrower than the fallback's
+    void document.fonts?.ready.then(fit);
+    return () => observer.disconnect();
+  }, [fit]);
+  return { field, fit };
 }
 
 function toUnits(entered: string, decimals: number): bigint | undefined {

@@ -734,27 +734,56 @@ test.describe("an amount over a four-digit balance at 375 x 812", () => {
   });
 });
 
-test.describe("the amount field with a long number at 375 x 812", () => {
-  test.use({ viewport: { width: 375, height: 812 } });
+for (const [width, tokens] of [
+  [320, 1],
+  [320, 2],
+  [375, 1],
+  [375, 2],
+] as const) {
+  test.describe(`the amount field with a long number at ${width} x 812, ${tokens} pay tokens`, () => {
+    test.use({ viewport: { width, height: 812 } });
 
-  test("steps its size down as the number grows and has no stepper", async ({ page }) => {
-    const dialog = await openPopup(page, 2, "idle");
-    const input = dialog.getByLabel("Amount");
-    const size = () => input.evaluate((element) => getComputedStyle(element).fontSize);
+    test("steps its size down as the number grows, to a 16px floor, and has no stepper", async ({ page }) => {
+      const dialog = await openPopup(page, 2, "idle", undefined, tokens === 2 ? "&tokens=2" : "");
+      const input = dialog.getByLabel("Amount");
+      const read = () =>
+        input.evaluate((element) => ({
+          size: parseFloat(getComputedStyle(element).fontSize),
+          fits: element.scrollWidth <= element.clientWidth,
+        }));
 
-    for (const [typed, expected] of [
-      ["10", "30px"],
-      ["1234.567", "24px"],
-      ["100.123456789", "20px"],
-    ] as const) {
-      await input.fill(typed);
-      await expect.poll(size, typed).toBe(expected);
-    }
-    await input.hover();
-    const steppers = dialog.getByTestId("amount-input").locator(".input-wrapper button");
-    for (const stepper of await steppers.all()) await expect(stepper).toBeHidden();
+      await expect.poll(read, "the amount at open").toEqual({ size: 30, fits: true });
+      for (const typed of ["12345", "123456", "1234567", "12345.67", "123456789", "100.123456789012345678"]) {
+        await input.fill(typed);
+        const { size, fits } = await read();
+        // under 16px a phone zooms the page into a focused field
+        expect.soft(size, `${typed}: no smaller than the floor`).toBeGreaterThanOrEqual(16);
+        expect.soft(fits || size === 16, `${typed}: scrolls only at the floor (${size}px)`).toBe(true);
+      }
+      await input.fill("123456");
+      expect(await read(), "six digits fit").toMatchObject({ fits: true });
+      await input.fill("10");
+      await expect.poll(read, "a short number grows back").toEqual({ size: 30, fits: true });
+
+      await input.hover();
+      const steppers = dialog.getByTestId("amount-input").locator(".input-wrapper button");
+      for (const stepper of await steppers.all()) await expect(stepper).toBeHidden();
+    });
+
+    test("fits a nine-digit amount at rest", async ({ page }) => {
+      const dialog = await openPopup(page, 2, "over", undefined, `&held=123456789${tokens === 2 ? "&tokens=2" : ""}`);
+      const input = dialog.getByLabel("Amount");
+      await expect(input).toHaveValue(/^123,?457,?769$/);
+      const fits = () => input.evaluate((element) => element.scrollWidth <= element.clientWidth);
+      if (width === 320 && tokens === 2) {
+        // a 75px field holds seven digits at the floor
+        expect(await input.evaluate((element) => getComputedStyle(element).fontSize)).toBe("16px");
+      } else {
+        await expect.poll(fits).toBe(true);
+      }
+    });
   });
-});
+}
 
 test.describe("an amount over the balance", () => {
   test.use({ viewport: { width: 375, height: 812 } });
