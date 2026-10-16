@@ -44,7 +44,8 @@ export async function openHarness(page: Page, url: string): Promise<void> {
           )
           .then((faces) => faces.map((found) => found.length))
           .catch(() => []),
-      { message: "each Inter weight loads from e2e/harness/inter.css" },
+      // a cold Vite cache re-optimises dependencies before the first face can load
+      { message: "each Inter weight loads from e2e/harness/inter.css", timeout: 30_000 },
     )
     .toEqual([1, 1, 1, 1]);
 }
