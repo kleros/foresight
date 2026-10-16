@@ -935,6 +935,40 @@ test.describe("the pay token's open menu", () => {
       expect(chosen.color, "the choice in the accent text").toBe(accent);
       expect(chosen.color).not.toBe(reached.color);
       expect(Number(chosen.weight)).toBeGreaterThan(Number(reached.weight));
+
+      const ring = await other.evaluate((row) => {
+        const probe = document.createElement("span");
+        probe.style.color = "var(--fs-popup-accent)";
+        document.body.append(probe);
+        const violet = getComputedStyle(probe).color;
+        probe.remove();
+        const style = getComputedStyle(row);
+        const reach = parseFloat(style.outlineOffset) + parseFloat(style.outlineWidth);
+        const box = row.getBoundingClientRect();
+        const clippedBy: string[] = [];
+        for (let parent = row.parentElement; parent; parent = parent.parentElement) {
+          const { overflowX, overflowY } = getComputedStyle(parent);
+          if (overflowX === "visible" && overflowY === "visible") continue;
+          const clip = parent.getBoundingClientRect();
+          if (
+            box.left - reach < clip.left - 0.5 ||
+            box.right + reach > clip.right + 0.5 ||
+            box.top - reach < clip.top - 0.5 ||
+            box.bottom + reach > clip.bottom + 0.5
+          ) {
+            clippedBy.push(parent.className || parent.tagName);
+          }
+        }
+        return {
+          outline: `${style.outlineStyle} ${style.outlineWidth} ${style.outlineColor}`,
+          expected: `solid 2px ${violet}`,
+          shadowRing: /\d+px [1-9]/.test(style.boxShadow),
+          clippedBy,
+        };
+      });
+      expect(ring.outline, "the reached row's ring in the violet").toBe(ring.expected);
+      expect(ring.shadowRing, "no second ring").toBe(false);
+      expect(ring.clippedBy, "the ring whole inside the list").toEqual([]);
     });
   }
 });
