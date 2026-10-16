@@ -360,24 +360,30 @@ test.describe("a popup on a short screen", () => {
   });
 });
 
-test.describe("every failure at the narrowest popup", () => {
-  test.use({ viewport: { width: 375, height: 667 } });
+for (const viewport of [
+  { width: 375, height: 667 },
+  { width: 360, height: 640 },
+  { width: 320, height: 568 },
+]) {
+  test.describe(`every failure at ${viewport.width} x ${viewport.height}`, () => {
+    test.use({ viewport });
 
-  test("fits its words in the status slot without moving the footer", async ({ page }) => {
-    const idle = await footprint(page, await openPopup(page, 2, "idle"));
-    for (const reason of FAILURE_REASONS) {
-      const dialog = await openPopup(page, 2, "failed", reason);
+    test("fits its words in the status slot without moving the footer", async ({ page }) => {
+      const idle = await footprint(page, await openPopup(page, 10, "idle"));
+      for (const reason of FAILURE_REASONS) {
+        const dialog = await openPopup(page, 10, "failed", reason);
 
-      expect.soft(await footprint(page, dialog), `${reason} has the idle popup's footprint`).toEqual(idle);
-      expect
-        .soft(
-          await dialog.getByRole("status").evaluate((element) => element.scrollHeight <= element.clientHeight + 1),
-          `${reason}: the status line fits its slot`,
-        )
-        .toBe(true);
-    }
+        expect.soft(await footprint(page, dialog), `${reason} has the idle popup's footprint`).toEqual(idle);
+        expect
+          .soft(
+            await dialog.getByRole("status").evaluate((element) => element.scrollHeight <= element.clientHeight + 1),
+            `${reason}: the status line fits its slot`,
+          )
+          .toBe(true);
+      }
+    });
   });
-});
+}
 
 test.describe("an amount over a four-digit balance at 375 x 812", () => {
   test.use({ viewport: { width: 375, height: 812 } });

@@ -157,12 +157,13 @@ export function PredictDialog({
           </div>
         </ScrollFade>
 
-        {/* outside the scroll area, so the reason a run stopped is never under the fold; two lines, held empty or not */}
+        {/* outside the scroll area, so the reason a run stopped is never under the fold; held empty or not,
+            two lines from 375px wide and three below, where the longest reasons wrap to three */}
         <p
           role="status"
           aria-live="polite"
           className={clsx(
-            "type-label flex h-10 shrink-0 items-center justify-center px-2 text-center text-pretty",
+            "type-label flex h-10 shrink-0 items-center max-[375px]:h-15 justify-center px-2 text-center text-pretty",
             status && STATUS_TONE[status.tone],
           )}
         >
