@@ -5,6 +5,7 @@ import { sendTransaction } from "@wagmi/core";
 import type { Address } from "viem";
 
 import { errorToast } from "@/utils/toast";
+import { FEE_ONLY_OUT_OF_FUNDS_COPY } from "@/utils/txErrorText";
 import { wrapWithToast } from "@/utils/wrapWithToast";
 
 import { withdrawTx } from "@/lib/trade-executor/funding";
@@ -29,8 +30,10 @@ export function useWithdrawFromExecutor(onSuccess?: () => void) {
     mutationFn: (args: WithdrawArgs) => {
       const tx = withdrawTx(args);
 
-      return wrapWithToast(wagmiConfig, () =>
-        sendTransaction(wagmiConfig, { to: tx.to, data: tx.data, chainId: DEFAULT_CHAIN_ID }),
+      return wrapWithToast(
+        wagmiConfig,
+        () => sendTransaction(wagmiConfig, { to: tx.to, data: tx.data, chainId: DEFAULT_CHAIN_ID }),
+        FEE_ONLY_OUT_OF_FUNDS_COPY,
       );
     },
     // wrapWithToast reports everything from the send on

@@ -101,6 +101,14 @@ describe("wrapWithToast", () => {
     expect(errorToast).toHaveBeenCalledExactlyOnceWith(toast);
   });
 
+  it("reports an out-of-funds send in the caller's words when it passes its own", async () => {
+    const error = new InsufficientFundsError({ cause: rpcError("insufficient funds for gas * price + value") });
+
+    await expect(wrapWithToast(config, () => Promise.reject(error), "Only the fee is short.")).rejects.toBe(error);
+
+    expect(errorToast).toHaveBeenCalledExactlyOnceWith("Only the fee is short.");
+  });
+
   it("says a sent transaction may still confirm when waiting for its receipt fails", async () => {
     const timeout = new WaitForTransactionReceiptTimeoutError({ hash: HASH });
     vi.mocked(waitForTransactionReceipt).mockRejectedValue(timeout);

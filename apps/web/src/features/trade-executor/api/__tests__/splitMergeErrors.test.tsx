@@ -3,13 +3,14 @@ import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { sendTransaction } from "@wagmi/core";
-import { UserRejectedRequestError, type Address } from "viem";
+import { InsufficientFundsError, InternalRpcError, UserRejectedRequestError, type Address } from "viem";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { errorToast } from "@/utils/toast";
 
 import { gnosisRouterAddress } from "@/config/contracts";
 
+import { useDepositToExecutor } from "../depositToExecutor";
 import { useMergeFromExecutor } from "../mergeFromExecutor";
 import { useSplitFromExecutor } from "../splitFromExecutor";
 import { useWithdrawFromExecutor } from "../withdrawFromExecutor";
@@ -103,5 +104,55 @@ describe("Mint and Merge failing once sent", () => {
     await settle(() => result.current.mutate(merge), result);
 
     expect(errorToast).toHaveBeenCalledExactlyOnceWith("You declined in your wallet.");
+  });
+});
+
+describe("each trade wallet action failing once sent for lack of funds", () => {
+  const FEE_ONLY = "Not enough xDAI for the network fee. Add some, then try again.";
+  const withdraw = { executor: address("2"), recipient: address("1"), assets: [{ token: address("9"), amount: 1n }] };
+
+  beforeEach(() => {
+    vi.mocked(sendTransaction).mockRejectedValue(
+      new InsufficientFundsError({
+        cause: new InternalRpcError(new Error("insufficient funds for gas * price + value")),
+      }),
+    );
+  });
+
+  it("tells Withdraw only the fee is short", async () => {
+    const { result } = renderHook(() => useWithdrawFromExecutor(), { wrapper });
+
+    await settle(() => result.current.mutate(withdraw), result);
+
+    expect(errorToast).toHaveBeenCalledExactlyOnceWith(FEE_ONLY);
+  });
+
+  it("tells Mint only the fee is short", async () => {
+    const { result } = renderHook(() => useSplitFromExecutor(), { wrapper });
+
+    await settle(() => result.current.mutate(split), result);
+
+    expect(errorToast).toHaveBeenCalledExactlyOnceWith(FEE_ONLY);
+  });
+
+  it("tells Merge only the fee is short", async () => {
+    const { result } = renderHook(() => useMergeFromExecutor(), { wrapper });
+
+    await settle(() => result.current.mutate(merge), result);
+
+    expect(errorToast).toHaveBeenCalledExactlyOnceWith(FEE_ONLY);
+  });
+
+  it("tells a deposit the amount and the fee are short together", async () => {
+    const { result } = renderHook(() => useDepositToExecutor(), { wrapper });
+
+    await settle(
+      () => result.current.mutate({ executor: address("2"), asset: { token: "native", amount: 1n } }),
+      result,
+    );
+
+    expect(errorToast).toHaveBeenCalledExactlyOnceWith(
+      "Not enough in your wallet for this and the fee. Lower the amount or add funds.",
+    );
   });
 });
