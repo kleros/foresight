@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, type RenderResult } from "@testing-library/react";
+import { render, screen, waitFor, within, type RenderResult } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   decodeFunctionData,
@@ -206,6 +206,11 @@ vi.mock("../usePredictFunding", () => ({
   }),
 }));
 vi.mock("../useHasPredicted", () => ({ useHasPredicted: () => true }));
+// a live preview for every estimate in the form, which a reopened run's summary must not show
+vi.mock("../usePricePreview", () => ({
+  usePricePreview: ({ selected }: { selected: SelectedEstimate[] }) =>
+    Object.fromEntries(selected.map((estimate) => [estimate.scale.market.toLowerCase(), { from: 300, to: 350 }])),
+}));
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -401,6 +406,20 @@ describe("the recovery screen", () => {
     await reopen();
 
     await waitFor(() => expect(onScreen()).toContain("410 $M"));
+  });
+
+  it("lists the markets as they stand, not the form's preview, whose deposit differs from the saved one", async () => {
+    await leaveRejectedDeposit();
+
+    await reopen();
+    await waitFor(() => expect(onScreen()).toContain("7.25"));
+    await userEvent.click(within(screen.getByTestId("predict-summary")).getByRole("button"));
+
+    const moves = within(screen.getByTestId("predict-summary"))
+      .getAllByTestId("market-move")
+      .map((move) => move.textContent);
+    expect(moves.length).toBeGreaterThan(0);
+    for (const move of moves) expect(move).toMatch(/^(Now |No preview)/);
   });
 
   it("shows the saved deposit and estimate after a submitted transaction", async () => {
