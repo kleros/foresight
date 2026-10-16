@@ -276,10 +276,10 @@ describe("statusLine", () => {
 
   it("names the estimates a run left out, since they were not signed", () => {
     expect(statusLine({ steps: idle, skipped: 2 })).toEqual({
-      text: "2 estimates could not be traded and were left out.",
+      text: "2 estimates could not be traded.",
       tone: "neutral",
     });
-    expect(statusLine({ steps: idle, skipped: 1 })?.text).toBe("1 estimate could not be traded and was left out.");
+    expect(statusLine({ steps: idle, skipped: 1 })?.text).toBe("1 estimate could not be traded.");
   });
 
   it("says in a few words that a sent transaction is not confirmed yet", () => {
@@ -298,12 +298,32 @@ describe("statusLine", () => {
   });
 
   it.each([
-    ["cancelled", "Your wallet cancelled or replaced the request."],
-    ["funds", "Not enough in your wallet for this and the fee. Lower the amount or add funds."],
+    ["rejected", "You declined in your wallet."],
+    ["cancelled", "Cancelled or replaced in your wallet."],
+    ["reverted", "The trade failed at these prices."],
+    ["rpc", "The network did not answer."],
+    ["unknown", "Something went wrong."],
+    ["no-route", "No trade found for these estimates. Try a larger amount."],
+    ["quote", "Could not get prices. Try again shortly."],
+    ["funds", "Your wallet is short, fee included. Lower the amount or add funds."],
+    ["balance", "Trade wallet balance is lower than shown. Check the amount."],
+    ["deposit-unconfirmed", "Your last deposit may still be confirming. Check your wallet."],
+    ["wrong-wallet", "Started from another wallet. Connect it to finish."],
+    ["wrong-chain", "Started on another network. Switch to it to finish."],
   ] as const)("names a %s stop in words with a referent", (reason, text) => {
     const stopped = steps({ progress: progress({ stage: "halted", failure: { reason, retryable: true } }) });
 
     expect(statusLine({ steps: stopped, skipped: 0 })?.text).toBe(text);
+  });
+
+  it("names a funds stop after money moved as the fee alone", () => {
+    const stopped = steps({
+      progress: progress({ stage: "halted", failure: { reason: "funds", retryable: true }, moneyMoved: true }),
+    });
+
+    expect(statusLine({ steps: stopped, skipped: 0 })?.text).toBe(
+      "Not enough xDAI for the fee. Add some, then try the rest.",
+    );
   });
 
   it("says nothing while a step is running", () => {

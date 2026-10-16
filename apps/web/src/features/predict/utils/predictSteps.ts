@@ -32,21 +32,21 @@ export interface PredictSteps {
 /** The chain's own errors name gas and contracts, which the popup never shows. */
 const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], string> = {
   rejected: "You declined in your wallet.",
-  cancelled: "Your wallet cancelled or replaced the request.",
-  reverted: "The trade did not go through at these prices.",
+  cancelled: "Cancelled or replaced in your wallet.",
+  reverted: "The trade failed at these prices.",
   rpc: "The network did not answer.",
   unknown: "Something went wrong.",
-  "no-route": "No trade moves these markets toward your estimates. Try a larger amount.",
-  quote: "Prices could not be fetched. Try again in a moment.",
+  "no-route": "No trade found for these estimates. Try a larger amount.",
+  quote: "Could not get prices. Try again shortly.",
   funds: OUT_OF_FUNDS_COPY,
-  balance: "Your trade wallet balance is lower than shown. Check the amount and try again.",
-  "deposit-unconfirmed": "Your last deposit may still be confirming. Check your wallet, then try again.",
-  "wrong-wallet": "This prediction was started from another wallet. Connect that wallet to finish it.",
-  "wrong-chain": "This prediction was started on another network. Switch to it to finish.",
+  balance: "Trade wallet balance is lower than shown. Check the amount.",
+  "deposit-unconfirmed": "Your last deposit may still be confirming. Check your wallet.",
+  "wrong-wallet": "Started from another wallet. Connect it to finish.",
+  "wrong-chain": "Started on another network. Switch to it to finish.",
 };
 
 /** Once the deposit is in the amount is fixed, so the only thing short is the fee in the wallet. */
-const FEE_SHORT_COPY = "Not enough xDAI for the network fee. Add some, then try the rest.";
+const FEE_SHORT_COPY = "Not enough xDAI for the fee. Add some, then try the rest.";
 
 /** A transaction is out there and nothing has said how it ended, so it is neither a success nor a failure. */
 const PENDING_COPY = "Sent, not confirmed yet.";
@@ -215,7 +215,7 @@ export function statusLine(args: { steps: PredictSteps; notice?: string; skipped
   return null;
 }
 
-/** "2 estimates could not be traded and were left out", with no full stop. */
+/** "2 estimates could not be traded", with no full stop. */
 export function leftOutText(count: number): string {
-  return `${count} ${count === 1 ? "estimate" : "estimates"} could not be traded and ${count === 1 ? "was" : "were"} left out`;
+  return `${count} ${count === 1 ? "estimate" : "estimates"} could not be traded`;
 }

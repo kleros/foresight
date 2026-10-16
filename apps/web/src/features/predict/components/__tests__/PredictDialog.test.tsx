@@ -342,7 +342,7 @@ describe("predicting", () => {
   it("says which estimates were left out", () => {
     render(<PredictDialog {...props()} skipped={1} />);
 
-    expect(screen.getByRole("status")).toHaveTextContent("1 estimate could not be traded and was left out.");
+    expect(screen.getByRole("status")).toHaveTextContent("1 estimate could not be traded.");
   });
 });
 

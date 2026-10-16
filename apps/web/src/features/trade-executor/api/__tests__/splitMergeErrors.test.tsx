@@ -152,7 +152,7 @@ describe("each trade wallet action failing once sent for lack of funds", () => {
     );
 
     expect(errorToast).toHaveBeenCalledExactlyOnceWith(
-      "Not enough in your wallet for this and the fee. Lower the amount or add funds.",
+      "Your wallet is short, fee included. Lower the amount or add funds.",
     );
   });
 });

@@ -450,10 +450,21 @@ for (const viewport of [
   test.describe(`every failure at ${viewport.width} x ${viewport.height}`, () => {
     test.use({ viewport });
 
-    test("fits its words in the status slot without moving the footer", async ({ page }) => {
+    test("fits its words in a two-line status slot, left-aligned under the title, without moving the footer", async ({
+      page,
+    }) => {
       const idle = await footprint(page, await openPopup(page, 10, "idle"));
       for (const reason of FAILURE_REASONS) {
         const dialog = await openPopup(page, 10, "failed", reason);
+        const status = dialog.getByRole("status");
+        const [text, title] = await Promise.all([
+          status.locator("span").boundingBox(),
+          dialog.getByRole("heading", { name: "Predict", exact: true }).boundingBox(),
+        ]);
+
+        expect.soft(await status.evaluate((element) => getComputedStyle(element).textAlign), reason).toBe("left");
+        expect.soft(Math.abs(text!.x - title!.x), `${reason} starts under the title`).toBeLessThanOrEqual(1);
+        expect.soft((await status.boundingBox())!.height, `${reason}: a two-line slot`).toBeLessThanOrEqual(40);
 
         expect.soft(await footprint(page, dialog), `${reason} has the idle popup's footprint`).toEqual(idle);
         expect

@@ -119,14 +119,14 @@ describe("createPredictRun when the quoter cannot be asked", () => {
   });
 
   it.each(failures)(
-    "tells the visitor the prices could not be fetched, not that no trade exists, when %s",
+    "tells the visitor it could not get prices, not that no trade exists, when %s",
     async (_, answer) => {
       const { driver } = setup(lensQuoterOn(answer));
 
       driver.start();
       const progress = await settled(driver);
 
-      expect(message(progress)).toMatch(/prices could not be fetched/i);
+      expect(message(progress)).toMatch(/could not get prices/i);
       expect(message(progress)).not.toBe(message(withReason(progress, "no-route")));
     },
   );

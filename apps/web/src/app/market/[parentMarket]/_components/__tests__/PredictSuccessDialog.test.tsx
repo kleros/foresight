@@ -18,8 +18,8 @@ beforeEach(() => {
 
 describe("PredictSuccessDialog", () => {
   it.each([
-    [["Hanoi"], "1 estimate could not be traded and was left out: Hanoi."],
-    [["Berlin", "Hanoi"], "2 estimates could not be traded and were left out: Berlin, Hanoi."],
+    [["Hanoi"], "1 estimate could not be traded: Hanoi."],
+    [["Berlin", "Hanoi"], "2 estimates could not be traded: Berlin, Hanoi."],
   ])("names what it left out as the popup words it: %j", (leftOut, line) => {
     render(<PredictSuccessDialog isOpen leftOut={leftOut} onClose={vi.fn()} />);
 
