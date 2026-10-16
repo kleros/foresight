@@ -610,7 +610,7 @@ for (const viewport of [
       }
     });
 
-    for (const state of ["idle"] as const) {
+    for (const state of ["idle", "failed", "pending", "disconnected"] as const) {
       test(`opens ${state} with its close button whole and nothing to scroll sideways`, async ({ page }) => {
         await page.emulateMedia({ reducedMotion: "reduce" });
         for (const options of [2, 10]) {
@@ -622,6 +622,17 @@ for (const viewport of [
             return scroller ? scroller.scrollWidth - scroller.clientWidth : 0;
           });
           expect.soft(sideways, `${options} options: sideways scroll`).toBe(0);
+          const [padding, bars] = await close.evaluate((element) => {
+            let scroller = element.parentElement!;
+            while (getComputedStyle(scroller).overflowY !== "auto") scroller = scroller.parentElement!;
+            const footer = scroller.querySelector(".predict-cta")!.parentElement!;
+            const { scrollPaddingTop, scrollPaddingBottom } = getComputedStyle(scroller);
+            return [
+              [parseFloat(scrollPaddingTop), parseFloat(scrollPaddingBottom)],
+              [element.parentElement!.offsetHeight, footer.offsetHeight],
+            ];
+          });
+          expect.soft(padding, `${options} options: scroll padding as tall as the sticky header and footer`).toEqual(bars);
           expect.soft(await isFullyShown(close), `${options} options: the close button at open`).toBe(true);
         }
       });
@@ -653,6 +664,8 @@ for (const viewport of [
             (await button.boundingBox())!.y + 1,
           );
           expect(partBox.y, "a part's top inside the dialog").toBeGreaterThanOrEqual(box.y);
+          const header = (await dialog.getByRole("heading", { name: "Predict", exact: true, level: 2 }).boundingBox())!;
+          expect(partBox.y, "a part's top below the header").toBeGreaterThanOrEqual(header.y + header.height - 1);
         }
       });
     }

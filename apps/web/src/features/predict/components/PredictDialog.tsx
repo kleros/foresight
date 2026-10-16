@@ -143,16 +143,17 @@ export function PredictDialog({
         "rounded-fs-popup bg-fs-surface border border-(--fs-popup-edge) shadow-(--fs-popup-shadow)",
       )}
     >
-      {/* on a phone on its side the whole popup scrolls, padded by the sticky button's 72px,
+      {/* on a phone on its side the whole popup scrolls between its sticky 32px header and its sticky button,
           and reaches 12px into the dialog's padding, room for the close button's overhang and its target */}
       <div
         className={clsx(
           "flex min-h-0 w-full flex-col",
-          "landscape-phone:overflow-y-auto landscape-phone:scroll-pb-18",
+          "landscape-phone:overflow-y-auto landscape-phone:scroll-pt-8 landscape-phone:scroll-pb-16",
+          "short:landscape-phone:scroll-pb-14",
           "landscape-phone:-mr-3 landscape-phone:w-[calc(100%+12px)] landscape-phone:pr-3",
         )}
       >
-        <div className="mb-2 flex h-8 shrink-0 items-center justify-between">
+        <div className="landscape-phone:sticky landscape-phone:top-0 landscape-phone:z-20 bg-fs-surface mb-2 flex h-8 shrink-0 items-center justify-between">
           <h2 className="text-fs-popup-text text-lg font-semibold tracking-[-0.01em]">Predict</h2>
           <LightButton
             text=""
@@ -241,7 +242,7 @@ export function PredictDialog({
           ) : null}
         </p>
 
-        <div className="bg-fs-surface sticky bottom-0 pt-1 pb-4 short:pb-3">
+        <div className="bg-fs-surface landscape-phone:pb-2 sticky bottom-0 pt-1 pb-4 short:pb-3">
           <PredictButton
             text={recovered ? "Resume" : isPending ? "Check again" : canRetry ? "Try the rest" : "Predict"}
             busyText={isRunning ? busyLabel(steps) : undefined}
