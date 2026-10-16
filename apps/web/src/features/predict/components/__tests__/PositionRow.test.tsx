@@ -16,10 +16,8 @@ const scale: OptionScale = {
   upperBound: 100,
 };
 
-const segment = (side: "up" | "down") => screen.getByTestId(`position-bar-${side}`);
-
 describe("PositionRow", () => {
-  it("names the UP and DOWN held under the bar's two ends", () => {
+  it("names the UP and DOWN held on one line, with no bar", () => {
     render(
       <PositionRow
         scale={scale}
@@ -29,8 +27,9 @@ describe("PositionRow", () => {
       />,
     );
 
-    expect(screen.getByText("214.09 UP")).toBeInTheDocument();
-    expect(screen.getByText("1.44 DOWN")).toBeInTheDocument();
+    expect(screen.getByTestId("position-held")).toHaveTextContent(/^214\.09 UP · 1\.44 DOWN$/);
+    expect(screen.queryByTestId("position-bar-up")).toBeNull();
+    expect(screen.queryByTestId("position-bar-down")).toBeNull();
   });
 
   it("groups a large holding in threes", () => {
@@ -39,21 +38,6 @@ describe("PositionRow", () => {
     );
 
     expect(screen.getByText("1,234,567 UP")).toBeInTheDocument();
-  });
-
-  it("splits the bar by the share of UP and DOWN held", () => {
-    render(<PositionRow scale={scale} position={{ up: 3n * WAD, down: 1n * WAD }} marketEstimate={75} decimals={18} />);
-
-    expect(segment("up").style.transform).toBe("scaleX(0.75)");
-    expect(segment("down").style.transform).toBe("scaleX(0.25)");
-  });
-
-  it("keeps a small side visible on the bar", () => {
-    render(
-      <PositionRow scale={scale} position={{ up: 10_000n * WAD, down: 1n * WAD }} marketEstimate={75} decimals={18} />,
-    );
-
-    expect(segment("down").style.transform).not.toBe("scaleX(0)");
   });
 
   it("values the position at the market estimate, in the option's own tokens", () => {
@@ -89,7 +73,7 @@ describe("PositionRow", () => {
       />,
     );
 
-    expect(screen.getByText("87 % adds to your UP")).toBeInTheDocument();
+    expect(screen.getByText("87 % adds to UP")).toBeInTheDocument();
   });
 
   it("says an estimate on the other side sells some of the position", () => {
@@ -117,7 +101,7 @@ describe("PositionRow", () => {
       />,
     );
 
-    expect(screen.queryByText(/your UP|some UP|your DOWN|some DOWN/)).toBeNull();
+    expect(screen.queryByText(/adds to|sells/)).toBeNull();
   });
 
   it("holds an empty line where the estimate's effect goes while no estimate is set", () => {

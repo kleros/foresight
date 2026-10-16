@@ -59,12 +59,18 @@ for (const width of [320, 375, 1280]) {
       expect(Math.max(...spills), `over ${spills.length} frames`).toBe(0);
     });
 
-    test("draws both sides of a position on its bar", async ({ page }) => {
-      await openCard(page, CASES["a position nearly all UP"]);
+    test("shows a position with no bar, its UP and DOWN on one line inside the card", async ({ page }) => {
+      for (const query of [CASES["a position nearly all UP"], CASES["a scale in millions"]]) {
+        await openCard(page, query);
+        const held = page.getByTestId("position-held");
+        const [box, card] = await Promise.all([
+          held.boundingBox(),
+          page.locator("#root > div > div").first().boundingBox(),
+        ]);
 
-      for (const side of ["up", "down"]) {
-        const box = (await page.getByTestId(`position-bar-${side}`).boundingBox())!;
-        expect(box.width, `${side} segment`).toBeGreaterThanOrEqual(2);
+        await expect(page.getByTestId("position-bar-up")).toHaveCount(0);
+        expect(box!.height, query).toBeLessThanOrEqual(20);
+        expect(box!.x + box!.width, query).toBeLessThanOrEqual(card!.x + card!.width);
       }
     });
 

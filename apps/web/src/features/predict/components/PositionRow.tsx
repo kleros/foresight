@@ -13,19 +13,6 @@ import type { OptionScale } from "@/types/optionScale";
 import type { SelectedEstimate } from "../types";
 import { POSITION_DIGITS, positionLeaning, positionWorth, type OptionPosition } from "../utils/position";
 
-/** The least share of the bar a side that is held draws, so it never disappears. */
-const MIN_SHARE = 0.02;
-
-/** UP's share of the tokens held, 0 to 1, with each side that is held kept at MIN_SHARE or more. */
-function upShare(position: OptionPosition): number {
-  const total = position.up + position.down;
-  if (total === 0n) return 0.5;
-  const share = Number((position.up * 10_000n) / total) / 10_000;
-  if (position.up > 0n && share < MIN_SHARE) return MIN_SHARE;
-  if (position.down > 0n && share > 1 - MIN_SHARE) return 1 - MIN_SHARE;
-  return share;
-}
-
 /** What the trade wallet holds of one option, once a prediction has been placed on it. */
 export function PositionRow({
   scale,
@@ -46,12 +33,15 @@ export function PositionRow({
   const leaning = positionLeaning(position);
   const amount = (value: bigint) => formatDisplayAmount(value, decimals, POSITION_DIGITS);
   const side = leaning === "higher" ? "UP" : "DOWN";
-  const up = upShare(position);
 
   return (
-    <section aria-label="Your position" className="border-fs-border type-label flex flex-col gap-1.5 border-t pt-3">
+    <section aria-label="Your position" className="border-fs-border type-label flex flex-col gap-1 border-t pt-3">
       <div className="flex flex-wrap items-center justify-between gap-x-4">
-        <span className="text-fs-text-secondary">Your position</span>
+        <span data-testid="position-held" className="whitespace-nowrap tabular-nums">
+          <span className="text-fs-tone-success-text">{`${amount(position.up)} UP`}</span>
+          <span className="text-fs-text-secondary">{" · "}</span>
+          <span className="text-fs-tone-error-text">{`${amount(position.down)} DOWN`}</span>
+        </span>
         {marketEstimate !== undefined ? (
           <WithHelpTooltip
             label="How this is worked out"
@@ -62,24 +52,6 @@ export function PositionRow({
             </span>
           </WithHelpTooltip>
         ) : null}
-      </div>
-      <div className="relative h-1.5 w-full overflow-hidden rounded-full" aria-hidden>
-        {(["up", "down"] as const).map((bar) => (
-          <span
-            key={bar}
-            data-testid={`position-bar-${bar}`}
-            className={clsx(
-              "absolute inset-0 block",
-              "transition-transform duration-(--fs-dur-enter) ease-(--fs-ease-enter)",
-              bar === "up" ? "bg-fs-estimate-up origin-left" : "bg-fs-estimate-down origin-right",
-            )}
-            style={{ transform: `scaleX(${bar === "up" ? up : Number((1 - up).toFixed(4))})` }}
-          />
-        ))}
-      </div>
-      <div className="flex justify-between gap-4 tabular-nums">
-        <span className="text-fs-tone-success-text">{`${amount(position.up)} UP`}</span>
-        <span className="text-fs-tone-error-text">{`${amount(position.down)} DOWN`}</span>
       </div>
       {/* held empty without an estimate, so the card keeps one height as the slider crosses the market */}
       {leaning ? (
@@ -98,7 +70,7 @@ export function PositionRow({
                 <ArrowDown className="size-3 shrink-0 [&_path]:fill-current" aria-hidden />
               )}
               {estimate.direction === leaning
-                ? `${formatEstimate(estimate.value, scale.unit)} adds to your ${side}`
+                ? `${formatEstimate(estimate.value, scale.unit)} adds to ${side}`
                 : `${formatEstimate(estimate.value, scale.unit)} sells some ${side}`}
             </>
           ) : null}
