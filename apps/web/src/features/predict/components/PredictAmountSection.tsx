@@ -194,8 +194,9 @@ export function PredictAmountSection({
             "[&_[role=option]]:h-10 [&_[role=option]]:py-0 [&_[role=option]]:pr-3 [&_[role=option]]:pl-3",
             "[&_[role=option]_p]:text-fs-popup-text [&_[role=option]_p]:text-[15px] [&_[role=option]_p]:font-medium",
             "[&_[role=option]:hover]:bg-fs-popup-hover [&_[role=option][data-focused]]:bg-fs-popup-hover",
-            // the choice wears the chip tone, without the library's bar
+            // the choice wears the chip tone, without the library's bar; its label in the accent, as dark hover is the chip tone too
             "[&_[role=option][data-selected]]:bg-fs-popup-chip [&_[role=option][data-selected]]:border-l-0",
+            "[&_[role=option][data-selected]_p]:text-fs-popup-accent-text [&_[role=option][data-selected]_p]:font-semibold",
           )}
         />
       </div>

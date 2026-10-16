@@ -897,6 +897,34 @@ test.describe("the pay token's open menu", () => {
       expect(read.chosen[0]).toBe(read.chosen[1]);
       expect(read.bar).toBe("0px");
     });
+
+    test(`keeps the choice apart from a row the keyboard reaches, in the ${theme} theme`, async ({ page }) => {
+      await openPopup(page, 2, "idle", undefined, `&tokens=2&theme=${theme}`);
+      await page.getByRole("button", { name: /sDAI/ }).focus();
+      await page.keyboard.press("Enter");
+      const listbox = page.getByRole("listbox");
+      await expect(listbox).toBeVisible();
+      await page.keyboard.press("ArrowDown");
+      const other = listbox.getByRole("option", { name: "xDAI" });
+      await expect(other).toHaveAttribute("data-focused", "true");
+      await settle(page.locator("body"));
+
+      const [chosen, reached, accent] = await listbox.evaluate((list) => {
+        const look = (row: Element) => {
+          const label = getComputedStyle(row.querySelector("p")!);
+          return { background: getComputedStyle(row).backgroundColor, color: label.color, weight: label.fontWeight };
+        };
+        const probe = document.createElement("span");
+        probe.style.color = "var(--fs-popup-accent-text)";
+        document.body.append(probe);
+        const tone = getComputedStyle(probe).color;
+        probe.remove();
+        return [look(list.querySelector('[aria-selected="true"]')!), look(list.querySelector("[data-focused]")!), tone];
+      });
+      expect(chosen.color, "the choice in the accent text").toBe(accent);
+      expect(chosen.color).not.toBe(reached.color);
+      expect(Number(chosen.weight)).toBeGreaterThan(Number(reached.weight));
+    });
   }
 });
 
