@@ -59,7 +59,7 @@ export function PredictSummary({
           "relative flex h-9 w-full items-center justify-between gap-3 rounded-fs-control px-1 text-left",
           "type-label text-fs-popup-text-2 cursor-pointer font-medium",
           "transition-colors duration-(--fs-dur-echo) ease-(--fs-ease-enter)",
-          "[@media(hover:hover)]:hover:bg-fs-popup-panel",
+          "[@media(hover:hover)]:hover:bg-fs-popup-hover",
           "focus-visible:ring-fs-accent focus-visible:ring-2 focus-visible:outline-none",
         )}
       >

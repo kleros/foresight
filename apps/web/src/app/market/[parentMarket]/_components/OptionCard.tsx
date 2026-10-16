@@ -54,7 +54,7 @@ export function OptionCard({
       className="border-gradient-purple-blue bg-fs-surface w-full rounded-(--fs-radius-panel)!"
       // the 1px transparent border keeps the hover tint off the gradient hairline beneath it
       buttonClassName={clsx(
-        "rounded-(--fs-radius-panel) border-transparent bg-transparent bg-clip-padding hover:bg-fs-popup-panel",
+        "rounded-(--fs-radius-panel) border-transparent bg-transparent bg-clip-padding hover:bg-fs-popup-hover",
         "aria-expanded:rounded-b-none aria-expanded:border-b-(--fs-popup-line)",
       )}
       glyph="chevron"

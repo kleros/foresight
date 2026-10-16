@@ -143,7 +143,7 @@ export function PredictDialog({
             onPress={onClose}
             className={clsx(
               "relative -mr-1.5 size-8 justify-center rounded-full! p-0",
-              "hover:bg-transparent [@media(hover:hover)]:hover:bg-fs-popup-panel disabled:opacity-40",
+              "hover:bg-transparent [@media(hover:hover)]:hover:bg-fs-popup-hover disabled:opacity-40",
               "before:absolute before:-inset-1.5 before:content-['']",
             )}
           />

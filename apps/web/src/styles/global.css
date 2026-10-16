@@ -44,6 +44,7 @@
   --radius-fs: var(--fs-radius);
   --color-fs-popup-panel: var(--fs-popup-panel);
   --color-fs-popup-chip: var(--fs-popup-chip);
+  --color-fs-popup-hover: var(--fs-popup-hover);
   --color-fs-popup-line: var(--fs-popup-line);
   --color-fs-popup-line-strong: var(--fs-popup-line-strong);
   --color-fs-popup-text: var(--fs-popup-text);

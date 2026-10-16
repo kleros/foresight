@@ -9,6 +9,8 @@
   --fs-popup-panel: #f4f2fb;
   /* the step above a panel, for a pill or chip sitting on it */
   --fs-popup-chip: #e8e4f5;
+  /* a pressable row's hover: the panel tone on the white sheet */
+  --fs-popup-hover: var(--fs-popup-panel);
   /* hairlines and the step connector, tinted toward the violet so they sit on the panels */
   --fs-popup-line: rgba(40, 20, 90, 0.08);
   --fs-popup-line-strong: rgba(40, 20, 90, 0.24);
@@ -42,6 +44,8 @@
   /* the Kleros violet surfaces, so the popup belongs to the page behind it */
   --fs-popup-panel: #1b003f;
   --fs-popup-chip: #2e206c;
+  /* the panel tone is 1.2:1 on the violet sheet; the chip's is 1.9:1 */
+  --fs-popup-hover: #2e206c;
   --fs-popup-line: rgba(218, 240, 255, 0.09);
   --fs-popup-line-strong: rgba(218, 240, 255, 0.3);
   --fs-popup-text: #e6f1ff;

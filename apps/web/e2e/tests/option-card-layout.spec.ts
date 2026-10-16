@@ -153,21 +153,18 @@ for (const width of [320, 375, 1280]) {
       expect(await size(/^What percentile score/)).toBe(12);
     });
 
-    test("tints its header on hover with the popup's panel tone", async ({ page }) => {
-      await openHarness(page, `${harness.url}?`);
-      const header = page.locator("#root button").first();
-      await header.hover();
-      await page.waitForTimeout(200);
+    // a lavender step on white; on the violet surface the panel tone is too close, so the chip's
+    for (const [theme, tone] of [
+      ["light", "rgb(244, 242, 251)"],
+      ["dark", "rgb(46, 32, 108)"],
+    ] as const) {
+      test(`tints its header on hover with the popup's hover tone in the ${theme} theme`, async ({ page }) => {
+        await openHarness(page, `${harness.url}?theme=${theme}`);
+        const header = page.locator("#root button").first();
+        await header.hover();
 
-      const [background, panel] = await header.evaluate((element) => {
-        const probe = document.createElement("span");
-        probe.style.backgroundColor = "var(--fs-popup-panel)";
-        element.append(probe);
-        const tone = getComputedStyle(probe).backgroundColor;
-        probe.remove();
-        return [getComputedStyle(element).backgroundColor, tone];
+        await expect(header).toHaveCSS("background-color", tone);
       });
-      expect(background).toBe(panel);
-    });
+    }
   });
 }

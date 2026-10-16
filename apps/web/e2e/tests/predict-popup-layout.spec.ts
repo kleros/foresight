@@ -1197,3 +1197,19 @@ test.describe("entrances under reduced motion", () => {
     );
   });
 });
+
+test.describe("the popup's hover tone", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  // the chip tone: the panel tone is about 1.2:1 on the dark surface
+  test("tints the close button and the summary's head in the chip tone in the dark theme", async ({ page }) => {
+    const dialog = await openPopup(page, 2, "idle", undefined, "&theme=dark");
+    for (const control of [
+      dialog.getByRole("button", { name: "Close" }),
+      dialog.getByTestId("predict-summary").getByRole("button"),
+    ]) {
+      await control.hover();
+      await expect(control).toHaveCSS("background-color", "rgb(46, 32, 108)");
+    }
+  });
+});
