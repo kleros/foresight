@@ -143,14 +143,15 @@ export function PredictDialog({
         "fs-aurora rounded-fs-popup bg-fs-surface border border-(--fs-popup-edge) shadow-(--fs-popup-shadow)",
       )}
     >
-      {/* on a phone on its side the whole popup scrolls between its sticky 40px header and its sticky button,
-          and reaches 12px into the dialog's padding, room for the close button's overhang and its target */}
+      {/* on a phone on its side the whole popup scrolls between its sticky 40px header and its sticky button;
+          it reaches 12px into the dialog's right padding for the close button's target, 4px into the left for Predict's ring */}
       <div
         className={clsx(
           "flex min-h-0 w-full flex-col",
           "landscape-phone:overflow-y-auto landscape-phone:scroll-pt-10 landscape-phone:scroll-pb-16",
           "short:landscape-phone:scroll-pb-14",
-          "landscape-phone:-mr-3 landscape-phone:w-[calc(100%+12px)] landscape-phone:pr-3",
+          "landscape-phone:-mr-3 landscape-phone:pr-3 landscape-phone:-ml-1 landscape-phone:pl-1",
+          "landscape-phone:w-[calc(100%+16px)]",
         )}
       >
         <div
@@ -172,6 +173,8 @@ export function PredictDialog({
               "relative -mr-1.5 size-8 justify-center rounded-full! p-0",
               "hover:bg-transparent [@media(hover:hover)]:hover:bg-fs-popup-hover disabled:opacity-40",
               "before:absolute before:-inset-1.5 before:content-['']",
+              // the scroller's top edge is the button's, so its ring sits inside
+              "landscape-phone:[--fs-focus-offset:-2px]",
             )}
           />
         </div>

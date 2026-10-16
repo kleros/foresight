@@ -1143,79 +1143,93 @@ test.describe("the popup opening focused", () => {
     expect(focused).toEqual({ tabIndex: "-1", focusVisible: true, outline: "none" });
   });
 
-  for (const theme of ["light", "dark"]) {
-    test(`rings each control reached by keyboard once, in the popup's violet, in the ${theme} theme`, async ({
-      page,
-    }) => {
-      const dialog = await openPopup(page, 2, "idle", undefined, `&tokens=2&theme=${theme}`);
-      const accent = await dialog.evaluate((element) => {
-        const probe = document.createElement("span");
-        probe.style.color = "var(--fs-popup-accent)";
-        element.append(probe);
-        const color = getComputedStyle(probe).color;
-        probe.remove();
-        return color;
-      });
-      expect(accent).toBe(theme === "light" ? "rgb(107, 60, 245)" : "rgb(155, 123, 255)");
+  // a window up to 480px tall scrolls the whole popup, whose scroller clips at its edges
+  for (const viewport of [
+    { width: 1280, height: 800 },
+    { width: 568, height: 320 },
+  ]) {
+    test.describe(`at ${viewport.width} x ${viewport.height}`, () => {
+      test.use({ viewport });
 
-      const seen: string[] = [];
-      for (let step = 0; step < 10; step++) {
-        await page.keyboard.press("Tab");
-        // the ring's colour transitions in
-        await settle(dialog);
-        const ring = await page.evaluate(() => {
-          const element = document.activeElement as HTMLElement;
-          // the amount field and the share slider's input draw on their panel or thumb
-          const drawn = element.matches("[data-panel=amount] input[inputmode]")
-            ? element.closest<HTMLElement>("[data-panel]")!
-            : element.matches("[type=range]")
-              ? element.closest<HTMLElement>("div:has(>#slider-label)")!
-              : element;
-          const style = getComputedStyle(drawn);
-          // a ring's offset is a band of the nearest painted box under it; any other band is a second mark
-          let under = "";
-          for (let parent = drawn.parentElement; parent && !under; parent = parent.parentElement) {
-            const fill = getComputedStyle(parent).backgroundColor;
-            if (fill !== "rgba(0, 0, 0, 0)") under = fill;
+      for (const theme of ["light", "dark"]) {
+        test(`rings each control reached by keyboard once, in the popup's violet, in the ${theme} theme`, async ({
+          page,
+        }) => {
+          const dialog = await openPopup(page, 2, "idle", undefined, `&tokens=2&theme=${theme}`);
+          const accent = await dialog.evaluate((element) => {
+            const probe = document.createElement("span");
+            probe.style.color = "var(--fs-popup-accent)";
+            element.append(probe);
+            const color = getComputedStyle(probe).color;
+            probe.remove();
+            return color;
+          });
+          expect(accent).toBe(theme === "light" ? "rgb(107, 60, 245)" : "rgb(155, 123, 255)");
+
+          const seen: string[] = [];
+          for (let step = 0; step < 10; step++) {
+            await page.keyboard.press("Tab");
+            // the ring's colour transitions in
+            await settle(dialog);
+            const ring = await page.evaluate(() => {
+              const element = document.activeElement as HTMLElement;
+              // the amount field and the share slider's input draw on their panel or thumb
+              const drawn = element.matches("[data-panel=amount] input[inputmode]")
+                ? element.closest<HTMLElement>("[data-panel]")!
+                : element.matches("[type=range]")
+                  ? element.closest<HTMLElement>("div:has(>#slider-label)")!
+                  : element;
+              const style = getComputedStyle(drawn);
+              // a ring's offset is a band of the nearest painted box under it; any other band is a second mark
+              let under = "";
+              for (let parent = drawn.parentElement; parent && !under; parent = parent.parentElement) {
+                const fill = getComputedStyle(parent).backgroundColor;
+                if (fill !== "rgba(0, 0, 0, 0)") under = fill;
+              }
+              const rings = (style.boxShadow.match(/rgb\([^)]*\) 0px 0px 0px [1-9]\d*px/g) ?? []).filter(
+                (shadow) => !shadow.startsWith(under),
+              );
+              // the panel rings for the amount field alone
+              const panel = element.closest("[data-panel=amount]");
+              if (panel && panel !== drawn && getComputedStyle(panel).boxShadow.includes(" 2px inset"))
+                rings.push("panel");
+              // the outline's outer edge, inside every box that clips it
+              const reach =
+                style.outlineStyle === "none" ? 0 : parseFloat(style.outlineOffset) + parseFloat(style.outlineWidth);
+              const box = drawn.getBoundingClientRect();
+              let clipped = false;
+              for (let parent = drawn.parentElement; parent; parent = parent.parentElement) {
+                const { overflowX, overflowY } = getComputedStyle(parent);
+                if (overflowX === "visible" && overflowY === "visible") continue;
+                const clip = parent.getBoundingClientRect();
+                if (
+                  box.left - reach < clip.left - 0.5 ||
+                  box.right + reach > clip.right + 0.5 ||
+                  box.top - reach < clip.top - 0.5 ||
+                  box.bottom + reach > clip.bottom + 0.5
+                ) {
+                  clipped = true;
+                }
+              }
+              return {
+                name: element.getAttribute("aria-label") || element.textContent?.trim() || element.tagName,
+                outline: style.outlineStyle === "none" ? null : `${style.outlineWidth} ${style.outlineColor}`,
+                rings,
+                clipped,
+              };
+            });
+            seen.push(ring.name);
+            const marks = [
+              ...(ring.outline ? [ring.outline] : []),
+              ...ring.rings.map((shadow) => shadow.split(" 0px")[0]),
+            ];
+            expect.soft(marks.length, `${ring.name}: one ring`).toBe(1);
+            expect.soft(marks[0], `${ring.name}: in the violet`).toContain(accent);
+            expect.soft(ring.clipped, `${ring.name}: the ring whole`).toBe(false);
           }
-          const rings = (style.boxShadow.match(/rgb\([^)]*\) 0px 0px 0px [1-9]\d*px/g) ?? []).filter(
-            (shadow) => !shadow.startsWith(under),
-          );
-          // the panel rings for the amount field alone
-          const panel = element.closest("[data-panel=amount]");
-          if (panel && panel !== drawn && getComputedStyle(panel).boxShadow.includes(" 2px inset")) rings.push("panel");
-          // the outline's outer edge, inside every box that clips it
-          const reach =
-            style.outlineStyle === "none" ? 0 : parseFloat(style.outlineOffset) + parseFloat(style.outlineWidth);
-          const box = drawn.getBoundingClientRect();
-          let clipped = false;
-          for (let parent = drawn.parentElement; parent; parent = parent.parentElement) {
-            const { overflowX, overflowY } = getComputedStyle(parent);
-            if (overflowX === "visible" && overflowY === "visible") continue;
-            const clip = parent.getBoundingClientRect();
-            if (
-              box.left - reach < clip.left - 0.5 ||
-              box.right + reach > clip.right + 0.5 ||
-              box.top - reach < clip.top - 0.5 ||
-              box.bottom + reach > clip.bottom + 0.5
-            ) {
-              clipped = true;
-            }
-          }
-          return {
-            name: element.getAttribute("aria-label") || element.textContent?.trim() || element.tagName,
-            outline: style.outlineStyle === "none" ? null : `${style.outlineWidth} ${style.outlineColor}`,
-            rings,
-            clipped,
-          };
+          expect(seen).toEqual(expect.arrayContaining(["Close", "Max", "Token", "2 markets move", "Predict"]));
         });
-        seen.push(ring.name);
-        const marks = [...(ring.outline ? [ring.outline] : []), ...ring.rings.map((shadow) => shadow.split(" 0px")[0])];
-        expect.soft(marks.length, `${ring.name}: one ring`).toBe(1);
-        expect.soft(marks[0], `${ring.name}: in the violet`).toContain(accent);
-        expect.soft(ring.clipped, `${ring.name}: the ring whole`).toBe(false);
       }
-      expect(seen).toEqual(expect.arrayContaining(["Close", "Max", "Token", "2 markets move", "Predict"]));
     });
   }
 });
