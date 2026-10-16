@@ -9,7 +9,7 @@ type ScrollFadeProps = {
   children: React.ReactNode;
   className?: string;
   fadeSize?: number; // px
-  /** Said at the foot while there is more to scroll to. */
+  /** Said at the foot while there is more to scroll to, on a strip of its own below the scroll area. */
   cue?: string;
   /** The least overflow, in px, that raises the fades and the cue; by default a 16px line, as less is usually padding. */
   minOverflow?: number;
@@ -27,8 +27,10 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
   minOverflow = 16,
 }) => {
   const ref = useRef<HTMLDivElement>(null);
+  const cueRef = useRef<HTMLSpanElement>(null);
   const [showTop, setShowTop] = useState(false);
   const [showBottom, setShowBottom] = useState(false);
+  const [hasOverflow, setHasOverflow] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -39,13 +41,16 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
       const { scrollTop, scrollHeight, clientHeight } = el;
 
       const maxScrollable = scrollHeight - clientHeight;
-      const hasOverflow = maxScrollable >= Math.max(minOverflow, 1);
+      // the cue's strip takes its height from the scroll area while it is held open
+      const strip = cueRef.current?.offsetHeight ?? 0;
+      const hasOverflow = maxScrollable >= Math.max(minOverflow, 1) + strip;
 
       // the tolerance never swallows the whole of a 1-2px overflow
       const tolerance = Math.min(EPSILON, maxScrollable - 1);
       const atTop = scrollTop <= tolerance;
       const atBottom = scrollTop >= maxScrollable - tolerance;
 
+      setHasOverflow(hasOverflow);
       setShowTop(hasOverflow && !atTop);
       setShowBottom(hasOverflow && !atBottom);
     };
@@ -68,51 +73,55 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
 
   return (
     <div className={clsx("relative min-h-0", "flex flex-1 flex-col", className)}>
-      {/* Top fade */}
-      {showTop && (
-        <div
-          className={clsx(
-            "pointer-events-none absolute top-0 right-0 left-0 z-10",
-            "from-fs-surface bg-linear-to-b to-transparent",
-          )}
-          style={{
-            height: fadeSize,
-          }}
-        />
-      )}
-
-      {/* Scroll container */}
-      <div
-        ref={ref}
-        className={clsx(
-          "w-full overflow-hidden overflow-y-auto",
-          "[-ms-overflow-style:none] scrollbar-none [&::-webkit-scrollbar]:hidden",
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        {/* Top fade */}
+        {showTop && (
+          <div
+            className={clsx(
+              "pointer-events-none absolute top-0 right-0 left-0 z-10",
+              "from-fs-surface bg-linear-to-b to-transparent",
+            )}
+            style={{
+              height: fadeSize,
+            }}
+          />
         )}
-      >
-        {children}
-      </div>
 
-      {/* Bottom fade */}
-      {showBottom && (
+        {/* Scroll container */}
         <div
+          ref={ref}
           className={clsx(
-            "pointer-events-none absolute right-0 bottom-0 left-0 z-10",
-            "from-fs-surface bg-linear-to-t to-transparent",
+            "w-full overflow-hidden overflow-y-auto",
+            "[-ms-overflow-style:none] scrollbar-none [&::-webkit-scrollbar]:hidden",
           )}
-          style={{
-            height: fadeSize,
-          }}
-        />
-      )}
+        >
+          {children}
+        </div>
+
+        {/* Bottom fade */}
+        {showBottom && (
+          <div
+            className={clsx(
+              "pointer-events-none absolute right-0 bottom-0 left-0 z-10",
+              "from-fs-surface bg-linear-to-t to-transparent",
+            )}
+            style={{
+              height: fadeSize,
+            }}
+          />
+        )}
+      </div>
 
       {cue ? (
         <span
+          ref={cueRef}
           data-testid="more-below"
           aria-hidden
           className={clsx(
-            "pointer-events-none absolute right-0 bottom-0 left-0 z-20 flex h-4 items-center justify-center gap-1",
+            "pointer-events-none h-4 shrink-0 items-center justify-center gap-1",
             "border-fs-border bg-fs-surface text-fs-text-secondary type-caption border-t",
             "transition-opacity duration-(--fs-dur-enter) ease-(--fs-ease-enter)",
+            hasOverflow ? "flex" : "hidden",
             showBottom ? "opacity-100" : "opacity-0",
           )}
         >

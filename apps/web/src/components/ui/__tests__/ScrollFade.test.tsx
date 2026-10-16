@@ -47,4 +47,34 @@ describe("ScrollFade's cue", () => {
       unmount();
     }
   });
+
+  it("takes no room while nothing is out of view", () => {
+    sized(300, 300);
+    render(
+      <ScrollFade cue="More below" minOverflow={1}>
+        <p>body</p>
+      </ScrollFade>,
+    );
+
+    expect(screen.getByTestId("more-below")).toHaveClass("hidden");
+  });
+
+  it("counts its own 16px strip as room the scroll area gave up", () => {
+    // with the strip open, the scroll area is 16px shorter than it would be without it
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(16);
+    for (const [scrollHeight, shown] of [
+      [317, true],
+      [316, false],
+    ] as const) {
+      sized(scrollHeight, 300);
+      const { unmount } = render(
+        <ScrollFade cue="More below" minOverflow={1}>
+          <p>body</p>
+        </ScrollFade>,
+      );
+
+      expect(screen.getByTestId("more-below")).toHaveClass(shown ? "flex" : "hidden");
+      unmount();
+    }
+  });
 });

@@ -363,6 +363,48 @@ test.describe("the popup's scroll area", () => {
     }
   }
 
+  for (const width of [320, 360, 375]) {
+    for (const options of [2, 3, 10]) {
+      test(`lays its cue over no step at any phone height, ${options} estimates at ${width} wide`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 812 });
+        const dialog = await openPopup(page, options);
+        const scroller = page.getByTestId("predict-body").locator("..");
+        const cue = dialog.getByTestId("more-below");
+        const titles = STEPS.map((title) => dialog.getByText(title, { exact: true }));
+
+        // every height from 560 to 812, 360 x 712 and 320 x 640 among them
+        for (let height = 560; height <= 812; height += 2) {
+          await page.setViewportSize({ width, height });
+          await page.evaluate(
+            () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+          );
+          await scroller.evaluate((element) => element.scrollTo(0, 0));
+          await page.evaluate(
+            () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+          );
+
+          const canScroll = await scroller.evaluate((element) => element.scrollHeight > element.clientHeight);
+          const cueBox = await cue.evaluate((element) =>
+            element.classList.contains("opacity-0") ? null : element.getBoundingClientRect().toJSON(),
+          );
+          expect
+            .soft(cueBox !== null, `${width} x ${height}: the cue shows exactly when the body scrolls`)
+            .toBe(canScroll);
+          if (!cueBox) continue;
+          const view = (await scroller.boundingBox())!;
+          for (const [index, title] of titles.entries()) {
+            const box = (await title.boundingBox())!;
+            // only the part the scroll area shows can be painted over
+            const top = Math.max(box.y, view.y);
+            const bottom = Math.min(box.y + box.height, view.y + view.height);
+            const overlaps = top < bottom && top < cueBox.bottom && bottom > cueBox.top;
+            expect.soft(overlaps, `${width} x ${height}: the cue lies over "${STEPS[index]}"`).toBe(false);
+          }
+        }
+      });
+    }
+  }
+
   // the cut row and its fade say there is more; four rows on a wide popup would overflow by a fade's worth for nothing
   for (const [width, height, options, rows] of [
     [1280, 800, 10, 3.5],
