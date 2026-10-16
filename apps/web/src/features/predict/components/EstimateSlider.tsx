@@ -90,11 +90,7 @@ export function EstimateSlider({
   const drop = marketShare === undefined ? 0 : pinDrop(pinGap(pin.sizes, { thumb: thumbShare, market: marketShare }));
   const isDown = drop === 1;
   const chipAt =
-    marketShare === undefined
-      ? 0
-      : isDown
-        ? droppedChipLeft(pin.sizes, marketShare)
-        : chipLeft(pin.sizes, marketShare);
+    marketShare === undefined ? 0 : isDown ? droppedChipLeft(pin.sizes, marketShare) : chipLeft(pin.sizes, marketShare);
   const covers = {
     lower: pin.sizes.track > 0 && chipAt < pin.sizes.lower,
     upper: pin.sizes.track > 0 && chipAt + pin.sizes.chip > pin.sizes.track - pin.sizes.upper,
