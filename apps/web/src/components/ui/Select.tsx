@@ -13,6 +13,7 @@ export function Select({
   placeholder,
   isDisabled,
   className,
+  menuClassName,
 }: {
   label: string;
   /** Keeps the label as the accessible name where the field is titled beside it. */
@@ -23,6 +24,8 @@ export function Select({
   placeholder?: string;
   isDisabled?: boolean;
   className?: string;
+  /** Classes for the open menu's popover; its list is `#listbox` and each row `[role=option]`. */
+  menuClassName?: string;
 }) {
   return (
     <DropdownSelect
@@ -33,6 +36,7 @@ export function Select({
       placeholder={placeholder}
       isDisabled={isDisabled}
       className={clsx(hideLabel && "*:first:sr-only", className)}
+      dropdownClassName={menuClassName}
     />
   );
 }

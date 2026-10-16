@@ -740,6 +740,56 @@ test.describe("the amount panel's controls", () => {
   });
 });
 
+test.describe("the pay token's open menu", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  for (const theme of ["light", "dark"]) {
+    test(`is a rounded list on the popup's surface, its rows in the popup's text and the choice in the chip tone, in the ${theme} theme`, async ({
+      page,
+    }) => {
+      await openPopup(page, 2, "idle", undefined, `&tokens=2&theme=${theme}`);
+      await page.getByRole("button", { name: /sDAI/ }).click();
+      const listbox = page.getByRole("listbox");
+      await expect(listbox).toBeVisible();
+      await settle(page.locator("body"));
+
+      const read = await listbox.evaluate((list) => {
+        const resolve = (property: string, value: string) => {
+          const probe = document.createElement("span");
+          probe.style.setProperty(property, value);
+          document.body.append(probe);
+          const resolved = getComputedStyle(probe).getPropertyValue(property);
+          probe.remove();
+          return resolved;
+        };
+        const popover = list.closest("[data-trigger]") ?? list.parentElement!.parentElement!;
+        const rows = [...list.querySelectorAll<HTMLElement>("[role=option]")];
+        const chosen = rows.find((row) => row.getAttribute("aria-selected") === "true")!;
+        const label = (row: HTMLElement) => getComputedStyle(row.querySelector("p")!);
+        return {
+          radius: getComputedStyle(popover).borderTopLeftRadius,
+          surface: [getComputedStyle(popover).backgroundColor, resolve("background-color", "var(--fs-surface)")],
+          line: [getComputedStyle(popover).borderTopColor, resolve("border-top-color", "var(--fs-popup-line)")],
+          heights: rows.map((row) => row.getBoundingClientRect().height),
+          sizes: rows.map((row) => label(row).fontSize),
+          text: [label(rows[1]).color, resolve("color", "var(--fs-popup-text)")],
+          chosen: [getComputedStyle(chosen).backgroundColor, resolve("background-color", "var(--fs-popup-chip)")],
+          bar: getComputedStyle(chosen).borderLeftWidth,
+        };
+      });
+
+      expect(read.radius).toBe("10px");
+      expect(read.surface[0]).toBe(read.surface[1]);
+      expect(read.line[0]).toBe(read.line[1]);
+      expect(read.heights).toEqual([40, 40]);
+      expect(read.sizes).toEqual(["15px", "15px"]);
+      expect(read.text[0]).toBe(read.text[1]);
+      expect(read.chosen[0]).toBe(read.chosen[1]);
+      expect(read.bar).toBe("0px");
+    });
+  }
+});
+
 test.describe("a single pay token", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 

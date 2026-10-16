@@ -177,6 +177,15 @@ export function PredictAmountSection({
             // the library's label box runs 16px past its glyphs; with no caret, 3px matches the icon's side
             tokens.length < 2 ? "predict-token-select-single [&>button]:pr-0.75" : "[&>button]:pr-2.5",
           )}
+          menuClassName={clsx(
+            "rounded-fs-control bg-fs-surface border-fs-popup-line",
+            "[&_#listbox]:bg-transparent [&_#listbox]:py-1",
+            "[&_[role=option]]:h-10 [&_[role=option]]:py-0 [&_[role=option]]:pr-3 [&_[role=option]]:pl-3",
+            "[&_[role=option]_p]:text-fs-popup-text [&_[role=option]_p]:text-[15px] [&_[role=option]_p]:font-medium",
+            "[&_[role=option]:hover]:bg-fs-popup-hover [&_[role=option][data-focused]]:bg-fs-popup-hover",
+            // the choice wears the chip tone, without the library's bar
+            "[&_[role=option][data-selected]]:bg-fs-popup-chip [&_[role=option][data-selected]]:border-l-0",
+          )}
         />
       </div>
 
