@@ -653,6 +653,29 @@ test.describe("the spine's line", () => {
     expect(await fills(await openPopup(page, 2, "signing"))).toEqual([true, true, true, false]);
   });
 
+  test("draws the circle, the check and the cross on one ring of one weight", async ({ page }) => {
+    const dialog = await openPopup(page, 2, "failed");
+    const rings = await dialog.locator('[data-bullet="failed"] svg').evaluateAll((glyphs) =>
+      glyphs.map((glyph) => {
+        const ring = glyph.querySelector("circle");
+        // the laid-out size, not the box, which a leaving glyph's scale shrinks
+        const box = { width: parseFloat(getComputedStyle(glyph).width) };
+        return {
+          glyph: glyph.dataset.glyph,
+          ring: ring && {
+            radius: (ring.r.baseVal.value / glyph.viewBox.baseVal.width) * box.width,
+            stroke:
+              (Number(getComputedStyle(ring).strokeWidth.replace("px", "")) / glyph.viewBox.baseVal.width) * box.width,
+          },
+        };
+      }),
+    );
+
+    const circle = rings.find(({ glyph }) => glyph === "circle")!.ring;
+    expect(circle).not.toBeNull();
+    expect(rings).toEqual(["circle", "check", "cross"].map((glyph) => ({ glyph, ring: circle })));
+  });
+
   test("shows the check of a finished step and the cross of a failed one, each glyph alone", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     const dialog = await openPopup(page, 2, "failed");
