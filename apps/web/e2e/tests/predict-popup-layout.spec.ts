@@ -601,7 +601,7 @@ test.describe("the amount panel's controls", () => {
   test("round Max's focus ring to the panel's corners and draw the token's caret as a 1.5px chevron", async ({
     page,
   }) => {
-    const dialog = await openPopup(page, 2);
+    const dialog = await openPopup(page, 2, "idle", undefined, "&tokens=2");
     const token = dialog.getByRole("button", { name: /sDAI/ });
 
     await expect(dialog.getByRole("button", { name: "Max" })).toHaveCSS("border-top-left-radius", "6px");
@@ -612,6 +612,32 @@ test.describe("the amount panel's controls", () => {
         return [caret.content, caret.width, caret.maskImage.startsWith("url(")];
       }),
     ).toEqual(['""', "14px", true]);
+  });
+});
+
+test.describe("a single pay token", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("draws no caret on a token select that cannot open", async ({ page }) => {
+    const dialog = await openPopup(page, 2);
+    const token = dialog.getByRole("button", { name: /sDAI/ });
+
+    await expect(token).toBeDisabled();
+    expect(await token.evaluate((button) => getComputedStyle(button, "::after").display)).toBe("none");
+    // the pill's ends hold the same space, icon to its left edge and label to its right
+    const [left, right] = await token.evaluate((button) => {
+      const box = button.getBoundingClientRect();
+      const icon = button.querySelector("svg")!.getBoundingClientRect();
+      const text = document.createTreeWalker(button, NodeFilter.SHOW_TEXT);
+      let label = 0;
+      for (let node = text.nextNode(); node; node = text.nextNode()) {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        label = Math.max(label, range.getBoundingClientRect().right);
+      }
+      return [icon.left - box.left, box.right - label];
+    });
+    expect(right).toBeCloseTo(left, 0);
   });
 });
 

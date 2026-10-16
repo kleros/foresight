@@ -64,6 +64,8 @@ const preview = Object.fromEntries(
 );
 
 const sDai = { id: "collateral" as const, symbol: "sDAI", decimals: 18 };
+/** `?tokens=2` offers xDAI beside sDAI, so the token select can open. */
+const tokens = params.get("tokens") === "2" ? [sDai, { id: "native" as const, symbol: "xDAI", decimals: 18 }] : [sDai];
 const collateral = { symbol: "sDAI", decimals: 18 };
 
 const run = (
@@ -147,7 +149,7 @@ createRoot(document.getElementById("root")!).render(
       preview={state === "recovered" ? undefined : preview}
       amount={amount}
       onAmountChange={() => {}}
-      tokens={[sDai]}
+      tokens={tokens}
       token={sDai}
       onTokenChange={() => {}}
       funding={funding}

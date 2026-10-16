@@ -170,8 +170,10 @@ export function PredictAmountSection({
           isDisabled={isReadOnly || tokens.length < 2}
           className={clsx(
             "shrink-0 [&>button]:bg-fs-popup-chip [&>button]:h-10 [&>button]:w-fit [&>button]:rounded-full",
-            "[&>button]:border-none [&>button]:pr-2.5 [&>button]:pl-1.5 [&>button]:focus:shadow-none",
+            "[&>button]:border-none [&>button]:pl-1.5 [&>button]:focus:shadow-none",
             "[&>button]:text-fs-popup-text [&>button]:font-semibold predict-token-select",
+            // the library's label box runs 16px past its glyphs; with no caret, 3px matches the icon's side
+            tokens.length < 2 ? "predict-token-select-single [&>button]:pr-0.75" : "[&>button]:pr-2.5",
           )}
         />
       </div>
