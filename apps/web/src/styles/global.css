@@ -449,8 +449,19 @@
 .predict-steps li:has([data-bullet="failed"]) h2 + p {
   color: var(--fs-tone-error-text);
 }
-/* the step's detail sits under its title where the two do not fit one line */
+/* the step's detail sits under its title where the two do not fit one line; both columns then
+   start at the row's top, so the 24px bullet and the title 2px down share a centre */
 @container (max-width: 22rem) {
+  .predict-steps > li > div:first-child {
+    padding-top: 0;
+  }
+  .predict-steps > li > div:first-child > div:last-child:not([style]) {
+    margin-bottom: 0;
+  }
+  .predict-steps > li > div:nth-child(2) {
+    justify-content: flex-start;
+    padding-top: 2px;
+  }
   .predict-steps > li > div:nth-child(2) > div {
     flex-direction: column;
     align-items: flex-start;

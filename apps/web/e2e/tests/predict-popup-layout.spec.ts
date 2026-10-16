@@ -1085,6 +1085,38 @@ test.describe("the steps' connector", () => {
   });
 });
 
+for (const width of [375, 320, 1280]) {
+  test.describe(`a step row at ${width} wide`, () => {
+    test.use({ viewport: { width, height: 812 } });
+
+    test("centres its bullet on its title, with a detail or without, and its connector runs bullet to bullet", async ({
+      page,
+    }) => {
+      const dialog = await openPopup(page, 2, "failed");
+      const rows = await dialog.locator(".predict-steps > li").evaluateAll((items) =>
+        items.map((item) => {
+          const bullet = item.querySelector("[data-bullet]")!.getBoundingClientRect();
+          const title = item.querySelector("h2")!.getBoundingClientRect();
+          const line = item
+            .querySelector(":scope > div:first-child > div:last-child:not([style])")
+            ?.getBoundingClientRect();
+          return { bullet, title, line };
+        }),
+      );
+
+      for (const [index, { bullet, title, line }] of rows.entries()) {
+        expect(bullet.top + bullet.height / 2, `step ${index + 1}'s bullet`).toBeCloseTo(
+          title.top + title.height / 2,
+          0,
+        );
+        if (!line) continue;
+        expect(line.top, `connector ${index + 1}'s top`).toBeCloseTo(bullet.bottom, 0);
+        expect(line.bottom, `connector ${index + 1}'s foot`).toBeCloseTo(rows[index + 1]!.bullet.top, 0);
+      }
+    });
+  });
+}
+
 test.describe("the popup's numbers", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
