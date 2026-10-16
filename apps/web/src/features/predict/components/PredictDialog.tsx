@@ -156,11 +156,11 @@ export function PredictDialog({
           <h3 className="type-label text-fs-popup-text-2 font-medium tabular-nums">
             {`${selected.length} ${selected.length === 1 ? "estimate" : "estimates"}`}
           </h3>
-          {/* over four rows three and a half show, three on a phone: the cut row, under a row-tall fade, is the cue */}
+          {/* over four rows three and a half show, over three on a phone two and a half: the cut row, under a row-tall fade, is the cue */}
           <ScrollFade
             fadeFrom="from-fs-popup-panel"
             fadeSize={32}
-            className={clsx("mt-1 w-full", selected.length > 4 && "max-h-28", selected.length > 3 && "max-sm:max-h-24")}
+            className={clsx("mt-1 w-full", selected.length > 4 && "max-h-28", selected.length > 3 && "max-sm:max-h-20")}
           >
             <PredictList
               selected={selected}

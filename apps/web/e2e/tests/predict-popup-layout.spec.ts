@@ -459,11 +459,12 @@ test.describe("the popup's scroll area", () => {
     }
   }
 
-  // the cut row and its fade say there is more; four rows on a wide popup would overflow by a fade's worth for nothing
+  // the cut row and its fade say there is more, on a phone too; four rows on a wide popup would overflow by a fade's worth for nothing
   for (const [width, height, options, rows] of [
     [1280, 800, 10, 3.5],
     [1280, 800, 4, 4],
-    [375, 667, 10, 3],
+    [375, 667, 10, 2.5],
+    [360, 740, 4, 2.5],
     [375, 667, 3, 3],
   ] as const) {
     test(`shows ${rows} estimate rows of ${options} at ${width} x ${height}`, async ({ page }) => {
