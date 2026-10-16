@@ -11,8 +11,8 @@
 @source "../../../../node_modules/@kleros/ui-components-library";
 
 @custom-variant dark (&:where(.dark, .dark *));
-/* a window too short for the predict popup's steps at rest: a phone at 375 x 667 or 360 x 740 */
-@custom-variant short (@media (max-height: 760px));
+/* a phone too short for the predict popup's steps at rest, such as 375 x 667 or 360 x 740 */
+@custom-variant short (@media (max-height: 760px) and (max-width: 639px));
 
 /* Foresight semantic tokens as Tailwind colours: bg-fs-surface, text-fs-text-secondary… */
 @theme inline {
@@ -504,7 +504,7 @@
   transform: scale(0.985);
 }
 /* the short-window variant, as `short` above */
-@media (max-height: 760px) {
+@media (max-height: 760px) and (max-width: 639px) {
   .predict-cta {
     height: 44px;
   }

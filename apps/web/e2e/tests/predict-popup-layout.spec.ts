@@ -40,11 +40,13 @@ const VIEWPORTS = [
   { width: 375, height: 667 },
   { width: 820, height: 1180 },
   { width: 1024, height: 768 },
+  { width: 1280, height: 720 },
+  { width: 1366, height: 657 },
   { width: 1280, height: 800 },
 ];
 const SIDE_MARGIN = 16;
-/** Windows too short for every step at rest, where the body scrolls with its cue. */
-const SCROLLING = ["320x568", "360x640"];
+/** Windows, or a window and an option count, too short for every step at rest, where the body scrolls with its cue. */
+const SCROLLING = ["320x568", "360x640", "1366x657", "1280x720-10"];
 
 let harness: Awaited<ReturnType<typeof startHarness>>;
 
@@ -263,7 +265,8 @@ for (const viewport of VIEWPORTS) {
         const idleDialog = await openPopup(page, options, "idle");
         const idle = await footprint(page, idleDialog);
         // the popup fits the window: every step is in view as the popup opens, with nothing to scroll to
-        for (const title of SCROLLING.includes(`${viewport.width}x${viewport.height}`) ? [] : STEPS) {
+        const size = `${viewport.width}x${viewport.height}`;
+        for (const title of SCROLLING.includes(size) || SCROLLING.includes(`${size}-${options}`) ? [] : STEPS) {
           expect
             .soft(await isFullyShown(idleDialog.getByText(title, { exact: true })), `"${title}" is in view at open`)
             .toBe(true);
@@ -328,7 +331,7 @@ for (const viewport of VIEWPORTS) {
         }
         expect.soft(pageErrors, "page errors").toEqual([]);
 
-        if (testInfo.errors.length > 0 || viewport.width !== 1280 || options !== 2) return;
+        if (testInfo.errors.length > 0 || size !== "1280x800" || options !== 2) return;
         await openPopup(page, 2, "idle");
         await expect(page).toHaveScreenshot("predict-popup-1280x800-idle.png", {
           animations: "disabled",
@@ -469,6 +472,24 @@ for (const viewport of [
 
       await expect(dialog.getByTestId("amount-slider")).toBeHidden();
       expect((await dialog.getByRole("status").boundingBox())!.height).toBeLessThanOrEqual(40);
+    });
+  });
+}
+
+for (const viewport of [
+  { width: 1024, height: 720 },
+  { width: 1280, height: 720 },
+  { width: 1366, height: 657 },
+  { width: 1440, height: 760 },
+]) {
+  test.describe(`a popup in a short desktop window at ${viewport.width} x ${viewport.height}`, () => {
+    test.use({ viewport });
+
+    test("keeps the share slider and the full-height button, which only a phone gives up", async ({ page }) => {
+      const dialog = await openPopup(page, 2);
+
+      await expect(dialog.getByTestId("amount-slider")).toBeVisible();
+      expect((await dialog.locator(".predict-cta").boundingBox())!.height).toBe(52);
     });
   });
 }
