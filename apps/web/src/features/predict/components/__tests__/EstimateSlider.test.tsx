@@ -95,6 +95,21 @@ describe("EstimateSlider market pin", () => {
   });
 });
 
+describe("EstimateSlider market chip before the track is measured", () => {
+  // jsdom lays nothing out, so the chip is always in its unmeasured place here
+  it("stays on the track with the market at either bound", () => {
+    for (const [market, shift] of [
+      [500, "-100%"],
+      [0, "-0%"],
+      [125, "-25%"],
+    ] as const) {
+      const { unmount } = renderSlider(undefined, { marketEstimate: market });
+      expect(screen.getByTestId("market-chip").parentElement!.style.transform).toBe(`translateX(${shift})`);
+      unmount();
+    }
+  });
+});
+
 describe("EstimateSlider value pill", () => {
   it("shows the estimate above the thumb", () => {
     renderSlider(400);

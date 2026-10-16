@@ -207,10 +207,11 @@ export function EstimateSlider({
                     "transition-transform duration-(--fs-dur-structural) ease-(--fs-ease-spring) motion-reduce:transition-none",
                 )}
                 style={{
+                  // unmeasured, it shifts by its own width as the pill does, which keeps it on the track
                   transform:
                     pin.sizes.track > 0
                       ? `translateX(${chipAt - marketShare * pin.sizes.track}px)`
-                      : "translateX(-50%)",
+                      : `translateX(-${marketShare * 100}%)`,
                 }}
               >
                 <span

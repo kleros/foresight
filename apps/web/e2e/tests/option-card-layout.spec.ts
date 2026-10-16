@@ -42,6 +42,23 @@ for (const width of [320, 375, 1280]) {
       });
     }
 
+    test("never scrolls sideways while it opens, with the market at the top of a millions scale", async ({ page }) => {
+      await page.addInitScript(() => {
+        const spills: number[] = [];
+        (window as unknown as { spills: number[] }).spills = spills;
+        const sample = () => {
+          spills.push(document.documentElement.scrollWidth - document.documentElement.clientWidth);
+          requestAnimationFrame(sample);
+        };
+        requestAnimationFrame(sample);
+      });
+      await openCard(page, "unit=%24M&lower=0&upper=5000000&market=5000000");
+      await page.waitForTimeout(500);
+
+      const spills = await page.evaluate(() => (window as unknown as { spills: number[] }).spills);
+      expect(Math.max(...spills), `over ${spills.length} frames`).toBe(0);
+    });
+
     test("draws both sides of a position on its bar", async ({ page }) => {
       await openCard(page, CASES["a position nearly all UP"]);
 
