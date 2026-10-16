@@ -95,6 +95,15 @@ describe("EstimateSlider market pin", () => {
   });
 });
 
+describe("EstimateSlider bounds", () => {
+  it("names the last point on the grid as the upper bound, where the bound is between two", () => {
+    const { container } = renderSlider(40, { scale: { ...scale, upperBound: 123.456 }, marketEstimate: 60 });
+
+    expect(container.querySelector('[data-bound="lower"]')).toHaveTextContent("0 $M");
+    expect(container.querySelector('[data-bound="upper"]')).toHaveTextContent("123 $M");
+  });
+});
+
 describe("EstimateSlider market chip before the track is measured", () => {
   // jsdom lays nothing out, so the chip is always in its unmeasured place here
   it("stays on the track with the market at either bound", () => {
