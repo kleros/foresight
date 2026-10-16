@@ -5,6 +5,8 @@ import { startHarness } from "../utils/component-harness";
 
 /** The slider's track in an option card: 375 and 1280 wide windows. */
 const TRACKS = [311, 1112];
+/** The track at 320 and 360 wide. */
+const PHONE_TRACKS = [256, 296];
 const MARKET = 75;
 
 let harness: Awaited<ReturnType<typeof startHarness>>;
@@ -141,6 +143,7 @@ for (const track of TRACKS) {
     for (const [name, query] of [
       ["a millions scale", { market: 3250000, upper: 5000000, unit: "$M" }],
       ["a percent scale near its top", { market: 85 }],
+      ["a percent scale near its bottom", { market: 15 }],
     ] as const) {
       test(`names both ends of ${name} beside a dropped chip`, async ({ page }) => {
         await open(page, { track, ...query });
@@ -244,6 +247,25 @@ for (const track of TRACKS) {
 
       expect(hits).toEqual([true, true]);
     });
+  });
+}
+
+for (const track of PHONE_TRACKS) {
+  test.describe(`the bounds on a ${track}px track`, () => {
+    test.use({ viewport: { width: track + 64, height: 400 }, contextOptions: { reducedMotion: "reduce" } });
+
+    for (const market of [15, 85]) {
+      test(`are both named beside a dropped chip at market ${market}`, async ({ page }) => {
+        await open(page, { track, market });
+        const shown = await geometry(page);
+
+        expect(shown.placement).toBe("down");
+        for (const side of ["lower", "upper"] as const) {
+          expect.soft(shown[side].hidden, `${side} bound hidden`).toBe(false);
+          expect.soft(overlaps(shown.chip, shown[side].box), `chip over the ${side} bound`).toBe(false);
+        }
+      });
+    }
   });
 }
 

@@ -7,6 +7,9 @@ const PIN_PREFLIGHT_PX = 40;
 /** The share of its full drop the chip dips before it drops, keeping it above the track. */
 export const PIN_PREFLIGHT_DROP = 0.2;
 
+/** How far the market's point may lie outside a dropped chip's edge: the stick's 3px width. */
+const PIN_EDGE_PX = 3;
+
 /** Half the slider's 24px thumb. */
 const THUMB_RADIUS_PX = 12;
 
@@ -19,7 +22,7 @@ export function chipLeft(size: { track: number; chip: number }, market: number):
 
 /**
  * A dropped chip's left edge: centred as `chipLeft` places it, slid clear of the bound labels while it
- * still spans the market's point; centred where it cannot do both.
+ * still spans the market's point, give or take `PIN_EDGE_PX`; centred where it cannot do both.
  */
 export function droppedChipLeft(
   size: { track: number; chip: number; lower: number; upper: number },
@@ -27,8 +30,8 @@ export function droppedChipLeft(
 ): number {
   const centred = chipLeft(size, market);
   const point = market * size.track;
-  const low = Math.max(size.lower + PIN_CLEARANCE_PX, point - size.chip);
-  const high = Math.min(size.track - size.upper - PIN_CLEARANCE_PX - size.chip, point);
+  const low = Math.max(size.lower + PIN_CLEARANCE_PX, point - size.chip - PIN_EDGE_PX);
+  const high = Math.min(size.track - size.upper - PIN_CLEARANCE_PX - size.chip, point + PIN_EDGE_PX);
   return low > high ? centred : clamp(centred, low, high);
 }
 

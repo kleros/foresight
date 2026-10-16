@@ -80,6 +80,13 @@ describe("droppedChipLeft", () => {
     expect(droppedChipLeft({ ...size, upper: 120 }, 0.55)).toBe(311 - 120 - 4 - 90);
   });
 
+  it("slides the chip clear of a bound while the market's point is within the stick's 3px of its edge", () => {
+    const phone = { track: 256, chip: 46, lower: 35, upper: 35 };
+    // the point at 217.6 lies 0.6px past the slid chip's right edge at 217
+    expect(droppedChipLeft(phone, 0.85)).toBe(256 - 35 - 4 - 46);
+    expect(droppedChipLeft(phone, 0.15)).toBe(35 + 4);
+  });
+
   it("stays centred where clearing the bound would leave the market's point outside it", () => {
     expect(droppedChipLeft(size, 0.98)).toBe(chipLeft(size, 0.98));
     expect(droppedChipLeft(size, 0)).toBe(0);
