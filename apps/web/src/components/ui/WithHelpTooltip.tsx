@@ -20,7 +20,7 @@ const WithHelpTooltip: React.FC<IWithHelpTooltip> = ({ tooltipMsg, label = "Help
       small
       text={tooltipMsg}
       {...{ place, tooltipProps }}
-      wrapperProps={{ "aria-label": label, className: "shrink-0" }}
+      wrapperProps={{ "aria-label": label }}
       className="max-w-[min(23.5rem,calc(100vw-2rem))] [&>small]:text-sm [&>small]:whitespace-pre-line"
     >
       {/* a 24px box whose ::before reaches the 44px target */}
