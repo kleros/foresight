@@ -17,7 +17,7 @@ type ScrollFadeProps = {
   fadeFrom?: string;
 };
 
-// measured before paint, so the cue's strip is in place before any child's effect scrolls the area
+// measured before paint, so the cue's strip is laid out by the next frame, when a child may scroll the area
 const useMeasureEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 /**
