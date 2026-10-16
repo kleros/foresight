@@ -558,6 +558,26 @@ test.describe("an amount over a four-digit balance at 375 x 812", () => {
   });
 });
 
+test.describe("an amount over the balance", () => {
+  test.use({ viewport: { width: 375, height: 812 } });
+
+  test("tints its digits in the error tone, with no status icon beside them", async ({ page }) => {
+    const dialog = await openPopup(page, 2, "over");
+    const input = dialog.getByLabel("Amount");
+    const errorTone = await input.evaluate((element) => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--fs-tone-error-text)";
+      element.parentElement!.append(probe);
+      const tone = getComputedStyle(probe).color;
+      probe.remove();
+      return tone;
+    });
+
+    await expect(input).toHaveCSS("color", errorTone);
+    await expect(dialog.getByTestId("amount-input").locator(".input-wrapper > svg")).toBeHidden();
+  });
+});
+
 test.describe("a balance that wraps under the amount's title", () => {
   for (const viewport of [
     { width: 360, height: 640 },

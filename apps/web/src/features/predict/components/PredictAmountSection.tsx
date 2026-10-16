@@ -141,9 +141,13 @@ export function PredictAmountSection({
           className={clsx(
             "inline-block min-w-0 flex-1 [&>label]:sr-only",
             "[&_input]:h-11 [&_input]:border-none [&_input]:bg-transparent [&_input]:px-0 [&_input]:shadow-none!",
-            "[&_input]:text-fs-popup-text [&_input]:text-[30px] [&_input]:leading-9 [&_input]:font-medium",
+            "[&_input]:text-[30px] [&_input]:leading-9 [&_input]:font-medium",
             "[&_input]:tracking-[-0.02em] [&_input]:tabular-nums [&_input]:placeholder:text-fs-popup-text-3",
             "[&_input]:focus:shadow-none",
+            // the line under the field names the limit, so too much tints the digits rather than adding an icon
+            notEnough
+              ? "[&_input]:text-fs-tone-error-text [&_.input-wrapper>svg]:hidden"
+              : "[&_input]:text-fs-popup-text",
           )}
           minValue="0"
           placeholder="0"
