@@ -840,6 +840,27 @@ test.describe("the popup opening focused", () => {
   });
 });
 
+test.describe("the amount field reached by keyboard", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("rings the amount panel, inside its edge, while the field has the focus", async ({ page }) => {
+    const dialog = await openPopup(page, 2, "idle");
+    const panel = dialog.locator('[data-panel="amount"]');
+    const input = dialog.getByTestId("amount-input").locator("input");
+    const shadow = () => panel.evaluate((element) => getComputedStyle(element).boxShadow);
+    const [atRest, box] = [await shadow(), await panel.boundingBox()];
+
+    for (let step = 0; step < 12 && !(await input.evaluate((element) => element === document.activeElement)); step++) {
+      await page.keyboard.press("Tab");
+    }
+    await expect(input).toBeFocused();
+
+    expect(await shadow()).not.toBe(atRest);
+    expect(await shadow()).toContain("inset");
+    expect(await panel.boundingBox()).toEqual(box);
+  });
+});
+
 test.describe("the popup's tones", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 

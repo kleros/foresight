@@ -78,6 +78,8 @@ export function PredictAmountSection({
       className={clsx(
         "@container rounded-fs-panel bg-fs-popup-panel p-4 short:px-3.5 short:py-2.5",
         "[background-image:var(--fs-popup-wash)]",
+        // the field draws no ring of its own, so the panel wears the popup's 2px focus ring, inside its edge
+        "has-[input:focus-visible]:ring-fs-accent has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-inset",
       )}
     >
       {/* the balance wraps under the title only when the two do not fit one line, and always on a phone under 375px */}
