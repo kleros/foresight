@@ -568,6 +568,40 @@ for (const viewport of [
   });
 }
 
+for (const viewport of [
+  { width: 844, height: 390 },
+  { width: 667, height: 375 },
+  { width: 568, height: 320 },
+]) {
+  test.describe(`a landscape phone at ${viewport.width} x ${viewport.height}`, () => {
+    test.use({ viewport });
+
+    for (const state of ["idle", "failed"] as const) {
+      test(`keeps the button inside the dialog and every part reachable above it, ${state}`, async ({ page }) => {
+        const dialog = await openPopup(page, 10, state);
+        const box = (await dialog.boundingBox())!;
+        const button = dialog.locator(".predict-cta");
+        const buttonBox = (await button.boundingBox())!;
+        expect(buttonBox.y + buttonBox.height, "the button's foot").toBeLessThanOrEqual(box.y + box.height);
+
+        for (const part of [
+          dialog.locator('[data-panel="amount"]'),
+          dialog.getByTestId("predict-summary"),
+          ...(await dialog.locator(".predict-steps > li").all()),
+          dialog.getByRole("status"),
+        ]) {
+          await part.evaluate((element) => element.scrollIntoView({ block: "nearest" }));
+          const partBox = (await part.boundingBox())!;
+          expect(partBox.y + partBox.height, "a part's foot above the button").toBeLessThanOrEqual(
+            (await button.boundingBox())!.y + 1,
+          );
+          expect(partBox.y, "a part's top inside the dialog").toBeGreaterThanOrEqual(box.y);
+        }
+      });
+    }
+  });
+}
+
 test.describe("an amount over a four-digit balance at 375 x 812", () => {
   test.use({ viewport: { width: 375, height: 812 } });
 

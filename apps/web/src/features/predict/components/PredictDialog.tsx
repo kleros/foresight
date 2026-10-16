@@ -132,7 +132,8 @@ export function PredictDialog({
         "rounded-fs-popup bg-fs-surface border border-(--fs-popup-edge) shadow-(--fs-popup-shadow)",
       )}
     >
-      <div className="flex min-h-0 w-full flex-col">
+      {/* on a phone on its side the whole popup scrolls, padded by the sticky button's 72px */}
+      <div className="landscape-phone:overflow-y-auto landscape-phone:scroll-pb-18 flex min-h-0 w-full flex-col">
         <div className="mb-2 flex h-8 shrink-0 items-center justify-between">
           <h2 className="text-fs-popup-text text-lg font-semibold tracking-[-0.01em]">Predict</h2>
           <LightButton
@@ -173,7 +174,12 @@ export function PredictDialog({
 
         {/* the steps end flush with the body, so any overflow hides some of them */}
         {/* a step row's height of fade, so a bullet half under it never shows a hard edge */}
-        <ScrollFade className="min-h-32 w-full" cue="More below" minOverflow={1} fadeSize={40}>
+        <ScrollFade
+          className="landscape-phone:min-h-0 landscape-phone:flex-none min-h-32 w-full"
+          cue="More below"
+          minOverflow={1}
+          fadeSize={40}
+        >
           <div data-testid="predict-body" className="pt-2 short:pt-1.5">
             <PredictAmountSection
               amount={recovered ? recovered.deposit : amount}

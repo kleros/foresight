@@ -13,6 +13,8 @@
 @custom-variant dark (&:where(.dark, .dark *));
 /* a phone too short for the predict popup's steps at rest, such as 375 x 667 or 360 x 740 */
 @custom-variant short (@media (max-height: 760px) and (max-width: 639px));
+/* a phone on its side, such as 844 x 390: too short for the popup's body to scroll on its own */
+@custom-variant landscape-phone (@media (max-height: 480px));
 
 /* Foresight semantic tokens as Tailwind colours: bg-fs-surface, text-fs-text-secondary… */
 @theme inline {
