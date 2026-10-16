@@ -11,6 +11,7 @@ import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 import { toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
 
+import { SHOWN } from "@/test/queries";
 import { addresses, GATEWAY } from "@/testing/fixtures";
 
 import { PredictCard } from "../PredictCard";
@@ -141,6 +142,6 @@ describe("the popup's estimates", () => {
     const popup = within(await screen.findByRole("dialog"));
     view.rerender(card(at(ESTIMATE)));
 
-    for (const option of OPTIONS) expect(popup.getByText(option.name)).toBeInTheDocument();
+    for (const option of OPTIONS) expect(popup.getByText(option.name, SHOWN)).toBeInTheDocument();
   });
 });

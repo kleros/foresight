@@ -71,26 +71,37 @@ export function PredictSummary({
           </span>
         ) : null}
       </button>
-      {isOpen ? (
-        <ul id={body} className="fs-enter flex flex-col px-1 pt-1 pb-1">
-          {selected.map((estimate) => (
-            <li
-              key={estimate.scale.market}
-              className="type-label flex h-8 items-center justify-between gap-4 text-[13px] leading-[18px]"
-            >
-              <span className="text-fs-popup-text-2 flex min-w-0 items-center gap-2">
-                <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: estimate.scale.color }} />
-                <span className="truncate" title={estimate.scale.name}>
-                  {estimate.scale.name}
+      {/* mounted while closed, so the toggle's aria-controls always names it; inert keeps its rows out of reach */}
+      <div data-open={isOpen || undefined} className="predict-summary-body">
+        <div className="min-h-0 overflow-hidden">
+          <ul
+            id={body}
+            aria-hidden={isOpen ? undefined : true}
+            {...(isOpen ? {} : { inert: "" })}
+            className="mb-1 flex flex-col border-b border-(--fs-popup-line) px-1 pt-1 pb-2"
+          >
+            {selected.map((estimate) => (
+              <li
+                key={estimate.scale.market}
+                className="type-label flex h-8 items-center justify-between gap-4 text-[13px] leading-[18px]"
+              >
+                <span className="text-fs-popup-text-2 flex min-w-0 items-center gap-2">
+                  <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: estimate.scale.color }} />
+                  <span className="truncate" title={estimate.scale.name}>
+                    {estimate.scale.name}
+                  </span>
                 </span>
-              </span>
-              <span data-testid="market-move" className="text-fs-popup-text font-medium whitespace-nowrap tabular-nums">
-                {marketMove(estimate, preview[estimate.scale.market.toLowerCase()])}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+                <span
+                  data-testid="market-move"
+                  className="text-fs-popup-text font-medium whitespace-nowrap tabular-nums"
+                >
+                  {marketMove(estimate, preview[estimate.scale.market.toLowerCase()])}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
     </div>
   );
 }

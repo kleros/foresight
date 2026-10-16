@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import { SHOWN } from "@/test/queries";
 import type { OptionScale } from "@/types/optionScale";
 
 import type { SelectedEstimate } from "../../types";
@@ -96,7 +97,7 @@ describe("the estimates going in", () => {
   it("lists each estimate with which way it moves the market", () => {
     render(<PredictDialog {...props()} />);
 
-    expect(screen.getByText("Greta Gerwig")).toBeInTheDocument();
+    expect(screen.getByText("Greta Gerwig", SHOWN)).toBeInTheDocument();
     expect(screen.getByText("400 $M")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "above the market" })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "below the market" })).toBeInTheDocument();

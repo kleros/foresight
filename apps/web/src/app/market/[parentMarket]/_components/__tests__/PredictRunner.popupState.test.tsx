@@ -13,6 +13,7 @@ import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 import { toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
 
+import { SHOWN } from "@/test/queries";
 import { addresses, GATEWAY } from "@/testing/fixtures";
 
 import { PredictCard } from "../PredictCard";
@@ -205,7 +206,7 @@ describe("estimates removed in the popup are a draft until Predict", () => {
     for (const option of removed) await userEvent.click(popup.getByRole("button", { name: `Remove ${option.name}` }));
     // each row fades out before it leaves
     await waitFor(() => {
-      for (const option of removed) expect(popup.queryByText(option.name)).toBeNull();
+      for (const option of removed) expect(popup.queryByText(option.name, SHOWN)).toBeNull();
     });
 
     await userEvent.click(popup.getByRole("button", { name: "Close" }));
@@ -215,7 +216,7 @@ describe("estimates removed in the popup are a draft until Predict", () => {
       Object.fromEntries(OPTIONS.map((option) => [option.market.toLowerCase(), ESTIMATE])),
     );
     const reopened = await openPopup();
-    for (const option of OPTIONS) expect(reopened.getByText(option.name)).toBeInTheDocument();
+    for (const option of OPTIONS) expect(reopened.getByText(option.name, SHOWN)).toBeInTheDocument();
   });
 
   it("leaves a removed estimate out of the prediction while the popup is open", async () => {

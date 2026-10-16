@@ -12,6 +12,7 @@ import type { Funding } from "@/features/predict/utils/funding";
 import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 import { toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
 
+import { SHOWN } from "@/test/queries";
 import { addresses, GATEWAY } from "@/testing/fixtures";
 
 import { PredictCard } from "../PredictCard";
@@ -158,7 +159,7 @@ async function openSecondPrediction(changed: (typeof OPTIONS)[number]) {
   const view = render(card(marketAt(MARKET_BEFORE)));
   await userEvent.click(screen.getByRole("button", { name: /^Predict (\d+ )?estimates?$/ }));
   const first = within(await screen.findByRole("dialog"));
-  for (const option of OPTIONS) expect(first.getByText(option.name)).toBeInTheDocument();
+  for (const option of OPTIONS) expect(first.getByText(option.name, SHOWN)).toBeInTheDocument();
   act(() => run.set(progressAt("signing")));
   act(() => run.set(progressAt("complete")));
 
@@ -193,9 +194,9 @@ describe("PredictDialog on a second prediction with one changed option", () => {
     async (_name, changed) => {
       const popup = await openSecondPrediction(changed);
 
-      expect(popup.getByText(changed.name)).toBeInTheDocument();
+      expect(popup.getByText(changed.name, SHOWN)).toBeInTheDocument();
       for (const option of OPTIONS.filter((candidate) => candidate !== changed))
-        expect(popup.queryByText(option.name)).toBeNull();
+        expect(popup.queryByText(option.name, SHOWN)).toBeNull();
     },
   );
 

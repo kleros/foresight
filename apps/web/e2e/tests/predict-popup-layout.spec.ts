@@ -954,3 +954,70 @@ test.describe("the popup's numbers", () => {
     }
   });
 });
+
+test.describe("the summary opening and closing", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  /** Every running transition or animation in the summary: what it moves, how long, and after what delay. */
+  const motion = (dialog: Locator) =>
+    dialog.getByTestId("predict-summary").evaluate((summary) =>
+      summary.getAnimations({ subtree: true }).map((animation) => ({
+        name:
+          animation instanceof CSSTransition
+            ? animation.transitionProperty
+            : animation instanceof CSSAnimation
+              ? animation.animationName
+              : "",
+        duration: Number(animation.effect!.getTiming().duration),
+        delay: animation.effect!.getTiming().delay ?? 0,
+      })),
+    );
+
+  test("grows the body under the steps' feet as its rows fade in, then fades the rows before it folds", async ({
+    page,
+  }) => {
+    const dialog = await openPopup(page, 2);
+    const head = dialog.getByTestId("predict-summary").getByRole("button");
+    const bulletTop = () =>
+      dialog
+        .locator("ol [data-bullet]")
+        .first()
+        .evaluate((bullet) => bullet.getBoundingClientRect().top);
+    const closed = await bulletTop();
+
+    await head.click();
+    expect(await motion(dialog)).toEqual(
+      expect.arrayContaining([
+        { name: "grid-template-rows", duration: 250, delay: 0 },
+        { name: "opacity", duration: 250, delay: 0 },
+        { name: "transform", duration: 250, delay: 0 },
+      ]),
+    );
+    // halfway, the steps are on their way down, not already there
+    await dialog.evaluate((element) =>
+      element.getAnimations({ subtree: true }).forEach((animation) => {
+        animation.pause();
+        animation.currentTime = 125;
+      }),
+    );
+    const halfway = await bulletTop();
+    await dialog.evaluate((element) =>
+      element.getAnimations({ subtree: true }).forEach((animation) => animation.finish()),
+    );
+    const open = await bulletTop();
+    expect(open - closed).toBeGreaterThan(40);
+    expect(halfway).toBeGreaterThan(closed + 4);
+    expect(halfway).toBeLessThan(open - 4);
+
+    await head.click();
+    expect(await motion(dialog)).toEqual(
+      expect.arrayContaining([
+        { name: "opacity", duration: 100, delay: 0 },
+        { name: "transform", duration: 100, delay: 0 },
+        { name: "grid-template-rows", duration: 250, delay: 100 },
+      ]),
+    );
+    await settle(dialog);
+    expect(await bulletTop()).toBeCloseTo(closed, 0);
+  });
+});
