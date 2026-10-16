@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -57,5 +57,16 @@ describe("PredictSuccessDialog", () => {
     render(<PredictSuccessDialog isOpen leftOut={[]} onClose={vi.fn()} />);
 
     expect(screen.getByRole("button", { name: "Close" })).toHaveAttribute("data-quiet", "true");
+  });
+
+  it("keeps the sign-in's label beside a spinner while the wallet signs, and cannot be pressed", () => {
+    atlas = { userExists: false, isVerified: false, isSigningIn: true, authoriseUser: vi.fn() };
+    render(<PredictSuccessDialog isOpen leftOut={[]} onClose={vi.fn()} />);
+    const button = screen.getByRole("button", { name: "Signing in…" });
+
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("data-busy", "true");
+    expect(within(button).getByText("Signing in…")).not.toHaveClass("invisible");
+    expect(within(button).getByTestId("predict-spinner")).toBeInTheDocument();
   });
 });

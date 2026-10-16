@@ -1740,6 +1740,26 @@ test.describe("the success dialog", () => {
       for (const end of ends) expect.soft(contrast(look.label, end), `on ${end}`).toBeGreaterThanOrEqual(4.5);
     });
 
+    test(`keeps the sign-in's label at 4.5:1 or more beside a spinner while the wallet signs, in the ${theme} theme`, async ({
+      page,
+    }) => {
+      await openHarness(
+        page,
+        `${harness.url}?options=2&state=success&dialog=success&subscribed=0&signin=busy&theme=${theme}`,
+      );
+      const signIn = page.getByRole("dialog", { name: "Prediction placed" }).getByRole("button", {
+        name: "Signing in…",
+      });
+      await expect(signIn).toHaveAttribute("data-busy", "true");
+      await expect(signIn.getByTestId("predict-spinner")).toBeVisible();
+      const look = await signIn.evaluate((button) => {
+        const label = getComputedStyle(button.querySelector(".button-text")!);
+        return { visibility: label.visibility, label: label.color, fill: getComputedStyle(button).backgroundColor };
+      });
+      expect(look.visibility).toBe("visible");
+      expect(contrast(look.label, look.fill)).toBeGreaterThanOrEqual(4.5);
+    });
+
     test(`draws the settings note's icon in the note's own tone, in the ${theme} theme`, async ({ page }) => {
       await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&theme=${theme}`);
       const note = page.getByText("Change this in Settings.", { exact: false });

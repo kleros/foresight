@@ -9,11 +9,19 @@ import { useAccount } from "wagmi";
 
 import { errorToast, infoToast, successToast } from "@/utils/toast";
 
-const EnsureAuth: React.FC<{ children: React.ReactNode; text?: string; className?: string }> = ({
-  children,
-  text,
-  className,
-}) => {
+/** What a caller's own sign-in button needs; `isSigningIn` while the wallet is asked to sign. */
+interface SignInButtonProps {
+  onPress: () => void;
+  isDisabled: boolean;
+  isSigningIn: boolean;
+}
+
+const EnsureAuth: React.FC<{
+  children: React.ReactNode;
+  text?: string;
+  /** Draws the sign-in in place of the library's button. */
+  renderButton?: (props: SignInButtonProps) => React.ReactNode;
+}> = ({ children, text, renderButton }) => {
   const { address } = useAccount();
   const { isVerified, isSigningIn, authoriseUser } = useAtlasProvider();
 
@@ -28,16 +36,12 @@ const EnsureAuth: React.FC<{ children: React.ReactNode; text?: string; className
       );
   }, [authoriseUser]);
 
-  return isVerified ? (
-    children
+  if (isVerified) return children;
+  const isDisabled = isSigningIn || !address;
+  return renderButton ? (
+    renderButton({ onPress: handleSignIn, isDisabled, isSigningIn })
   ) : (
-    <Button
-      text={text ?? "Sign In"}
-      onPress={handleSignIn}
-      isDisabled={isSigningIn || !address}
-      isLoading={isSigningIn}
-      {...{ className }}
-    />
+    <Button text={text ?? "Sign In"} onPress={handleSignIn} isDisabled={isDisabled} isLoading={isSigningIn} />
   );
 };
 

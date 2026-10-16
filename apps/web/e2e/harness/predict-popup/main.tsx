@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
-import { Button } from "@kleros/ui-components-library";
 import { parseUnits } from "viem";
 
+import { PredictButton } from "@/features/predict/components/PredictButton";
 import { PredictDialog } from "@/features/predict/components/PredictDialog";
 import type { ListedEstimate } from "@/features/predict/components/PredictList";
 import type { PredictFailureReason, PredictProgress } from "@/features/predict/run/types";
@@ -45,6 +45,8 @@ const held = parseUnits(params.get("held") ?? "19", 18);
 if (params.get("theme") === "dark") document.documentElement.classList.add("dark");
 /** `?dialog=success` the dialog a finished run opens; `&subscribed=0` for a visitor without resolution emails. */
 const dialog = params.get("dialog");
+/** `&signin=busy` the success dialog's sign-in while the wallet signs. */
+const signingIn = params.get("signin") === "busy";
 /** `?skipped=N` estimates the run left out, said on the status line; a `harness-skipped` event changes it after open. */
 const initialSkipped = Number(params.get("skipped") ?? "0");
 
@@ -136,8 +138,15 @@ const success = (
     onClose={() => {}}
     subscribed={params.get("subscribed") !== "0"}
     email="visitor@example.com"
-    // the app's sign-in needs a wallet; this stands in for its button
-    signUp={(className) => <Button text="Sign in to subscribe" className={className} />}
+    // the app's sign-in needs a wallet; this draws its button as PredictSuccessDialog does
+    signUp={
+      <PredictButton
+        text="Sign in to subscribe"
+        busyText={signingIn ? "Signing in…" : undefined}
+        isDisabled={false}
+        onPress={() => {}}
+      />
+    }
   />
 );
 
