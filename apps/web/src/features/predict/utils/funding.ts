@@ -1,6 +1,6 @@
-import { formatAmount, formatDisplayAmount } from "@/utils/amount";
+import { cutToOwned, formatAmount, formatDisplayAmount, OWNED_DECIMALS } from "@/utils/amount";
 
-import { AMOUNT_DISPLAY_DECIMALS, GAS_RESERVE_WEI } from "../oracle/tolerances";
+import { GAS_RESERVE_WEI } from "../oracle/tolerances";
 import type { PayToken } from "../types";
 
 const WAD = 10n ** 18n;
@@ -58,10 +58,7 @@ export function planFunding({ amount, ownWallet, tradeWallet, tokenPerCollateral
 }
 
 /** Rounded down to the decimals the popup shows, so the signed amount is the shown amount. */
-export function roundToDisplay(value: bigint, decimals: number): bigint {
-  const step = 10n ** BigInt(Math.max(decimals - AMOUNT_DISPLAY_DECIMALS, 0));
-  return value - (value % step);
-}
+export const roundToDisplay = cutToOwned;
 
 /** A whole percentage of `balance`, rounded down. */
 export const shareOf = (balance: bigint, percent: number): bigint => (balance * BigInt(Math.round(percent))) / 100n;
@@ -85,7 +82,7 @@ export interface FundingSummary {
  * typed amount reads as typed; a non-zero amount below the last decimal is named, not shown as 0.
  */
 export function shownAmount(value: bigint, decimals: number): string {
-  const step = 10n ** BigInt(Math.max(decimals - AMOUNT_DISPLAY_DECIMALS, 0));
+  const step = 10n ** BigInt(Math.max(decimals - OWNED_DECIMALS, 0));
   const shown = formatDisplayAmount(((value + step / 2n) / step) * step, decimals);
   return shown === "0" && value > 0n ? `less than ${formatAmount(step, decimals)}` : shown;
 }

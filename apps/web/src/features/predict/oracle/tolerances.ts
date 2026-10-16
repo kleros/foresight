@@ -7,9 +7,6 @@ export const QUOTE_DEADLINE_SECONDS = 30 * 60;
 /** Native balance an xDAI deposit and Max always leave for gas: 0.01 xDAI. */
 export const GAS_RESERVE_WEI = 10n ** 16n;
 
-/** Decimals Max and the slider round down to, so the signed amount is the shown amount. */
-export const AMOUNT_DISPLAY_DECIMALS = 4;
-
 /** How far past its target a pool may end after a run, in ticks. */
 export const PRICE_TOLERANCE_TICKS = 1;
 

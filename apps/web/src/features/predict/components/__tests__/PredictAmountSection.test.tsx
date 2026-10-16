@@ -1,13 +1,16 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { parseUnits } from "viem";
 import { describe, expect, it, vi } from "vitest";
 
-import { AMOUNT_DISPLAY_DECIMALS, GAS_RESERVE_WEI } from "../../oracle/tolerances";
+import { OWNED_DECIMALS } from "@/utils/amount";
+
+import { GAS_RESERVE_WEI } from "../../oracle/tolerances";
 import { planFunding } from "../../utils/funding";
 import { PredictAmountSection, type PayTokenChoice } from "../PredictAmountSection";
 
 const WAD = 10n ** 18n;
-const STEP = 10n ** BigInt(18 - AMOUNT_DISPLAY_DECIMALS);
+const STEP = 10n ** BigInt(18 - OWNED_DECIMALS);
 
 const sDai: PayTokenChoice = { id: "collateral", symbol: "sDAI", decimals: 18 };
 const xDai: PayTokenChoice = { id: "native", symbol: "xDAI", decimals: 18 };
@@ -66,25 +69,34 @@ const wallets = [
 ];
 
 describe.each(wallets)("Max and 50% with only $name in the wallet", ({ token, held, spendable }) => {
-  it(`Max fills at most ${AMOUNT_DISPLAY_DECIMALS} decimals, rounded down from what can be spent`, async () => {
+  it(`Max fills at most ${OWNED_DECIMALS} decimals, rounded down from what can be spent`, async () => {
     const onAmountChange = renderSection(token, held);
 
     await userEvent.click(screen.getByRole("button", { name: "Max" }));
 
     const amount = lastAmount(onAmountChange);
-    expect(decimalsOf(amount)).toBeLessThanOrEqual(AMOUNT_DISPLAY_DECIMALS);
+    expect(decimalsOf(amount)).toBeLessThanOrEqual(OWNED_DECIMALS);
     expect(amount).toBeLessThanOrEqual(spendable);
     expect(spendable - amount).toBeLessThan(STEP);
   });
 
-  it(`50% fills at most ${AMOUNT_DISPLAY_DECIMALS} decimals, rounded down from half of what can be spent`, () => {
+  it("Max fills exactly the balance it shows", async () => {
+    const onAmountChange = renderSection(token, held);
+    const shown = screen.getByText(/^Balance: /).textContent!.match(/^Balance: ([\d,.]+) /)![1]!;
+
+    await userEvent.click(screen.getByRole("button", { name: "Max" }));
+
+    expect(lastAmount(onAmountChange)).toBe(parseUnits(shown.replace(/,/g, ""), token.decimals));
+  });
+
+  it(`50% fills at most ${OWNED_DECIMALS} decimals, rounded down from half of what can be spent`, () => {
     const onAmountChange = renderSection(token, held);
 
     fireEvent.change(screen.getByRole("slider"), { target: { value: "50" } });
 
     const amount = lastAmount(onAmountChange);
     const half = spendable / 2n;
-    expect(decimalsOf(amount)).toBeLessThanOrEqual(AMOUNT_DISPLAY_DECIMALS);
+    expect(decimalsOf(amount)).toBeLessThanOrEqual(OWNED_DECIMALS);
     expect(amount).toBeLessThanOrEqual(half);
     expect(half - amount).toBeLessThan(2n * STEP);
   });
@@ -175,7 +187,7 @@ describe("the total line", () => {
     );
 
     expect(screen.getByText(/in your trade wallet/)).toHaveTextContent(
-      `4 sDAI = 4 in your trade wallet + less than ${1 / 10 ** AMOUNT_DISPLAY_DECIMALS} from your wallet`,
+      `4 sDAI = 4 in your trade wallet + less than ${1 / 10 ** OWNED_DECIMALS} from your wallet`,
     );
   });
 });
