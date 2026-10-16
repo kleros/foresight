@@ -84,7 +84,8 @@ export function PredictAmountSection({
         "@container rounded-fs-panel bg-fs-popup-panel p-4 short:px-3.5 short:py-2.5",
         "[background-image:var(--fs-popup-wash)]",
         // the field draws no ring of its own, so the panel wears the popup's 2px focus ring, inside its edge
-        "has-[input:focus-visible]:ring-fs-accent has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-inset",
+        "has-[[data-testid=amount-input]_input:focus-visible]:ring-fs-focus-ring",
+        "has-[[data-testid=amount-input]_input:focus-visible]:ring-2 has-[[data-testid=amount-input]_input:focus-visible]:ring-inset",
       )}
     >
       {/* the balance wraps under the title only when the two do not fit one line, and always on a phone under 375px */}
@@ -189,9 +190,11 @@ export function PredictAmountSection({
             tokens.length < 2 ? "predict-token-select-single [&>button]:pr-0.75" : "[&>button]:pr-2.5",
           )}
           menuClassName={clsx(
-            "rounded-fs-control bg-fs-surface border-fs-popup-line",
+            "fs-aurora rounded-fs-control bg-fs-surface border-fs-popup-line",
             "[&_#listbox]:bg-transparent [&_#listbox]:py-1",
             "[&_[role=option]]:h-10 [&_[role=option]]:py-0 [&_[role=option]]:pr-3 [&_[role=option]]:pl-3",
+            // the list clips at its sides, so a row's ring sits inside its edge
+            "[&_[role=option]]:[--fs-focus-offset:-2px]",
             "[&_[role=option]_p]:text-fs-popup-text [&_[role=option]_p]:text-[15px] [&_[role=option]_p]:font-medium",
             "[&_[role=option]:hover]:bg-fs-popup-hover [&_[role=option][data-focused]]:bg-fs-popup-hover",
             // the choice wears the chip tone, without the library's bar; its label in the accent, as dark hover is the chip tone too
@@ -284,7 +287,7 @@ function AmountSlider({
             "[&_#slider-fill]:[background:var(--fs-popup-axis)]",
             "[&_div:has(>#slider-label)]:size-4 [&_div:has(>#slider-label)]:border-2",
             "[&_div:has(>#slider-label)]:border-(--fs-popup-axis-to) [&_div:has(>#slider-label)]:bg-fs-surface",
-            "[&_div:has(>#slider-label)[data-focus-visible]]:ring-fs-accent",
+            "[&_div:has(>#slider-label)[data-focus-visible]]:ring-fs-focus-ring",
             "[&_div:has(>#slider-label)[data-focus-visible]]:ring-2",
             "[&_div:has(>#slider-label)[data-focus-visible]]:ring-offset-fs-surface",
             "[&_div:has(>#slider-label)[data-focus-visible]]:ring-offset-2",

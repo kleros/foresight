@@ -38,7 +38,7 @@ export function PredictSuccessView({
       className={clsx(
         "h-fit max-h-[calc(100dvh-32px)] w-[calc(100vw-2rem)] max-w-[440px] overflow-y-auto",
         "flex flex-col gap-5 p-5 sm:p-6",
-        "rounded-fs-popup bg-fs-surface border border-(--fs-popup-edge) shadow-(--fs-popup-shadow)",
+        "fs-aurora rounded-fs-popup bg-fs-surface border border-(--fs-popup-edge) shadow-(--fs-popup-shadow)",
       )}
     >
       <div className="flex flex-col items-center gap-3 pt-2 text-center">

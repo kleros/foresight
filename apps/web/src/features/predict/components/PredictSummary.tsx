@@ -60,7 +60,8 @@ export function PredictSummary({
           "type-label text-fs-popup-text-2 cursor-pointer font-medium",
           "transition-colors duration-(--fs-dur-echo) ease-(--fs-ease-enter)",
           "[@media(hover:hover)]:hover:bg-fs-popup-hover",
-          "focus-visible:ring-fs-accent focus-visible:ring-2 focus-visible:outline-none",
+          // the body's scroll area clips at its sides, so the ring sits inside the edge
+          "[--fs-focus-offset:-2px]",
         )}
       >
         <span className="text-fs-popup-text flex min-w-0 items-center gap-1.5">

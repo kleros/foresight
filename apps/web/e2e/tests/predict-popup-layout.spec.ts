@@ -1143,14 +1143,57 @@ test.describe("the popup opening focused", () => {
     expect(focused).toEqual({ tabIndex: "-1", focusVisible: true, outline: "none" });
   });
 
-  test("keeps the ring on a control reached by keyboard", async ({ page }) => {
-    const dialog = await openPopup(page, 2, "idle");
-    await page.keyboard.press("Tab");
-    const outline = await page.evaluate(() => getComputedStyle(document.activeElement!).outlineStyle);
+  for (const theme of ["light", "dark"]) {
+    test(`rings each control reached by keyboard once, in the popup's violet, in the ${theme} theme`, async ({
+      page,
+    }) => {
+      const dialog = await openPopup(page, 2, "idle", undefined, `&tokens=2&theme=${theme}`);
+      const accent = await dialog.evaluate((element) => {
+        const probe = document.createElement("span");
+        probe.style.color = "var(--fs-popup-accent)";
+        element.append(probe);
+        const color = getComputedStyle(probe).color;
+        probe.remove();
+        return color;
+      });
+      expect(accent).toBe(theme === "light" ? "rgb(107, 60, 245)" : "rgb(155, 123, 255)");
 
-    expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
-    expect(outline).toBe("solid");
-  });
+      const seen: string[] = [];
+      for (let step = 0; step < 10; step++) {
+        await page.keyboard.press("Tab");
+        // the ring's colour transitions in
+        await settle(dialog);
+        const ring = await page.evaluate(() => {
+          const element = document.activeElement as HTMLElement;
+          // the amount field and the share slider's input draw on their panel or thumb
+          const drawn = element.matches("[data-panel=amount] input[inputmode]")
+            ? element.closest<HTMLElement>("[data-panel]")!
+            : element.matches("[type=range]")
+              ? element.closest<HTMLElement>("div:has(>#slider-label)")!
+              : element;
+          const style = getComputedStyle(drawn);
+          // a ring's offset is a band of the surface under it
+          const surface = getComputedStyle(element.closest("[role=dialog]")!).backgroundColor;
+          const rings = (style.boxShadow.match(/rgb\([^)]*\) 0px 0px 0px [1-9]\d*px/g) ?? []).filter(
+            (shadow) => !shadow.startsWith(surface),
+          );
+          // the panel rings for the amount field alone
+          const panel = element.closest("[data-panel=amount]");
+          if (panel && panel !== drawn && getComputedStyle(panel).boxShadow.includes(" 2px inset")) rings.push("panel");
+          return {
+            name: element.getAttribute("aria-label") || element.textContent?.trim() || element.tagName,
+            outline: style.outlineStyle === "none" ? null : `${style.outlineWidth} ${style.outlineColor}`,
+            rings,
+          };
+        });
+        seen.push(ring.name);
+        const marks = [...(ring.outline ? [ring.outline] : []), ...ring.rings.map((shadow) => shadow.split(" 0px")[0])];
+        expect.soft(marks.length, `${ring.name}: one ring`).toBe(1);
+        expect.soft(marks[0], `${ring.name}: in the violet`).toContain(accent);
+      }
+      expect(seen).toEqual(expect.arrayContaining(["Close", "Max", "Token", "2 markets move", "Predict"]));
+    });
+  }
 });
 
 test.describe("the amount field reached by keyboard", () => {
@@ -1170,7 +1213,7 @@ test.describe("the amount field reached by keyboard", () => {
 
     const accent = await panel.evaluate((element) => {
       const probe = document.createElement("span");
-      probe.style.color = "var(--fs-accent)";
+      probe.style.color = "var(--fs-popup-accent)";
       element.append(probe);
       const color = getComputedStyle(probe).color;
       probe.remove();
@@ -1547,6 +1590,31 @@ test.describe("the success dialog", () => {
       await tokenValue(page, "borderRadius", "var(--fs-radius-control)"),
     );
   });
+
+  for (const theme of ["light", "dark"]) {
+    test(`rings its buttons in the popup's violet when reached by keyboard, in the ${theme} theme`, async ({
+      page,
+    }) => {
+      await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&subscribed=0&theme=${theme}`);
+      const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+      const accent = await tokenValue(page, "color", "var(--fs-popup-accent)");
+      for (const name of ["Sign in to subscribe", "Close"]) {
+        const button = dialog.getByRole("button", { name });
+        for (
+          let step = 0;
+          step < 6 && !(await button.evaluate((element) => element === document.activeElement));
+          step++
+        ) {
+          await page.keyboard.press("Tab");
+        }
+        await expect(button).toBeFocused();
+        await settle(dialog);
+        await expect(button).toHaveCSS("outline-color", accent);
+        await expect(button).toHaveCSS("outline-style", "solid");
+        expect(await button.evaluate((element) => /\d+px [1-9]/.test(getComputedStyle(element).boxShadow))).toBe(false);
+      }
+    });
+  }
 
   test("brings its mark in by opacity alone under reduced motion", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });

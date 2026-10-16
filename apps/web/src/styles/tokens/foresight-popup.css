@@ -18,6 +18,8 @@
   --fs-popup-text: #1d1733;
   --fs-popup-text-2: #5c567a;
   --fs-popup-text-3: #67618a;
+  /* the keyboard focus ring: 5.3:1 on the panel, 4.7:1 on a chip */
+  --fs-popup-accent: #6b3cf5;
   /* Max and links: 6.7:1 on the panel, where --fs-text-accent's blue is off-palette */
   --fs-popup-accent-text: #5a2fd6;
   /* a deepened slice of the brand axis, so white text passes at both ends (7.1 and 4.6:1) */
@@ -51,6 +53,8 @@
   --fs-popup-text: #e6f1ff;
   --fs-popup-text-2: #b7c3dc;
   --fs-popup-text-3: #8d9ab8;
+  /* 6.0:1 on the panel, 4.3:1 on a chip */
+  --fs-popup-accent: #9b7bff;
   --fs-popup-accent-text: #b9a7ff;
   --fs-popup-axis-from: #b45fff;
   --fs-popup-axis-to: #6cc5ff;
@@ -66,4 +70,9 @@
   /* a shadow is invisible on #1b003f, so a hairline marks the edge instead */
   --fs-popup-shadow: 0 24px 60px rgb(0 0 0 / 0.55);
   --fs-popup-edge: rgba(218, 240, 255, 0.1);
+}
+
+/* the popup, its success dialog, the option cards and the pay token's menu ring a focused control in the violet */
+.fs-aurora {
+  --fs-focus-ring: var(--fs-popup-accent);
 }

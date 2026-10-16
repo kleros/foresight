@@ -211,3 +211,58 @@ for (const width of [320, 375, 1280]) {
     }
   });
 }
+
+test.describe("the option card reached by keyboard", () => {
+  test.use({ viewport: { width: 375, height: 900 } });
+
+  for (const theme of ["light", "dark"]) {
+    test(`rings its header, slider and value pill once each, in the popup's violet, in the ${theme} theme`, async ({
+      page,
+    }) => {
+      await openCard(page, `value=40&theme=${theme}`);
+      await page.mouse.move(0, 0);
+      const accent = await page.evaluate(() => {
+        const probe = document.createElement("span");
+        probe.style.color = "var(--fs-popup-accent)";
+        document.body.append(probe);
+        const color = getComputedStyle(probe).color;
+        probe.remove();
+        return color;
+      });
+      expect(accent).toBe(theme === "light" ? "rgb(107, 60, 245)" : "rgb(155, 123, 255)");
+
+      const seen: string[] = [];
+      // the header was pressed to open the card; a key moves the focus on and back to it, by keyboard
+      await page.keyboard.press("Tab");
+      await page.keyboard.press("Shift+Tab");
+      for (let step = 0; step < 4; step++) {
+        if (step > 0) await page.keyboard.press("Tab");
+        await page.evaluate(() =>
+          Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined))),
+        );
+        const ring = await page.evaluate(() => {
+          const element = document.activeElement as HTMLElement;
+          const drawn =
+            element.getAttribute("type") === "range"
+              ? element.closest<HTMLElement>("div:has(>#slider-label)")!
+              : element;
+          const style = getComputedStyle(drawn);
+          const surface = getComputedStyle(element.closest(".fs-aurora")!).backgroundColor;
+          const rings = (style.boxShadow.match(/rgb\([^)]*\) 0px 0px 0px [1-9]\d*px/g) ?? []).filter(
+            (shadow) => !shadow.startsWith(surface),
+          );
+          return {
+            name: element.getAttribute("aria-label") || element.textContent?.trim() || element.tagName,
+            marks: [
+              ...(style.outlineStyle === "none" ? [] : [style.outlineColor]),
+              ...rings.map((shadow) => shadow.split(" 0px")[0]),
+            ],
+          };
+        });
+        seen.push(ring.name);
+        expect.soft(ring.marks, `${ring.name}: one ring in the violet`).toEqual([accent]);
+      }
+      expect(seen.some((name) => name.includes("type your estimate"))).toBe(true);
+    });
+  }
+});

@@ -140,7 +140,7 @@ export function PredictDialog({
         "h-auto max-h-[calc(100dvh-5rem)] md:max-h-[calc(100dvh-5.5rem)]",
         "w-[calc(100vw-2rem)] max-w-[480px]",
         "flex px-4 pt-4 pb-0! md:px-5 md:pt-5",
-        "rounded-fs-popup bg-fs-surface border border-(--fs-popup-edge) shadow-(--fs-popup-shadow)",
+        "fs-aurora rounded-fs-popup bg-fs-surface border border-(--fs-popup-edge) shadow-(--fs-popup-shadow)",
       )}
     >
       {/* on a phone on its side the whole popup scrolls between its sticky 40px header and its sticky button,

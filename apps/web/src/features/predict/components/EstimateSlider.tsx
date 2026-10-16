@@ -123,7 +123,7 @@ export function EstimateSlider({
               "[&_div:has(>#slider-label)]:z-10",
               "[&_div:has(>#slider-label)]:before:absolute [&_div:has(>#slider-label)]:before:-inset-3.25",
               "[&_div:has(>#slider-label)]:before:content-['']",
-              "[&_div:has(>#slider-label)[data-focus-visible]]:ring-fs-accent",
+              "[&_div:has(>#slider-label)[data-focus-visible]]:ring-fs-focus-ring",
               "[&_div:has(>#slider-label)[data-focus-visible]]:ring-2",
               "[&_div:has(>#slider-label)[data-focus-visible]]:ring-offset-2",
               "[&_div:has(>#slider-label)[data-focus-visible]]:ring-offset-fs-surface",
@@ -426,7 +426,7 @@ const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill
             // reaches 8px up into the padding above, so the pill's target is taller than it draws
             "before:absolute before:inset-x-0 before:-top-2 before:bottom-0 before:content-['']",
             "inline-flex h-7 cursor-pointer items-center gap-1.5 border px-2.5 text-sm font-semibold whitespace-nowrap tabular-nums",
-            "hover:border-fs-accent focus-visible:ring-fs-accent focus-visible:ring-2 focus-visible:outline-none",
+            "hover:border-fs-accent",
           )}
         >
           {formatEstimate(shown, scale.unit)}
