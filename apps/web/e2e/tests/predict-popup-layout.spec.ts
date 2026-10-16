@@ -790,6 +790,17 @@ for (const [width, tokens] of [
       await input.fill("10");
       await expect.poll(read, "a short number grows back").toEqual({ size: 30, fits: true });
 
+      // a blur groups the digits, which widens the value
+      await input.fill("12345678");
+      await dialog.getByRole("heading", { name: "Predict", exact: true }).click();
+      await expect(input).toHaveValue("12,345,678");
+      await expect
+        .poll(async () => {
+          const { size, fits } = await read();
+          return fits || size === 16;
+        }, "the grouped value refits")
+        .toBe(true);
+
       await input.hover();
       const steppers = dialog.getByTestId("amount-input").locator(".input-wrapper button");
       for (const stepper of await steppers.all()) await expect(stepper).toBeHidden();
