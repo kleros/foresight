@@ -46,7 +46,11 @@ export function PredictStepsTimeline({ steps }: { steps: PredictSteps }) {
     if (steps.failure === undefined && running === undefined) return;
     // a behaviour passed here overrides the stylesheet's reduced-motion scroll-behavior
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    timeline.current?.scrollIntoView?.({ block: "nearest", behavior: reduce ? "auto" : "smooth" });
+    // a frame later, once the scroll area's own effect has raised its cue strip and shortened the view
+    const frame = requestAnimationFrame(() =>
+      timeline.current?.scrollIntoView?.({ block: "nearest", behavior: reduce ? "auto" : "smooth" }),
+    );
+    return () => cancelAnimationFrame(frame);
   }, [steps.failure, running]);
 
   const items: TimelineItem[] = steps.rows.map((row) => ({

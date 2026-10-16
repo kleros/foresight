@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import clsx from "clsx";
 
@@ -16,6 +16,9 @@ type ScrollFadeProps = {
   /** The fades' colour, as a `from-*` class: the surface the scroll area sits on. */
   fadeFrom?: string;
 };
+
+// measured before paint, so the cue's strip is in place before any child's effect scrolls the area
+const useMeasureEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 /**
  * Self-contained scrollable wrapper with automatic top/bottom fades.
@@ -35,7 +38,7 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
   const [showBottom, setShowBottom] = useState(false);
   const [hasOverflow, setHasOverflow] = useState(false);
 
-  useEffect(() => {
+  useMeasureEffect(() => {
     const el = ref.current;
     if (!el) return;
     const EPSILON = 2; // px tolerance for sub-pixel / animation noise

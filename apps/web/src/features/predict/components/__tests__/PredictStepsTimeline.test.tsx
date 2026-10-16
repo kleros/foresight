@@ -115,6 +115,9 @@ describe("the timeline's place in the popup", () => {
     vi.unstubAllGlobals();
   });
 
+  /** The timeline scrolls a frame after it renders. */
+  const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+
   /** jsdom has no matchMedia; this one answers only the reduced-motion query, as `reduce` says. */
   const prefersReducedMotion = (reduce: boolean) =>
     vi.stubGlobal("matchMedia", (query: string) => ({
@@ -125,7 +128,7 @@ describe("the timeline's place in the popup", () => {
   it.each([
     [false, "smooth"],
     [true, "auto"],
-  ])("with reduced motion %s, scrolls to a running step with behaviour %s", (reduce, behavior) => {
+  ])("with reduced motion %s, scrolls to a running step with behaviour %s", async (reduce, behavior) => {
     prefersReducedMotion(reduce);
     const scroll = vi.fn();
     Element.prototype.scrollIntoView = scroll;
@@ -135,11 +138,12 @@ describe("the timeline's place in the popup", () => {
         steps={{ rows: [{ key: "predict", title: "Place prediction", subtitle: "", view: "running" }] }}
       />,
     );
+    await nextFrame();
 
     expect(scroll).toHaveBeenCalledExactlyOnceWith({ block: "nearest", behavior });
   });
 
-  it("scrolls itself into view when a run stops with a failure", () => {
+  it("scrolls itself into view when a run stops with a failure", async () => {
     const scroll = vi.fn();
     Element.prototype.scrollIntoView = scroll;
     const view = render(
@@ -147,6 +151,7 @@ describe("the timeline's place in the popup", () => {
         steps={{ rows: [{ key: "predict", title: "Place prediction", subtitle: "", view: "idle" }] }}
       />,
     );
+    await nextFrame();
     expect(scroll).not.toHaveBeenCalled();
 
     view.rerender(
@@ -157,6 +162,7 @@ describe("the timeline's place in the popup", () => {
         }}
       />,
     );
+    await nextFrame();
 
     expect(scroll).toHaveBeenCalledTimes(1);
   });

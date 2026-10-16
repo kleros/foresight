@@ -397,6 +397,26 @@ test.describe("the popup's scroll area", () => {
     }
   }
 
+  for (const [width, height, options] of [
+    [320, 568, 2],
+    [360, 640, 10],
+    [1366, 657, 10],
+  ] as const) {
+    for (const state of ["signing", "failed"] as const) {
+      test(`opens ${state} with its steps' foot at the body's foot, ${options} estimates at ${width} x ${height}`, async ({
+        page,
+      }) => {
+        await page.emulateMedia({ reducedMotion: "reduce" });
+        await page.setViewportSize({ width, height });
+        await openPopup(page, options, state);
+        const scroller = await page.getByTestId("predict-body").locator("..").boundingBox();
+        const steps = await page.locator(".predict-steps").boundingBox();
+
+        expect(steps!.y + steps!.height).toBeLessThanOrEqual(scroller!.y + scroller!.height + 1);
+      });
+    }
+  }
+
   for (const width of [320, 360, 375]) {
     for (const options of [2, 3, 10]) {
       test(`lays its cue over no step at any phone height, ${options} estimates at ${width} wide`, async ({ page }) => {
