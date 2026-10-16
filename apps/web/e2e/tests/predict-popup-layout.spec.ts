@@ -1180,16 +1180,36 @@ test.describe("the popup opening focused", () => {
           // the panel rings for the amount field alone
           const panel = element.closest("[data-panel=amount]");
           if (panel && panel !== drawn && getComputedStyle(panel).boxShadow.includes(" 2px inset")) rings.push("panel");
+          // the outline's outer edge, inside every box that clips it
+          const reach =
+            style.outlineStyle === "none" ? 0 : parseFloat(style.outlineOffset) + parseFloat(style.outlineWidth);
+          const box = drawn.getBoundingClientRect();
+          let clipped = false;
+          for (let parent = drawn.parentElement; parent; parent = parent.parentElement) {
+            const { overflowX, overflowY } = getComputedStyle(parent);
+            if (overflowX === "visible" && overflowY === "visible") continue;
+            const clip = parent.getBoundingClientRect();
+            if (
+              box.left - reach < clip.left - 0.5 ||
+              box.right + reach > clip.right + 0.5 ||
+              box.top - reach < clip.top - 0.5 ||
+              box.bottom + reach > clip.bottom + 0.5
+            ) {
+              clipped = true;
+            }
+          }
           return {
             name: element.getAttribute("aria-label") || element.textContent?.trim() || element.tagName,
             outline: style.outlineStyle === "none" ? null : `${style.outlineWidth} ${style.outlineColor}`,
             rings,
+            clipped,
           };
         });
         seen.push(ring.name);
         const marks = [...(ring.outline ? [ring.outline] : []), ...ring.rings.map((shadow) => shadow.split(" 0px")[0])];
         expect.soft(marks.length, `${ring.name}: one ring`).toBe(1);
         expect.soft(marks[0], `${ring.name}: in the violet`).toContain(accent);
+        expect.soft(ring.clipped, `${ring.name}: the ring whole`).toBe(false);
       }
       expect(seen).toEqual(expect.arrayContaining(["Close", "Max", "Token", "2 markets move", "Predict"]));
     });

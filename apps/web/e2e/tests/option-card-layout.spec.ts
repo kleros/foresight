@@ -251,8 +251,23 @@ test.describe("the option card reached by keyboard", () => {
           const rings = (style.boxShadow.match(/rgb\([^)]*\) 0px 0px 0px [1-9]\d*px/g) ?? []).filter(
             (shadow) => !shadow.startsWith(surface),
           );
+          const reach =
+            style.outlineStyle === "none" ? 0 : parseFloat(style.outlineOffset) + parseFloat(style.outlineWidth);
+          const box = drawn.getBoundingClientRect();
+          let clipped = false;
+          for (let parent = drawn.parentElement; parent; parent = parent.parentElement) {
+            const { overflowX, overflowY } = getComputedStyle(parent);
+            if (overflowX === "visible" && overflowY === "visible") continue;
+            const clip = parent.getBoundingClientRect();
+            clipped ||=
+              box.left - reach < clip.left - 0.5 ||
+              box.right + reach > clip.right + 0.5 ||
+              box.top - reach < clip.top - 0.5 ||
+              box.bottom + reach > clip.bottom + 0.5;
+          }
           return {
             name: element.getAttribute("aria-label") || element.textContent?.trim() || element.tagName,
+            clipped,
             marks: [
               ...(style.outlineStyle === "none" ? [] : [style.outlineColor]),
               ...rings.map((shadow) => shadow.split(" 0px")[0]),
@@ -261,6 +276,7 @@ test.describe("the option card reached by keyboard", () => {
         });
         seen.push(ring.name);
         expect.soft(ring.marks, `${ring.name}: one ring in the violet`).toEqual([accent]);
+        expect.soft(ring.clipped, `${ring.name}: the ring whole`).toBe(false);
       }
       expect(seen.some((name) => name.includes("type your estimate"))).toBe(true);
     });

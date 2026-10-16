@@ -144,6 +144,8 @@ function EstimateRow({
             // a 44px-wide target; the row's own 32px is its height
             "before:absolute before:-inset-x-2 before:-inset-y-0.5 before:content-['']",
             "disabled:opacity-50",
+            // the list's scroll area clips at its sides, so the ring sits inside the edge
+            "[--fs-focus-offset:-2px]",
           )}
           text=""
           aria-label={`Remove ${scale.name}`}
