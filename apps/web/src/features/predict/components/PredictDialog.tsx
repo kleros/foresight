@@ -118,16 +118,15 @@ export function PredictDialog({
   const [summaryOpen, setSummaryOpen] = useState(false);
   const statusRef = useRef<HTMLParagraphElement>(null);
   const statusText = status?.text;
-  const stepRunning = steps.rows.some((row) => row.view === "running");
-  // where the whole popup scrolls, the status line sits under the fold; while a step runs, the timeline's scroll to it rules
+  // where the whole popup scrolls, the status line sits under the fold; during a run, the timeline's scroll to its step rules
   useEffect(() => {
-    if (!isOpen || statusText === undefined || stepRunning) return;
+    if (!isOpen || statusText === undefined || isRunning) return;
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     const frame = requestAnimationFrame(() =>
       statusRef.current?.scrollIntoView?.({ block: "nearest", behavior: reduce ? "auto" : "smooth" }),
     );
     return () => cancelAnimationFrame(frame);
-  }, [isOpen, statusText, stepRunning]);
+  }, [isOpen, statusText, isRunning]);
 
   return (
     <Modal

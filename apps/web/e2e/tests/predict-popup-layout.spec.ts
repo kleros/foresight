@@ -602,11 +602,15 @@ for (const viewport of [
 
     test("opens with the reason Predict is off in view", async ({ page }) => {
       await page.emulateMedia({ reducedMotion: "reduce" });
-      for (const options of [2, 10]) {
-        const dialog = await openPopup(page, options, "disconnected");
-        const status = dialog.getByRole("status").locator("span");
-        await expect(status).toHaveText("Connect a wallet to predict.");
-        expect.soft(await isFullyShown(status), `${options} options`).toBe(true);
+      for (const state of ["disconnected", "failed", "pending"] as const) {
+        for (const options of [2, 10]) {
+          const dialog = await openPopup(page, options, state);
+          const status = dialog.getByRole("status").locator("span");
+          await expect(status).not.toBeEmpty();
+          // both scrolls wait a frame
+          await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+          expect.soft(await isFullyShown(status), `${state}, ${options} options`).toBe(true);
+        }
       }
     });
 
