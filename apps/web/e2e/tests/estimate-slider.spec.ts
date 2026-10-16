@@ -282,6 +282,26 @@ test.describe("the value pill", () => {
     await expect(page.getByText("19 % below the market")).toBeVisible();
   });
 
+  for (const [how, close] of [
+    ["Tab", (page: Page) => page.keyboard.press("Tab")],
+    ["Shift+Tab", (page: Page) => page.keyboard.press("Shift+Tab")],
+    ["a press outside", (page: Page) => page.mouse.click(5, 380)],
+  ] as const) {
+    test(`keeps a rounding note applied as ${how} closes the field, until the next press`, async ({ page }) => {
+      await open(page, { track: 311, market: MARKET, value: 40 });
+      const status = page.getByRole("status");
+
+      await pill(page).click();
+      await field(page).fill("55.5");
+      await close(page);
+      await settle(page);
+      await expect(status).toHaveText("Rounded to 56 %.");
+
+      await page.mouse.click(5, 380);
+      await expect(status).toHaveText("");
+    });
+  }
+
   test("keeps the value on Escape", async ({ page }) => {
     await open(page, { track: 311, market: MARKET, value: 40 });
 
