@@ -1358,18 +1358,27 @@ test.describe("the popup's hover tone", () => {
 test.describe("an estimate removed from the popup", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test("fades and shrinks its row by transitions on opacity and scale", async ({ page }) => {
+  test("fades and shrinks its row by opacity and scale while its height folds, drawing the rows below up", async ({
+    page,
+  }) => {
     const dialog = await openPopup(page, 3);
     const row = dialog.getByRole("listitem").first();
+    const next = dialog.getByRole("listitem").nth(1);
     const name = await row.locator("[title]").getAttribute("title");
+    const top = () => next.evaluate((element) => element.getBoundingClientRect().top);
+    const before = await top();
 
     await dialog.getByRole("button", { name: `Remove ${name}` }).click();
     const moving = await row.evaluate((element) =>
-      element
-        .getAnimations()
-        .map((animation) => (animation as CSSTransition).transitionProperty)
-        .sort(),
+      element.getAnimations().map((animation) => {
+        animation.pause();
+        animation.currentTime = 50;
+        return (animation as CSSTransition).transitionProperty;
+      }),
     );
-    expect(moving).toEqual(expect.arrayContaining(["opacity", "scale"]));
+    expect(moving).toEqual(expect.arrayContaining(["opacity", "scale", "height"]));
+    const halfway = await top();
+    expect(halfway).toBeLessThan(before - 4);
+    expect(halfway).toBeGreaterThan(before - 28);
   });
 });
