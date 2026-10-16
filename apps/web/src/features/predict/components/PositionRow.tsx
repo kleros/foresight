@@ -40,12 +40,13 @@ export function PositionRow({
       className="type-label flex flex-col gap-1 border-t border-t-(--fs-popup-line) pt-3"
     >
       <div className="flex flex-wrap items-center justify-between gap-x-4">
-        <span className="whitespace-nowrap">
+        {/* a figure never breaks; DOWN wraps under UP where the two do not fit one line */}
+        <span>
           <span className="text-fs-text-secondary">{"You hold "}</span>
           <span data-testid="position-held" className="tabular-nums">
-            <span className="text-fs-tone-success-text font-semibold">{`${amount(position.up)} UP`}</span>
-            <span className="text-fs-text-secondary">{" · "}</span>
-            <span className="text-fs-tone-error-text font-semibold">{`${amount(position.down)} DOWN`}</span>
+            <span className="text-fs-tone-success-text font-semibold whitespace-nowrap">{`${amount(position.up)} UP`}</span>
+            <span className="text-fs-text-secondary">{"\u00a0· "}</span>
+            <span className="text-fs-tone-error-text font-semibold whitespace-nowrap">{`${amount(position.down)} DOWN`}</span>
           </span>
         </span>
         {marketEstimate !== undefined ? (

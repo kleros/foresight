@@ -63,18 +63,31 @@ for (const width of [320, 375, 1280]) {
       expect(Math.max(...spills), `over ${spills.length} frames`).toBe(0);
     });
 
-    test("shows a position with no bar, its UP and DOWN on one line inside the card", async ({ page }) => {
+    // at 320 "You hold 12,345.67 UP · 890.12 DOWN" is wider than the row's 256px, so DOWN wraps under UP there
+    test("shows a position with no bar, its UP and DOWN inside the row, on one line from 375px", async ({ page }) => {
       for (const query of [CASES["a position nearly all UP"], CASES["a scale in millions"]]) {
         await openCard(page, query);
         const held = page.getByTestId("position-held");
-        const [box, card] = await Promise.all([
+        const [box, row] = await Promise.all([
           held.boundingBox(),
-          page.locator("#root > div > div").first().boundingBox(),
+          page.getByRole("region", { name: "Your position" }).boundingBox(),
         ]);
 
         await expect(page.getByTestId("position-bar-up")).toHaveCount(0);
-        expect(box!.height, query).toBeLessThanOrEqual(20);
-        expect(box!.x + box!.width, query).toBeLessThanOrEqual(card!.x + card!.width);
+        if (width >= 375) expect(box!.height, query).toBeLessThanOrEqual(20);
+        expect(box!.x + box!.width, query).toBeLessThanOrEqual(row!.x + row!.width + 0.5);
+      }
+    });
+
+    test("keeps an eight-digit UP and a four-digit DOWN inside the position row", async ({ page }) => {
+      for (const query of ["value=87&up=1234567.89&down=0.01", "value=87&up=12345678.89&down=1234.56"]) {
+        await openCard(page, query);
+        const row = page.getByRole("region", { name: "Your position" });
+        const edge = (await row.boundingBox())!;
+        for (const side of [/ UP$/, / DOWN$/]) {
+          const figure = (await page.getByTestId("position-held").getByText(side).boundingBox())!;
+          expect(figure.x + figure.width, `${query}: ${side}`).toBeLessThanOrEqual(edge.x + edge.width + 0.5);
+        }
       }
     });
 
