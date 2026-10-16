@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Modal } from "@kleros/ui-components-library";
 import clsx from "clsx";
@@ -116,6 +116,17 @@ export function PredictDialog({
   const shownPreview = useHeldWhile(preview, isLocked);
   // the visitor's own choice, so no run state opens or closes it
   const [summaryOpen, setSummaryOpen] = useState(false);
+  const statusRef = useRef<HTMLParagraphElement>(null);
+  const statusText = status?.text;
+  // where the whole popup scrolls, the status line sits under the fold; this runs after the timeline's own scroll
+  useEffect(() => {
+    if (!isOpen || statusText === undefined) return;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const frame = requestAnimationFrame(() =>
+      statusRef.current?.scrollIntoView?.({ block: "nearest", behavior: reduce ? "auto" : "smooth" }),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [isOpen, statusText]);
 
   return (
     <Modal
@@ -215,6 +226,7 @@ export function PredictDialog({
 
         {/* outside the scroll area, so the reason a run stopped is never under the fold; two lines held empty or not */}
         <p
+          ref={statusRef}
           role="status"
           aria-live="polite"
           className={clsx(

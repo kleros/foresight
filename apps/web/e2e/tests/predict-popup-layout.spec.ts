@@ -600,6 +600,16 @@ for (const viewport of [
   test.describe(`a landscape phone at ${viewport.width} x ${viewport.height}`, () => {
     test.use({ viewport });
 
+    test("opens with the reason Predict is off in view", async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      for (const options of [2, 10]) {
+        const dialog = await openPopup(page, options, "disconnected");
+        const status = dialog.getByRole("status").locator("span");
+        await expect(status).toHaveText("Connect a wallet to predict.");
+        expect.soft(await isFullyShown(status), `${options} options`).toBe(true);
+      }
+    });
+
     for (const state of ["idle"] as const) {
       test(`opens ${state} with its close button whole and nothing to scroll sideways`, async ({ page }) => {
         await page.emulateMedia({ reducedMotion: "reduce" });
