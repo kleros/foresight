@@ -365,6 +365,30 @@ test.describe("the popup's scroll area", () => {
     });
   }
 
+  for (const theme of ["light", "dark"]) {
+    test(`draws its cue in the popup's own text and hairline tones in the ${theme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width: 320, height: 568 });
+      const dialog = await openPopup(page, 2, "idle", undefined, `&theme=${theme}`);
+      const cue = dialog.getByTestId("more-below");
+      await expect(cue).toHaveCSS("opacity", "1");
+      const [tones, expected] = await cue.evaluate((element) => {
+        const probe = document.createElement("span");
+        probe.style.color = "var(--fs-popup-text-2)";
+        probe.style.borderTopColor = "var(--fs-popup-line)";
+        element.parentElement!.append(probe);
+        const want = getComputedStyle(probe);
+        const got = getComputedStyle(element);
+        const pair = [
+          [got.color, got.borderTopColor],
+          [want.color, want.borderTopColor],
+        ];
+        probe.remove();
+        return pair;
+      });
+      expect(tones).toEqual(expected);
+    });
+  }
+
   // 360 x 716 leaves the body a few px short of its steps
   for (const viewport of [
     { width: 360, height: 640 },

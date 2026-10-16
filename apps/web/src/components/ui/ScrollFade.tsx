@@ -15,6 +15,8 @@ type ScrollFadeProps = {
   minOverflow?: number;
   /** The fades' colour, as a `from-*` class: the surface the scroll area sits on. */
   fadeFrom?: string;
+  /** The cue's text and top border colours, as `text-*` and `border-*` classes. */
+  cueTone?: string;
 };
 
 // measured before paint, so the cue's strip is laid out by the next frame, when a child may scroll the area
@@ -31,6 +33,7 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
   cue,
   minOverflow = 16,
   fadeFrom = "from-fs-surface",
+  cueTone = "border-fs-border text-fs-text-secondary",
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const cueRef = useRef<HTMLSpanElement>(null);
@@ -127,7 +130,8 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
           aria-hidden
           className={clsx(
             "pointer-events-none h-4 shrink-0 items-center justify-center gap-1",
-            "border-fs-border bg-fs-surface text-fs-text-secondary type-caption border-t",
+            "bg-fs-surface type-caption border-t",
+            cueTone,
             "transition-opacity duration-(--fs-dur-enter) ease-(--fs-ease-enter)",
             hasOverflow ? "flex" : "hidden",
             showBottom ? "opacity-100" : "opacity-0",

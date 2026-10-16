@@ -177,6 +177,7 @@ export function PredictDialog({
         <ScrollFade
           className="landscape-phone:min-h-0 landscape-phone:flex-none min-h-32 w-full"
           cue="More below"
+          cueTone="border-(--fs-popup-line) text-fs-popup-text-2"
           minOverflow={1}
           fadeSize={40}
         >
