@@ -47,7 +47,7 @@ describe("PositionRow", () => {
       <PositionRow scale={scale} position={{ up: 200n * WAD, down: 40n * WAD }} marketEstimate={75} decimals={18} />,
     );
 
-    expect(screen.getByText("≈ 160 Movie A tokens")).toBeInTheDocument();
+    expect(screen.getByText("≈ 160 tokens")).toBeInTheDocument();
   });
 
   it("leaves the value out while the market estimate is unknown", () => {

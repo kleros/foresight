@@ -65,6 +65,15 @@ for (const width of [320, 375, 1280]) {
         return found !== null && (found === element || element.contains(found));
       });
       expect(hit, "the help icon takes a press").toBe(true);
+
+      const lineHeight = await worth.evaluate((element) => parseFloat(getComputedStyle(element).lineHeight));
+      const worthBox = (await worth.boundingBox())!;
+      expect(worthBox.height, "the worth on one line").toBeLessThanOrEqual(lineHeight + 1);
+      const helpBox = (await help.boundingBox())!;
+      expect(
+        Math.abs(helpBox.y + helpBox.height / 2 - (worthBox.y + worthBox.height / 2)),
+        "the help centred on the worth's line",
+      ).toBeLessThanOrEqual(1);
     });
 
     test("never scrolls sideways while it opens, with the market at the top of a millions scale", async ({ page }) => {
