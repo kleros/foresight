@@ -692,3 +692,10 @@ test.describe("the market pin's drop", () => {
     });
   });
 });
+
+test("sets the bounds in tabular figures, through the caption role's font shorthand", async ({ page }) => {
+  await open(page, { track: 311, market: MARKET });
+  for (const side of ["lower", "upper"]) {
+    await expect(page.locator(`[data-bound="${side}"]`)).toHaveCSS("font-variant-numeric", "tabular-nums");
+  }
+});

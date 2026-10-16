@@ -60,21 +60,32 @@
   --radius-fs-control: var(--fs-radius-control);
 }
 
-/* Semantic type roles as single utilities */
+/* Semantic type roles as single utilities. `font` resets font-variant-numeric, so each role re-reads
+   Tailwind's numeric variables: `tabular-nums` beside a role still applies, and without one it inherits. */
 @utility type-h1 {
   font: var(--type-h1);
+  font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,)
+    var(--tw-numeric-fraction,);
 }
 @utility type-h2 {
   font: var(--type-h2);
+  font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,)
+    var(--tw-numeric-fraction,);
 }
 @utility type-body {
   font: var(--type-body);
+  font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,)
+    var(--tw-numeric-fraction,);
 }
 @utility type-label {
   font: var(--type-label);
+  font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,)
+    var(--tw-numeric-fraction,);
 }
 @utility type-caption {
   font: var(--type-caption);
+  font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,)
+    var(--tw-numeric-fraction,);
 }
 
 /** The one content gutter: the header, the page and the footer all sit on it. */

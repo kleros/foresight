@@ -856,3 +856,16 @@ test.describe("the steps' connector", () => {
     expect(await shown(failed, "failed")).toEqual(["cross"]);
   });
 });
+
+test.describe("the popup's numbers", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("set the balance and the estimates count in tabular figures, through the type roles' font shorthand", async ({
+    page,
+  }) => {
+    const dialog = await openPopup(page, 10);
+    for (const number of [dialog.getByText(/^Balance:/), dialog.getByText(/^10 estimates$/)]) {
+      await expect(number).toHaveCSS("font-variant-numeric", "tabular-nums");
+    }
+  });
+});
