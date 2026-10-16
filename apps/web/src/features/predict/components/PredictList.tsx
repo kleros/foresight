@@ -113,7 +113,7 @@ function EstimateRow({
       data-leaving={isLeaving || undefined}
       className={clsx(
         "col-span-full grid h-8 grid-cols-subgrid items-center text-[15px] leading-5",
-        "transition-[opacity,transform] duration-(--fs-dur-echo) ease-(--fs-ease-exit)",
+        "transition-[opacity,scale] duration-(--fs-dur-echo) ease-(--fs-ease-exit)",
         "data-leaving:scale-[.97] data-leaving:opacity-0 motion-reduce:data-leaving:scale-100",
       )}
     >

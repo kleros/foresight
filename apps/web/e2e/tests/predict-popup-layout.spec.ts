@@ -1207,6 +1207,7 @@ test.describe("the summary opening and closing", () => {
         { name: "grid-template-rows", duration: 250, delay: 0 },
         { name: "opacity", duration: 250, delay: 0 },
         { name: "transform", duration: 250, delay: 0 },
+        { name: "rotate", duration: 250, delay: 0 },
       ]),
     );
     // halfway, the steps are on their way down, not already there
@@ -1351,5 +1352,24 @@ test.describe("the popup's hover tone", () => {
       await control.hover();
       await expect(control).toHaveCSS("background-color", "rgb(46, 32, 108)");
     }
+  });
+});
+
+test.describe("an estimate removed from the popup", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("fades and shrinks its row by transitions on opacity and scale", async ({ page }) => {
+    const dialog = await openPopup(page, 3);
+    const row = dialog.getByRole("listitem").first();
+    const name = await row.locator("[title]").getAttribute("title");
+
+    await dialog.getByRole("button", { name: `Remove ${name}` }).click();
+    const moving = await row.evaluate((element) =>
+      element
+        .getAnimations()
+        .map((animation) => (animation as CSSTransition).transitionProperty)
+        .sort(),
+    );
+    expect(moving).toEqual(expect.arrayContaining(["opacity", "scale"]));
   });
 });

@@ -148,9 +148,9 @@ for (const width of [320, 375, 1280]) {
       const chevrons = page.locator('button[aria-expanded] svg path[d="M4 6l4 4 4-4"]');
 
       await page.locator("#root button").first().click();
-      expect(await motion()).toEqual(expect.arrayContaining(["grid-template-rows", "opacity", "transform"]));
+      expect(await motion()).toEqual(expect.arrayContaining(["grid-template-rows", "opacity", "rotate", "transform"]));
       await page.getByRole("button", { name: "Details" }).click();
-      expect(await motion()).toEqual(expect.arrayContaining(["grid-template-rows", "opacity", "transform"]));
+      expect(await motion()).toEqual(expect.arrayContaining(["grid-template-rows", "opacity", "rotate", "transform"]));
       await expect(chevrons).toHaveCount(2);
     });
 

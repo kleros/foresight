@@ -138,8 +138,11 @@
     opacity var(--fs-dur-echo) var(--fs-ease-exit),
     transform var(--fs-dur-echo) var(--fs-ease-exit);
 }
+/* Tailwind v4's rotate-180 sets the rotate property, not transform */
 .fs-chevron {
-  transition: transform var(--fs-dur-enter) var(--fs-ease-structural);
+  transition:
+    transform var(--fs-dur-enter) var(--fs-ease-structural),
+    rotate var(--fs-dur-enter) var(--fs-ease-structural);
 }
 /* A typed estimate landing: the value pill settles into its new place over the thumb. */
 @keyframes fsPillCommit {
