@@ -90,7 +90,7 @@ function OptionBalance({
               <li key={token} className="flex min-w-0 gap-1.5">
                 <span className="text-fs-text-secondary">{side}</span>{" "}
                 <span
-                  className="text-fs-text-primary truncate"
+                  className="text-fs-text-primary truncate tabular-nums"
                   title={held === undefined ? undefined : formatDisplayAmount(held, decimals)}
                 >
                   {held === undefined ? "—" : formatDisplayAmount(held, decimals, SHOWN_DIGITS)}

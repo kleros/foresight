@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { PIN_PREFLIGHT_DROP } from "../../src/features/predict/utils/marketPin";
-import { startHarness } from "../utils/component-harness";
+import { openHarness, startHarness } from "../utils/component-harness";
 
 /** The slider's track in an option card: 375 and 1280 wide windows. */
 const TRACKS = [311, 1112];
@@ -23,7 +23,7 @@ type Box = { left: number; top: number; right: number; bottom: number };
 
 async function open(page: Page, query: Record<string, string | number>) {
   const search = new URLSearchParams(Object.entries(query).map(([key, value]) => [key, String(value)]));
-  await page.goto(`${harness.url}?${search}`);
+  await openHarness(page, `${harness.url}?${search}`);
   await expect(page.getByTestId("market-chip")).toBeVisible();
 }
 

@@ -50,7 +50,7 @@ export function TokenAmountField({
         <BigNumberField
           name="amount"
           className={clsx(
-            "inline-block flex-1 max-md:w-max",
+            "inline-block flex-1 tabular-nums max-md:w-max",
             "[&_input]:rounded-r-none [&_input]:border-none [&_input]:focus:shadow-none",
           )}
           onChange={(entered) => onChange(entered.toFixed())}
@@ -88,7 +88,7 @@ export function TokenAmountField({
       {error ? (
         <span className="text-fs-tone-error absolute mt-1 text-xs">{error}</span>
       ) : (
-        <span className="text-fs-text-primary absolute mt-1 text-xs">
+        <span className="text-fs-text-primary absolute mt-1 text-xs tabular-nums">
           {isLoadingBalance
             ? "Reading balance…"
             : // a balance we could not read must not read as an empty one

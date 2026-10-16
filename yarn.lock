@@ -3356,6 +3356,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@fontsource/inter@npm:5.3.0":
+  version: 5.3.0
+  resolution: "@fontsource/inter@npm:5.3.0"
+  checksum: 10c0/568601c10c83601c23005f8cd7434499df6e007eaa22c4dabbb1dcae327cc8e4a148ece8d4a4edaa8bafc5d2371ea97a37d1cc91ffbed77a43e2d8c15a6e831b
+  languageName: node
+  linkType: hard
+
 "@foresight/contracts@workspace:*, @foresight/contracts@workspace:packages/contracts":
   version: 0.0.0-use.local
   resolution: "@foresight/contracts@workspace:packages/contracts"
@@ -21762,6 +21769,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "web@workspace:apps/web"
   dependencies:
+    "@fontsource/inter": "npm:5.3.0"
     "@foresight/contracts": "workspace:*"
     "@foresight/eslint-config": "workspace:*"
     "@foresight/mock-atlas": "workspace:*"

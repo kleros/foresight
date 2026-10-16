@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { EstimateSlider } from "@/features/predict/components/EstimateSlider";
 
 import "@/styles/global.css";
+import "../inter.css";
 
 const params = new URLSearchParams(window.location.search);
 const number = (name: string, fallback: number) => Number(params.get(name) ?? fallback);

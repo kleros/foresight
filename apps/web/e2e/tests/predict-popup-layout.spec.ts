@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { startHarness } from "../utils/component-harness";
+import { openHarness, startHarness } from "../utils/component-harness";
 
 const STEPS = ["Create a trade wallet", "Add funds", "Place prediction"];
 /** Every point of a run the harness can render; `?state=` in e2e/harness/predict-popup/main.tsx. */
@@ -109,7 +109,10 @@ async function openPopup(
   reason?: string,
   extra = "",
 ) {
-  await page.goto(`${harness.url}?options=${options}&state=${state}${reason ? `&reason=${reason}` : ""}${extra}`);
+  await openHarness(
+    page,
+    `${harness.url}?options=${options}&state=${state}${reason ? `&reason=${reason}` : ""}${extra}`,
+  );
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("button", { name: "Close" })).toBeVisible();
   const accent = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--fs-accent"));
@@ -510,7 +513,7 @@ test.describe("an amount over a four-digit balance at 375 x 812", () => {
   test.use({ viewport: { width: 375, height: 812 } });
 
   test("shows the balance and its token whole, and keeps the slider's thumb on the track at 100%", async ({ page }) => {
-    await page.goto(`${harness.url}?options=2&state=over&held=6833.959612`);
+    await openHarness(page, `${harness.url}?options=2&state=over&held=6833.959612`);
     const dialog = page.getByRole("dialog");
     const summary = dialog.getByText(/^Not enough balance/);
 
@@ -570,7 +573,7 @@ test.describe("the amount's title and balance on a narrow screen", () => {
       test.use({ viewport: { width, height } });
 
       test("shows the title whole, Max whole, and the balance inside the dialog", async ({ page }) => {
-        await page.goto(`${harness.url}?${query}`);
+        await openHarness(page, `${harness.url}?${query}`);
         const dialog = page.getByRole("dialog");
         const node = dialog.locator('[data-panel="amount"]');
         const title = node.locator("h3");
@@ -750,7 +753,7 @@ test.describe("a disabled Predict", () => {
     ["dark", [46, 32, 108]],
   ] as const) {
     test(`is the muted panel tone with its label at 4.5:1 or more in the ${theme} theme`, async ({ page }) => {
-      await page.goto(`${harness.url}?options=2&state=over&theme=${theme}`);
+      await openHarness(page, `${harness.url}?options=2&state=over&theme=${theme}`);
       const predict = page.getByRole("dialog").getByRole("button", { name: "Predict" });
       await expect(predict).toBeDisabled();
 
@@ -786,7 +789,7 @@ test.describe("accent text in the dark theme", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
   test("reads at AA on the dialog's surface", async ({ page }) => {
-    await page.goto(`${harness.url}?options=2&state=idle&theme=dark`);
+    await openHarness(page, `${harness.url}?options=2&state=idle&theme=dark`);
     const max = page.getByRole("dialog").getByRole("button", { name: "Max" }).locator(".button-text");
 
     const ratio = await max.evaluate((label) => {

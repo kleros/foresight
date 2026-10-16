@@ -7,6 +7,7 @@ import { OptionBalances } from "@/features/trade-executor/components/TradeWallet
 import type { TradeWalletOption } from "@/features/trade-executor/types";
 
 import "@/styles/global.css";
+import "../inter.css";
 
 /** From a name wider than any card to a two-letter one, in Latin, German compound and CJK text. */
 const NAMES = [

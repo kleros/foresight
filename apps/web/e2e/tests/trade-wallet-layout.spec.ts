@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { startHarness } from "../utils/component-harness";
+import { openHarness, startHarness } from "../utils/component-harness";
 
 const LONGEST = "Greater Metropolitan Region of São Paulo and Surrounding Areas";
 const PHONES = [
@@ -19,7 +19,7 @@ test.afterAll(async () => {
 });
 
 async function open(page: Page, query: Record<string, string>) {
-  await page.goto(`${harness.url}?${new URLSearchParams(query)}`);
+  await openHarness(page, `${harness.url}?${new URLSearchParams(query)}`);
 }
 
 for (const viewport of PHONES) {

@@ -12,6 +12,7 @@ import { fundsToAdd, predictSteps } from "@/features/predict/utils/predictSteps"
 import { PredictSuccessView } from "@/app/market/[parentMarket]/_components/PredictSuccessView";
 
 import "@/styles/global.css";
+import "../inter.css";
 
 const WAD = 10n ** 18n;
 const WALLET = "0xdcee0000000000000000000000000000000c664f";

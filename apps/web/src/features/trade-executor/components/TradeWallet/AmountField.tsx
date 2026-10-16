@@ -54,7 +54,7 @@ export function AmountField({
         isReadOnly={isReadOnly}
         className={clsx(
           // Max sits at the right end of the message row; the library justifies it, which spaces out a wrapped line
-          "w-full [&>div:last-child]:pr-10 [&>div:last-child]:text-left",
+          "w-full tabular-nums [&>div:last-child]:pr-10 [&>div:last-child]:text-left",
           // two lines held on a phone, where an over-balance line wraps, so the dialog keeps its height
           "max-sm:[&>div:last-child]:min-h-10 max-sm:[&>div:last-child]:items-start",
         )}

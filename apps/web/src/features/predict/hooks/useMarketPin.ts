@@ -59,7 +59,12 @@ export function useMarketPin({ holdPill = false }: { holdPill?: boolean } = {}) 
     if (!root) return;
     const observer = new ResizeObserver(measure);
     observer.observe(root);
-    return () => observer.disconnect();
+    // a web font arriving resizes the chip and the labels, not the track
+    document.fonts?.addEventListener("loadingdone", measure);
+    return () => {
+      observer.disconnect();
+      document.fonts?.removeEventListener("loadingdone", measure);
+    };
   }, []);
 
   const measured = sizes.track > 0;

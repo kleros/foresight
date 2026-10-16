@@ -264,7 +264,7 @@ export function EstimateSlider({
               />
             </div>
           ) : null}
-          <div className="type-caption text-fs-text-secondary flex justify-between">
+          <div className="type-caption text-fs-text-secondary flex justify-between tabular-nums">
             {/* a dropped chip that cannot slide clear of a bound covers it, so the bound steps aside */}
             <span data-bound="lower" className={clsx(isDown && covers.lower && "invisible")}>
               {formatEstimate(snapEstimate(scale.lowerBound, scale), scale.unit)}

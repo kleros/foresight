@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { startHarness } from "../utils/component-harness";
+import { openHarness, startHarness } from "../utils/component-harness";
 
 let harness: Awaited<ReturnType<typeof startHarness>>;
 
@@ -22,7 +22,7 @@ const CASES = {
 };
 
 async function openCard(page: Page, query: string) {
-  await page.goto(`${harness.url}?${query}`);
+  await openHarness(page, `${harness.url}?${query}`);
   await page.locator("#root button").first().click();
   await expect(page.getByRole("slider")).toBeVisible();
 }
@@ -103,7 +103,7 @@ for (const width of [320, 375, 1280]) {
     });
 
     test("rounds the card to the popup's panel radius, its header following it while closed", async ({ page }) => {
-      await page.goto(`${harness.url}?`);
+      await openHarness(page, `${harness.url}?`);
       const card = page.locator("#root > div > div").first();
       const header = page.locator("#root button").first();
 
@@ -114,7 +114,7 @@ for (const width of [320, 375, 1280]) {
     });
 
     test("reveals what opens by opacity and transform alone", async ({ page }) => {
-      await page.goto(`${harness.url}?up=3&down=2`);
+      await openHarness(page, `${harness.url}?up=3&down=2`);
       await page.evaluate(() => {
         const started: string[][] = [];
         (window as unknown as { started: string[][] }).started = started;

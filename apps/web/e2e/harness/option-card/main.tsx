@@ -6,6 +6,7 @@ import type { SessionStatus } from "@/features/sessions/types";
 import { OptionCard } from "@/app/market/[parentMarket]/_components/OptionCard";
 
 import "@/styles/global.css";
+import "../inter.css";
 
 const params = new URLSearchParams(window.location.search);
 const number = (name: string, fallback: number) => Number(params.get(name) ?? fallback);
