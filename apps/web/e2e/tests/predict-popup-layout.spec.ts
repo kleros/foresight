@@ -655,17 +655,16 @@ test.describe("the spine's line", () => {
 
   test("draws the circle, the check and the cross on one ring of one weight", async ({ page }) => {
     const dialog = await openPopup(page, 2, "failed");
-    const rings = await dialog.locator('[data-bullet="failed"] svg').evaluateAll((glyphs) =>
+    const rings = await dialog.locator('[data-bullet="failed"] svg').evaluateAll((glyphs: SVGSVGElement[]) =>
       glyphs.map((glyph) => {
         const ring = glyph.querySelector("circle");
-        // the laid-out size, not the box, which a leaving glyph's scale shrinks
-        const box = { width: parseFloat(getComputedStyle(glyph).width) };
+        // laid-out px per viewBox unit, not the box, which a leaving glyph's scale shrinks
+        const scale = parseFloat(getComputedStyle(glyph).width) / glyph.viewBox.baseVal.width;
         return {
           glyph: glyph.dataset.glyph,
           ring: ring && {
-            radius: (ring.r.baseVal.value / glyph.viewBox.baseVal.width) * box.width,
-            stroke:
-              (Number(getComputedStyle(ring).strokeWidth.replace("px", "")) / glyph.viewBox.baseVal.width) * box.width,
+            radius: ring.r.baseVal.value * scale,
+            stroke: parseFloat(getComputedStyle(ring).strokeWidth) * scale,
           },
         };
       }),
