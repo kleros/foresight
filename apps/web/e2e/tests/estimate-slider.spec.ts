@@ -242,6 +242,22 @@ test.describe("the value pill", () => {
     await expect(pill(page)).toBeFocused();
   });
 
+  test("keeps a rounding note until focus moves on, then shows the hint again", async ({ page }) => {
+    await open(page, { track: 311, market: MARKET, value: 40 });
+    const status = page.getByRole("status");
+
+    await pill(page).click();
+    await field(page).fill("55.5");
+    await field(page).press("Enter");
+    await expect(status).toHaveText("Rounded to 56 %.");
+    await page.waitForTimeout(300);
+    await expect(status).toHaveText("Rounded to 56 %.");
+
+    await page.keyboard.press("Shift+Tab");
+    await expect(status).toHaveText("");
+    await expect(page.getByText("19 % below the market")).toBeVisible();
+  });
+
   test("keeps the value on Escape", async ({ page }) => {
     await open(page, { track: 311, market: MARKET, value: 40 });
 

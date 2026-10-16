@@ -63,6 +63,19 @@ export function EstimateSlider({
   // a field open when the slider locks is dropped, not reopened once it unlocks
   if (isDisabled && draft !== undefined) setDraft(undefined);
 
+  // a note answers one entry, so the next focus or press hands the line back to the hint;
+  // listening from the next task leaves out the focus and press that delivered it
+  useEffect(() => {
+    if (!note) return;
+    const clear = () => setNote(undefined);
+    const events = ["focusin", "focusout", "pointerdown"] as const;
+    const timer = setTimeout(() => events.forEach((name) => document.addEventListener(name, clear)));
+    return () => {
+      clearTimeout(timer);
+      events.forEach((name) => document.removeEventListener(name, clear));
+    };
+  }, [note]);
+
   const commit = (next: number) => {
     const snapped = snapEstimate(next, scale);
     if (marketEstimate !== undefined && snapped === marketEstimate) onClear();
@@ -148,6 +161,7 @@ export function EstimateSlider({
               minWidth={pin.sizes.pill}
               onDraft={setDraft}
               onOpen={() => setNote(undefined)}
+              onCancel={() => setNote(undefined)}
               onTyped={(typed) => {
                 const clamped = Math.min(scale.upperBound, Math.max(scale.lowerBound, typed));
                 const snapped = snapEstimate(clamped, scale);
@@ -273,12 +287,14 @@ interface ValuePillProps {
   minWidth: number;
   onDraft: (draft: string | undefined) => void;
   onOpen: () => void;
+  /** The field closed without a number applied. */
+  onCancel: () => void;
   onTyped: (value: number) => void;
   onInvalid: (message: string) => void;
 }
 
 const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill(
-  { share, shown, scale, draft, minWidth, onDraft: setDraft, onOpen, onTyped, onInvalid },
+  { share, shown, scale, draft, minWidth, onDraft: setDraft, onOpen, onCancel, onTyped, onInvalid },
   ref,
 ) {
   const button = useRef<HTMLButtonElement>(null);
@@ -296,11 +312,16 @@ const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill
     setDraft(undefined);
   };
 
+  const cancel = (refocus: boolean) => {
+    onCancel();
+    close(refocus);
+  };
+
   /** Enter keeps the field open on text that is not a number; a blur closes it unchanged. */
   const apply = (byEnter: boolean) => {
     const typed = readTypedEstimate(draft ?? "", scale.unit);
-    if ((draft ?? "").trim() === "") return close(byEnter);
-    if (!Number.isFinite(typed)) return byEnter ? onInvalid("Enter a number.") : close(false);
+    if ((draft ?? "").trim() === "") return cancel(byEnter);
+    if (!Number.isFinite(typed)) return byEnter ? onInvalid("Enter a number.") : cancel(false);
     onTyped(typed);
     close(byEnter);
   };
@@ -312,7 +333,7 @@ const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill
     } else if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
-      close(true);
+      cancel(true);
     }
   };
 

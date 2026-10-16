@@ -363,6 +363,73 @@ describe("EstimateSlider note", () => {
 
     expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
+
+  const refuse = async () => {
+    await userEvent.click(pill());
+    await userEvent.clear(field());
+    await userEvent.type(field(), "lots{Enter}");
+    expect(screen.getByRole("status")).toHaveTextContent("Enter a number.");
+  };
+
+  it("drops a refusal on Escape, bringing the hint back", async () => {
+    renderSlider(400);
+    await refuse();
+
+    await userEvent.keyboard("{Escape}");
+
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    expect(screen.getByText("88 $M above the market")).toBeInTheDocument();
+  });
+
+  it("drops a refusal when the field closes on a blur", async () => {
+    renderSlider(400);
+    await refuse();
+
+    await userEvent.tab();
+
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    expect(screen.getByText("88 $M above the market")).toBeInTheDocument();
+  });
+
+  const round = async () => {
+    await userEvent.click(pill());
+    await userEvent.clear(field());
+    await userEvent.type(field(), "250.4{Enter}");
+    expect(screen.getByRole("status")).toHaveTextContent("Rounded to 250 $M.");
+    expect(pill()).toHaveFocus();
+  };
+
+  it("gives the line back to the hint once focus moves on", async () => {
+    renderSlider(400);
+    await round();
+
+    await userEvent.tab();
+
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    expect(screen.getByText("88 $M above the market")).toBeInTheDocument();
+  });
+
+  it("gives the line back to the hint at the next press", async () => {
+    renderSlider(400);
+    await round();
+
+    await userEvent.click(document.body);
+
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+  });
+
+  it("stays for a note applied by a blur, until the next press", async () => {
+    renderSlider(400);
+    await userEvent.click(pill());
+    await userEvent.clear(field());
+    await userEvent.type(field(), "250.4");
+
+    await userEvent.click(document.body);
+    expect(screen.getByRole("status")).toHaveTextContent("Rounded to 250 $M.");
+
+    await userEvent.click(document.body);
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+  });
 });
 
 describe("EstimateSlider hint", () => {
