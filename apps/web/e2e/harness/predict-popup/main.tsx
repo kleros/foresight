@@ -137,7 +137,7 @@ const success = (
     subscribed={params.get("subscribed") !== "0"}
     email="visitor@example.com"
     // the app's sign-in needs a wallet; this stands in for its button
-    signUp={<Button small text="Sign in to subscribe" />}
+    signUp={(className) => <Button text="Sign in to subscribe" className={className} />}
   />
 );
 

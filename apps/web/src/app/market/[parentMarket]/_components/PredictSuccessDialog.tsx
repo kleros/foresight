@@ -28,11 +28,11 @@ export function PredictSuccessDialog({
       onClose={onClose}
       subscribed={Boolean(userExists)}
       email={user?.email}
-      signUp={
-        <EnsureAuth text="Sign in to subscribe">
+      signUp={(className) => (
+        <EnsureAuth text="Sign in to subscribe" className={className}>
           <ContactDetailsForm />
         </EnsureAuth>
-      }
+      )}
     />
   );
 }

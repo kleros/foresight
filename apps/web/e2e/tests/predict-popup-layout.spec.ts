@@ -1562,6 +1562,17 @@ test.describe("a step's bullet", () => {
 });
 
 /** Resolves a colour or length token to its computed value, through a probe in the page. */
+/** WCAG contrast between two computed rgb() colours. */
+function contrast(first: string, second: string) {
+  const luminance = (css: string) => {
+    const [r = 0, g = 0, b = 0] = css.match(/[\d.]+/g)!.map(Number);
+    const linear = (c: number) => ((c /= 255) <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+  };
+  const [a, b] = [luminance(first), luminance(second)];
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
 function tokenValue(page: Page, property: "color" | "borderRadius", value: string) {
   return page.evaluate(
     ([property, value]) => {
@@ -1613,6 +1624,38 @@ test.describe("the success dialog", () => {
         await expect(button).toHaveCSS("outline-style", "solid");
         expect(await button.evaluate((element) => /\d+px [1-9]/.test(getComputedStyle(element).boxShadow))).toBe(false);
       }
+    });
+  }
+
+  for (const theme of ["light", "dark"]) {
+    test(`offers the sign-in on the popup's axis, its label at 4.5:1 or more at both ends, in the ${theme} theme`, async ({
+      page,
+    }) => {
+      await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&subscribed=0&theme=${theme}`);
+      const signIn = page.getByRole("dialog", { name: "Prediction placed" }).getByRole("button", {
+        name: "Sign in to subscribe",
+      });
+      const ends = [
+        await tokenValue(page, "color", "var(--fs-popup-axis-from)"),
+        await tokenValue(page, "color", "var(--fs-popup-axis-to)"),
+      ];
+      const look = await signIn.evaluate((button) => ({
+        fill: getComputedStyle(button).backgroundImage,
+        label: getComputedStyle(button.querySelector(".button-text")!).color,
+      }));
+      for (const end of ends) expect(look.fill).toContain(end);
+      expect(look.label).toBe(await tokenValue(page, "color", "var(--fs-popup-on-axis)"));
+      for (const end of ends) expect.soft(contrast(look.label, end), `on ${end}`).toBeGreaterThanOrEqual(4.5);
+    });
+
+    test(`draws the settings note's icon in the note's own tone, in the ${theme} theme`, async ({ page }) => {
+      await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&theme=${theme}`);
+      const note = page.getByText("Change this in Settings.", { exact: false });
+      const [icon, text] = await note.evaluate((element) => [
+        getComputedStyle(element.querySelector("svg path")!).fill,
+        getComputedStyle(element).color,
+      ]);
+      expect(icon).toBe(text);
     });
   }
 

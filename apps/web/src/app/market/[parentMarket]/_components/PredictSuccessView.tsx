@@ -26,8 +26,8 @@ export function PredictSuccessView({
   /** The visitor already gets resolution emails. */
   subscribed: boolean;
   email?: string;
-  /** Shown to a visitor not yet subscribed. */
-  signUp: ReactNode;
+  /** Shown to a visitor not yet subscribed; `className` styles its button as the dialog's action. */
+  signUp: (className: string) => ReactNode;
 }) {
   return (
     <Modal
@@ -77,14 +77,14 @@ export function PredictSuccessView({
               />
             ) : null}
             <InfoCard
-              className="text-fs-popup-text-2 w-fit text-[13px] leading-[18px] wrap-break-word"
+              className="text-fs-popup-text-2 w-fit text-[13px] leading-[18px] wrap-break-word [&_svg_path]:fill-current"
               msg="Change this in Settings. Make sure your email is confirmed."
             />
           </>
         ) : (
           <>
             <h2 className="text-fs-popup-text text-sm font-semibold">Get an email when the market resolves</h2>
-            <div className="flex flex-col items-center">{signUp}</div>
+            <div className="flex flex-col items-center">{signUp("predict-cta")}</div>
           </>
         )}
       </section>
