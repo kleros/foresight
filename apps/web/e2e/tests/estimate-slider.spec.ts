@@ -171,7 +171,7 @@ for (const track of TRACKS) {
     test("moves the pin only when the committed value changes, not as the pill opens or takes typing", async ({
       page,
     }) => {
-      // where opening the field used to raise a dropped chip
+      // a dropped chip near its clearance, where a wider pill would raise it
       const value = track === 311 ? 56 : 71;
       await open(page, { track, market: MARKET, value });
       const pin = async () => {
@@ -454,14 +454,15 @@ test.describe("the market pin's drop", () => {
   test.describe("with reduced motion", () => {
     test.use({ contextOptions: { reducedMotion: "reduce" } });
 
-    test("lands at once, with no spring", async ({ page }) => {
-      await open(page, { track: 311, market: MARKET, value: 20 });
+    test("lands at once, with no spring, sliding clear of a bound included", async ({ page }) => {
+      // at 85 the dropped chip slides off the upper bound
+      await open(page, { track: 311, market: 85, value: 20 });
       await stepUntilDropped(page);
 
       const timing = await page.evaluate(() =>
         document
           .querySelector('[data-testid="market-pin"]')!
-          .getAnimations()
+          .getAnimations({ subtree: true })
           .map((animation) => ({
             duration: Number(animation.effect!.getComputedTiming().duration),
             easing: animation.effect!.getComputedTiming().easing,
