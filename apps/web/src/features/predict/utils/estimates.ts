@@ -61,16 +61,20 @@ export function selectedEstimates(
   return selected;
 }
 
-const GROUPED = /^-?\d{1,3}(,\d{3})+(\.\d*)?$/;
-const DECIMAL_COMMA = /^-?\d*,\d+$/;
+const GROUPED = /^-?[1-9]\d{0,2}(,\d{3})+(\.\d*)?$/;
+// three digits after the comma would be a group, which only "0," or no whole part can rule out
+const DECIMAL_COMMA = /^-?(\d*,(\d{1,2}|\d{4,})|0?,\d{3})$/;
+const SPACE_GROUPED = /^-?\d{1,3}(\s\d{3})+([.,]\d+)?$/;
 const PLAIN = /^-?(\d+\.?\d*|\.\d+)$/;
 
 /**
- * A typed estimate, unit and spaces allowed; NaN for anything but a decimal number. Commas
- * before each group of three digits group thousands, and any other single comma is the decimal point.
+ * A typed estimate, unit, a leading plus and spaces between groups of three allowed; NaN for anything but
+ * a decimal number. Commas before each group of three digits group thousands; any other single comma is the decimal point.
  */
 export function readTypedEstimate(text: string, unit: string | null): number {
-  const bare = (unit ? text.split(unit).join("") : text).replace(/\s/g, "");
+  const trimmed = (unit ? text.split(unit).join("") : text).trim().replace(/^\+(?=[\d.,])/, "");
+  if (/\s/.test(trimmed) && !SPACE_GROUPED.test(trimmed)) return Number.NaN;
+  const bare = trimmed.replace(/\s/g, "");
   const dotted = GROUPED.test(bare) ? bare.replace(/,/g, "") : DECIMAL_COMMA.test(bare) ? bare.replace(",", ".") : bare;
   return PLAIN.test(dotted) ? Number(dotted) : Number.NaN;
 }

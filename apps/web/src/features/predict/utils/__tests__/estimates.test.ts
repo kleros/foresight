@@ -122,8 +122,25 @@ describe("readTypedEstimate", () => {
     expect(readTypedEstimate("0,45", null)).toBe(0.45);
   });
 
+  it("reads a comma after a leading zero as the decimal point, since no grouped number starts with 0", () => {
+    expect(readTypedEstimate("0,500", null)).toBe(0.5);
+    expect(readTypedEstimate("4,100", "%")).toBe(4100);
+  });
+
+  it("takes a leading plus and spaces that group thousands", () => {
+    expect(readTypedEstimate("+5", "%")).toBe(5);
+    expect(readTypedEstimate("4 100 000 $M", "$M")).toBe(4100000);
+    expect(readTypedEstimate("1 234,5", null)).toBe(1234.5);
+  });
+
   it("refuses anything else", () => {
-    for (const text of ["", " ", "abc", "0x32", "1e1", "Infinity", "1,2,3", "12,34,567", "1.2.3", "1,234,5", "-"]) {
+    for (const text of [
+      ...["", " ", "abc", "0x32", "1e1", "Infinity", "1,2,3", "12,34,567", "1.2.3", "1,234,5", "-"],
+      // three digits after a comma read as a group, which four digits before it cannot be
+      "1234,567",
+      // spaces only between groups of three
+      ...["5 0", "12 34", "+-5", "++5"],
+    ]) {
       expect(readTypedEstimate(text, null), text).toBeNaN();
     }
   });
