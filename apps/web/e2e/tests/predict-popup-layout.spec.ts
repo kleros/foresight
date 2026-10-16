@@ -1161,3 +1161,39 @@ test.describe("the success dialog", () => {
     expect([...new Set(keys)]).toEqual(["opacity"]);
   });
 });
+
+test.describe("entrances under reduced motion", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  /** The properties each element's running animations change, keyframe offsets and easing aside. */
+  const animatedProperties = (elements: Locator) =>
+    elements.evaluateAll((nodes) =>
+      nodes.map((node) => [
+        ...new Set(
+          node
+            .getAnimations()
+            .flatMap((animation) => (animation.effect as KeyframeEffect).getKeyframes())
+            .flatMap((frame) => Object.keys(frame))
+            .filter((key) => !["offset", "easing", "composite", "computedOffset"].includes(key)),
+        ),
+      ]),
+    );
+
+  test("fade without rising: the failure's status line, and each shared entrance class", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const dialog = await openPopup(page, 2, "failed", "rejected");
+    await page.evaluate(() => {
+      const host = document.createElement("div");
+      host.id = "entrances";
+      host.innerHTML =
+        '<div class="fs-rise">rise</div><div class="fs-spawn">spawn</div>' +
+        '<svg class="fs-icon-draw"><path d="M0 0L8 8"/><polyline points="0,0 8,8"/></svg>';
+      document.body.append(host);
+    });
+
+    expect(await animatedProperties(dialog.getByRole("status").locator(".fs-enter"))).toEqual([["opacity"]]);
+    expect(await animatedProperties(page.locator("#entrances").locator(".fs-rise, .fs-spawn, path, polyline"))).toEqual(
+      [["opacity"], ["opacity"], ["opacity"], ["opacity"]],
+    );
+  });
+});
