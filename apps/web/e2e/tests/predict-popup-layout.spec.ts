@@ -470,7 +470,7 @@ for (const viewport of [
 test.describe("an amount over a four-digit balance at 375 x 812", () => {
   test.use({ viewport: { width: 375, height: 812 } });
 
-  test("shows the balance and its token whole, and keeps the slider's 100% on the track", async ({ page }) => {
+  test("shows the balance and its token whole, and keeps the slider's thumb on the track at 100%", async ({ page }) => {
     await page.goto(`${harness.url}?options=2&state=over&held=6833.959612`);
     const dialog = page.getByRole("dialog");
     const summary = dialog.getByText(/^Not enough balance/);
@@ -484,11 +484,14 @@ test.describe("an amount over a four-digit balance at 375 x 812", () => {
     ).toBe(true);
     expect(await isFullyShown(summary)).toBe(true);
 
-    const label = dialog.locator("#slider-label");
-    await expect(label).toHaveText("100%");
-    const [labelBox, track] = await Promise.all([label.boundingBox(), dialog.locator("#slider-track").boundingBox()]);
-    expect(labelBox!.x).toBeGreaterThanOrEqual(track!.x);
-    expect(labelBox!.x + labelBox!.width).toBeLessThanOrEqual(track!.x + track!.width);
+    await expect(dialog.getByTestId("amount-share")).toHaveText("100%");
+    const slider = dialog.getByTestId("amount-slider");
+    const [thumb, row] = await Promise.all([
+      slider.locator("div:has(>#slider-label)").boundingBox(),
+      slider.boundingBox(),
+    ]);
+    expect(thumb!.x).toBeGreaterThanOrEqual(row!.x);
+    expect(thumb!.x + thumb!.width).toBeLessThanOrEqual(row!.x + row!.width);
   });
 });
 
@@ -547,14 +550,42 @@ test.describe("the amount's title and balance on a narrow screen", () => {
 test.describe("a locked share slider", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test("keeps its percent above the thumb", async ({ page }) => {
+  test("keeps its percent beside the track", async ({ page }) => {
     const dialog = await openPopup(page, 2, "signing");
 
-    const label = dialog.getByTestId("amount-slider").locator("#slider-label");
-    await expect(label).toBeVisible();
-    await expect(label).toHaveText(/^\d+%$/);
+    await expect(dialog.getByTestId("amount-share")).toBeVisible();
+    await expect(dialog.getByTestId("amount-share")).toHaveText(/^\d+%$/);
   });
 });
+
+for (const viewport of [
+  { width: 1280, height: 800 },
+  { width: 375, height: 812 },
+]) {
+  test.describe(`the share slider at ${viewport.width} x ${viewport.height}`, () => {
+    test.use({ viewport });
+
+    test("is a 16px row with no floating label, and a 44px hit area between the summary and the steps", async ({
+      page,
+    }) => {
+      const dialog = await openPopup(page, 2, "idle");
+      const slider = dialog.getByTestId("amount-slider");
+      const summary = dialog.getByTestId("amount-input").locator("xpath=following-sibling::p[1]");
+      const [row, hit, above, below] = await Promise.all([
+        slider.boundingBox(),
+        slider.locator("div:has(>#slider-track)").boundingBox(),
+        summary.boundingBox(),
+        dialog.getByText("Create a trade wallet", { exact: true }).boundingBox(),
+      ]);
+
+      expect(row!.height).toBe(16);
+      expect(hit!.height).toBeGreaterThanOrEqual(44);
+      expect(hit!.y).toBeGreaterThanOrEqual(above!.y + above!.height);
+      expect(hit!.y + hit!.height).toBeLessThanOrEqual(below!.y);
+      await expect(slider.locator("#slider-label")).toBeHidden();
+    });
+  });
+}
 
 test.describe("the popup opening focused", () => {
   test.use({ viewport: { width: 1280, height: 800 } });

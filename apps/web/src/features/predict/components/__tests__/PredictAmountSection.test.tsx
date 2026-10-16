@@ -291,3 +291,34 @@ describe("Max", () => {
     expect(max.classList.contains("invisible")).toBe(true);
   });
 });
+
+describe("the share slider", () => {
+  it.each([true, false])("says its share beside the track, locked or not (locked: %s)", (isReadOnly) => {
+    render(
+      <PredictAmountSection
+        amount={5n * WAD}
+        onAmountChange={vi.fn()}
+        tokens={[sDai]}
+        token={sDai}
+        onTokenChange={vi.fn()}
+        funding={planFunding({ amount: 5n * WAD, ownWallet: 10n * WAD, tradeWallet: 0n })}
+        collateral={{ symbol: "sDAI", decimals: 18 }}
+        isFirstPrediction
+        isReadOnly={isReadOnly}
+      />,
+    );
+
+    expect(screen.getByTestId("amount-share")).toHaveTextContent(/^50%$/);
+  });
+});
+
+describe("the share slider by keyboard", () => {
+  it("steps the amount up from the arrow keys", async () => {
+    const onAmountChange = renderSection(sDai, 10n * WAD);
+
+    screen.getByRole("slider").focus();
+    await userEvent.keyboard("{ArrowRight}");
+
+    expect(lastAmount(onAmountChange)).toBe(WAD / 10n);
+  });
+});

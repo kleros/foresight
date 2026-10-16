@@ -1,5 +1,3 @@
-import type { CSSProperties } from "react";
-
 import { BigNumberField, Slider } from "@kleros/ui-components-library";
 import clsx from "clsx";
 import { formatUnits, parseUnits } from "viem";
@@ -183,7 +181,7 @@ function toUnits(entered: string, decimals: number): bigint | undefined {
   }
 }
 
-/** A share of the balance, with a dot at each quarter the fill has not reached yet. Dimmed whenever it cannot move. */
+/** A share of the balance, said beside the track, with a dot at each quarter the fill has not reached yet. Dimmed whenever it cannot move. */
 function AmountSlider({
   percent,
   isDisabled,
@@ -198,53 +196,54 @@ function AmountSlider({
       data-testid="amount-slider"
       // typing the amount stands in for it where the steps would otherwise sit under the fold
       className={clsx(
-        // the library floats its label 25px above the thumb, outside this box
-        "relative mx-3 mt-7.5 -mb-2 w-[calc(100%-24px)] short:hidden",
+        // a 44px hit area on a 16px row: the track overhangs into these margins, never into the summary
+        "mt-3.5 mb-1.5 flex h-4 items-center gap-3 short:hidden",
         "transition-opacity duration-(--fs-dur-enter) ease-(--fs-ease-enter)",
         isDisabled && "opacity-50",
       )}
-      style={{ "--label-shift": `${percent}%` } as CSSProperties}
     >
-      <Slider
-        className={clsx(
-          "relative z-1 mt-0",
-          // shifted by its own width times the share, the label ends at the thumb's centre at 100% and starts there at 0%
-          "[&_#slider-label]:translate-x-[calc(-1*var(--label-shift))]",
-          "[&_#slider-fill]:h-1 [&_#slider-track]:h-1",
-          "[&_#slider-label]:text-fs-text-primary! [&_#slider-label]:font-semibold",
-          // the field above already says the amount; at 0 the floating label is noise
-          percent === 0 && "[&_#slider-label]:invisible",
-          // the library hides the label on a disabled slider; a locked run still shows its share
-          "[&_#slider-label]:block!",
-          "[&_div:has(>#slider-label)[data-focus-visible]]:ring-fs-accent",
-          "[&_div:has(>#slider-label)[data-focus-visible]]:ring-2",
-          "[&_div:has(>#slider-label)[data-focus-visible]]:ring-offset-fs-surface",
-          "[&_div:has(>#slider-label)[data-focus-visible]]:ring-offset-2",
-        )}
-        minValue={0}
-        maxValue={100}
-        value={percent}
-        leftLabel=""
-        rightLabel=""
-        aria-label="Share of your balance"
-        isDisabled={isDisabled}
-        callback={onChange}
-        formatter={(value) => `${value}%`}
-      />
-      <div
-        className={clsx(
-          "absolute top-3.5 left-0 z-0 -translate-y-1/2",
-          "pointer-events-none flex w-full justify-between",
-        )}
-        aria-hidden
-      >
-        {[0, 25, 50, 75, 100].map((mark) => (
-          <span
-            key={mark}
-            className={clsx("block size-2 rounded-full", mark < percent || mark === 0 ? "invisible" : "bg-fs-border")}
-          />
-        ))}
+      <div className="relative mx-2 h-4 min-w-0 flex-1">
+        <Slider
+          className={clsx(
+            "relative z-1 mt-0 w-full",
+            "[&>div:last-child]:hidden [&_#slider-label]:hidden",
+            "[&_div:has(>#slider-track)]:-my-3.5 [&_div:has(>#slider-track)]:h-11",
+            "[&_#slider-fill]:h-1 [&_#slider-track]:h-1",
+            "[&_div:has(>#slider-label)]:size-4 [&_div:has(>#slider-label)]:border-2",
+            "[&_div:has(>#slider-label)[data-focus-visible]]:ring-fs-accent",
+            "[&_div:has(>#slider-label)[data-focus-visible]]:ring-2",
+            "[&_div:has(>#slider-label)[data-focus-visible]]:ring-offset-fs-surface",
+            "[&_div:has(>#slider-label)[data-focus-visible]]:ring-offset-2",
+          )}
+          minValue={0}
+          maxValue={100}
+          value={percent}
+          leftLabel=""
+          rightLabel=""
+          aria-label="Share of your balance"
+          isDisabled={isDisabled}
+          callback={onChange}
+          // without one the library renders a live <output> in the thumb
+          formatter={(value) => `${value}%`}
+        />
+        <div
+          className="pointer-events-none absolute top-1/2 -left-1 z-0 flex w-[calc(100%+8px)] -translate-y-1/2 justify-between"
+          aria-hidden
+        >
+          {[0, 25, 50, 75, 100].map((mark) => (
+            <span
+              key={mark}
+              className={clsx("block size-2 rounded-full", mark < percent || mark === 0 ? "invisible" : "bg-fs-border")}
+            />
+          ))}
+        </div>
       </div>
+      <span
+        data-testid="amount-share"
+        className="text-fs-text-secondary w-9 shrink-0 text-right text-xs leading-4 tabular-nums"
+      >
+        {percent}%
+      </span>
     </div>
   );
 }
