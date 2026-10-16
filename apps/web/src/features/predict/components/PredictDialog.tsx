@@ -2,16 +2,20 @@
 
 import { useState } from "react";
 
-import { Button, Modal } from "@kleros/ui-components-library";
+import { Modal } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
+import LightButton from "@/components/ui/LightButton";
 import { ScrollFade } from "@/components/ui/ScrollFade";
+
+import CloseIcon from "@/assets/svg/close.svg";
 
 import type { PayToken } from "../types";
 import { PredictAmountSection, type PayTokenChoice } from "./PredictAmountSection";
+import { PredictButton } from "./PredictButton";
 import { PredictList, type ListedEstimate, type PriceMove } from "./PredictList";
-import { PredictSpineNode } from "./PredictSpineNode";
 import { PredictStepsTimeline } from "./PredictStepsTimeline";
+import { PredictSummary } from "./PredictSummary";
 import type { Funding } from "../utils/funding";
 import { statusLine, type PredictSteps, type StatusLine } from "../utils/predictSteps";
 
@@ -37,6 +41,8 @@ interface PredictDialogProps {
   skipped: number;
   /** A run is between its first signature and its end. */
   isRunning: boolean;
+  /** The run is pricing its routes, before anything is signed. */
+  isPricing?: boolean;
   /** A stopped run can pick up where it stopped, with the amount and estimates it was started with. */
   canRetry: boolean;
   /** The stopped run sent a transaction whose outcome is unknown; pressing on checks it first. */
@@ -50,7 +56,7 @@ interface PredictDialogProps {
 }
 
 const STATUS_TONE: Record<StatusLine["tone"], string> = {
-  neutral: "text-fs-text-secondary",
+  neutral: "text-fs-popup-text-2",
   warning: "text-fs-tone-warning-text",
   error: "text-fs-tone-error-text",
 };
@@ -63,9 +69,16 @@ function useHeldWhile<T>(value: T, locked: boolean): T {
   return locked && held ? held.value : value;
 }
 
+/** What the running step is waiting on, for the busy button: `Confirm in your wallet`, without a batch count. */
+function busyLabel(steps: PredictSteps): string {
+  const detail = steps.rows.find((row) => row.view === "running")?.subtitle ?? "";
+  return detail.split(" · ").at(-1) || "Predicting…";
+}
+
 /**
- * Futarchy's predict popup as one spine: the estimates, the amount, then the run's steps. Every region
- * has a fixed height, so the dialog keeps one size from the first look through signing, a failure and the end of the run.
+ * Futarchy's predict popup: the estimates, the amount, a summary of the markets it moves, then the run's steps.
+ * Every region has a fixed height, so the dialog keeps one size from the first look through signing, a failure
+ * and the end of the run; only the summary, opened by the visitor, adds to it.
  */
 export function PredictDialog({
   isOpen,
@@ -85,6 +98,7 @@ export function PredictDialog({
   steps,
   skipped,
   isRunning,
+  isPricing = false,
   canRetry,
   isPending = false,
   recovered,
@@ -100,6 +114,8 @@ export function PredictDialog({
   // a refreshed balance or re-priced preview would change what the visitor is reading mid-run
   const shownFunding = useHeldWhile(funding, isLocked);
   const shownPreview = useHeldWhile(preview, isLocked);
+  // the visitor's own choice, so no run state opens or closes it
+  const [summaryOpen, setSummaryOpen] = useState(false);
 
   return (
     <Modal
@@ -109,38 +125,54 @@ export function PredictDialog({
       isDismissable={!isRunning}
       onOpenChange={(open) => (open || isRunning ? undefined : onClose())}
       className={clsx(
-        "fixed top-18 left-1/2 -translate-x-1/2 transform md:top-20",
-        "h-auto max-h-[calc(100dvh-5rem)] md:max-h-[calc(100dvh-7rem)]",
-        "w-[calc(100vw-2rem)] max-w-[560px]",
-        "flex px-4 pt-4 pb-0! md:px-10 md:pt-6",
-        "rounded-fs border-fs-border bg-fs-surface border",
+        "fixed top-18 left-1/2 -translate-x-1/2 transform",
+        "h-auto max-h-[calc(100dvh-5rem)] md:max-h-[calc(100dvh-5.5rem)]",
+        "w-[calc(100vw-2rem)] max-w-[480px]",
+        "flex px-4 pt-4 pb-0! md:px-5 md:pt-5",
+        "rounded-fs-popup bg-fs-surface border border-(--fs-popup-edge) shadow-(--fs-popup-shadow)",
       )}
     >
       <div className="flex min-h-0 w-full flex-col">
-        <h2 className="text-fs-text-primary mb-2 text-xl font-semibold md:text-2xl">Predict</h2>
-        {/* its line runs on through the body's top padding, which keeps the amount's 44px Max inside the scroll area */}
-        <div className="shrink-0 [&_.spine-line]:-mb-2.5! [&_[data-spine-content]]:pb-0!">
-          <PredictSpineNode
-            title={`${selected.length} ${selected.length === 1 ? "estimate" : "estimates"}`}
-            done={isLocked}
-          >
-            {/* over four rows three and a half show, three on a phone over three: the cut row is the cue */}
-            <ScrollFade
-              className={clsx("w-full", selected.length > 4 && "max-h-28", selected.length > 3 && "max-sm:max-h-27")}
-            >
-              <PredictList
-                selected={selected}
-                onRemove={onRemove}
-                isReadOnly={isLocked}
-                isFixed={recovered !== undefined}
-                preview={shownPreview}
-              />
-            </ScrollFade>
-          </PredictSpineNode>
+        <div className="mb-2 flex h-8 shrink-0 items-center justify-between">
+          <h2 className="text-fs-popup-text text-lg font-semibold tracking-[-0.01em]">Predict</h2>
+          <LightButton
+            text=""
+            aria-label="Close"
+            icon={<CloseIcon className="text-fs-popup-text-2 size-4.5" />}
+            isDisabled={isRunning}
+            onPress={onClose}
+            className={clsx(
+              "relative -mr-1.5 size-8 justify-center rounded-full! p-0",
+              "hover:bg-transparent [@media(hover:hover)]:hover:bg-fs-popup-panel disabled:opacity-40",
+              "before:absolute before:-inset-1.5 before:content-['']",
+            )}
+          />
         </div>
+
+        <section
+          data-panel="estimates"
+          className="rounded-fs-panel bg-fs-popup-panel shrink-0 px-4 pt-3 pb-1.5 short:pt-2.5 short:pb-1"
+        >
+          <h3 className="type-label text-fs-popup-text-2 font-medium tabular-nums">
+            {`${selected.length} ${selected.length === 1 ? "estimate" : "estimates"}`}
+          </h3>
+          {/* over four rows three and a half show, three on a phone: the cut row is the cue */}
+          <ScrollFade
+            fadeFrom="from-fs-popup-panel"
+            className={clsx("mt-1 w-full", selected.length > 4 && "max-h-28", selected.length > 3 && "max-sm:max-h-24")}
+          >
+            <PredictList
+              selected={selected}
+              onRemove={onRemove}
+              isReadOnly={isLocked}
+              isFixed={recovered !== undefined}
+            />
+          </ScrollFade>
+        </section>
+
         {/* the steps end flush with the body, so any overflow hides some of them */}
         <ScrollFade className="min-h-32 w-full" cue="More below" minOverflow={1}>
-          <div data-testid="predict-body" className="pt-3">
+          <div data-testid="predict-body" className="pt-2 short:pt-1.5">
             <PredictAmountSection
               amount={recovered ? recovered.deposit : amount}
               onAmountChange={onAmountChange}
@@ -154,6 +186,13 @@ export function PredictDialog({
               isDisconnected={isDisconnected}
               note={recovered ? "Locked to the amount this prediction started with." : undefined}
             />
+            <PredictSummary
+              selected={selected}
+              preview={shownPreview}
+              isOpen={summaryOpen}
+              onToggle={() => setSummaryOpen((open) => !open)}
+              isPricing={isPricing}
+            />
             <PredictStepsTimeline steps={steps} />
           </div>
         </ScrollFade>
@@ -163,7 +202,7 @@ export function PredictDialog({
           role="status"
           aria-live="polite"
           className={clsx(
-            "type-label flex h-10 shrink-0 items-center text-left text-pretty",
+            "type-label flex h-10 shrink-0 items-center text-left text-[13px] leading-[18px] text-pretty",
             status && STATUS_TONE[status.tone],
           )}
         >
@@ -174,19 +213,16 @@ export function PredictDialog({
           ) : null}
         </p>
 
-        <div className="bg-fs-surface sticky bottom-0 flex justify-center gap-3.5 py-4 md:pb-6 short:py-3">
-          <Button text="Cancel" variant="secondary" onPress={onClose} isDisabled={isRunning} />
-          <Button
-            className="min-w-[170px]"
+        <div className="bg-fs-surface sticky bottom-0 pt-1 pb-4 short:pb-3">
+          <PredictButton
             text={recovered ? "Resume" : isPending ? "Check again" : canRetry ? "Try the rest" : "Predict"}
+            busyText={isRunning ? busyLabel(steps) : undefined}
             onPress={onPredict}
             isDisabled={
-              isRunning ||
               notice !== undefined ||
               (!canRetry &&
                 (recovered !== undefined || selected.length === 0 || funding === null || tooMuch || nothingToTrade))
             }
-            isLoading={isRunning}
           />
         </div>
       </div>

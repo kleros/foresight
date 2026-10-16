@@ -87,7 +87,9 @@ function isFullyShown(locator: Locator): Promise<boolean> {
       return false;
     }
 
-    const inset = 2;
+    // a rounded corner is not part of the element, so its probe sits inside the curve
+    const radius = parseFloat(getComputedStyle(element).borderTopLeftRadius) || 0;
+    const inset = Math.max(2, Math.min(radius, rect.width / 2, rect.height / 2));
     const points: Array<[number, number]> = [
       [rect.left + rect.width / 2, rect.top + rect.height / 2],
       [rect.left + inset, rect.top + inset],
@@ -109,12 +111,27 @@ async function openPopup(
 ) {
   await page.goto(`${harness.url}?options=${options}&state=${state}${reason ? `&reason=${reason}` : ""}${extra}`);
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByRole("button", { name: "Cancel" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Close" })).toBeVisible();
   const accent = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--fs-accent"));
   expect(accent.trim(), "the harness loads Foresight's token layer").not.toBe("");
   await expect(
     dialog.getByRole("listitem").filter({ has: page.getByRole("img", { name: /the market$/ }) }),
   ).toHaveCount(options);
+  await settle(dialog);
+  return dialog;
+}
+
+/** Opens the summary under the amount, as the visitor would, and waits for its entrance to finish. */
+async function openSummary(dialog: Locator) {
+  const head = dialog.getByTestId("predict-summary").getByRole("button");
+  await head.click();
+  await expect(head).toHaveAttribute("aria-expanded", "true");
+  await dialog.page().mouse.move(0, 0);
+  await settle(dialog);
+}
+
+/** Waits out every finite animation in the dialog. */
+async function settle(dialog: Locator) {
   // a finished entrance leaves no transform behind to count as overflow; the running pulse never finishes
   await dialog.evaluate((element) =>
     Promise.all(
@@ -125,19 +142,18 @@ async function openPopup(
         .map((animation) => animation.finished.catch(() => undefined)),
     ),
   );
-  return dialog;
 }
 
-/** The boxes a state change must not move: the dialog, its footer, and the scrolled body's full height. */
+/** The boxes a state change must not move: the dialog, its button, and the scrolled body's full height. */
 async function footprint(page: Page, dialog: Locator) {
   const box = (await dialog.boundingBox())!;
-  const cancel = (await dialog.getByRole("button", { name: "Cancel" }).boundingBox())!;
+  const button = (await dialog.locator(".predict-cta").boundingBox())!;
   const body = await page.getByTestId("predict-body").evaluate((element) => element.getBoundingClientRect().height);
   const bullet = (await dialog.locator("ol [data-bullet]").first().boundingBox())!;
   const round = (value: number) => Math.round(value * 10) / 10;
   return {
     dialog: [box.x, box.y, box.width, box.height].map(round),
-    footer: [cancel.x, cancel.y].map(round),
+    footer: [button.x, button.y, button.width, button.height].map(round),
     body: round(body),
     steps: round(bullet.x),
   };
@@ -167,11 +183,7 @@ for (const height of [812, 667]) {
           expect.soft(375 - (popup.x + popup.width), "right margin").toBeGreaterThanOrEqual(SIDE_MARGIN);
         }
 
-        const barTop = Math.min(
-          ...(await Promise.all(
-            ["Cancel", "Predict"].map(async (name) => (await dialog.getByRole("button", { name }).boundingBox())!.y),
-          )),
-        );
+        const barTop = (await dialog.locator(".predict-cta").boundingBox())!.y;
         const cue = await dialog
           .getByTestId("more-below")
           .evaluate((element) =>
@@ -189,9 +201,7 @@ for (const height of [812, 667]) {
           await step.evaluate((element) => element.scrollIntoView({ block: "nearest" }));
           expect.soft(await isFullyShown(step), `"${title}" is shown once scrolled to`).toBe(true);
           const box = await step.boundingBox();
-          expect
-            .soft(box && box.y + box.height, `"${title}" ends above the Cancel/Predict bar`)
-            .toBeLessThanOrEqual(barTop);
+          expect.soft(box && box.y + box.height, `"${title}" ends above the Predict bar`).toBeLessThanOrEqual(barTop);
         }
 
         const rows = dialog.getByRole("listitem").filter({ has: page.getByRole("img", { name: /the market$/ }) });
@@ -199,7 +209,15 @@ for (const height of [812, 667]) {
           const row = rows.nth(index);
           await row.evaluate((element) => element.scrollIntoView({ block: "nearest" }));
           expect.soft(await isFullyShown(row), `estimate ${index + 1} is shown once scrolled to`).toBe(true);
-          const move = row.getByTestId("estimate-move");
+        }
+
+        // each estimate's market move is in the summary, shown whole once it is open
+        await openSummary(dialog);
+        const moves = dialog.getByTestId("market-move");
+        await expect.soft(moves).toHaveCount(options);
+        for (let index = 0; index < options; index++) {
+          const move = moves.nth(index);
+          await move.evaluate((element) => element.scrollIntoView({ block: "nearest" }));
           expect
             .soft(
               await move.evaluate((element) => {
@@ -211,6 +229,7 @@ for (const height of [812, 667]) {
             )
             .toBe(true);
         }
+        await openPopup(page, options);
 
         expect.soft(pageErrors, "page errors").toEqual([]);
 
@@ -232,7 +251,7 @@ for (const viewport of VIEWPORTS) {
     test.describe(`the ${options}-estimate popup through a run at ${viewport.width} x ${viewport.height}`, () => {
       test.use({ viewport });
 
-      test("keeps one footprint and its footer in place in every state, inside the window", async ({
+      test("keeps one footprint and its button in place in every state, summary open or closed, inside the window", async ({
         page,
       }, testInfo) => {
         const pageErrors: string[] = [];
@@ -240,7 +259,7 @@ for (const viewport of VIEWPORTS) {
 
         const idleDialog = await openPopup(page, options, "idle");
         const idle = await footprint(page, idleDialog);
-        // the spine fits the window: every step is in view as the popup opens, with nothing to scroll to
+        // the popup fits the window: every step is in view as the popup opens, with nothing to scroll to
         for (const title of SCROLLING.includes(`${viewport.width}x${viewport.height}`) ? [] : STEPS) {
           expect
             .soft(await isFullyShown(idleDialog.getByText(title, { exact: true })), `"${title}" is in view at open`)
@@ -294,6 +313,15 @@ for (const viewport of VIEWPORTS) {
               `${state}: the status line fits its slot`,
             )
             .toBe(true);
+        }
+
+        // open, the summary adds its rows; every state then keeps the open idle popup's footprint
+        await openSummary(await openPopup(page, options, "idle"));
+        const idleOpen = await footprint(page, page.getByRole("dialog"));
+        for (const [state, extra] of [...STATES.map((state) => [state, ""] as const), ["idle", "&first=0"] as const]) {
+          const dialog = await openPopup(page, options, state, undefined, extra);
+          await openSummary(dialog);
+          expect.soft(await footprint(page, dialog), `${state}${extra} with the summary open`).toEqual(idleOpen);
         }
         expect.soft(pageErrors, "page errors").toEqual([]);
 
@@ -544,7 +572,7 @@ test.describe("the amount's title and balance on a narrow screen", () => {
       test("shows the title whole, Max whole, and the balance inside the dialog", async ({ page }) => {
         await page.goto(`${harness.url}?${query}`);
         const dialog = page.getByRole("dialog");
-        const node = dialog.locator("[data-spine-node]").filter({ has: page.getByLabel("Amount") });
+        const node = dialog.locator('[data-panel="amount"]');
         const title = node.locator("h3");
         await expect(title).toBeVisible();
 
@@ -598,6 +626,22 @@ for (const viewport of [
   });
 }
 
+test.describe("the header's close button", () => {
+  test.use({ viewport: { width: 375, height: 667 } });
+
+  test("cannot be pressed while a run goes, and can at rest and after a stop", async ({ page }) => {
+    for (const state of STATES) {
+      const close = (await openPopup(page, 2, state)).getByRole("button", { name: "Close" });
+      const running = state === "quoting" || state === "signing" || state === "confirming";
+      if (running) await expect.soft(close, state).toBeDisabled();
+      else await expect.soft(close, state).toBeEnabled();
+      // a 44px target round its 32px circle
+      const box = (await close.boundingBox())!;
+      expect.soft(Math.min(box.width, box.height) + 12, `${state}: its target`).toBeGreaterThanOrEqual(44);
+    }
+  });
+});
+
 test.describe("the popup opening focused", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
@@ -628,17 +672,19 @@ test.describe("the popup opening focused", () => {
 test.describe("the popup's tones", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test("draws a finished step in the success tone and a failure in the error text tone", async ({ page }) => {
+  test("checks a finished step on the axis and says a failure in the error text tone", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
     const dialog = await openPopup(page, 2, "failed");
-    const color = (locator: Locator) => locator.evaluate((element) => getComputedStyle(element).color);
+    const done = dialog.locator('[data-bullet="done"]').first();
 
-    // --fs-tone-success and --fs-tone-error-text in the light theme
-    expect(await color(dialog.locator('[data-bullet="done"] [data-glyph="check"]').first())).toBe("rgb(0, 196, 43)");
-    // the circle leaving a finished bullet keeps its own tone, so the bullet never shows an empty green ring
-    expect(await color(dialog.locator('[data-bullet="done"] [data-glyph="circle"]').first())).not.toBe(
-      "rgb(0, 196, 43)",
+    // --fs-popup-on-axis over the bullet's axis fill, and --fs-tone-error-text, in the light theme
+    expect(await done.locator('[data-glyph="check"]').evaluate((glyph) => getComputedStyle(glyph).color)).toBe(
+      "rgb(255, 255, 255)",
     );
-    expect(await color(dialog.getByRole("status"))).toBe("rgb(196, 0, 42)");
+    expect(await done.evaluate((bullet) => getComputedStyle(bullet, "::before").opacity)).toBe("1");
+    expect(await dialog.getByRole("status").evaluate((status) => getComputedStyle(status).color)).toBe(
+      "rgb(196, 0, 42)",
+    );
   });
 });
 
@@ -659,15 +705,18 @@ test.describe("the running step", () => {
 test.describe("the popup under reduced motion", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test("keeps the running step and the loading Predict still", async ({ page }) => {
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    const dialog = await openPopup(page, 2, "signing");
-    const animations = await dialog
-      .locator("li, li *, button svg")
-      .evaluateAll((items) => items.map((item) => getComputedStyle(item).animationName));
+  for (const state of ["signing", "quoting"] as const) {
+    test(`keeps the running step, the busy button and the price check still while ${state}`, async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      const dialog = await openPopup(page, 2, state);
+      await expect(dialog.getByTestId("predict-spinner")).toBeVisible();
+      const animations = await dialog
+        .locator("li, li *, button svg, [data-testid=predict-spinner], [data-testid=pricing-sweep] *")
+        .evaluateAll((items) => items.map((item) => getComputedStyle(item).animationName));
 
-    expect(animations.every((name) => name === "none")).toBe(true);
-  });
+      expect(animations.every((name) => name === "none")).toBe(true);
+    });
+  }
 });
 
 test.describe("a disabled Predict", () => {
@@ -695,12 +744,12 @@ test.describe("a disabled Predict", () => {
       };
     });
 
-  // the accent mixed 55 % toward the secondary text in light and toward the border in dark
+  // --fs-popup-cta-disabled in each theme
   for (const [theme, fill] of [
-    ["light", [88, 111, 188]],
-    ["dark", [65, 82, 192]],
+    ["light", [235, 232, 244]],
+    ["dark", [46, 32, 108]],
   ] as const) {
-    test(`is a greyed blue with its white label at 3:1 or more in the ${theme} theme`, async ({ page }) => {
+    test(`is the muted panel tone with its label at 4.5:1 or more in the ${theme} theme`, async ({ page }) => {
       await page.goto(`${harness.url}?options=2&state=over&theme=${theme}`);
       const predict = page.getByRole("dialog").getByRole("button", { name: "Predict" });
       await expect(predict).toBeDisabled();
@@ -709,11 +758,11 @@ test.describe("a disabled Predict", () => {
       expect(shown.alpha).toBe(1);
       expect(shown.opacity).toBe(1);
       shown.fill.forEach((channel, index) => expect.soft(Math.abs(channel - fill[index]!)).toBeLessThanOrEqual(2));
-      expect(shown.ratio).toBeGreaterThanOrEqual(3);
+      expect(shown.ratio).toBeGreaterThanOrEqual(4.5);
     });
   }
 
-  test("dims Max to the secondary text while it cannot be pressed", async ({ page }) => {
+  test("dims Max to the tertiary text while it cannot be pressed", async ({ page }) => {
     const dialog = await openPopup(page, 2, "signing");
     const max = dialog.getByRole("button", { name: "Max" });
     await expect(max).toBeDisabled();
@@ -722,7 +771,7 @@ test.describe("a disabled Predict", () => {
       max.locator(".button-text").evaluate((element) => getComputedStyle(element).color),
       dialog.evaluate((element) => {
         const probe = element.ownerDocument.createElement("span");
-        probe.className = "text-fs-text-secondary";
+        probe.className = "text-fs-popup-text-3";
         element.append(probe);
         const color = getComputedStyle(probe).color;
         probe.remove();
@@ -758,60 +807,49 @@ test.describe("accent text in the dark theme", () => {
   });
 });
 
-test.describe("the spine's line", () => {
+test.describe("the steps' connector", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  /** The accent fill over each connector, top to bottom: true where it is drawn. */
+  /** The axis fill over each dotted connector, top to bottom: true where it is drawn. */
   const fills = (dialog: Locator) =>
     dialog
-      .locator(".spine-line, .predict-spine > li > div:first-child > div:last-child")
+      .locator(".predict-steps > li > div:first-child > div:last-child:not([style])")
       .evaluateAll((lines) =>
         lines.map((line) => getComputedStyle(line, "::after").transform === "matrix(1, 0, 0, 1, 0, 0)"),
       );
 
-  test("is unfilled at rest, and fills under each node and step that has finished", async ({ page }) => {
+  test("is dotted and unfilled at rest, and fills under each step that has finished", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
-    expect(await fills(await openPopup(page, 2, "idle"))).toEqual([false, false, false, false]);
+    const idle = await openPopup(page, 2, "idle");
+    expect(await fills(idle)).toEqual([false, false]);
+    expect(
+      await idle
+        .locator(".predict-steps > li > div:first-child > div:last-child:not([style])")
+        .first()
+        .evaluate((line) => getComputedStyle(line).borderLeftStyle),
+    ).toBe("dotted");
 
-    // the estimates, the amount and the trade wallet are done; adding funds is running
-    expect(await fills(await openPopup(page, 2, "signing"))).toEqual([true, true, true, false]);
+    // the trade wallet is done; adding funds is running
+    expect(await fills(await openPopup(page, 2, "signing"))).toEqual([true, false]);
   });
 
-  test("draws the circle, the check and the cross on one ring of one weight", async ({ page }) => {
-    const dialog = await openPopup(page, 2, "failed");
-    const rings = await dialog.locator('[data-bullet="failed"] svg').evaluateAll((glyphs: SVGSVGElement[]) =>
-      glyphs.map((glyph) => {
-        const ring = glyph.querySelector("circle");
-        // laid-out px per viewBox unit, not the box, which a leaving glyph's scale shrinks
-        const scale = parseFloat(getComputedStyle(glyph).width) / glyph.viewBox.baseVal.width;
-        return {
-          glyph: glyph.dataset.glyph,
-          ring: ring && {
-            radius: ring.r.baseVal.value * scale,
-            stroke: parseFloat(getComputedStyle(ring).strokeWidth) * scale,
-          },
-        };
-      }),
-    );
-
-    const circle = rings.find(({ glyph }) => glyph === "circle")!.ring;
-    expect(circle).not.toBeNull();
-    expect(rings).toEqual(["circle", "check", "cross"].map((glyph) => ({ glyph, ring: circle })));
-  });
-
-  test("shows the check of a finished step and the cross of a failed one, each glyph alone", async ({ page }) => {
+  test("numbers a step until it finishes or fails, then shows the check or the cross alone", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
-    const dialog = await openPopup(page, 2, "failed");
-    const shown = (view: string) =>
+    const shown = (dialog: Locator, view: string) =>
       dialog
         .locator(`[data-bullet="${view}"]`)
         .first()
-        .locator("svg")
+        .locator("[data-glyph]")
         .evaluateAll((glyphs) =>
-          glyphs.filter((glyph) => getComputedStyle(glyph).opacity === "1").map((glyph) => glyph.dataset.glyph),
+          glyphs
+            .filter((glyph) => getComputedStyle(glyph).opacity === "1")
+            .map((glyph) => (glyph as HTMLElement).dataset.glyph),
         );
 
-    expect(await shown("done")).toEqual(["check"]);
-    expect(await shown("failed")).toEqual(["cross"]);
+    const idle = await openPopup(page, 2, "idle");
+    expect(await shown(idle, "idle")).toEqual(["digit"]);
+    const failed = await openPopup(page, 2, "failed");
+    expect(await shown(failed, "done")).toEqual(["check"]);
+    expect(await shown(failed, "failed")).toEqual(["cross"]);
   });
 });

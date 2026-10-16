@@ -36,11 +36,11 @@ describe("PredictStepsTimeline while adding funds", () => {
   it("says to confirm in the wallet while the deposit waits on a signature, then says it is confirming", () => {
     const { rerender } = render(timeline(depositing("signing")));
 
-    expect(item("Add funds").querySelector("small")?.textContent).toBe("Confirm in your wallet");
+    expect(item("Add funds").querySelector("h2 + p")?.textContent).toBe("Confirm in your wallet");
 
     rerender(timeline(depositing("confirming")));
 
-    expect(item("Add funds").querySelector("small")?.textContent).toBe("Confirming…");
+    expect(item("Add funds").querySelector("h2 + p")?.textContent).toBe("Confirming…");
   });
 });
 
@@ -83,7 +83,22 @@ describe("PredictStepsTimeline bullets", () => {
     view.rerender(timeline(halted));
 
     expect(item("Add funds").querySelector("[data-bullet]")).toBe(before);
-    expect(before?.querySelectorAll("svg")).toHaveLength(3);
+    expect(before?.querySelectorAll("[data-glyph]")).toHaveLength(3);
+  });
+
+  it("numbers the steps 1 to 3 in their bullets", () => {
+    render(timeline(depositing("signing")));
+
+    expect(
+      screen.getAllByRole("listitem").map((row) => row.querySelector('[data-glyph="digit"]')?.textContent),
+    ).toEqual(["1", "2", "3"]);
+  });
+
+  it("puts a step's detail on its title's line, in the timeline's party slot", () => {
+    render(timeline(depositing("signing")));
+
+    expect(within(item("Add funds")).getByLabelText("Timeline item party: Confirm in your wallet")).toBeVisible();
+    expect(item("Add funds").querySelector("small")?.textContent).toBe("");
   });
 
   it("crosses the step that stopped the run, in place, with no row added", () => {

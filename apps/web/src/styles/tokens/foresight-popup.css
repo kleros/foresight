@@ -1,0 +1,65 @@
+/* The predict popup and its success dialog ("Aurora"): an explicit exception to the 3px system,
+   scoped to those two dialogs. Each token says why it departs from the semantic layer. */
+:root {
+  /* nested surfaces read as depth: modal 24 > panel 16 (8px inset) > control 10 > pill */
+  --fs-radius-popup: 24px;
+  --fs-radius-panel: 16px;
+  --fs-radius-control: 10px;
+  /* a tone step off the sheet separates a panel without a border */
+  --fs-popup-panel: #f4f2fb;
+  /* the step above a panel, for a pill or chip sitting on it */
+  --fs-popup-chip: #e8e4f5;
+  /* hairlines and the step connector, tinted toward the violet so they sit on the panels */
+  --fs-popup-line: rgba(40, 20, 90, 0.08);
+  --fs-popup-line-strong: rgba(40, 20, 90, 0.24);
+  /* text on the lavender panels: 15.5, 6.2 and 4.9:1 on --fs-popup-panel */
+  --fs-popup-text: #1d1733;
+  --fs-popup-text-2: #5c567a;
+  --fs-popup-text-3: #67618a;
+  /* Max and links: 6.7:1 on the panel, where --fs-text-accent's blue is off-palette */
+  --fs-popup-accent-text: #5a2fd6;
+  /* a deepened slice of the brand axis, so white text passes at both ends (7.1 and 4.6:1) */
+  --fs-popup-axis-from: #7a00e6;
+  --fs-popup-axis-to: #0077d4;
+  --fs-popup-axis: linear-gradient(100deg, var(--fs-popup-axis-from), var(--fs-popup-axis-to));
+  --fs-popup-axis-v: linear-gradient(180deg, var(--fs-popup-axis-from), var(--fs-popup-axis-to));
+  --fs-popup-on-axis: #ffffff;
+  /* a button that cannot be pressed: its label is 4.5:1 on it */
+  --fs-popup-cta-disabled: #ebe8f4;
+  --fs-popup-cta-disabled-text: #6b6680;
+  /* the share slider's rail and its quarter dots, 3:1 against the panel for the dots */
+  --fs-popup-track: #e6e2f3;
+  --fs-popup-track-dot: #c8c2e0;
+  /* a 10% wash of each axis end in two corners of the amount panel: colour, not a fill */
+  --fs-popup-wash:
+    radial-gradient(60% 80% at 100% 0%, rgb(144 19 254 / 0.1), transparent 70%),
+    radial-gradient(50% 70% at 0% 100%, rgb(0 154 255 / 0.1), transparent 70%);
+  --fs-popup-shadow: 0 20px 48px rgb(40 20 90 / 0.18), 0 1px 2px rgb(40 20 90 / 0.08);
+  --fs-popup-edge: transparent;
+}
+:root.dark,
+.dark {
+  /* the Kleros violet surfaces, so the popup belongs to the page behind it */
+  --fs-popup-panel: #1b003f;
+  --fs-popup-chip: #2e206c;
+  --fs-popup-line: rgba(218, 240, 255, 0.09);
+  --fs-popup-line-strong: rgba(218, 240, 255, 0.3);
+  --fs-popup-text: #e6f1ff;
+  --fs-popup-text-2: #b7c3dc;
+  --fs-popup-text-3: #8d9ab8;
+  --fs-popup-accent-text: #b9a7ff;
+  --fs-popup-axis-from: #b45fff;
+  --fs-popup-axis-to: #6cc5ff;
+  /* the dark axis is light, so its label is the deep violet: 5.5 and 10.2:1 */
+  --fs-popup-on-axis: #12003a;
+  --fs-popup-cta-disabled: #2e206c;
+  --fs-popup-cta-disabled-text: #9aa6c6;
+  --fs-popup-track: #392c74;
+  --fs-popup-track-dot: #5b4e9c;
+  --fs-popup-wash:
+    radial-gradient(60% 80% at 100% 0%, rgb(180 95 255 / 0.22), transparent 70%),
+    radial-gradient(50% 70% at 0% 100%, rgb(108 197 255 / 0.16), transparent 70%);
+  /* a shadow is invisible on #1b003f, so a hairline marks the edge instead */
+  --fs-popup-shadow: 0 24px 60px rgb(0 0 0 / 0.55);
+  --fs-popup-edge: rgba(218, 240, 255, 0.1);
+}

@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useRef } from "react";
 import { CustomTimeline } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
-import { SpineBullet } from "./SpineBullet";
+import { StepBullet } from "./StepBullet";
 import type { PredictStepRow, PredictSteps, StepView } from "../utils/predictSteps";
 
 type TimelineItem = React.ComponentProps<typeof CustomTimeline>["items"][number];
@@ -15,13 +15,13 @@ const Views = createContext<Partial<Record<PredictStepRow["key"], StepView>>>({}
  * per row, defined once: the same type across views keeps the element, so its glyphs can cross-fade.
  */
 function WalletBullet() {
-  return <SpineBullet view={useContext(Views).wallet ?? "idle"} />;
+  return <StepBullet number={1} view={useContext(Views).wallet ?? "idle"} />;
 }
 function FundsBullet() {
-  return <SpineBullet view={useContext(Views).funds ?? "idle"} />;
+  return <StepBullet number={2} view={useContext(Views).funds ?? "idle"} />;
 }
 function PredictBullet() {
-  return <SpineBullet view={useContext(Views).predict ?? "idle"} />;
+  return <StepBullet number={3} view={useContext(Views).predict ?? "idle"} />;
 }
 const BULLETS: Record<PredictStepRow["key"], () => React.ReactNode> = {
   wallet: WalletBullet,
@@ -51,8 +51,9 @@ export function PredictStepsTimeline({ steps }: { steps: PredictSteps }) {
 
   const items: TimelineItem[] = steps.rows.map((row) => ({
     title: row.title,
-    party: "",
-    subtitle: row.subtitle,
+    // the detail sits on the title's line, right-aligned
+    party: row.subtitle,
+    subtitle: "",
     Icon: BULLETS[row.key],
     state: TIMELINE_STATE[row.view],
   }));
@@ -62,13 +63,13 @@ export function PredictStepsTimeline({ steps }: { steps: PredictSteps }) {
   if (!first) return null;
 
   return (
-    <div ref={timeline} className="w-full">
+    <div ref={timeline} className="@container w-full">
       <Views.Provider value={views}>
         <CustomTimeline
           items={[first, ...rest]}
           className={clsx(
-            "predict-spine w-full",
-            // the library pulses the whole row; only the bullet pulses, so the subtitle stays legible
+            "predict-steps w-full",
+            // the library pulses the whole row; only the bullet pulses, so its detail stays legible
             "[&_li]:animate-none [&_[data-bullet=running]]:animate-loading motion-reduce:[&_[data-bullet=running]]:animate-none",
           )}
         />

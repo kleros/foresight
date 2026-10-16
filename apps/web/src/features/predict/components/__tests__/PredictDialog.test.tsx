@@ -48,7 +48,7 @@ const steps: PredictSteps = {
 };
 
 const subtitleOf = (title: string) =>
-  screen.getByRole("listitem", { name: `Timeline item: ${title}` }).querySelector("small")?.textContent ?? "";
+  screen.getByRole("listitem", { name: `Timeline item: ${title}` }).querySelector("h2 + p")?.textContent ?? "";
 
 const props = () => ({
   isOpen: true,
@@ -70,19 +70,26 @@ const props = () => ({
   onPredict: vi.fn(),
 });
 
-describe("the estimates going in", () => {
-  it("says where each market would move", () => {
-    render(<PredictDialog {...props()} preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 355 } }} />);
+const summaryHead = () => within(screen.getByTestId("predict-summary")).getByRole("button");
 
-    expect(screen.getByText("Market 312 → 355 $M")).toBeInTheDocument();
+describe("the estimates going in", () => {
+  it("says where each market would move, once the summary is opened", async () => {
+    render(<PredictDialog {...props()} preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 355 } }} />);
+    expect(screen.queryByText(/→/)).toBeNull();
+
+    await userEvent.click(summaryHead());
+
+    expect(screen.getByText("312 → 355 $M")).toBeInTheDocument();
     expect(screen.getAllByText(/→/)).toHaveLength(1);
   });
 
-  it("says where the market is, not a move too small to show", () => {
+  it("says where the market stays, not a move too small to show", async () => {
     render(<PredictDialog {...props()} preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 312.0001 } }} />);
 
+    await userEvent.click(summaryHead());
+
     expect(screen.queryByText(/→/)).toBeNull();
-    expect(screen.getByText("Market at 312 $M")).toBeInTheDocument();
+    expect(screen.getByText("Stays at 312 $M")).toBeInTheDocument();
   });
 
   it("lists each estimate with which way it moves the market", () => {
@@ -247,10 +254,14 @@ describe("predicting", () => {
     expect(screen.queryByText(/pool fee/)).toBeNull();
   });
 
-  it("offers no way out part way through, which would abandon work already on chain", () => {
-    render(<PredictDialog {...props()} isRunning />);
+  it("offers no way out part way through, which would abandon work already on chain", async () => {
+    const onClose = vi.fn();
+    render(<PredictDialog {...props()} onClose={onClose} isRunning />);
 
-    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Close" })).toBeDisabled();
+    await userEvent.keyboard("{Escape}");
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
     for (const remove of screen.getAllByRole("button", { name: /Remove/ })) expect(remove).toBeDisabled();
   });
 
@@ -418,30 +429,136 @@ describe("the dialog's accessible name", () => {
   });
 });
 
-describe("the spine's two input nodes", () => {
-  const nodeBullet = (title: string) =>
-    screen.getByText(title).closest("[data-spine-node]")?.querySelector("[data-bullet]")?.getAttribute("data-bullet");
-
+describe("the header's close button", () => {
   it.each([
-    ["at rest", {}, "idle"],
-    ["while a run goes", { isRunning: true }, "done"],
-    ["when a stopped run can be picked up", { canRetry: true }, "done"],
-  ])("are %s %s", (_name, state, view) => {
-    render(<PredictDialog {...props()} {...state} />);
+    ["at rest", {}],
+    ["after a run stopped", { canRetry: true, steps: { ...steps, failure: "You declined in your wallet." } }],
+    ["while a sent transaction is unconfirmed", { canRetry: true, isPending: true }],
+  ])("closes the popup %s", async (_name, state) => {
+    const onClose = vi.fn();
+    render(<PredictDialog {...props()} {...state} onClose={onClose} />);
 
-    expect(nodeBullet("2 estimates")).toBe(view);
-    expect(nodeBullet("You pay")).toBe(view);
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("titles the estimates node with their count", () => {
+  it("closes on Escape at rest", async () => {
+    const onClose = vi.fn();
+    render(<PredictDialog {...props()} onClose={onClose} />);
+
+    await userEvent.keyboard("{Escape}");
+
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("titles the estimates panel with their count", () => {
     render(<PredictDialog {...props()} selected={selected.slice(0, 1)} />);
 
     expect(screen.getByText("1 estimate")).toBeInTheDocument();
   });
 });
 
+describe("the button while a run goes", () => {
+  const running: PredictSteps = {
+    rows: [
+      { key: "wallet", title: "Trade wallet", subtitle: "0xdcee…664f", view: "done" },
+      { key: "funds", title: "Add funds", subtitle: "", view: "inactive" },
+      { key: "predict", title: "Place prediction", subtitle: "1 of 2 · Confirm in your wallet", view: "running" },
+    ],
+    started: true,
+  };
+
+  it("keeps a label, what the run waits on, beside a spinner, and cannot be pressed", () => {
+    render(<PredictDialog {...props()} isRunning steps={running} />);
+    const button = screen.getByRole("button", { name: "Confirm in your wallet" });
+
+    expect(button).toBeDisabled();
+    expect(within(button).getByText("Confirm in your wallet")).not.toHaveClass("invisible");
+    expect(within(button).getByTestId("predict-spinner")).toBeInTheDocument();
+  });
+
+  it("goes back to its own label, with no spinner, once the run stops", () => {
+    const view = render(<PredictDialog {...props()} isRunning steps={running} />);
+
+    view.rerender(
+      <PredictDialog {...props()} canRetry steps={{ ...steps, failure: "You declined in your wallet." }} />,
+    );
+
+    expect(screen.getByRole("button", { name: "Try the rest" })).toBeEnabled();
+    expect(screen.queryByTestId("predict-spinner")).toBeNull();
+  });
+});
+
+describe("the summary under the amount", () => {
+  it("counts the markets this prediction moves", () => {
+    render(
+      <PredictDialog
+        {...props()}
+        preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 355 }, [COOGLER.toLowerCase()]: { from: 296, to: 280 } }}
+      />,
+    );
+
+    expect(summaryHead()).toHaveTextContent("2 markets move");
+    expect(summaryHead()).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("says it is checking prices while a run prices its routes", () => {
+    render(<PredictDialog {...props()} isRunning isPricing />);
+
+    expect(summaryHead()).toHaveTextContent("Checking prices…");
+    expect(screen.getByTestId("pricing-sweep")).toBeInTheDocument();
+  });
+
+  it("lists only figures the app computes: each market's move, and no fee, minimum or time", async () => {
+    render(<PredictDialog {...props()} preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 355 } }} />);
+
+    await userEvent.click(summaryHead());
+    const summary = screen.getByTestId("predict-summary");
+
+    expect(
+      within(summary)
+        .getAllByTestId("market-move")
+        .map((move) => move.textContent),
+    ).toEqual(["312 → 355 $M", "Now 296 $M"]);
+    expect(summary).not.toHaveTextContent(/fee|xDAI|receive|minimum|~|≈|\bs\b|min/i);
+  });
+
+  it("stays open or closed as the visitor left it, whatever the run does", async () => {
+    const preview = { [GERWIG.toLowerCase()]: { from: 312, to: 355 } };
+    const view = render(<PredictDialog {...props()} preview={preview} />);
+    await userEvent.click(summaryHead());
+
+    view.rerender(<PredictDialog {...props()} preview={preview} isRunning isPricing />);
+    expect(summaryHead()).toHaveAttribute("aria-expanded", "true");
+    view.rerender(<PredictDialog {...props()} preview={preview} isRunning />);
+    expect(summaryHead()).toHaveAttribute("aria-expanded", "true");
+    view.rerender(
+      <PredictDialog
+        {...props()}
+        preview={preview}
+        canRetry
+        steps={{ ...steps, failure: "You declined in your wallet." }}
+      />,
+    );
+    expect(summaryHead()).toHaveAttribute("aria-expanded", "true");
+
+    await userEvent.click(summaryHead());
+    view.rerender(<PredictDialog {...props()} preview={preview} isRunning />);
+    expect(summaryHead()).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("can be opened while a run goes, to read the moves it locked with", async () => {
+    render(<PredictDialog {...props()} isRunning />);
+
+    await userEvent.click(summaryHead());
+
+    expect(summaryHead()).toHaveAttribute("aria-expanded", "true");
+  });
+});
+
 describe("what a run shows while it goes", () => {
-  it("holds the balance, the summary and the market captions it locked with", () => {
+  it("holds the balance, the funding line and the market moves it locked with", async () => {
     const preview = { [GERWIG.toLowerCase()]: { from: 312, to: 355 } };
     const view = render(<PredictDialog {...props()} preview={preview} isRunning />);
 
@@ -456,7 +573,8 @@ describe("what a run shows while it goes", () => {
 
     expect(screen.getByText("Balance: 25 sDAI")).toBeInTheDocument();
     expect(screen.getByText("10 sDAI = 6 in your trade wallet + 4 from your wallet")).toBeInTheDocument();
-    expect(screen.getByText("Market 312 → 355 $M")).toBeInTheDocument();
+    await userEvent.click(summaryHead());
+    expect(screen.getByText("312 → 355 $M")).toBeInTheDocument();
   });
 
   it("reads them again once the run is over", () => {

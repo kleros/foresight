@@ -13,6 +13,8 @@ type ScrollFadeProps = {
   cue?: string;
   /** The least overflow, in px, that raises the fades and the cue; by default a 16px line, as less is usually padding. */
   minOverflow?: number;
+  /** The fades' colour, as a `from-*` class: the surface the scroll area sits on. */
+  fadeFrom?: string;
 };
 
 /**
@@ -25,6 +27,7 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
   fadeSize = 24,
   cue,
   minOverflow = 16,
+  fadeFrom = "from-fs-surface",
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const cueRef = useRef<HTMLSpanElement>(null);
@@ -79,7 +82,8 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
           <div
             className={clsx(
               "pointer-events-none absolute top-0 right-0 left-0 z-10",
-              "from-fs-surface bg-linear-to-b to-transparent",
+              fadeFrom,
+              "bg-linear-to-b to-transparent",
             )}
             style={{
               height: fadeSize,
@@ -103,7 +107,8 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
           <div
             className={clsx(
               "pointer-events-none absolute right-0 bottom-0 left-0 z-10",
-              "from-fs-surface bg-linear-to-t to-transparent",
+              fadeFrom,
+              "bg-linear-to-t to-transparent",
             )}
             style={{
               height: fadeSize,

@@ -171,6 +171,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
       steps={steps}
       skipped={progress?.skipped.length ?? 0}
       isRunning={isRunning}
+      isPricing={stage === "quoting"}
       canRetry={canRetry}
       isPending={Boolean(pendingHash)}
       recovered={recovered && { deposit: recovered.deposit, token: runToken }}

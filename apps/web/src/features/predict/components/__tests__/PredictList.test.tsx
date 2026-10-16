@@ -14,19 +14,12 @@ const estimate: ListedEstimate = {
   direction: "higher",
 };
 
-const list = (move?: { from: number; to: number }, selected: ListedEstimate[] = [estimate]) =>
-  render(
-    <PredictList
-      selected={selected}
-      onRemove={vi.fn()}
-      isReadOnly={false}
-      preview={move ? { [market.toLowerCase()]: move } : {}}
-    />,
-  );
+const list = (selected: ListedEstimate[] = [estimate]) =>
+  render(<PredictList selected={selected} onRemove={vi.fn()} isReadOnly={false} />);
 
 describe("PredictList's rows", () => {
   it("reads each estimate as its name, its value and an arrow for which side of the market it is on", () => {
-    list({ from: 75, to: 80 });
+    list();
     const row = screen.getByRole("listitem");
 
     expect(within(row).getByText("Movie A")).toBeInTheDocument();
@@ -35,29 +28,16 @@ describe("PredictList's rows", () => {
     expect(row).not.toHaveTextContent(/than the market/);
   });
 
-  it("says where the market moves from and to, with the unit once", () => {
-    list({ from: 75, to: 80 });
-
-    expect(screen.getByTestId("estimate-move")).toHaveTextContent(/^Market 75 → 80 %$/);
-  });
-
-  it("says only where the market starts when the move reaches the estimate", () => {
-    list({ from: 75, to: 87 });
-
-    expect(screen.getByTestId("estimate-move")).toHaveTextContent(/^from 75 %$/);
-  });
-
-  it("holds the move's line with where the market is while the move is not known, so the row keeps its height", () => {
+  it("keeps the market's move off the row, which has one right edge", () => {
     list();
 
-    expect(screen.getByTestId("estimate-move")).toHaveTextContent("Market at 75 %");
+    expect(screen.getByRole("listitem")).toHaveTextContent(/^Movie A87 %$/);
   });
 
-  it("carries the full name and caption in a title, for when they are cut short", () => {
-    list({ from: 75, to: 80 });
+  it("carries the full name in a title, for when it is cut short", () => {
+    list();
 
     expect(screen.getByText("Movie A")).toHaveAttribute("title", "Movie A");
-    expect(screen.getByTestId("estimate-move")).toHaveAttribute("title", "Market 75 → 80 %");
   });
 });
 

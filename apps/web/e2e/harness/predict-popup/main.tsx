@@ -138,6 +138,7 @@ createRoot(document.getElementById("root")!).render(
       steps={steps}
       skipped={0}
       isRunning={isRunning}
+      isPricing={state === "quoting"}
       canRetry={state === "failed" || state === "pending" || state === "recovered"}
       isPending={state === "pending"}
       recovered={state === "recovered" ? { deposit: 4n * WAD, token: sDai } : undefined}

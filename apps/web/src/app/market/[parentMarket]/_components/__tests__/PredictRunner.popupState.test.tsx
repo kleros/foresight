@@ -154,7 +154,7 @@ function renderPage() {
 }
 
 const fundsSubtitle = (popup: ReturnType<typeof within>) =>
-  popup.getByRole("listitem", { name: "Timeline item: Add funds" }).querySelector("small")?.textContent ?? "";
+  popup.getByRole("listitem", { name: "Timeline item: Add funds" }).querySelector("h2 + p")?.textContent ?? "";
 
 async function openPopup() {
   await userEvent.click(screen.getByRole("button", { name: /^Predict (\d+ )?estimates?$/ }));
@@ -197,7 +197,7 @@ describe("estimates removed in the popup are a draft until Predict", () => {
     ["two estimates", [OPTIONS[0], OPTIONS[2]]],
   ] as const;
 
-  it.each(removals)("Cancel puts back %s removed in the popup", async (_label, removed) => {
+  it.each(removals)("closing puts back %s removed in the popup", async (_label, removed) => {
     wallet.sDai = 10n * WAD;
     const detail = renderPage();
     const popup = await openPopup();
@@ -208,7 +208,7 @@ describe("estimates removed in the popup are a draft until Predict", () => {
       for (const option of removed) expect(popup.queryByText(option.name)).toBeNull();
     });
 
-    await userEvent.click(popup.getByRole("button", { name: "Cancel" }));
+    await userEvent.click(popup.getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
     expect(savedEstimates(detail.parentMarket)).toEqual(
@@ -296,13 +296,13 @@ describe("the popup opens on a pay token the wallet holds", () => {
     await waitFor(async () => expect(await balanceToken(popup)).toBe(expected));
   });
 
-  it("opens on xDAI again after Cancel when the wallet holds only xDAI", async () => {
+  it("opens on xDAI again after closing when the wallet holds only xDAI", async () => {
     wallet.xDai = 50n * WAD;
     renderPage();
     let popup = await openPopup();
     await waitFor(async () => expect(await balanceToken(popup)).toBe("xDAI"));
 
-    await userEvent.click(popup.getByRole("button", { name: "Cancel" }));
+    await userEvent.click(popup.getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     popup = await openPopup();
 

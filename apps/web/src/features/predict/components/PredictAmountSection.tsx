@@ -9,7 +9,6 @@ import DaiIcon from "@/assets/svg/dai.svg";
 
 import { ownedAmount } from "@/utils/amount";
 
-import { PredictSpineNode } from "./PredictSpineNode";
 import type { PayToken } from "../types";
 import { fundingSummary, percentOf, roundToDisplay, shareOf, type Funding } from "../utils/funding";
 
@@ -75,24 +74,29 @@ export function PredictAmountSection({
         : `Balance: ${ownedAmount(available, token.decimals)} ${token.symbol}`;
 
   return (
-    <PredictSpineNode
-      done={isReadOnly}
-      delayed
-      title={
-        isFirstPrediction ? (
-          "You pay"
-        ) : (
-          <>
-            Extra funds
-            <span className="type-caption text-fs-text-secondary ml-1.5 font-normal max-sm:hidden">optional</span>
-          </>
-        )
-      }
-      right={
-        // always under the title below 416px, where whether it fits beside the title depends on the balance's digits;
-        // above, the title, an 11-digit balance and Max fit on one line
-        <div className="ml-auto flex min-w-0 items-baseline gap-2 @max-[26rem]:basis-full @max-[26rem]:justify-between">
-          <span className="type-caption text-fs-text-secondary min-w-0 truncate">{balance}</span>
+    <section
+      data-panel="amount"
+      className={clsx(
+        "@container rounded-fs-panel bg-fs-popup-panel p-4 short:px-3.5 short:py-2.5",
+        "[background-image:var(--fs-popup-wash)]",
+      )}
+    >
+      {/* below 384px the balance takes its own line whatever its digits; above, or on a short window, it shortens beside the title */}
+      <div className="flex min-h-5 flex-wrap items-center justify-between gap-x-3 @min-[24rem]:flex-nowrap short:flex-nowrap">
+        <h3 className="type-label text-fs-popup-text-2 min-w-0 shrink-0 truncate font-medium">
+          {isFirstPrediction ? (
+            "You pay"
+          ) : (
+            <>
+              Extra funds
+              <span className="text-fs-popup-text-3 ml-1.5 font-normal @max-[28rem]:hidden">optional</span>
+            </>
+          )}
+        </h3>
+        <div className="ml-auto flex h-5 min-w-0 items-center gap-2 @max-[24rem]:basis-full @max-[24rem]:justify-between short:basis-auto! short:justify-end!">
+          <span className="type-label text-fs-popup-text-2 min-w-0 truncate tabular-nums" title={balance || undefined}>
+            {balance}
+          </span>
           <LightButton
             small
             text="Max"
@@ -101,30 +105,34 @@ export function PredictAmountSection({
             className={clsx(
               // a 44px target that takes no more height than its label
               "-my-3 min-h-11 min-w-11 shrink-0 justify-end rounded-none! p-0 hover:bg-transparent!",
-              "[&_.button-text]:text-fs-text-accent [&_.button-text]:text-xs [&_.button-text]:font-semibold",
-              "data-disabled:[&_.button-text]:text-fs-text-secondary",
-              // hidden, not removed: its baseline sets the title row's height
+              "[&_.button-text]:text-fs-popup-accent-text [&_.button-text]:text-xs [&_.button-text]:font-semibold",
+              "[&_.button-text]:tracking-wide [&_.button-text]:uppercase",
+              "data-disabled:[&_.button-text]:text-fs-popup-text-3",
+              // hidden, not removed, so the row keeps its shape
               noBalance && "invisible",
             )}
           />
         </div>
-      }
-    >
+      </div>
+
       <div
         data-testid="amount-input"
         className={clsx(
-          "border-fs-border rounded-fs flex h-fit flex-row border",
+          "mt-2 flex h-11 flex-row items-center gap-3 short:mt-1.5 short:h-10",
           "transition-opacity duration-(--fs-dur-enter) ease-(--fs-ease-enter)",
           isReadOnly && "opacity-50",
         )}
       >
         <BigNumberField
           isRequired
-          // the field names its input only through its own label; "You pay" above is what shows
+          // the field names its input only through its own label; the panel's title is what shows
           label="Amount"
           className={clsx(
             "inline-block min-w-0 flex-1 [&>label]:sr-only",
-            "[&_input]:rounded-r-none [&_input]:border-none [&_input]:focus:shadow-none",
+            "[&_input]:h-11 [&_input]:border-none [&_input]:bg-transparent [&_input]:px-0 [&_input]:shadow-none!",
+            "[&_input]:text-fs-popup-text [&_input]:text-[30px] [&_input]:leading-9 [&_input]:font-medium",
+            "[&_input]:tracking-[-0.02em] [&_input]:tabular-nums [&_input]:placeholder:text-fs-popup-text-3",
+            "[&_input]:focus:shadow-none",
           )}
           minValue="0"
           placeholder="0"
@@ -140,25 +148,25 @@ export function PredictAmountSection({
           options={tokens.map((choice) => ({
             id: choice.id,
             text: choice.symbol,
-            icon: <DaiIcon className="mr-2 size-6" />,
+            icon: <DaiIcon className="mr-2 size-7" />,
           }))}
           value={token.id}
           onChange={(id) => onTokenChange(id as PayToken)}
           isDisabled={isReadOnly || tokens.length < 2}
           className={clsx(
-            "shrink-0 [&>button]:bg-fs-surface-tint [&>button]:h-11.25 [&>button]:w-fit",
-            "[&>button]:border-none [&>button]:focus:shadow-none",
-            "[&>button]:rounded-l-none",
-            "[&>svg]:fill-fs-text-secondary [&>svg]:size-3",
+            "shrink-0 [&>button]:bg-fs-popup-chip [&>button]:h-10 [&>button]:w-fit [&>button]:rounded-full",
+            "[&>button]:border-none [&>button]:pr-2.5 [&>button]:pl-1.5 [&>button]:focus:shadow-none",
+            "[&>button]:text-fs-popup-text [&>button]:font-semibold",
+            "[&>button>svg:last-child]:fill-fs-popup-text-2 [&>button>svg:last-child]:ml-1 [&>button>svg:last-child]:size-3",
           )}
         />
       </div>
 
-      {/* two lines held on a phone and one above, whatever it says, so no state moves the steps */}
+      {/* two lines held, whatever it says, so no state moves the steps */}
       <p
         className={clsx(
-          "mt-1 min-h-10 text-xs leading-5 text-pretty wrap-anywhere sm:min-h-5",
-          summary?.tone === "error" ? "text-fs-tone-error-text" : "text-fs-text-secondary",
+          "mt-1.5 min-h-9 text-[13px] leading-[18px] text-pretty tabular-nums wrap-anywhere",
+          summary?.tone === "error" ? "text-fs-tone-error-text" : "text-fs-popup-text-2",
         )}
       >
         {summary?.text}
@@ -169,7 +177,7 @@ export function PredictAmountSection({
         isDisabled={isReadOnly || !max}
         onChange={(percent) => max !== undefined && onAmountChange(roundDown(shareOf(max, percent)))}
       />
-    </PredictSpineNode>
+    </section>
   );
 }
 
@@ -197,7 +205,7 @@ function AmountSlider({
       // typing the amount stands in for it where the steps would otherwise sit under the fold
       className={clsx(
         // a 44px hit area on a 16px row: the track overhangs into these margins, never into the summary
-        "mt-3.5 mb-1.5 flex h-4 items-center gap-3 short:hidden",
+        "mt-3.5 flex h-4 items-center gap-3 short:hidden",
         "transition-opacity duration-(--fs-dur-enter) ease-(--fs-ease-enter)",
         isDisabled && "opacity-50",
       )}
@@ -208,8 +216,10 @@ function AmountSlider({
             "relative z-1 mt-0 w-full",
             "[&>div:last-child]:hidden [&_#slider-label]:hidden",
             "[&_div:has(>#slider-track)]:-my-3.5 [&_div:has(>#slider-track)]:h-11",
-            "[&_#slider-fill]:h-1 [&_#slider-track]:h-1",
+            "[&_#slider-fill]:h-1 [&_#slider-track]:h-1 [&_#slider-track]:bg-fs-popup-track",
+            "[&_#slider-fill]:[background:var(--fs-popup-axis)]",
             "[&_div:has(>#slider-label)]:size-4 [&_div:has(>#slider-label)]:border-2",
+            "[&_div:has(>#slider-label)]:border-(--fs-popup-axis-to) [&_div:has(>#slider-label)]:bg-fs-surface",
             "[&_div:has(>#slider-label)[data-focus-visible]]:ring-fs-accent",
             "[&_div:has(>#slider-label)[data-focus-visible]]:ring-2",
             "[&_div:has(>#slider-label)[data-focus-visible]]:ring-offset-fs-surface",
@@ -227,20 +237,23 @@ function AmountSlider({
           formatter={(value) => `${value}%`}
         />
         <div
-          className="pointer-events-none absolute top-1/2 -left-1 z-0 flex w-[calc(100%+8px)] -translate-y-1/2 justify-between"
+          className="pointer-events-none absolute top-1/2 -left-[3px] z-0 flex w-[calc(100%+6px)] -translate-y-1/2 justify-between"
           aria-hidden
         >
           {[0, 25, 50, 75, 100].map((mark) => (
             <span
               key={mark}
-              className={clsx("block size-2 rounded-full", mark < percent || mark === 0 ? "invisible" : "bg-fs-border")}
+              className={clsx(
+                "block size-1.5 rounded-full",
+                mark < percent || mark === 0 ? "invisible" : "bg-fs-popup-track-dot",
+              )}
             />
           ))}
         </div>
       </div>
       <span
         data-testid="amount-share"
-        className="text-fs-text-secondary w-9 shrink-0 text-right text-xs leading-4 tabular-nums"
+        className="text-fs-popup-text-2 w-9 shrink-0 text-right text-xs leading-4 tabular-nums"
       >
         {percent}%
       </span>

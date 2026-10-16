@@ -203,6 +203,6 @@ describe("PredictDialog on a second prediction with one changed option", () => {
     const popup = await openSecondPrediction(OPTIONS[1]);
     const funds = popup.getByRole("listitem", { name: "Timeline item: Add funds" });
 
-    expect(funds.querySelector("small")?.textContent ?? "").toBe("");
+    expect(funds.querySelector("h2 + p")?.textContent ?? "").toBe("");
   });
 });
