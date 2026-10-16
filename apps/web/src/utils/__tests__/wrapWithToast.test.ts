@@ -83,12 +83,12 @@ describe("wrapWithToast", () => {
     [
       "an out-of-funds send over http",
       new InsufficientFundsError({ cause: rpcError("insufficient funds for gas * price + value") }),
-      "Not enough in your wallet for this and the network fee.",
+      "Not enough in your wallet for this and the fee. Lower the amount or add funds.",
     ],
     [
       "an out-of-funds send through an injected wallet",
       new InsufficientFundsError({ cause: new InternalRpcError(new Error("insufficient funds for transfer")) }),
-      "Not enough in your wallet for this and the network fee.",
+      "Not enough in your wallet for this and the fee. Lower the amount or add funds.",
     ],
     [
       "a send that reverts while gas is estimated",

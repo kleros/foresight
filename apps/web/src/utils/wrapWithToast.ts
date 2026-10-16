@@ -3,7 +3,7 @@ import { waitForTransactionReceipt, type Config } from "@wagmi/core";
 import type { Hash, TransactionReceipt } from "viem";
 
 import { errorToast, infoToast, successToast } from "./toast";
-import { chainText, OUT_OF_FUNDS, REVERTS } from "./txErrorText";
+import { chainText, OUT_OF_FUNDS, OUT_OF_FUNDS_COPY, REVERTS } from "./txErrorText";
 
 /** The wallet's and the node's own messages name codes and contracts, so the toast never shows them. */
 const TX_ERROR_TOAST: Record<ReturnType<typeof classifyTxError>, string> = {
@@ -25,7 +25,7 @@ function errorCopy(error: unknown): string {
   const cause = classifyTxError(error);
   if (cause === "rejected") return TX_ERROR_TOAST.rejected;
   const text = chainText(error);
-  if (OUT_OF_FUNDS.test(text)) return "Not enough in your wallet for this and the network fee.";
+  if (OUT_OF_FUNDS.test(text)) return OUT_OF_FUNDS_COPY;
   if (REVERTS.test(text)) return TX_ERROR_TOAST.unknown;
   return TX_ERROR_TOAST[cause];
 }

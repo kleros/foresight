@@ -23,3 +23,6 @@ export function chainText(error: unknown): string {
 // a node reports both as an internal JSON-RPC error, which `classifyTxError` reads as a slow network
 export const OUT_OF_FUNDS = /insufficient funds|doesn't have enough funds/;
 export const REVERTS = /execution reverted|reverted with|vm exception/;
+
+/** Said wherever a send fails on `OUT_OF_FUNDS`; two lines in the predict popup's status slot from 360px wide. */
+export const OUT_OF_FUNDS_COPY = "Not enough in your wallet for this and the fee. Lower the amount or add funds.";
