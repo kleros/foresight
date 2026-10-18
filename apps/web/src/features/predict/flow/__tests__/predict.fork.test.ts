@@ -33,7 +33,7 @@ import {
   type LedgerScope,
 } from "./support/ledger";
 import { DUST_WEI } from "../../oracle/tolerances";
-import { fundingRequest, planFunding, type Funding } from "../../utils/funding";
+import { expectedSplit, fundingRequest, planFunding, type Funding } from "../../utils/funding";
 import type { PredictCtx, PredictOption, PredictRequest, PredictSnapshot } from "../types";
 
 /**
@@ -1220,6 +1220,8 @@ interface ScenarioRun {
   driver: import("../../run/types").PredictDriver;
   /** Each option's pool prices and fees as the run started. */
   start: Map<Address, { up: bigint; down: bigint; fees: { up: bigint; down: bigint } }>;
+  /** Each option's trades as the popup's Details showed them before the run. */
+  preview: Map<Address, ReturnType<Awaited<ReturnType<typeof load>>["previewTrades"]>>;
 }
 
 describe("money kept by every predict run, against a gnosis fork", () => {
@@ -1473,6 +1475,31 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       });
     }
 
+    // what the popup's Details shows, worked out as usePricePreview does
+    const reader = app.createPredictReader({
+      client,
+      sessionId: session.id,
+      collateral: session.collateralToken,
+      credits: { token: route.token, manager: route.manager },
+    });
+    const states = await reader.optionStates({ options, executor });
+    const preview: ScenarioRun["preview"] = new Map();
+    for (const [index, option] of options.entries()) {
+      const state = states[index]!;
+      preview.set(
+        option.childMarket,
+        app.previewTrades(
+          {
+            pools: state.pools,
+            targetPriceWad: option.targetPriceWad,
+            held: state.held,
+            splitAmount: state.underlying + expectedSplit(funding),
+          },
+          tolerances.SLIPPAGE_BPS,
+        ),
+      );
+    }
+
     const scope: LedgerScope = {
       owner: owner.address,
       executor,
@@ -1516,12 +1543,7 @@ describe("money kept by every predict run, against a gnosis fork", () => {
           }
         },
       }),
-      reader: app.createPredictReader({
-        client,
-        sessionId: session.id,
-        collateral: session.collateralToken,
-        credits: { token: route.token, manager: route.manager },
-      }),
+      reader,
       quoter: app.createLensQuoter(client, CHAIN_ID),
       creditsQuoter: app.createLensExactInputQuoter(client, CHAIN_ID),
       slippageBps: tolerances.SLIPPAGE_BPS,
@@ -1548,6 +1570,7 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       progress: driver.getProgress(),
       driver,
       start,
+      preview,
     };
   }
 
@@ -1666,6 +1689,12 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       ]);
       const [leg] = decodeFunctionData({ abi: SWAPR_ROUTER_ABI, data: swap }).args;
       expect(leg.recipient.toLowerCase()).toBe(executor.toLowerCase());
+      // the manager approves its own sDAI to the router inside execute, so the spend lands with no executor approve
+      const approvesSwapr = first
+        .filter((call) => call.to.toLowerCase() === collateral.toLowerCase() && call.data.startsWith("0x095ea7b3"))
+        .map((call) => decodeFunctionData({ abi: erc20Abi, data: call.data }).args[0] as Address)
+        .filter((spender) => spender.toLowerCase() === route.swaprRouter.toLowerCase());
+      expect(approvesSwapr, "the trade wallet approves its sDAI to Swapr").toEqual([]);
       const unwrap = first.find((call) => call.to.toLowerCase() === route.wxdai.toLowerCase())!;
       const [floor] = decodeFunctionData({ abi: WXDAI_WITHDRAW_ABI, data: unwrap.data }).args;
       expect(floor).toBe(leg.amountOutMinimum);
@@ -1728,6 +1757,36 @@ describe("money kept by every predict run, against a gnosis fork", () => {
         continue;
       }
       expect(legs.childSplit, `${child.childMarket} splits all it holds`).toBe(held + perChild);
+
+      // M5: Details previewed the legs signed, and a split short of the real one only by the
+      // credits swap's loss and, for xDAI, the deposit's rounding
+      const shown = run.preview.get(option.childMarket);
+      expect(shown, `${option.childMarket} had a preview`).toBeTruthy();
+      const kinds = (entries: Array<{ kind: string; side: string }>) =>
+        entries.map(({ kind, side }) => `${kind} ${side}`).sort();
+      expect(
+        kinds(
+          legs.legInputs.map((leg) => ({
+            kind: leg.tokenIn.toLowerCase() === child.underlying.toLowerCase() ? "buy" : "sell",
+            side: leg.pool,
+          })),
+        ),
+        `${option.childMarket}: the legs signed are the legs previewed`,
+      ).toEqual(
+        kinds([
+          ...shown!.sells.map((leg) => ({ kind: "sell", side: leg.side })),
+          ...shown!.buys.map((leg) => ({ kind: "buy", side: leg.side })),
+        ]),
+      );
+      const previewOff =
+        shown!.split > legs.childSplit ? shown!.split - legs.childSplit : legs.childSplit - shown!.split;
+      const allowed =
+        (request.creditsToSpend * BigInt(tolerances.CREDITS_MAX_LOSS_BPS)) / 10_000n +
+        (request.depositNative ? DUST_WEI : 0n);
+      expect(
+        previewOff,
+        `${option.childMarket}: previewed a split of ${shown!.split}, split ${legs.childSplit}`,
+      ).toBeLessThanOrEqual(allowed);
       for (const token of [option.upToken, option.downToken]) {
         const floor =
           legs.childSplit -
