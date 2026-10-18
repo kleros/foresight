@@ -5,5 +5,5 @@ typechain-types/
 coverage/
 # hardhat-deploy output, generated per network.
 deployments/*/
-# upstream sources, kept byte-identical
+# upstream sources, unchanged apart from a provenance line
 contracts/vendor/

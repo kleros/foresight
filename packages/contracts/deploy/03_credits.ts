@@ -51,7 +51,7 @@ const deployCredits: DeployFunction = async (hre: HardhatRuntimeEnvironment) => 
     );
   }
 
-  // A redeploy onto a node that already has the manager would mint a second grant.
+  // Seeds only the deployment that created this manager.
   if (!manager.newlyDeployed) return;
 
   await deployments.execute(
