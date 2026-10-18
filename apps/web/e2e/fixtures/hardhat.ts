@@ -32,7 +32,7 @@ export const test = base.extend<{ hardhat: HardhatClient }>({
 });
 
 /** Gnosis' Foresight credits governor: an admin of the token and the manager's governor. */
-export const CREDITS_GOVERNOR: Address = "0x4EDCA105188a0783Ab3A6f09c50567D1E3F8591D";
+const CREDITS_GOVERNOR: Address = "0x4EDCA105188a0783Ab3A6f09c50567D1E3F8591D";
 
 const CREDITS_ADMIN_ABI = parseAbi([
   "function governor() view returns (address)",
