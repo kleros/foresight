@@ -18,10 +18,15 @@ export interface TokenChoice {
   symbol: string;
 }
 
+/** A token besides the collateral the source holds, picked by its address. */
+export interface HeldToken extends TokenChoice {
+  address: Address;
+  balance: bigint;
+}
+
 /** The token ids the picker addresses; the native one is not an address. */
 const NATIVE = "native";
 const COLLATERAL = "collateral";
-const CREDITS = "credits";
 
 interface TransferDialogProps {
   isOpen: boolean;
@@ -34,8 +39,8 @@ interface TransferDialogProps {
   collateral: TokenChoice & { address: Address };
   /** Offered only where the native currency can reach the collateral. */
   native?: TokenChoice;
-  /** Foresight credits the source holds; offered only when it holds some. */
-  credits?: TokenChoice & { address: Address; balance: bigint | undefined };
+  /** Other tokens the source holds, such as Foresight credits; each offered only when it holds some. */
+  held?: HeldToken[];
   onSubmit: (asset: Asset) => void;
   isPending: boolean;
   /** Max takes the whole balance rather than the shown amount. */
@@ -51,7 +56,7 @@ export function TransferDialog({
   source,
   collateral,
   native,
-  credits,
+  held = [],
   onSubmit,
   isPending,
   maxIsExact,
@@ -60,10 +65,10 @@ export function TransferDialog({
   const [input, setInput] = useState("");
 
   const useNative = selected === NATIVE && native !== undefined;
-  const useCredits = selected === CREDITS && credits !== undefined;
+  const other = held.find((token) => token.balance > 0n && token.address === selected);
   const funds = useFunds(source, collateral.address);
-  const chosen = useNative && native ? native : useCredits ? credits : collateral;
-  const available = useNative ? funds.data?.native : useCredits ? credits.balance : (funds.data?.token ?? undefined);
+  const chosen = useNative && native ? native : (other ?? collateral);
+  const available = useNative ? funds.data?.native : other ? other.balance : (funds.data?.token ?? undefined);
 
   const amount = parseAmount(input, chosen.decimals);
   const exceedsAvailable = amount !== null && available !== undefined && amount > available;
@@ -71,14 +76,16 @@ export function TransferDialog({
   const tokens = [
     { id: COLLATERAL, symbol: collateral.symbol, decimals: collateral.decimals },
     ...(native ? [{ id: NATIVE, symbol: native.symbol, decimals: native.decimals }] : []),
-    ...(credits ? [{ id: CREDITS, symbol: credits.symbol, decimals: credits.decimals }] : []),
+    ...held
+      .filter((token) => token.balance > 0n)
+      .map((token) => ({ id: token.address, symbol: token.symbol, decimals: token.decimals })),
   ];
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (amount === null || exceedsAvailable) return;
 
-    onSubmit({ token: useNative ? "native" : useCredits ? credits.address : collateral.address, amount });
+    onSubmit({ token: useNative ? "native" : (other?.address ?? collateral.address), amount });
   };
 
   return (
@@ -95,7 +102,7 @@ export function TransferDialog({
           error={
             exceedsAvailable ? overCap("Not enough balance.", available, chosen.decimals, chosen.symbol) : undefined
           }
-          isLoadingBalance={!useCredits && funds.isPending}
+          isLoadingBalance={!other && funds.isPending}
           isReadOnly={isPending}
           maxIsExact={maxIsExact}
         />
