@@ -71,11 +71,9 @@ export function planFunding({
   let left = collateralIn;
   // each part in whole shown decimals, so what is signed and burned is what the popup shows
   const uses = credits.map((line): CreditUse => {
-    const usable = min(left, line.usable);
-    const fromTradeWallet = cutToOwned(min(usable, line.tradeWallet), CREDIT_DECIMALS);
-    const fromWallet = cutToOwned(min(usable - fromTradeWallet, line.wallet), CREDIT_DECIMALS);
-    left -= fromTradeWallet + fromWallet;
-    return { kind: line.kind, fromTradeWallet, fromWallet };
+    const use = creditUse(line, min(left, line.usable));
+    left -= use.fromTradeWallet + use.fromWallet;
+    return use;
   });
   // what the cut leaves below a shown decimal is not worth a deposit of its own
   if (left < CREDIT_STEP && uses.some((use) => use.fromTradeWallet + use.fromWallet > 0n)) {
@@ -85,8 +83,11 @@ export function planFunding({
   const toAdd = left > tradeWallet ? left - tradeWallet : 0n;
   // rounded up, so what lands covers the shortfall
   const depositNeeded = rate === WAD ? toAdd : (toAdd * rate + WAD - 1n) / WAD;
+  // the cut applied to each line whole, so no amount it accepts asks for credits the cut drops
   const creditsAvailable = toToken(
-    credits.reduce((sum, line) => sum + min(line.usable, line.tradeWallet + line.wallet), 0n),
+    credits
+      .map((line) => creditUse(line, line.usable))
+      .reduce((sum, use) => sum + use.fromTradeWallet + use.fromWallet, 0n),
   );
 
   return {
@@ -103,6 +104,13 @@ export function planFunding({
 }
 
 const min = (a: bigint, b: bigint) => (a < b ? a : b);
+
+/** Up to `usable` of the line's credits, trade wallet first, each source cut to the shown decimals. */
+function creditUse(line: CreditLine, usable: bigint): CreditUse {
+  const fromTradeWallet = cutToOwned(min(usable, line.tradeWallet), CREDIT_DECIMALS);
+  const fromWallet = cutToOwned(min(usable - fromTradeWallet, line.wallet), CREDIT_DECIMALS);
+  return { kind: line.kind, fromTradeWallet, fromWallet };
+}
 
 const CREDIT_DECIMALS = 18;
 
