@@ -1802,7 +1802,12 @@ describe("money kept by every predict run, against a gnosis fork", () => {
         expect(moved(before, after, executor, child.underlying), `${child.childMarket}'s underlying`).toBe(perChild);
         continue;
       }
-      expect(legs.childSplit, `${child.childMarket} splits all it holds`).toBe(held + perChild);
+      // the credits' mint is split less the rate margin, which stays as underlying for the next run
+      const margin = (minted * app.MINT_RATE_MARGIN_BPS) / 10_000n + 1n;
+      expect(legs.childSplit, `${child.childMarket} splits at most what it holds`).toBeLessThanOrEqual(held + perChild);
+      expect(legs.childSplit, `${child.childMarket} splits all it holds but the margin`).toBeGreaterThanOrEqual(
+        held + perChild - margin,
+      );
 
       // M5: Details previewed the legs signed, and a split short of the real one only by the
       // credits swap's loss and, for xDAI, the deposit's rounding

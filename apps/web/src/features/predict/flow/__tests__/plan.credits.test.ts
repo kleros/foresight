@@ -9,6 +9,7 @@ import { CREDITS_MAX_LOSS_BPS, CREDITS_SLIPPAGE_BPS } from "../../oracle/toleran
 import {
   assertRoutes,
   CreditsUnavailableError,
+  MINT_RATE_MARGIN_BPS,
   planPredict,
   PredictConfigError,
   STEP_ID,
@@ -173,7 +174,7 @@ describe("the first batch of a credits run", () => {
     expect(sDaiApprovals).toEqual([addresses.router]);
   });
 
-  it("splits each option from both sources: the sDAI and what the unwrapped credits mint", async () => {
+  it("splits each option from both sources: the sDAI and what the unwrapped credits mint, less the rate margin", async () => {
     const one = option(1);
     const tx = await build(
       creditsRun(),
@@ -184,7 +185,11 @@ describe("the first batch of a credits run", () => {
       .map((call) => decodeFunctionData({ abi: gnosisRouterAbi, data: call.data }))
       .filter((call) => call.functionName === "splitPosition" && call.args[1] === one.childMarket);
 
-    expect(childSplits.map((call) => call.args[2])).toEqual([WAD / 10n + 3n * WAD + mintedFrom(floorOf(2n * WAD))]);
+    // a rate rise between the build and the send mints less than the preview, so each split stays under it
+    const preview = mintedFrom(floorOf(2n * WAD));
+    const margin = (preview * MINT_RATE_MARGIN_BPS) / 10_000n;
+    expect(margin).toBeGreaterThan(0n);
+    expect(childSplits.map((call) => call.args[2])).toEqual([WAD / 10n + 3n * WAD + preview - margin]);
   });
 
   it("with credits alone, splits only from xDAI at the parent", async () => {

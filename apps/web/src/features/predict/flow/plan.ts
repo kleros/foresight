@@ -199,8 +199,15 @@ async function optionCalls(
 /** The credits leg of the first batch, and the collateral its xDAI mints at the parent. */
 interface CreditsLeg {
   calls: ExecutorValueCall[];
+  /** What each option splits of the mint: the vault's preview less `MINT_RATE_MARGIN_BPS`. */
   minted: bigint;
 }
+
+/**
+ * Of ten thousand, held back from the credits' mint when each option's split is sized. Interest
+ * landing in sDAI raises its rate, so `splitFromBase` can mint less than the build-time preview.
+ */
+export const MINT_RATE_MARGIN_BPS = 1n;
 
 /**
  * The manager swaps `creditsToSpend` of its collateral for WXDAI paid to the executor, which unwraps
@@ -250,9 +257,9 @@ async function creditsLeg(ctx: PredictCtx, amount: bigint, deps: PredictDeps): P
     args: [{ ...params, amountOutMinimum: floor, limitSqrtPrice: 0n }],
   });
 
+  const preview = await deps.reader.previewDeposit(floor);
   return {
-    // splitFromBase deposits the xDAI into the vault in the same call, so this preview is exact at that block
-    minted: await deps.reader.previewDeposit(floor),
+    minted: preview - (preview * MINT_RATE_MARGIN_BPS) / 10_000n,
     calls: [
       {
         to: route.manager,
