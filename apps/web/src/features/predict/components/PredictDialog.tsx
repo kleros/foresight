@@ -34,6 +34,8 @@ interface PredictDialogProps {
   /** Null while the balances are still being read. */
   funding: Funding | null;
   collateral: { symbol: string; decimals: number };
+  /** One option, as the session names it: `city`. */
+  optionNoun: string;
   isFirstPrediction: boolean;
   isDisconnected?: boolean;
   steps: PredictSteps;
@@ -91,6 +93,7 @@ export function PredictDialog({
   onTokenChange,
   funding,
   collateral,
+  optionNoun,
   isFirstPrediction,
   isDisconnected,
   steps,
@@ -225,6 +228,9 @@ export function PredictDialog({
             <PredictSummary
               selected={selected}
               preview={shownPreview}
+              collateral={collateral}
+              // a stored run minted what it stored, not what this form holds
+              mint={recovered || !shownFunding ? undefined : { amount: shownFunding.collateralIn, noun: optionNoun }}
               isOpen={summaryOpen}
               onToggle={() => setSummaryOpen((open) => !open)}
               isPricing={isPricing}

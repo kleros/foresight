@@ -12,6 +12,7 @@ import type { PayToken, SelectedEstimate } from "@/features/predict/types";
 import { roundToDisplay } from "@/features/predict/utils/funding";
 import { fundsToAdd, predictSteps, type FundsToAdd } from "@/features/predict/utils/predictSteps";
 import type { SessionDetail } from "@/features/sessions/types";
+import { optionNounSingular } from "@/features/sessions/utils/optionNoun";
 import { useExecutor } from "@/features/trade-executor/api/getExecutor";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
@@ -178,6 +179,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
       }}
       funding={funding}
       collateral={collateral}
+      optionNoun={optionNounSingular(session.itemName)}
       isFirstPrediction={isFirstPrediction}
       isDisconnected={owner === undefined}
       steps={steps}
