@@ -3393,6 +3393,7 @@ __metadata:
     prettier: "npm:^3.7.4"
     prettier-plugin-solidity: "npm:^1.4.2"
     solhint-plugin-prettier: "npm:^0.1.0"
+    solmate: "npm:6.8.0"
     ts-node: "npm:^10.9.2"
     typechain: "npm:^8.3.2"
     typescript: "npm:^5.8.3"
@@ -19549,7 +19550,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"solmate@npm:^6.2.0":
+"solmate@npm:6.8.0, solmate@npm:^6.2.0":
   version: 6.8.0
   resolution: "solmate@npm:6.8.0"
   checksum: 10c0/0221167f344f2fc683aedf3ce1508ea514c145c83e3e27034697e1a72eedddc5c36affd951d8d285ed5a1781409a918cb78c97a0e2b01772f3500eae7a958fdc
