@@ -37,6 +37,30 @@ export function gnosisRouterAddress(chainId: number = DEFAULT_CHAIN_ID): Address
   return GNOSIS_ROUTER_ADDRESSES[chainId] ?? null;
 }
 
+/** Same contracts on both; gnosis' manager spends real sDAI, the local one a mintable stand-in. */
+export const foresightCreditsAbi = localhost.foresightCreditsAbi;
+
+export const creditsManagerAbi = localhost.creditsManagerAbi;
+
+export type CreditsContracts = { credits: Address; manager: Address };
+
+const FORESIGHT_CREDITS_ADDRESSES: Record<number, Address> = {
+  ...localhost.foresightCreditsAddress,
+  ...gnosis.foresightCreditsAddress,
+};
+const CREDITS_MANAGER_ADDRESSES: Record<number, Address> = {
+  ...localhost.creditsManagerAddress,
+  ...gnosis.creditsManagerAddress,
+};
+
+export function creditsContracts(chainId: number = DEFAULT_CHAIN_ID): CreditsContracts | null {
+  const credits = FORESIGHT_CREDITS_ADDRESSES[chainId];
+  const manager = CREDITS_MANAGER_ADDRESSES[chainId];
+  if (!credits || !manager) return null;
+
+  return { credits, manager };
+}
+
 export const sDaiAdapterAbi = gnosis.savingsXDaiAdapterAbi;
 
 const S_DAI_ADDRESSES: Record<number, Address> = { ...gnosis.savingsXDaiAddress };
