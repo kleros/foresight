@@ -21,12 +21,25 @@ beforeEach(() => {
 
 describe("PredictSuccessDialog", () => {
   it.each([
-    [["Hanoi"], "1 estimate could not be traded: Hanoi."],
-    [["Berlin", "Hanoi"], "2 estimates could not be traded: Berlin, Hanoi."],
-  ])("names what it left out as the popup words it: %j", (leftOut, line) => {
+    [["Hanoi"], "Could not be traded: Hanoi."],
+    [["Berlin", "Hanoi"], "Could not be traded: Berlin, Hanoi."],
+  ])("names what it left out: %j", (leftOut, line) => {
     render(<PredictSuccessDialog isOpen leftOut={leftOut} onClose={vi.fn()} />);
 
     expect(screen.getByText(line)).toBeInTheDocument();
+  });
+
+  it("counts what was placed out of every estimate when some were left out", () => {
+    render(
+      <PredictSuccessDialog
+        isOpen
+        placed={{ estimates: 2, amount: 10n * 10n ** 18n, symbol: "sDAI", decimals: 18 }}
+        leftOut={["Nairobi", "Montevideo"]}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("2 of 4 estimates · 10 sDAI")).toBeInTheDocument();
   });
 
   it("is named by its heading", () => {
@@ -114,6 +127,10 @@ describe("PredictSuccessDialog", () => {
     render(<PredictSuccessDialog isOpen leftOut={[]} onClose={vi.fn()} />);
 
     expect(Boolean(screen.queryByText("Confirm your email first, or it will not arrive."))).toBe(warns);
+    expect(screen.getByRole("link", { name: warns ? "Confirm in Settings" : "Change in Settings" })).toHaveAttribute(
+      "href",
+      "/settings?tab=notifications",
+    );
   });
 
   it("keeps the sign-in's label beside a spinner while the wallet signs, and cannot be pressed", () => {

@@ -2027,6 +2027,10 @@ test.describe("the success dialog", () => {
 
     await expect(warning).toBeVisible();
     await expect(warning).toHaveCSS("color", await tokenValue(page, "color", "var(--fs-tone-warning-text)"));
+    await expect(page.getByRole("link", { name: "Confirm in Settings" })).toHaveAttribute(
+      "href",
+      "/settings?tab=notifications",
+    );
   });
 
   test("keeps the sign-in at 44px in the panel and Close as a 44px text action", async ({ page }) => {

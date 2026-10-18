@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Modal } from "@kleros/ui-components-library";
@@ -7,7 +8,6 @@ import clsx from "clsx";
 
 import { PredictButton } from "@/features/predict/components/PredictButton";
 import { shownAmount } from "@/features/predict/utils/funding";
-import { leftOutText } from "@/features/predict/utils/predictSteps";
 
 import { paths } from "@/config/paths";
 
@@ -21,9 +21,10 @@ export interface PlacedPrediction {
   decimals: number;
 }
 
-/** "2 estimates · 10 sDAI". */
-export function placedText({ estimates, amount, symbol, decimals }: PlacedPrediction): string {
-  const count = `${estimates} ${estimates === 1 ? "estimate" : "estimates"}`;
+/** "2 estimates · 10 sDAI", or "2 of 4 estimates · 10 sDAI" when `leftOut` more could not be traded. */
+export function placedText({ estimates, amount, symbol, decimals }: PlacedPrediction, leftOut = 0): string {
+  const total = estimates + leftOut;
+  const count = `${leftOut > 0 ? `${estimates} of ${total}` : estimates} ${total === 1 ? "estimate" : "estimates"}`;
   return amount ? `${count} · ${shownAmount(amount, decimals)} ${symbol}` : count;
 }
 
@@ -75,10 +76,12 @@ export function PredictSuccessView({
           </svg>
         </span>
         <h1 className="text-fs-popup-text text-xl font-semibold tracking-[-0.01em] text-balance">Prediction placed</h1>
-        {placed ? <p className="text-fs-popup-text-2 -mt-1 text-sm tabular-nums">{placedText(placed)}</p> : null}
+        {placed ? (
+          <p className="text-fs-popup-text-2 -mt-1 text-sm tabular-nums">{placedText(placed, leftOut.length)}</p>
+        ) : null}
         {leftOut.length > 0 ? (
           <p className="text-fs-popup-text-2 text-[13px] leading-[18px] text-pretty">
-            {leftOutText(leftOut.length)}: {leftOut.join(", ")}.
+            Could not be traded: {leftOut.join(", ")}.
           </p>
         ) : null}
       </div>
@@ -101,15 +104,15 @@ export function PredictSuccessView({
                 Confirm your email first, or it will not arrive.
               </p>
             ) : null}
-            <a
+            <Link
               href={paths.settings.getHref("notifications")}
               className={clsx(
                 "text-fs-popup-accent-text w-fit text-[13px] leading-[18px] font-medium",
                 "underline decoration-current/40 underline-offset-3",
               )}
             >
-              Change in Settings
-            </a>
+              {isEmailVerified === false ? "Confirm in Settings" : "Change in Settings"}
+            </Link>
           </>
         ) : (
           <>
