@@ -1,4 +1,10 @@
-import { createViemTxGateway, type FlowTx } from "@foresight/tx-orchestrator";
+import {
+  createFlowRunStore,
+  createMemoryStorage,
+  createViemTxGateway,
+  type FlowRunStorage,
+  type FlowTx,
+} from "@foresight/tx-orchestrator";
 import {
   createPublicClient,
   createWalletClient,
@@ -1204,6 +1210,8 @@ interface Scenario {
   beforeBatch?: () => Promise<void>;
   /** Sends with this gas rather than an estimate, so a batch meant to revert reaches the chain. */
   gas?: bigint;
+  /** Closes the tab at the first batch: before it is signed, or once it landed with no hash stored. */
+  closeTab?: "before-batch" | "after-batch";
 }
 
 interface ScenarioRun {
@@ -1222,6 +1230,17 @@ interface ScenarioRun {
   start: Map<Address, { up: bigint; down: bigint; fees: { up: bigint; down: bigint } }>;
   /** Each option's trades as the popup's Details showed them before the run. */
   preview: Map<Address, ReturnType<Awaited<ReturnType<typeof load>>["previewTrades"]>>;
+  /** A fresh driver on the storage as the tab left it, as a reload opens it. */
+  reopen: () => import("../../run/types").PredictDriver;
+}
+
+/** The tab closed at this send; the storage it left is what a reload reads. */
+class TabClosedError extends Error {}
+
+function copyStorage(from: FlowRunStorage): FlowRunStorage {
+  const copy = createMemoryStorage();
+  for (const key of from.keys()) copy.setItem(key, from.getItem(key)!);
+  return copy;
 }
 
 describe("money kept by every predict run, against a gnosis fork", () => {
@@ -1514,43 +1533,62 @@ describe("money kept by every predict run, against a gnosis fork", () => {
 
     const sent: ScenarioRun["sent"] = [];
     let beforeBatch = scenario.beforeBatch;
-    const driver = app.createPredictRun({
-      gateway: createViemTxGateway({
-        client,
-        sendTransaction: async (tx) => {
-          if (beforeBatch && tx.to.toLowerCase() === executor.toLowerCase()) {
-            const hook = beforeBatch;
-            beforeBatch = undefined;
-            await hook();
-          }
-          const data = tx.data ?? "0x";
-          const value = tx.value ?? 0n;
-          const gas =
-            scenario.gas ?? ((await client.estimateGas({ account: owner, to: tx.to, data, value })) * 3n) / 2n;
-          const nonce = await client.getTransactionCount({ address: owner.address, blockTag: "pending" });
-          try {
-            const hash = await wallet.sendTransaction({ account: owner, chain: gnosis, to: tx.to, data, value, gas });
-            sent.push({ stepId: "", tx, receipt: await client.waitForTransactionReceipt({ hash }) });
-            return hash;
-          } catch (error) {
-            // hardhat mines a reverting send and answers it with an error, so its fee is found by nonce
-            const block = await client.getBlock({ blockTag: "latest", includeTransactions: true });
-            const mined = block.transactions.find(
-              (each) => each.from.toLowerCase() === owner.address.toLowerCase() && each.nonce === nonce,
-            );
-            if (mined) sent.push({ stepId: "", tx, receipt: await client.getTransactionReceipt({ hash: mined.hash }) });
-            throw error;
-          }
-        },
-      }),
-      reader,
-      quoter: app.createLensQuoter(client, CHAIN_ID),
-      creditsQuoter: app.createLensExactInputQuoter(client, CHAIN_ID),
-      slippageBps: tolerances.SLIPPAGE_BPS,
-      flowId: `predict-money-${owner.address}-${Date.now()}`,
-      ctx: () => ctx,
-      snapshot: () => request,
+    const storage = createMemoryStorage();
+    let closeTab = scenario.closeTab;
+    let leftBehind: FlowRunStorage | undefined;
+    const flowId = `predict-money-${owner.address}-${Date.now()}`;
+    const gateway = createViemTxGateway({
+      client,
+      sendTransaction: async (tx) => {
+        const isBatch = tx.to.toLowerCase() === executor.toLowerCase();
+        if (beforeBatch && isBatch) {
+          const hook = beforeBatch;
+          beforeBatch = undefined;
+          await hook();
+        }
+        if (isBatch && closeTab === "before-batch") {
+          closeTab = undefined;
+          leftBehind = copyStorage(storage);
+          throw new TabClosedError();
+        }
+        const data = tx.data ?? "0x";
+        const value = tx.value ?? 0n;
+        const gas = scenario.gas ?? ((await client.estimateGas({ account: owner, to: tx.to, data, value })) * 3n) / 2n;
+        const nonce = await client.getTransactionCount({ address: owner.address, blockTag: "pending" });
+        let hash: Hash;
+        try {
+          hash = await wallet.sendTransaction({ account: owner, chain: gnosis, to: tx.to, data, value, gas });
+          sent.push({ stepId: "", tx, receipt: await client.waitForTransactionReceipt({ hash }) });
+        } catch (error) {
+          // hardhat mines a reverting send and answers it with an error, so its fee is found by nonce
+          const block = await client.getBlock({ blockTag: "latest", includeTransactions: true });
+          const mined = block.transactions.find(
+            (each) => each.from.toLowerCase() === owner.address.toLowerCase() && each.nonce === nonce,
+          );
+          if (mined) sent.push({ stepId: "", tx, receipt: await client.getTransactionReceipt({ hash: mined.hash }) });
+          throw error;
+        }
+        if (isBatch && closeTab === "after-batch") {
+          closeTab = undefined;
+          leftBehind = copyStorage(storage);
+          throw new TabClosedError();
+        }
+        return hash;
+      },
     });
+    const driverOn = (from: FlowRunStorage) =>
+      app.createPredictRun({
+        gateway,
+        reader,
+        quoter: app.createLensQuoter(client, CHAIN_ID),
+        creditsQuoter: app.createLensExactInputQuoter(client, CHAIN_ID),
+        slippageBps: tolerances.SLIPPAGE_BPS,
+        flowId,
+        store: createFlowRunStore({ storage: from }),
+        ctx: () => ctx,
+        snapshot: () => request,
+      });
+    const driver = driverOn(storage);
 
     driver.start();
     await vi.waitFor(() => expect(["halted", "complete"]).toContain(driver.getProgress().stage), {
@@ -1571,6 +1609,11 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       driver,
       start,
       preview,
+      reopen: () => {
+        if (!leftBehind) throw new Error("The tab never closed.");
+        driver.dispose();
+        return driverOn(leftBehind);
+      },
     };
   }
 
@@ -2067,6 +2110,54 @@ describe("money kept by every predict run, against a gnosis fork", () => {
     },
     900_000,
   );
+
+  for (const closeTab of ["before-batch", "after-batch"] as const) {
+    it.skipIf(!FORK_RPC_URL)(
+      `a tab closed ${closeTab === "before-batch" ? "after Add credits" : "as the first batch landed"} moves and spends the credits once on reload (A7)`,
+      async () => {
+        const run = await runScenario({
+          key: nextKey(),
+          pay: "collateral",
+          amount: parseEther("12"),
+          walletCollateral: parseEther("50"),
+          credits: { wallet: parseEther("5") },
+          options: nudged(1),
+          closeTab,
+        });
+        expect(run.request).toMatchObject({ creditsFromEoa: parseEther("5"), creditsToSpend: parseEther("5") });
+        expect(run.progress.stage).toBe("halted");
+        expect(await balance(route.token, run.ctx.executor), "the trade wallet's credits as the tab closed").toBe(
+          closeTab === "before-batch" ? parseEther("5") : 0n,
+        );
+
+        const reloaded = run.reopen();
+        reloaded.recover();
+        await vi.waitFor(() => expect(["review", "halted"]).toContain(reloaded.getProgress().stage), {
+          timeout: 60_000,
+          interval: 250,
+        });
+        expect(reloaded.getProgress().stage, JSON.stringify(reloaded.getProgress().failure)).toBe("review");
+        const sentBefore = run.sent.length;
+        reloaded.resume();
+        await vi.waitFor(() => expect(["halted", "complete"]).toContain(reloaded.getProgress().stage), {
+          timeout: 300_000,
+          interval: 250,
+        });
+
+        const transfers = run.sent.filter(({ tx }) => tx.to.toLowerCase() === route.token.toLowerCase());
+        expect(transfers, "the credits moved once").toHaveLength(1);
+        expect(landedBatches(run), "the first batch landed once").toHaveLength(1);
+        if (closeTab === "after-batch") expect(run.sent.length, "nothing signed on reload").toBe(sentBefore);
+        await expectMoneyKept({
+          ...run,
+          after: await readLedger(client, SCOPE_TOKENS(run)),
+          progress: reloaded.getProgress(),
+        });
+        reloaded.dispose();
+      },
+      900_000,
+    );
+  }
 
   it.skipIf(!FORK_RPC_URL)(
     "many options at once, some already at their estimate, lands each one moved and names each left out",
