@@ -31,6 +31,7 @@ export function creditsOffer(credits: CreditsHeld | null): CreditsOffer {
 export interface CreditLine {
   kind: "foresight";
   tradeWallet: bigint;
+  /** The manager spends from its caller, the trade wallet, so these move there before a spend. */
   wallet: bigint;
   /** What the line's manager covers now, of both. */
   usable: bigint;
