@@ -113,9 +113,13 @@ function TitleRow({ option, isSet }: { option: SessionOption; isSet: boolean }) 
         <h3 className="text-fs-text-primary min-w-0 text-left font-semibold wrap-break-word">{option.name}</h3>
       </div>
       {isSet ? (
-        <CheckCircle className="size-4 shrink-0" role="img" aria-label="Estimate set" />
+        <CheckCircle
+          className="text-fs-tone-success-text size-4 shrink-0 [&_path]:fill-current"
+          role="img"
+          aria-label="Estimate set"
+        />
       ) : (
-        <MinusOutline className="size-4 shrink-0" aria-hidden />
+        <MinusOutline className="text-fs-popup-text-3 size-4 shrink-0 [&_path]:fill-current" aria-hidden />
       )}
     </div>
   );

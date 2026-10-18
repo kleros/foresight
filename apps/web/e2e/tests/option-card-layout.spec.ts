@@ -216,6 +216,65 @@ for (const width of [320, 375, 1280]) {
   });
 }
 
+/** WCAG contrast between two computed rgb() colours. */
+function contrast(first: string, second: string) {
+  const luminance = (css: string) => {
+    const [r = 0, g = 0, b = 0] = css.match(/[\d.]+/g)!.map(Number);
+    const linear = (c: number) => ((c /= 255) <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+  };
+  const [a, b] = [luminance(first), luminance(second)];
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+test.describe("the option card header's mark", () => {
+  test.use({ viewport: { width: 375, height: 900 } });
+
+  for (const theme of ["light", "dark"]) {
+    for (const [mark, query, token] of [
+      ["check", "value=40", "var(--fs-tone-success-text)"],
+      ["minus", "", "var(--fs-popup-text-3)"],
+    ] as const) {
+      test(`draws the ${mark} in its theme token at 3:1 or more, at rest and on hover, in the ${theme} theme`, async ({
+        page,
+      }) => {
+        await openHarness(page, `${harness.url}?${query}&theme=${theme}`);
+        const header = page.locator("#root button").first();
+        // the mark closes the title row, beside the option's name
+        const icon = header.locator("div:has(> div > h3) > svg");
+        const look = () =>
+          icon.evaluate((svg) => {
+            let ground = "";
+            for (let at: Element | null = svg; at && !ground; at = at.parentElement) {
+              const fill = getComputedStyle(at).backgroundColor;
+              if (fill.startsWith("rgb(")) ground = fill;
+            }
+            return { fill: getComputedStyle(svg.querySelector("path")!).fill, ground };
+          });
+        const expected = await page.evaluate((value) => {
+          const probe = document.createElement("span");
+          probe.style.color = value;
+          document.body.append(probe);
+          const color = getComputedStyle(probe).color;
+          probe.remove();
+          return color;
+        }, token);
+
+        const rest = await look();
+        expect.soft(contrast(rest.fill, rest.ground), `at rest on ${rest.ground}`).toBeGreaterThanOrEqual(3);
+        await header.hover();
+        await page.evaluate(() =>
+          Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined))),
+        );
+        await expect(header).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+        const hover = await look();
+        expect.soft(contrast(hover.fill, hover.ground), `on hover on ${hover.ground}`).toBeGreaterThanOrEqual(3);
+        expect(rest.fill).toBe(expected);
+      });
+    }
+  }
+});
+
 test.describe("the option card reached by keyboard", () => {
   test.use({ viewport: { width: 375, height: 900 } });
 
