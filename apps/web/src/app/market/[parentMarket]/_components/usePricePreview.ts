@@ -7,7 +7,7 @@ import type { PriceMove } from "@/features/predict/components/PredictList";
 import { SLIPPAGE_BPS } from "@/features/predict/oracle/tolerances";
 import { createPredictReader } from "@/features/predict/run/reader";
 import type { SelectedEstimate } from "@/features/predict/types";
-import { previewUpPrice } from "@/features/predict/utils/plan";
+import { previewTrades } from "@/features/predict/utils/plan";
 import type { SessionDetail } from "@/features/sessions/types";
 
 import { priceWadToEstimate } from "@/utils/optionPrice";
@@ -16,7 +16,7 @@ import { publicClient } from "@/lib/web3/public-client";
 
 import { toPredictOptions } from "./toPredictOptions";
 
-/** Where each selected option's market sits now and where this prediction would move it, keyed by lower-case market. */
+/** Where each selected option's market sits now, where this prediction would move it and with which trades, keyed by lower-case market. */
 export function usePricePreview(args: {
   session: SessionDetail;
   selected: SelectedEstimate[];
@@ -50,7 +50,7 @@ export function usePricePreview(args: {
     const scale = session.options.find((each) => each.market === option.childMarket);
     if (!state || !scale) continue;
 
-    const move = previewUpPrice(
+    const trades = previewTrades(
       {
         pools: state.pools,
         targetPriceWad: option.targetPriceWad,
@@ -59,10 +59,12 @@ export function usePricePreview(args: {
       },
       SLIPPAGE_BPS,
     );
-    if (move) {
+    if (trades) {
+      const { from, to, ...plan } = trades;
       preview[option.childMarket.toLowerCase()] = {
-        from: priceWadToEstimate(move.from, scale),
-        to: priceWadToEstimate(move.to, scale),
+        from: priceWadToEstimate(from, scale),
+        to: priceWadToEstimate(to, scale),
+        plan,
       };
     }
   }

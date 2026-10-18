@@ -27,6 +27,8 @@ export interface PredictSteps {
   note?: string;
   /** A run exists, so the line shown before one no longer applies. */
   started?: true;
+  /** The routes are being priced before the run's first step, which no step row shows. */
+  pricing?: true;
 }
 
 /** The chain's own errors name gas and contracts, which the popup never shows. */
@@ -53,8 +55,11 @@ const PENDING_COPY = "Sent, not confirmed yet.";
 
 const RECONCILING_COPY = "Checking your last transaction…";
 
+/** Said by the summary row and the button while the routes are priced, and by a step quoting mid-run. */
+export const CHECKING_PRICES = "Checking prices…";
+
 const STAGE_COPY: Partial<Record<PredictProgress["stage"], string>> = {
-  quoting: "Finding prices…",
+  quoting: CHECKING_PRICES,
   signing: "Confirm in your wallet",
   confirming: "Confirming…",
 };
@@ -123,11 +128,12 @@ export function predictSteps(
   const runningBatch = batches.findIndex((step) => step.state === "running");
   // the routes are priced before anything is signed, while no step of the run is going yet
   const checking = progress?.stage === "quoting" && !runSteps.some((step) => step.state === "running");
-  const predictRunning = runningBatch >= 0 || checking;
+  const predictRunning = runningBatch >= 0;
   const stageCopy = progress ? (STAGE_COPY[progress.stage] ?? "") : "";
   const becomes = collateral && ` (≈ ${shownAmount(collateral.amount, collateral.decimals)} ${collateral.symbol})`;
   const adding = toAdd === 0n ? "" : `${shownAmount(toAdd, decimals)} ${symbol}${becomes ?? ""}`;
-  const fundsWait = progress?.stage === "signing" || progress?.stage === "confirming" ? stageCopy : "";
+  // only a batch quotes, so the steps before one say only what the wallet is waiting on
+  const txWait = progress?.stage === "signing" || progress?.stage === "confirming" ? stageCopy : "";
 
   // the row whose step errored stopped the run; with none, nothing got past pricing.
   // A sent, unconfirmed transaction may still land, so its row is not crossed.
@@ -148,14 +154,14 @@ export function predictSteps(
       : {
           key: "wallet",
           title: "Create a trade wallet",
-          subtitle: walletRow?.state === "running" ? stageCopy : "",
+          subtitle: walletRow?.state === "running" ? txWait : "",
           view: walletRow?.state === "running" ? "running" : "idle",
         },
     {
       key: "funds",
       title: "Add funds",
       // while it runs the amount is in the locked field above, so the row shows only the wait
-      subtitle: fundsRow?.state === "running" ? fundsWait : adding,
+      subtitle: fundsRow?.state === "running" ? txWait : adding,
       view:
         fundsRow?.state === "running"
           ? "running"
@@ -168,19 +174,23 @@ export function predictSteps(
     {
       key: "predict",
       title: "Place prediction",
-      subtitle: checking
-        ? stageCopy
-        : predictRunning
-          ? batches.length > 1
-            ? `${runningBatch + 1} of ${batches.length}${stageCopy ? ` · ${stageCopy}` : ""}`
-            : stageCopy
-          : "",
+      subtitle: predictRunning
+        ? batches.length > 1
+          ? `${runningBatch + 1} of ${batches.length}${stageCopy ? ` · ${stageCopy}` : ""}`
+          : stageCopy
+        : "",
       view: predictRunning ? "running" : progress?.stage === "complete" ? "done" : halted ? "inactive" : "idle",
     },
   ];
 
   const started = progress && progress.stage !== "idle" ? { started: true as const } : {};
-  if (!halted) return { rows, ...started, ...(reconciling ? { note: RECONCILING_COPY } : {}) };
+  if (!halted)
+    return {
+      rows,
+      ...started,
+      ...(reconciling ? { note: RECONCILING_COPY } : {}),
+      ...(checking ? { pricing: true as const } : {}),
+    };
 
   const marked = rows.map((stepRow) =>
     stepRow.key === failedKey

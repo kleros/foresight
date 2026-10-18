@@ -34,10 +34,12 @@
   /* the share slider's rail and its quarter dots; the dots are decorative, as the share label states the value */
   --fs-popup-track: #e6e2f3;
   --fs-popup-track-dot: #c8c2e0;
-  /* a 10% wash of each axis end in two corners of the amount panel: colour, not a fill */
-  --fs-popup-wash:
-    radial-gradient(60% 80% at 100% 0%, rgb(144 19 254 / 0.1), transparent 70%),
-    radial-gradient(50% 70% at 0% 100%, rgb(0 154 255 / 0.1), transparent 70%);
+  /* the amount panel's tint: 6% of the axis, even along it. Declared per theme so it mixes that theme's ends */
+  --fs-popup-wash: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--fs-popup-axis-from) 6%, transparent),
+    color-mix(in srgb, var(--fs-popup-axis-to) 6%, transparent)
+  );
   --fs-popup-shadow: 0 20px 48px rgb(40 20 90 / 0.18), 0 1px 2px rgb(40 20 90 / 0.08);
   --fs-popup-edge: transparent;
 }
@@ -64,9 +66,11 @@
   --fs-popup-cta-disabled-text: #9aa6c6;
   --fs-popup-track: #392c74;
   --fs-popup-track-dot: #5b4e9c;
-  --fs-popup-wash:
-    radial-gradient(60% 80% at 100% 0%, rgb(180 95 255 / 0.22), transparent 70%),
-    radial-gradient(50% 70% at 0% 100%, rgb(108 197 255 / 0.16), transparent 70%);
+  --fs-popup-wash: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--fs-popup-axis-from) 6%, transparent),
+    color-mix(in srgb, var(--fs-popup-axis-to) 6%, transparent)
+  );
   /* a shadow is invisible on #1b003f, so a hairline marks the edge instead */
   --fs-popup-shadow: 0 24px 60px rgb(0 0 0 / 0.55);
   --fs-popup-edge: rgba(218, 240, 255, 0.1);

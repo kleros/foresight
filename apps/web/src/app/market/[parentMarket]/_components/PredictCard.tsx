@@ -26,6 +26,7 @@ import { ownedAmount } from "@/utils/amount";
 import { createRunStore } from "@/lib/flowRunStore";
 
 import { type PredictBlocker, predictBlocker } from "./predictBlocker";
+import type { PlacedPrediction } from "./PredictSuccessView";
 
 // The run pulls in the orchestrator, the quoter and a chain client; none of that belongs on the
 // page until someone asks to predict.
@@ -58,6 +59,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
   const isOpen = opened !== undefined;
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [leftOut, setLeftOut] = useState<string[]>([]);
+  const [placedRun, setPlacedRun] = useState<PlacedPrediction>();
   const { address } = useAccount();
   // what this page last placed, by owner and lower-case market
   const [placed, setPlaced] = useState<{ owner: Address; values: Record<string, number> }>();
@@ -149,7 +151,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
           session={session}
           selected={opened}
           onClose={() => setOpened(undefined)}
-          onSuccess={(skipped: Address[]) => {
+          onSuccess={(skipped: Address[], run: PlacedPrediction) => {
             if (address) {
               const traded = opened.filter((estimate) => !skipped.includes(estimate.scale.market));
               setPlaced({
@@ -165,12 +167,15 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
             setLeftOut(
               session.options.filter((option) => skipped.includes(option.market)).map((option) => option.name),
             );
+            setPlacedRun(run);
             setOpened(undefined);
             setIsSuccessOpen(true);
           }}
         />
       ) : null}
-      {isSuccessOpen ? <PredictSuccessDialog isOpen leftOut={leftOut} onClose={() => setIsSuccessOpen(false)} /> : null}
+      {isSuccessOpen ? (
+        <PredictSuccessDialog isOpen placed={placedRun} leftOut={leftOut} onClose={() => setIsSuccessOpen(false)} />
+      ) : null}
     </SectionCard>
   );
 }

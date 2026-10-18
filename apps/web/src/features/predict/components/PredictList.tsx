@@ -11,6 +11,7 @@ import ArrowUp from "@/assets/svg/long-arrow-up.svg";
 import { formatEstimate } from "@/utils/formatEstimate";
 
 import type { SelectedEstimate } from "../types";
+import type { PreviewTrades } from "../utils/plan";
 
 /** An estimate as the list shows it; a stored run's has no market estimate to compare against. */
 export type ListedEstimate = Pick<SelectedEstimate, "scale" | "value"> &
@@ -20,6 +21,8 @@ export type ListedEstimate = Pick<SelectedEstimate, "scale" | "value"> &
 export interface PriceMove {
   from: number;
   to: number;
+  /** The trades that make the move, in the collateral's base units. */
+  plan?: Omit<PreviewTrades, "from" | "to">;
 }
 
 /** --fs-dur-echo in ms, the length of a row's exit; 0 where no stylesheet sets it. */

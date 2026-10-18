@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 
 import { Button } from "@kleros/ui-components-library";
+import clsx from "clsx";
 import { useAccount } from "wagmi";
 
 import WithHelpTooltip from "@/components/ui/WithHelpTooltip";
@@ -14,6 +15,7 @@ import { explorerAddressUrl } from "@/config/site";
 
 import { AmountDialog } from "./AmountDialog";
 import { OptionBalances } from "./OptionBalances";
+import { TRADE_WALLET_CARD } from "./tradeWalletCard";
 import { TradeWalletSkeleton } from "./TradeWalletSkeleton";
 import { TransferDialog } from "./TransferDialog";
 import { useDepositToExecutor } from "../../api/depositToExecutor";
@@ -81,7 +83,7 @@ export function TradeWallet({
 
   return (
     <>
-      <section aria-label="Trade wallet" className="bg-fs-surface-sunken rounded-fs flex flex-col px-4 py-3 md:px-6">
+      <section aria-label="Trade wallet" className={clsx(TRADE_WALLET_CARD, "flex flex-col")}>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 max-sm:w-full">
             <WithHelpTooltip

@@ -103,11 +103,35 @@ describe("predictSteps naming what the funds step adds", () => {
 });
 
 describe("predictSteps during a run", () => {
-  it("shows the prices being checked before the run has a step going", () => {
+  it("leaves every step waiting while the prices are checked before the run has a step going", () => {
     const pending = progress().steps.map((step) => ({ ...step, state: "pending" as const }));
-    const rows = steps({ progress: progress({ stage: "quoting", steps: pending }) }).rows;
+    const checked = steps({ progress: progress({ stage: "quoting", steps: pending }) });
 
-    expect(rows[2]).toMatchObject({ view: "running", subtitle: "Finding prices…" });
+    expect(checked.pricing).toBe(true);
+    expect(checked.rows.map((row) => [row.view, row.subtitle])).toEqual([
+      ["idle", ""],
+      ["idle", "4 sDAI"],
+      ["idle", ""],
+    ]);
+  });
+
+  it("keeps the prediction step running while a batch checks its prices mid-run", () => {
+    const checked = steps({ progress: progress({ stage: "quoting" }) });
+
+    expect(checked.pricing).toBeUndefined();
+    expect(checked.rows[2]).toMatchObject({ view: "running", subtitle: "Checking prices…" });
+  });
+
+  it("says nothing of prices on the trade wallet step while it is prepared", () => {
+    const creating = progress({
+      stage: "quoting",
+      steps: [
+        { id: "create-wallet", label: "", state: "running" },
+        { id: "predict-1", label: "", state: "pending" },
+      ],
+    });
+
+    expect(steps({ progress: creating }).rows[0]).toMatchObject({ view: "running", subtitle: "" });
   });
 
   it("says to confirm in the wallet while it asks for a signature", () => {

@@ -45,6 +45,8 @@ const VIEWPORTS = [
   { width: 1280, height: 800 },
 ];
 const SIDE_MARGIN = 16;
+/** The states a run passes through from idle, which hold idle's amount and so list the same trades. */
+const SAME_TRADES: readonly string[] = ["idle", "quoting", "signing", "confirming", "failed", "pending", "success"];
 /** Windows, or a window and an option count, too short for every step at rest, where the body scrolls with its cue. */
 const SCROLLING = ["320x568", "360x640", "1366x657", "1280x720-10"];
 
@@ -323,13 +325,29 @@ for (const viewport of VIEWPORTS) {
             .toBe(true);
         }
 
-        // open, the summary adds its rows; every state then keeps the open idle popup's footprint
+        // open, the summary adds its rows; a run then keeps the open idle popup's footprint
         await openSummary(await openPopup(page, options, "idle"));
         const idleOpen = await footprint(page, page.getByRole("dialog"));
+        // where the dialog's top, sides and button sit; its height follows the trades it lists
+        const frame = ({ dialog: [x, y, width], footer: [fx, , fwidth, fheight], steps }: typeof idleOpen) => ({
+          dialog: [x, y, width],
+          footer: [fx, fwidth, fheight],
+          steps,
+        });
         for (const [state, extra] of [...STATES.map((state) => [state, ""] as const), ["idle", "&first=0"] as const]) {
           const dialog = await openPopup(page, options, state, undefined, extra);
           await openSummary(dialog);
-          expect.soft(await footprint(page, dialog), `${state}${extra} with the summary open`).toEqual(idleOpen);
+          const open = await footprint(page, dialog);
+          if (SAME_TRADES.includes(state) && extra === "") {
+            expect.soft(open, `${state} with the summary open`).toEqual(idleOpen);
+          } else {
+            // another amount, or a stored run, lists other trades
+            expect.soft(frame(open), `${state}${extra} with the summary open`).toEqual(frame(idleOpen));
+            const box = (await dialog.boundingBox())!;
+            expect
+              .soft(box.y + box.height, `${state}${extra} open: bottom edge in the window`)
+              .toBeLessThanOrEqual(viewport.height);
+          }
         }
         expect.soft(pageErrors, "page errors").toEqual([]);
 
@@ -1402,6 +1420,64 @@ test.describe("the running step", () => {
   });
 });
 
+test.describe("the amount panel's tint", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  for (const theme of ["light", "dark"]) {
+    test(`is one even linear tint along the axis, with no corner hotspot, in the ${theme} theme`, async ({ page }) => {
+      await openHarness(page, `${harness.url}?options=2&theme=${theme}`);
+      const image = await page
+        .locator("[data-panel=amount]")
+        .evaluate((panel) => getComputedStyle(panel).backgroundImage);
+
+      expect(image.match(/linear-gradient/g)).toHaveLength(1);
+      expect(image).not.toContain("radial-gradient");
+    });
+  }
+});
+
+test.describe("the price check before a run", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("says Checking prices… on the summary and the button while every step waits", async ({ page }) => {
+    const dialog = await openPopup(page, 2, "quoting");
+
+    await expect(dialog.locator('[data-bullet="running"]')).toHaveCount(0);
+    await expect(dialog.getByTestId("predict-summary").getByRole("button")).toHaveText("Checking prices…");
+    await expect(dialog.locator(".predict-cta")).toHaveText("Checking prices…");
+    await expect(dialog.getByText("Finding prices…")).toHaveCount(0);
+  });
+
+  test("stretches and shrinks its line as it crosses, by transform alone", async ({ page }) => {
+    const dialog = await openPopup(page, 2, "quoting");
+    const sweep = await dialog.locator("[data-testid=pricing-sweep] > i").evaluate((node) => {
+      const properties = (animations: Animation[]) => [
+        ...new Set(
+          animations
+            .flatMap((animation) => (animation.effect as KeyframeEffect).getKeyframes())
+            .flatMap((frame) => Object.keys(frame))
+            .filter((key) => !["offset", "easing", "composite", "computedOffset"].includes(key)),
+        ),
+      ];
+      const all = node.getAnimations({ subtree: true });
+      const bar = all.filter((animation) => (animation.effect as KeyframeEffect).pseudoElement === "::before");
+      const easings = all.map((animation) => (animation.effect as KeyframeEffect).getKeyframes()[0]?.easing);
+      return {
+        easings: easings.sort(),
+        names: all.map((animation) => (animation as CSSAnimation).animationName).sort(),
+        properties: properties(all),
+        barProperties: properties(bar),
+      };
+    });
+
+    expect(sweep.names).toEqual(["predict-sweep-stretch", "predict-sweep-travel"]);
+    expect(sweep.properties).toEqual(["transform"]);
+    expect(sweep.barProperties).toEqual(["transform"]);
+    // the motion tokens' structural and enter curves, resolved inside the keyframes
+    expect(sweep.easings).toEqual(["cubic-bezier(0, 0, 0.2, 1)", "cubic-bezier(0.2, 0, 0, 1)"]);
+  });
+});
+
 test.describe("the popup under reduced motion", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
@@ -1417,6 +1493,12 @@ test.describe("the popup under reduced motion", () => {
         .evaluateAll((items) => items.map((item) => getComputedStyle(item).animationName));
 
       expect(animations.every((name) => name === "none")).toBe(true);
+      if (state === "quoting") {
+        const bar = await dialog
+          .locator("[data-testid=pricing-sweep] > i")
+          .evaluate((node) => getComputedStyle(node, "::before").animationName);
+        expect(bar).toBe("none");
+      }
     });
   }
 });
@@ -1674,6 +1756,88 @@ test.describe("the popup's numbers", () => {
   });
 });
 
+/** Each figure in the open summary: true when nothing of it is cut and it sits inside its row. */
+function figuresShownWhole(dialog: Locator) {
+  return dialog
+    .getByTestId("predict-summary")
+    .locator('[data-testid="trade-leg"], [data-testid="trade-mint"] > span, [data-testid="market-move"]')
+    .evaluateAll((figures) =>
+      figures.map((figure) => {
+        const row = figure.closest("li, p")!.getBoundingClientRect();
+        const box = figure.getBoundingClientRect();
+        return {
+          text: figure.textContent,
+          whole:
+            figure.scrollWidth <= figure.clientWidth + 1 &&
+            box.left >= row.left - 0.5 &&
+            box.right <= row.right + 0.5 &&
+            box.bottom <= row.bottom + 0.5,
+        };
+      }),
+    );
+}
+
+for (const viewport of [
+  { width: 1280, height: 800 },
+  { width: 375, height: 667 },
+]) {
+  test.describe(`the trades in the summary at ${viewport.width} x ${viewport.height}`, () => {
+    test.use({ viewport });
+
+    test("lists the mint, each option's legs on its connector and the closing note, every figure whole", async ({
+      page,
+    }, testInfo) => {
+      const dialog = await openPopup(page, 2);
+      await openSummary(dialog);
+      const summary = dialog.getByTestId("predict-summary");
+
+      expect(await summary.getByTestId("trade-mint").evaluate((mint) => mint.textContent!.replace(/\s+/g, " "))).toBe(
+        "Mint10 sDAI → 10 tokens of every city",
+      );
+      for (const name of ["Berlin", "Lisbon metropolitan area"]) {
+        const legs = summary.getByRole("list", { name: `Trades for ${name}` });
+        await expect(legs.getByRole("listitem").first()).toHaveText(/^Split/);
+        await expect(legs).toHaveCSS("border-left-style", "dotted");
+        expect(await legs.getByRole("listitem").count(), `${name}'s legs`).toBeGreaterThanOrEqual(2);
+        expect((await legs.getByRole("listitem").first().boundingBox())!.height, "a one-line leg").toBe(26);
+      }
+      await expect(summary.getByTestId("trades-note")).toBeVisible();
+      for (const figure of await figuresShownWhole(dialog)) expect.soft(figure.whole, figure.text!).toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
+
+      await summary.getByTestId("trades-note").scrollIntoViewIfNeeded();
+      await testInfo.attach(`trades-${viewport.width}x${viewport.height}`, {
+        body: await page.screenshot(),
+        contentType: "image/png",
+      });
+    });
+
+    test("wraps seven-digit figures under themselves, truncates a long name and says which option is left out", async ({
+      page,
+    }, testInfo) => {
+      const dialog = await openPopup(page, 2, "idle", undefined, "&trades=worst");
+      await openSummary(dialog);
+      const summary = dialog.getByTestId("predict-summary");
+
+      expect(await summary.getByTestId("trade-mint").evaluate((mint) => mint.textContent!.replace(/\s+/g, " "))).toBe(
+        "Mint1,234,567.89 sDAI → 1,234,567.89 tokens of every city",
+      );
+      const name = summary.getByTitle(/^Greater Lisbon/);
+      expect(await name.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+      await expect(summary.getByRole("list", { name: "Trades for Lisbon metropolitan area" })).toHaveText(
+        "No tradeAlready at your estimate; left out",
+      );
+      for (const figure of await figuresShownWhole(dialog)) expect.soft(figure.whole, figure.text!).toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
+
+      await testInfo.attach(`trades-worst-${viewport.width}x${viewport.height}`, {
+        body: await page.screenshot(),
+        contentType: "image/png",
+      });
+    });
+  });
+}
+
 test.describe("the summary opening and closing", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
@@ -1790,16 +1954,58 @@ function tokenValue(page: Page, property: "color" | "borderRadius", value: strin
 test.describe("the success dialog", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test("draws the email in a field of the panel's tones", async ({ page }) => {
+  test("names the email in one sentence, links to Settings in the accent, and rings its mark in the panel's tone", async ({
+    page,
+  }) => {
     await openHarness(page, `${harness.url}?options=2&state=success&dialog=success`);
-    const email = page.getByRole("dialog", { name: "Prediction placed" }).getByRole("textbox");
+    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const link = dialog.getByRole("link", { name: "Change in Settings" });
 
-    await expect(email).toHaveCSS("background-color", await tokenValue(page, "color", "var(--fs-surface)"));
-    await expect(email).toHaveCSS("border-top-color", await tokenValue(page, "color", "var(--fs-popup-line)"));
-    await expect(email).toHaveCSS(
+    await expect(dialog.getByText("2 estimates · 10 sDAI")).toBeVisible();
+    await expect(dialog.getByText(/^You'll get an email at/)).toHaveText(
+      "You'll get an email at visitor@example.com when the market resolves.",
+    );
+    await expect(dialog.getByRole("textbox")).toHaveCount(0);
+    await expect(link).toHaveAttribute("href", "/settings?tab=notifications");
+    await expect(link).toHaveCSS("color", await tokenValue(page, "color", "var(--fs-popup-accent-text)"));
+    await expect(dialog.getByText("Confirm your email first", { exact: false })).toHaveCount(0);
+    const ring = await page.getByTestId("success-mark").evaluate((mark) => getComputedStyle(mark).boxShadow);
+    expect(ring).toContain(await tokenValue(page, "color", "var(--fs-popup-panel)"));
+  });
+
+  test("groups the title, the panel and the action 24 and 16 apart", async ({ page }) => {
+    await openHarness(page, `${harness.url}?options=2&state=success&dialog=success`);
+    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const title = (await dialog.getByText("2 estimates · 10 sDAI").boundingBox())!;
+    const panel = (await dialog.locator("section").boundingBox())!;
+    const close = (await dialog.getByRole("button", { name: "Close" }).boundingBox())!;
+
+    expect(Math.round(panel.y - (title.y + title.height))).toBe(24);
+    expect(Math.round(close.y - (panel.y + panel.height))).toBe(16);
+  });
+
+  test("warns in the warning tone when the email is not confirmed", async ({ page }) => {
+    await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&verified=0`);
+    const warning = page.getByText("Confirm your email first, or it will not arrive.");
+
+    await expect(warning).toBeVisible();
+    await expect(warning).toHaveCSS("color", await tokenValue(page, "color", "var(--fs-tone-warning-text)"));
+  });
+
+  test("keeps the sign-in at 44px in the panel and Close as a 44px text action", async ({ page }) => {
+    await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&subscribed=0`);
+    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const signIn = dialog.locator("section").getByRole("button", { name: "Sign in to subscribe" });
+    const close = dialog.getByRole("button", { name: "Close" });
+
+    expect((await signIn.boundingBox())!.height).toBe(44);
+    await expect(signIn).toHaveCSS(
       "border-top-left-radius",
       await tokenValue(page, "borderRadius", "var(--fs-radius-control)"),
     );
+    expect((await close.boundingBox())!.height).toBe(44);
+    await expect(close).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(dialog.locator(".predict-cta")).toHaveCount(1);
   });
 
   for (const theme of ["light", "dark"]) {
@@ -1866,16 +2072,6 @@ test.describe("the success dialog", () => {
       });
       expect(look.visibility).toBe("visible");
       expect(contrast(look.label, look.fill)).toBeGreaterThanOrEqual(4.5);
-    });
-
-    test(`draws the settings note's icon in the note's own tone, in the ${theme} theme`, async ({ page }) => {
-      await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&theme=${theme}`);
-      const note = page.getByText("Change this in Settings.", { exact: false });
-      const [icon, text] = await note.evaluate((element) => [
-        getComputedStyle(element.querySelector("svg path")!).fill,
-        getComputedStyle(element).color,
-      ]);
-      expect(icon).toBe(text);
     });
   }
 

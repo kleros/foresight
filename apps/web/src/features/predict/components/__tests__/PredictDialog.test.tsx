@@ -48,6 +48,25 @@ const steps: PredictSteps = {
   ],
 };
 
+/** Before the run's first step, while its routes are priced. */
+const pricing = predictSteps({
+  wallet: { address: "0xdcee0000000000000000000000000000000c664f", deployed: false },
+  toAdd: 4n * WAD,
+  symbol: "sDAI",
+  decimals: 18,
+  progress: {
+    stage: "quoting",
+    steps: [
+      { id: "create-wallet", label: "", state: "pending" },
+      { id: "deposit", label: "", state: "pending" },
+      { id: "predict-1", label: "", state: "pending" },
+    ],
+    skipped: [],
+    batchesDone: 0,
+    batches: 1,
+  },
+});
+
 const subtitleOf = (title: string) =>
   screen.getByRole("listitem", { name: `Timeline item: ${title}` }).querySelector("h2 + p")?.textContent ?? "";
 
@@ -63,6 +82,7 @@ const props = () => ({
   onTokenChange: vi.fn(),
   funding: funding() as Funding | null,
   collateral: { symbol: "sDAI", decimals: 18 },
+  optionNoun: "director",
   isFirstPrediction: true,
   steps,
   skipped: 0,
@@ -76,13 +96,16 @@ const summaryHead = () => within(screen.getByTestId("predict-summary")).getByRol
 describe("the estimates going in", () => {
   it("says where each market would move, once the summary is opened", async () => {
     render(<PredictDialog {...props()} preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 355 } }} />);
-    const moves = () => within(screen.getByTestId("predict-summary")).queryAllByRole("listitem");
-    expect(moves()).toEqual([]);
+    const markets = () => screen.queryByRole("list", { name: "Markets" });
+    expect(markets()).toBeNull();
 
     await userEvent.click(summaryHead());
 
-    expect(moves()[0]).toHaveTextContent("312 → 355 $M");
-    expect(screen.getAllByText(/→/)).toHaveLength(1);
+    expect(
+      within(markets()!)
+        .getAllByTestId("market-move")
+        .map((move) => move.textContent),
+    ).toEqual(["312 → 355 $M", "Now 296 $M"]);
   });
 
   it("says where the market stays, not a move too small to show", async () => {
@@ -90,8 +113,7 @@ describe("the estimates going in", () => {
 
     await userEvent.click(summaryHead());
 
-    expect(screen.queryByText(/→/)).toBeNull();
-    expect(screen.getByText("Stays at 312 $M")).toBeInTheDocument();
+    expect(screen.getAllByTestId("market-move")[0]).toHaveTextContent(/^Stays at 312 \$M$/);
   });
 
   it("lists each estimate with which way it moves the market", () => {
@@ -506,20 +528,54 @@ describe("the summary under the amount", () => {
     expect(summaryHead()).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("says it is checking prices while a run prices its routes", () => {
-    render(<PredictDialog {...props()} isRunning isPricing />);
+  it("says it is checking prices on the summary and the button, with every step still waiting", () => {
+    render(<PredictDialog {...props()} isRunning steps={pricing} />);
 
     expect(summaryHead()).toHaveTextContent("Checking prices…");
     expect(screen.getByTestId("pricing-sweep")).toBeInTheDocument();
+    expect(document.querySelector(".predict-cta")).toHaveTextContent("Checking prices…");
+    expect(document.querySelector(".predict-cta")).toHaveAttribute("data-busy", "true");
+    expect(subtitleOf("Place prediction")).toBe("");
   });
 
-  it("lists only figures the app computes: each market's move, and no fee, minimum or time", async () => {
+  it("leaves a batch quoting mid-run to its step, with the summary and button as they are", () => {
+    const quoting = predictSteps({
+      wallet: { address: "0xdcee0000000000000000000000000000000c664f", deployed: true },
+      ...fundsToAdd(funding(), sDai, sDai),
+      progress: {
+        stage: "quoting",
+        steps: [
+          { id: "predict-1", label: "", state: "success" },
+          { id: "predict-2", label: "", state: "running" },
+        ],
+        skipped: [],
+        batchesDone: 1,
+        batches: 2,
+      },
+    });
+    render(
+      <PredictDialog
+        {...props()}
+        isRunning
+        steps={quoting}
+        preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 355 } }}
+      />,
+    );
+
+    expect(subtitleOf("Place prediction")).toBe("2 of 2 · Checking prices…");
+    expect(summaryHead()).toHaveTextContent("1 market moves");
+    expect(screen.queryByTestId("pricing-sweep")).toBeNull();
+    expect(screen.getByRole("button", { name: "Checking prices…" })).toHaveAttribute("data-busy", "true");
+  });
+
+  it("lists only figures the app computes: the mint and each market's move, and no fee, minimum or time", async () => {
     render(<PredictDialog {...props()} preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 355 } }} />);
 
     await userEvent.click(summaryHead());
     const summary = screen.getByTestId("predict-summary");
 
     expect(summaryHead().textContent).toBe("1 market moves");
+    expect(screen.getByTestId("trade-mint")).toHaveTextContent(/^Mint10 sDAI → 10 tokens of every director$/);
     expect(
       within(summary)
         .getAllByRole("listitem")
@@ -527,12 +583,38 @@ describe("the summary under the amount", () => {
     ).toEqual(["Greta Gerwig312 → 355 $M", "Ryan CooglerNow 296 $M"]);
   });
 
+  it("holds the mint it showed when a run started while the balance refreshes", async () => {
+    const view = render(<PredictDialog {...props()} />);
+    await userEvent.click(summaryHead());
+
+    view.rerender(<PredictDialog {...props()} isRunning />);
+    view.rerender(<PredictDialog {...props()} isRunning funding={funding({ collateralIn: 3n * WAD })} />);
+
+    expect(screen.getByTestId("trade-mint")).toHaveTextContent("10 sDAI → 10 tokens");
+  });
+
+  it("names no mint with nothing going in", async () => {
+    render(<PredictDialog {...props()} funding={funding({ collateralIn: 0n })} />);
+
+    await userEvent.click(summaryHead());
+
+    expect(screen.queryByTestId("trade-mint")).toBeNull();
+  });
+
+  it("names no mint for a stored run, which minted what it stored", async () => {
+    render(<PredictDialog {...props()} recovered={{ deposit: 4n * WAD, token: sDai }} canRetry />);
+
+    await userEvent.click(summaryHead());
+
+    expect(screen.queryByTestId("trade-mint")).toBeNull();
+  });
+
   it("stays open or closed as the visitor left it, whatever the run does", async () => {
     const preview = { [GERWIG.toLowerCase()]: { from: 312, to: 355 } };
     const view = render(<PredictDialog {...props()} preview={preview} />);
     await userEvent.click(summaryHead());
 
-    view.rerender(<PredictDialog {...props()} preview={preview} isRunning isPricing />);
+    view.rerender(<PredictDialog {...props()} preview={preview} isRunning steps={pricing} />);
     expect(summaryHead()).toHaveAttribute("aria-expanded", "true");
     view.rerender(<PredictDialog {...props()} preview={preview} isRunning />);
     expect(summaryHead()).toHaveAttribute("aria-expanded", "true");

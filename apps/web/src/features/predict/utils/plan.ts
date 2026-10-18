@@ -168,26 +168,44 @@ export function planBuys(option: OptionTarget, sold: readonly SoldLeg[], slippag
   return { mergeAmount: legs.length > 0 || sold.length > 0 ? mergeAmount : 0n, legs };
 }
 
+/** One option's trades as the pool maths plays them out against the pools as read. */
+export interface PreviewTrades {
+  /** Underlying split into one of each outcome token. */
+  split: bigint;
+  sells: { side: OptionSide; amountIn: bigint; underlyingOut: bigint }[];
+  /** Outcome sets merged back to underlying. */
+  merge: bigint;
+  buys: { side: OptionSide; amountIn: bigint; outcomeOut: bigint }[];
+  /** The UP token's price before and after, as a wad. */
+  from: bigint;
+  to: bigint;
+}
+
 /**
- * The UP token's price now and once the option's sells and buys have run, from the pool maths alone. The
- * run quotes against the pools as they are when it signs, so it can land elsewhere.
+ * The trades `planSells` and `planBuys` make for one option, each filled by the pool maths alone, and where they
+ * leave the UP price; null where the UP pool never priced. The run quotes the pools as they are when it signs.
  */
-export function previewUpPrice(option: OptionTarget, slippageBps: number): { from: bigint; to: bigint } | null {
+export function previewTrades(option: OptionTarget, slippageBps: number): PreviewTrades | null {
   const up = option.pools.up;
   if (up.sqrtPriceX96 <= 0n) return null;
 
   const target = (side: OptionSide) => (side === "up" ? option.targetPriceWad : WAD - option.targetPriceWad);
   const from = priceFromSqrtPriceX96(up.sqrtPriceX96, up.outcomeIsToken0);
-  let price = from;
+  let to = from;
 
-  const sold = planSells(option).map((leg): SoldLeg => {
+  const sells = planSells(option).map((leg) => {
     const swap = swapToward(option.pools[leg.side], target(leg.side), leg.amountIn);
-    if (leg.side === "up") price = swap.priceWad;
+    if (leg.side === "up") to = swap.priceWad;
     return { side: leg.side, amountIn: leg.amountIn, underlyingOut: swap.amountOut };
   });
-  for (const leg of planBuys(option, sold, slippageBps).legs) {
-    if (leg.side === "up") price = swapToward(up, option.targetPriceWad, leg.amountIn).priceWad;
-  }
+  const plan = planBuys(option, sells, slippageBps);
+  const buys = plan.legs.map((leg) => {
+    const swap = swapToward(option.pools[leg.side], target(leg.side), leg.amountIn);
+    if (leg.side === "up") to = swap.priceWad;
+    return { side: leg.side, amountIn: leg.amountIn, outcomeOut: swap.amountOut };
+  });
 
-  return { from, to: price };
+  // an option with no legs is left out of the run, so nothing of it is split either
+  const trades = sells.length > 0 || buys.length > 0;
+  return { split: trades ? option.splitAmount : 0n, sells, merge: plan.mergeAmount, buys, from, to };
 }

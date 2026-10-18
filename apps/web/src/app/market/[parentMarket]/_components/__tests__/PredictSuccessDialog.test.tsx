@@ -44,21 +44,76 @@ describe("PredictSuccessDialog", () => {
     expect(screen.queryByText(/when this market resolves/)).toBeNull();
   });
 
-  it("closes on its wide button, the dialog's one action for a visitor already subscribed", async () => {
+  it("closes on a quiet wide button for a visitor already subscribed, as nothing is at stake", async () => {
     const onClose = vi.fn();
     render(<PredictSuccessDialog isOpen leftOut={[]} onClose={onClose} />);
     const close = screen.getByRole("button", { name: "Close" });
 
-    expect(close).not.toHaveAttribute("data-quiet");
+    expect(close).toHaveAttribute("data-quiet", "true");
     await userEvent.click(close);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("quiets Close beside the sign-in, which is the action there", () => {
+  it("makes Close a text action beside the sign-in, which is the one action there", async () => {
     atlas = { userExists: false, isVerified: false, isSigningIn: false, authoriseUser: vi.fn() };
+    const onClose = vi.fn();
+    render(<PredictSuccessDialog isOpen leftOut={[]} onClose={onClose} />);
+    const close = screen.getByRole("button", { name: "Close" });
+
+    expect(close).not.toHaveClass("predict-cta");
+    expect(document.querySelectorAll(".predict-cta")).toHaveLength(1);
+    await userEvent.click(close);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("says what was placed under its title", () => {
+    render(
+      <PredictSuccessDialog
+        isOpen
+        placed={{ estimates: 2, amount: 10n * 10n ** 18n, symbol: "sDAI", decimals: 18 }}
+        leftOut={[]}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("2 estimates · 10 sDAI")).toBeInTheDocument();
+  });
+
+  it("names only the estimates when nothing was paid", () => {
+    render(
+      <PredictSuccessDialog
+        isOpen
+        placed={{ estimates: 1, symbol: "sDAI", decimals: 18 }}
+        leftOut={[]}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("1 estimate")).toBeInTheDocument();
+  });
+
+  it("names the subscribed email in one sentence, with a link to change it in Settings", () => {
     render(<PredictSuccessDialog isOpen leftOut={[]} onClose={vi.fn()} />);
 
-    expect(screen.getByRole("button", { name: "Close" })).toHaveAttribute("data-quiet", "true");
+    expect(screen.getByText(/^You'll get an email at/)).toHaveTextContent(
+      "You'll get an email at visitor@example.com when the market resolves.",
+    );
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.getByRole("link", { name: "Change in Settings" })).toHaveAttribute(
+      "href",
+      "/settings?tab=notifications",
+    );
+  });
+
+  it.each([
+    [false, true],
+    [true, false],
+    [undefined, false],
+  ])("warns the email will not arrive when isEmailVerified is %s: %s", (isEmailVerified, warns) => {
+    atlas = { user: { email: "visitor@example.com", isEmailVerified }, userExists: true };
+    render(<PredictSuccessDialog isOpen leftOut={[]} onClose={vi.fn()} />);
+
+    expect(Boolean(screen.queryByText("Confirm your email first, or it will not arrive."))).toBe(warns);
   });
 
   it("keeps the sign-in's label beside a spinner while the wallet signs, and cannot be pressed", () => {

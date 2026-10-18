@@ -17,7 +17,7 @@ import { PredictList, type ListedEstimate, type PriceMove } from "./PredictList"
 import { PredictStepsTimeline } from "./PredictStepsTimeline";
 import { PredictSummary } from "./PredictSummary";
 import type { Funding } from "../utils/funding";
-import { statusLine, type PredictSteps, type StatusLine } from "../utils/predictSteps";
+import { CHECKING_PRICES, statusLine, type PredictSteps, type StatusLine } from "../utils/predictSteps";
 
 interface PredictDialogProps {
   isOpen: boolean;
@@ -34,6 +34,8 @@ interface PredictDialogProps {
   /** Null while the balances are still being read. */
   funding: Funding | null;
   collateral: { symbol: string; decimals: number };
+  /** One option, as the session names it: `city`. */
+  optionNoun: string;
   isFirstPrediction: boolean;
   isDisconnected?: boolean;
   steps: PredictSteps;
@@ -41,8 +43,6 @@ interface PredictDialogProps {
   skipped: number;
   /** A run is between its first signature and its end. */
   isRunning: boolean;
-  /** The run is pricing its routes, before anything is signed. */
-  isPricing?: boolean;
   /** A stopped run can pick up where it stopped, with the amount and estimates it was started with. */
   canRetry: boolean;
   /** The stopped run sent a transaction whose outcome is unknown; pressing on checks it first. */
@@ -93,12 +93,12 @@ export function PredictDialog({
   onTokenChange,
   funding,
   collateral,
+  optionNoun,
   isFirstPrediction,
   isDisconnected,
   steps,
   skipped,
   isRunning,
-  isPricing = false,
   canRetry,
   isPending = false,
   recovered,
@@ -110,6 +110,7 @@ export function PredictDialog({
   // with nothing held, an empty amount has nothing to trade with
   const nothingToTrade = isFirstPrediction && (funding?.collateralIn ?? 0n) === 0n;
   const status = statusLine({ steps, notice, skipped });
+  const isPricing = steps.pricing === true;
   const runToken = recovered?.token;
   // a refreshed balance or re-priced preview would change what the visitor is reading mid-run
   const shownFunding = useHeldWhile(funding, isLocked);
@@ -227,6 +228,9 @@ export function PredictDialog({
             <PredictSummary
               selected={selected}
               preview={shownPreview}
+              collateral={collateral}
+              // a stored run minted what it stored, not what this form holds
+              mint={recovered || !shownFunding ? undefined : { amount: shownFunding.collateralIn, noun: optionNoun }}
               isOpen={summaryOpen}
               onToggle={() => setSummaryOpen((open) => !open)}
               isPricing={isPricing}
@@ -255,7 +259,7 @@ export function PredictDialog({
         <div className="bg-fs-surface landscape-phone:pb-2 sticky bottom-0 pt-1 pb-4 short:pb-3">
           <PredictButton
             text={recovered ? "Resume" : isPending ? "Check again" : canRetry ? "Try the rest" : "Predict"}
-            busyText={isRunning ? busyLabel(steps) : undefined}
+            busyText={isRunning ? (isPricing ? CHECKING_PRICES : busyLabel(steps)) : undefined}
             onPress={onPredict}
             isDisabled={
               notice !== undefined ||
