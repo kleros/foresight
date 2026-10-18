@@ -6,12 +6,21 @@ import type { PredictSnapshot } from "../flow/types";
 /**
  * `no-route`: no option can be moved toward its estimate with what the run has to spend.
  * `quote`: the quoter gave no answer, so whether a route exists is unknown.
- * `balance`: the trade wallet holds less than the popup counted on.
+ * `balance`: the trade wallet, or the wallet's credits, hold less than the popup counted on.
+ * `credits`: the credits manager cannot cover the credits, or its swap would lose too much.
  * `deposit-unconfirmed`: a recovered run's deposit may have been signed with no hash kept.
  * `wrong-wallet`, `wrong-chain`: a saved run belongs to another wallet or network than the connected one.
  */
 export type PredictFailureReason =
-  TxErrorCause | "no-route" | "quote" | "funds" | "balance" | "deposit-unconfirmed" | "wrong-wallet" | "wrong-chain";
+  | TxErrorCause
+  | "no-route"
+  | "quote"
+  | "funds"
+  | "balance"
+  | "credits"
+  | "deposit-unconfirmed"
+  | "wrong-wallet"
+  | "wrong-chain";
 
 /** What the popup shows while a prediction runs. */
 export type PredictStage =

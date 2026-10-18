@@ -1,5 +1,5 @@
 import { gnosis, localhost } from "@foresight/contracts";
-import { isAddressEqual, type Address } from "viem";
+import { isAddressEqual, parseAbi, type Address } from "viem";
 
 import { DEFAULT_CHAIN_ID } from "./chains";
 
@@ -59,6 +59,34 @@ export function creditsContracts(chainId: number = DEFAULT_CHAIN_ID): CreditsCon
   if (!credits || !manager) return null;
 
   return { credits, manager };
+}
+
+/** Wrapped xDAI, the asset behind sDAI and what the credits swap pays out. */
+export const wxdaiAbi = parseAbi(["function withdraw(uint256 wad)"]);
+
+const WXDAI_ADDRESSES: Record<number, Address> = { 100: "0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d" };
+
+/** Swapr's Algebra router: Lens' target for a single-pool swap, and the one the credits manager whitelists. */
+const SWAPR_ROUTER_ADDRESSES: Record<number, Address> = { 100: "0xfFB643E73f280B97809A8b41f7232AB401a04ee1" };
+
+export interface CreditsRoute {
+  /** The credits token. */
+  token: Address;
+  manager: Address;
+  wxdai: Address;
+  swaprRouter: Address;
+}
+
+/**
+ * What a run needs to spend credits: the credits, their manager, WXDAI and the router the manager
+ * swaps through. Null unless the manager spends `collateral`, which is Gnosis' sDAI.
+ */
+export function creditsRoute(collateral: Address, chainId: number = DEFAULT_CHAIN_ID): CreditsRoute | null {
+  const contracts = creditsContracts(chainId);
+  const wxdai = WXDAI_ADDRESSES[chainId];
+  const swaprRouter = SWAPR_ROUTER_ADDRESSES[chainId];
+  if (!contracts || !wxdai || !swaprRouter || !sDaiDepositRoute(collateral, chainId)) return null;
+  return { token: contracts.credits, manager: contracts.manager, wxdai, swaprRouter };
 }
 
 export const sDaiAdapterAbi = gnosis.savingsXDaiAdapterAbi;

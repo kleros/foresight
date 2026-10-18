@@ -1,6 +1,7 @@
 import { cutToOwned, formatAmount, formatDisplayAmount, OWNED_DECIMALS } from "@/utils/amount";
 
-import { GAS_RESERVE_WEI } from "../oracle/tolerances";
+import type { PredictRequest } from "../flow/types";
+import { CREDITS_SLIPPAGE_BPS, GAS_RESERVE_WEI } from "../oracle/tolerances";
 import type { PayToken } from "../types";
 import type { CreditLine } from "./credits";
 
@@ -68,10 +69,11 @@ export function planFunding({
 
   const collateralIn = toCollateral(amount);
   let left = collateralIn;
+  // each part in whole shown decimals, so what is signed and burned is what the popup shows
   const uses = credits.map((line): CreditUse => {
     const usable = min(left, line.usable);
-    const fromTradeWallet = min(usable, line.tradeWallet);
-    const fromWallet = min(usable - fromTradeWallet, line.wallet);
+    const fromTradeWallet = cutToOwned(min(usable, line.tradeWallet), CREDIT_DECIMALS);
+    const fromWallet = cutToOwned(min(usable - fromTradeWallet, line.wallet), CREDIT_DECIMALS);
     left -= fromTradeWallet + fromWallet;
     return { kind: line.kind, fromTradeWallet, fromWallet };
   });
@@ -96,6 +98,33 @@ export function planFunding({
 }
 
 const min = (a: bigint, b: bigint) => (a < b ? a : b);
+
+const CREDIT_DECIMALS = 18;
+
+/** What a run is asked to sign for `funding`: the sDAI split apart from the credits, and the credits by source. */
+export function fundingRequest(
+  funding: Funding,
+  native: boolean,
+): Pick<
+  PredictRequest,
+  "deposit" | "depositNative" | "collateralIn" | "collateralBefore" | "creditsFromEoa" | "creditsToSpend"
+> {
+  return {
+    deposit: funding.deposit,
+    depositNative: native,
+    collateralIn: funding.collateralIn - funding.creditsIn,
+    collateralBefore: funding.tradeWallet,
+    creditsFromEoa: funding.credits.reduce((sum, use) => sum + use.fromWallet, 0n),
+    creditsToSpend: funding.creditsIn,
+  };
+}
+
+/**
+ * The collateral a run is expected to split: the sDAI as is, and the credits at the floor their
+ * swap is held to, before the pool's own fee and price, which only the quote knows.
+ */
+export const expectedSplit = (funding: Funding): bigint =>
+  funding.collateralIn - funding.creditsIn + (funding.creditsIn * BigInt(10_000 - CREDITS_SLIPPAGE_BPS)) / 10_000n;
 
 /** Rounded down to the decimals the popup shows, so the signed amount is the shown amount. */
 export const roundToDisplay = cutToOwned;

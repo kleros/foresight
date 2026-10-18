@@ -11,12 +11,13 @@ import {
 } from "viem";
 import { gnosis } from "viem/chains";
 
-import { creditsContracts, tradeExecutorFactoryAbi, tradeExecutorFactoryAddress } from "@/config/contracts";
-import { LOCAL_RPC_URL } from "@/config/chains";
 import { shownAmount } from "@/features/predict/utils/funding";
 
-import { INDEXER_URL } from "../fixtures/indexer";
+import { LOCAL_RPC_URL } from "@/config/chains";
+import { creditsContracts, tradeExecutorFactoryAbi, tradeExecutorFactoryAddress } from "@/config/contracts";
+
 import { expect, test } from "../fixtures";
+import { INDEXER_URL } from "../fixtures/indexer";
 
 /**
  * A credits prediction through the real popup on the gnosis fork, as hardhat's tenth account.

@@ -1,5 +1,7 @@
 import type { Address } from "viem";
 
+import type { CreditsRoute } from "@/config/contracts";
+
 import type { PoolLiquidity } from "@/types/pool";
 
 import type { OutcomeBalances } from "../utils/plan";
@@ -36,6 +38,14 @@ export interface PredictReader {
   /** The session's collateral sitting in the executor. */
   collateralBalance(executor: Address): Promise<bigint>;
   optionStates(args: { options: PredictOption[]; executor: Address }): Promise<OptionChainState[]>;
+  /** Foresight credits `holder` holds; none where the chain has no credits. */
+  creditsBalance(holder: Address): Promise<bigint>;
+  /** The collateral the credits manager holds, which its credits spend one for one. */
+  managerCollateral(): Promise<bigint>;
+  /** The collateral the vault mints for `assets` of its underlying now. */
+  previewDeposit(assets: bigint): Promise<bigint>;
+  /** The underlying `shares` of the collateral redeem for now. */
+  vaultValue(shares: bigint): Promise<bigint>;
 }
 
 export interface PredictSnapshot {
@@ -45,10 +55,16 @@ export interface PredictSnapshot {
   /** Paid as xDAI through the savings adapter rather than as the collateral itself. */
   depositNative: boolean;
   /**
-   * Collateral to split at the parent. The chosen amount for a collateral deposit; read back
-   * once an xDAI deposit lands, since the adapter's output is not known in advance.
+   * Collateral to split at the parent, credits apart. The chosen amount for a collateral deposit;
+   * read back once an xDAI deposit lands, since the adapter's output is not known in advance.
    */
   collateralIn: bigint;
+  /** Credits moved from the owner's wallet to the trade wallet before the spend. */
+  creditsFromEoa: bigint;
+  /** Credits the first batch burns, swapping as much of the manager's collateral for the split. */
+  creditsToSpend: bigint;
+  /** The executor's credits read from the chain as the run started, before any transfer. */
+  creditsAtStart: bigint;
   /** The trade-wallet collateral the visitor was shown, which the split draws on up to `collateralIn`. */
   collateralBefore: bigint;
   /** The executor's collateral read from the chain as the run started, before any deposit. */
@@ -59,7 +75,7 @@ export interface PredictSnapshot {
 }
 
 /** What the visitor asked for; the run adds the chain-read starting balance when it starts. */
-export type PredictRequest = Omit<PredictSnapshot, "collateralAtStart">;
+export type PredictRequest = Omit<PredictSnapshot, "collateralAtStart" | "creditsAtStart">;
 
 export interface PredictCtx {
   chainId: number;
@@ -74,4 +90,6 @@ export interface PredictCtx {
   parentMarket: Address;
   /** Null where the chain has no savings adapter, which rules out an xDAI deposit. */
   sDaiAdapter: Address | null;
+  /** Null where credits cannot fund this session's collateral. */
+  credits: CreditsRoute | null;
 }

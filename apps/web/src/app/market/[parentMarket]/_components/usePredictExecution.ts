@@ -7,7 +7,7 @@ import type { Address } from "viem";
 
 import { usePredictRun, type PredictRunInput } from "@/features/predict/hooks/usePredictRun";
 import type { SelectedEstimate } from "@/features/predict/types";
-import type { Funding } from "@/features/predict/utils/funding";
+import { fundingRequest, type Funding } from "@/features/predict/utils/funding";
 import { sessionChartKey } from "@/features/sessions/api/getSessionChart";
 import { refreshSessionAfterTrade } from "@/features/sessions/api/getSessionStats";
 import type { SessionDetail } from "@/features/sessions/types";
@@ -15,7 +15,7 @@ import { executorKey } from "@/features/trade-executor/api/getExecutor";
 import { fundsKeyPrefix } from "@/features/trade-executor/api/getFunds";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
-import { gnosisRouterAddress, sDaiDepositRoute, tradeExecutorFactoryAddress } from "@/config/contracts";
+import { creditsRoute, gnosisRouterAddress, sDaiDepositRoute, tradeExecutorFactoryAddress } from "@/config/contracts";
 
 import { toPredictOptions } from "./toPredictOptions";
 
@@ -57,11 +57,21 @@ export function usePredictExecution(args: {
           owner,
           executor: tradeWallet,
           sDaiAdapter: sDaiDepositRoute(collateralToken, DEFAULT_CHAIN_ID)?.sDaiAdapter ?? null,
+          credits: creditsRoute(collateralToken, DEFAULT_CHAIN_ID),
           options: () => toPredictOptions(session, selected),
-          deposit: () => fundingRef.current.funding?.deposit ?? 0n,
-          depositNative: () => fundingRef.current.native,
-          collateralIn: () => fundingRef.current.funding?.collateralIn ?? 0n,
-          collateralBefore: () => fundingRef.current.funding?.tradeWallet ?? 0n,
+          funding: () => {
+            const { funding, native } = fundingRef.current;
+            return funding
+              ? fundingRequest(funding, native)
+              : {
+                  deposit: 0n,
+                  depositNative: native,
+                  collateralIn: 0n,
+                  collateralBefore: 0n,
+                  creditsFromEoa: 0n,
+                  creditsToSpend: 0n,
+                };
+          },
           onComplete: () => {
             void queryClient.invalidateQueries({ queryKey: fundsKeyPrefix });
             void queryClient.invalidateQueries({ queryKey: executorKey(owner) });

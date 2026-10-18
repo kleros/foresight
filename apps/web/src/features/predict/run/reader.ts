@@ -1,6 +1,6 @@
 "use client";
 
-import { erc20Abi, type Address, type PublicClient } from "viem";
+import { erc20Abi, erc4626Abi, type Address, type PublicClient } from "viem";
 
 import { readPoolLiquidity, type PoolRef } from "@/lib/swap/algebraPool";
 import { fetchTokenBalances } from "@/lib/trade-executor/balances";
@@ -24,7 +24,12 @@ export function createPredictReader(args: {
   client: PublicClient;
   sessionId: string;
   collateral: Address;
+  /** Where the chain has Foresight credits for this collateral. */
+  credits?: { token: Address; manager: Address } | null;
 }): PredictReader {
+  const balanceOf = (token: Address, holder: Address) =>
+    args.client.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [holder] });
+
   const poolState = async (ref: PoolRef | undefined, targetPriceWad: bigint): Promise<PoolLiquidity> =>
     ref === undefined
       ? UNPRICED
@@ -37,11 +42,32 @@ export function createPredictReader(args: {
     },
 
     collateralBalance(executor) {
+      return balanceOf(args.collateral, executor);
+    },
+
+    async creditsBalance(holder) {
+      return args.credits ? balanceOf(args.credits.token, holder) : 0n;
+    },
+
+    async managerCollateral() {
+      return args.credits ? balanceOf(args.collateral, args.credits.manager) : 0n;
+    },
+
+    previewDeposit(assets) {
       return args.client.readContract({
         address: args.collateral,
-        abi: erc20Abi,
-        functionName: "balanceOf",
-        args: [executor],
+        abi: erc4626Abi,
+        functionName: "previewDeposit",
+        args: [assets],
+      });
+    },
+
+    vaultValue(shares) {
+      return args.client.readContract({
+        address: args.collateral,
+        abi: erc4626Abi,
+        functionName: "convertToAssets",
+        args: [shares],
       });
     },
 

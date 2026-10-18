@@ -1,13 +1,17 @@
 import type { FlowTx } from "@foresight/tx-orchestrator";
-import { decodeFunctionData, erc20Abi, isAddressEqual, parseAbi, slice, type Address, type Hex } from "viem";
+import { decodeFunctionData, isAddressEqual, parseAbi, slice, type Address, type Hex } from "viem";
 
-import { creditsManagerAbi, gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
+import { tradeExecutorAbi } from "@/config/contracts";
 
+import { ALGEBRA_ROUTER_ABI } from "./fakes";
 import { PREDICT_ALLOW_LIST, type PredictAllowList } from "../../../oracle/allowlist";
 import type { PredictCtx } from "../../types";
-import { ALGEBRA_ROUTER_ABI } from "./fakes";
 
 const WXDAI_ABI = parseAbi(["function withdraw(uint256 wad)"]);
+const TRANSFER_ABI = parseAbi(["function transfer(address to, uint256 amount)"]);
+const APPROVE_ABI = parseAbi(["function approve(address spender, uint256 amount)"]);
+const EXECUTE_ABI = parseAbi(["function execute(address to, bytes data, uint256 amount, address outputToken)"]);
+const SPLIT_FROM_BASE_ABI = parseAbi(["function splitFromBase(address market) payable"]);
 
 /** The contracts a run's calls may name, as the run's context resolves them. */
 export interface Resolved {
@@ -74,7 +78,7 @@ export function departures(args: {
   if (value !== 0n) out.push(`${top.name} carries ${value} native`);
 
   if (top.name === "transfer(address,uint256)") {
-    const [to] = decodeFunctionData({ abi: erc20Abi, data }).args;
+    const [to] = decodeFunctionData({ abi: TRANSFER_ABI, data }).args;
     if (!isAddressEqual(to, ctx.executor)) out.push(`transfer names ${to}, not the executor`);
     return out;
   }
@@ -116,7 +120,7 @@ export function departures(args: {
     }
 
     if (entry.name === "approve(address,uint256)") {
-      const [spender, amount] = decodeFunctionData({ abi: erc20Abi, data: call.data }).args;
+      const [spender, amount] = decodeFunctionData({ abi: APPROVE_ABI, data: call.data }).args;
       const allowed = (entry.spender ?? []).some((name) => isAddressEqual(spenders[name]!, spender));
       if (!allowed) out.push(`${at}: approves ${spender}`);
       if (amount === 2n ** 256n - 1n) out.push(`${at}: approves an unbounded amount`);
@@ -127,7 +131,7 @@ export function departures(args: {
       if (params.limitSqrtPrice === 0n) out.push(`${at}: swap carries no price limit`);
     }
     if (entry.name.startsWith("execute(")) {
-      const [to, swap, , outputToken] = decodeFunctionData({ abi: creditsManagerAbi, data: call.data }).args;
+      const [to, swap, , outputToken] = decodeFunctionData({ abi: EXECUTE_ABI, data: call.data }).args;
       if (!isAddressEqual(to, resolved.swaprRouter)) out.push(`${at}: credits spent through ${to}`);
       if (resolved.wxdai === null || !isAddressEqual(outputToken, resolved.wxdai)) {
         out.push(`${at}: credits buy ${outputToken}`);
@@ -139,7 +143,7 @@ export function departures(args: {
       withdrawn = decodeFunctionData({ abi: WXDAI_ABI, data: call.data }).args[0];
     }
     if (entry.name.startsWith("splitFromBase(")) {
-      const [market] = decodeFunctionData({ abi: gnosisRouterAbi, data: call.data }).args as readonly [Address];
+      const [market] = decodeFunctionData({ abi: SPLIT_FROM_BASE_ABI, data: call.data }).args;
       if (!isAddressEqual(market, ctx.parentMarket)) out.push(`${at}: splits ${market}, not the session's parent`);
     }
   }

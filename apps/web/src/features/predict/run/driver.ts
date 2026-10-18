@@ -14,12 +14,13 @@ import type { Address, Hash } from "viem";
 
 import { chainText, OUT_OF_FUNDS, REVERTS } from "@/utils/txErrorText";
 
-import type { SwapQuoter } from "@/lib/swap/types";
+import type { ExactInputQuoter, SwapQuoter } from "@/lib/swap/types";
 
 import type { PredictDriver, PredictFailureReason, PredictProgress, PredictStepRow } from "./types";
 import {
   assertRoutes,
   createPredictHooks,
+  CreditsUnavailableError,
   NoRouteError,
   planPredict,
   PredictConfigError,
@@ -30,7 +31,7 @@ import {
 } from "../flow/plan";
 import type { PredictCtx, PredictReader, PredictRequest, PredictSnapshot } from "../flow/types";
 
-/** The trade wallet holds less than the share of the prediction it was shown to cover. */
+/** The trade wallet, or the wallet's credits, hold less than the prediction was shown to draw on. */
 class TradeWalletShortError extends Error {}
 
 /** Why a saved run cannot be continued from the connected wallet, if it cannot. */
@@ -45,6 +46,7 @@ export function createPredictRun(args: {
   gateway: TxGateway;
   reader: PredictReader;
   quoter: SwapQuoter;
+  creditsQuoter?: ExactInputQuoter;
   /** Keyed per chain, owner and session, so no two runs share a stored record. */
   flowId: string;
   ctx: () => PredictCtx;
@@ -64,7 +66,7 @@ export function createPredictRun(args: {
   /** Set while the routes are checked, before the orchestrator has a run; reset and dispose clear it. */
   let checking: object | undefined;
   /** The reason a step failed with, which the orchestrator's own causes cannot carry. */
-  let buildFailure: "no-route" | "quote" | "funds" | undefined;
+  let buildFailure: "no-route" | "quote" | "funds" | "credits" | undefined;
   /** Set while a sent transaction's outcome is read from the chain; the run itself stays stopped meanwhile. */
   let reconciling = false;
   /** Set once a stored run is restored, until it is thrown away: the popup shows its snapshot, not the form. */
@@ -78,6 +80,7 @@ export function createPredictRun(args: {
   const deps: PredictDeps = {
     reader: args.reader,
     quoter: args.quoter,
+    creditsQuoter: args.creditsQuoter,
     slippageBps: args.slippageBps,
     optionsPerBatch: args.optionsPerBatch,
     onSkip: (option, _reason, stepId) => {
@@ -104,8 +107,14 @@ export function createPredictRun(args: {
     // A missing route is fatal to the orchestrator and a failed quote pauses it.
     classifyError: (error) => {
       buildFailure =
-        error instanceof NoRouteError ? "no-route" : error instanceof QuoteFailedError ? "quote" : undefined;
-      if (buildFailure === "quote") return "rpc";
+        error instanceof NoRouteError
+          ? "no-route"
+          : error instanceof QuoteFailedError
+            ? "quote"
+            : error instanceof CreditsUnavailableError
+              ? "credits"
+              : undefined;
+      if (buildFailure === "quote" || buildFailure === "credits") return "rpc";
       if (buildFailure === "no-route" || error instanceof PredictConfigError) return "unknown";
       if (error instanceof Error && !("cause" in error)) return "rpc";
       const cause = classifyTxError(error);
@@ -224,6 +233,7 @@ export function createPredictRun(args: {
       void work().catch((error: unknown) => {
         if (error instanceof NoRouteError) report("no-route");
         else if (error instanceof QuoteFailedError) report("quote", action);
+        else if (error instanceof CreditsUnavailableError) report("credits");
         else if (error instanceof TradeWalletShortError) report("balance");
         else if (error instanceof PredictConfigError) report("unknown");
         else report(classifyTxError(error), action);
@@ -275,10 +285,10 @@ export function createPredictRun(args: {
       reconciling = false;
     });
     if (found.outcome === "reverted") return;
-    // A deposit signed as the tab died left no hash, and the balance cannot show it until it mines.
-    if (found.outcome === "unknown" && found.stepId === STEP_ID.deposit) {
-      const deposit = steps.find((step) => step.id === STEP_ID.deposit);
-      if (!(await deposit?.canSkip?.(stored.ctx, stored.snapshot))) {
+    // A transfer signed as the tab died left no hash, and the balance cannot show it until it mines.
+    if (found.outcome === "unknown" && (found.stepId === STEP_ID.deposit || found.stepId === STEP_ID.addCredits)) {
+      const transfer = steps.find((step) => step.id === found.stepId);
+      if (!(await transfer?.canSkip?.(stored.ctx, stored.snapshot))) {
         report("deposit-unconfirmed", resumeRun);
         return;
       }
@@ -289,9 +299,16 @@ export function createPredictRun(args: {
 
   /** Pins the trade wallet's balance before anything is signed, and checks a route exists. */
   async function prepare(ctx: PredictCtx, requested: PredictRequest): Promise<PredictSnapshot> {
-    const collateralAtStart = await args.reader.collateralBalance(ctx.executor);
+    const [collateralAtStart, creditsAtStart] = await Promise.all([
+      args.reader.collateralBalance(ctx.executor),
+      args.reader.creditsBalance(ctx.executor),
+    ]);
     if (collateralAtStart < tradeWalletShare(requested)) throw new TradeWalletShortError();
-    const snapshot = { ...requested, collateralAtStart };
+    if (creditsAtStart + requested.creditsFromEoa < requested.creditsToSpend) throw new TradeWalletShortError();
+    if (requested.creditsFromEoa > 0n && (await args.reader.creditsBalance(ctx.owner)) < requested.creditsFromEoa) {
+      throw new TradeWalletShortError();
+    }
+    const snapshot = { ...requested, collateralAtStart, creditsAtStart };
     await assertRoutes(ctx, snapshot, deps);
     return snapshot;
   }

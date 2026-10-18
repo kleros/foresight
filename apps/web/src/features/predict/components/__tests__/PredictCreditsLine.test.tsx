@@ -96,13 +96,13 @@ describe("the credits line", () => {
   });
 
   it("when the manager is short, says how many are usable now and Max credits takes only those", () => {
-    const { onAmountChange } = renderLine({ wallet: 500n * WAD, tradeWallet: 0n, manager: 200n * WAD });
+    const { onAmountChange } = renderLine({ wallet: 50n * WAD, tradeWallet: 0n, manager: 20n * WAD });
 
     expect(tick()).toBeChecked();
-    expect(note()).toHaveTextContent("200 of 500 usable now");
+    expect(note()).toHaveTextContent("20 of 50 usable now");
 
     fireEvent.click(useMax());
-    expect(onAmountChange).toHaveBeenLastCalledWith(200n * WAD);
+    expect(onAmountChange).toHaveBeenLastCalledWith(20n * WAD);
   });
 
   it("when the manager is empty, offers no tick and says none of them is usable", () => {

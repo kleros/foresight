@@ -1,5 +1,6 @@
-import { encodeFunctionData, parseAbi, type Address, type Hex } from "viem";
+import { encodeFunctionData, type Address, type Hex } from "viem";
 
+import { ALGEBRA_ROUTER_ABI } from "@/lib/swap/algebraRouter";
 import {
   NoSwapRouteError,
   type ExactInputQuoter,
@@ -136,7 +137,13 @@ export interface FakeQuoter extends SwapQuoter {
  * Pays out half of what goes in, and encodes the pair it was asked for in its calldata so a test
  * can tell one leg's swap from another's.
  */
-export function fakeQuoter(opts: { refuse?: (request: SwapQuoteRequest) => boolean } = {}): FakeQuoter {
+export function fakeQuoter(
+  opts: {
+    refuse?: (request: SwapQuoteRequest) => boolean;
+    /** Encodes Swapr's `exactInputSingle` with the request's recipient and limit, as the Lens quoter signs it. */
+    asSwapr?: boolean;
+  } = {},
+): FakeQuoter {
   const requests: SwapQuoteRequest[] = [];
 
   return {
@@ -149,7 +156,23 @@ export function fakeQuoter(opts: { refuse?: (request: SwapQuoteRequest) => boole
         amountIn: request.amount,
         amountOut: request.amount / 2n,
         router: addresses.swapRouter,
-        data: `0x${request.tokenIn.slice(2)}${request.tokenOut.slice(2)}` as Hex,
+        data: opts.asSwapr
+          ? encodeFunctionData({
+              abi: ALGEBRA_ROUTER_ABI,
+              functionName: "exactInputSingle",
+              args: [
+                {
+                  tokenIn: request.tokenIn,
+                  tokenOut: request.tokenOut,
+                  recipient: request.recipient,
+                  deadline: 1_700_001_800n,
+                  amountIn: request.amount,
+                  amountOutMinimum: request.amount / 2n,
+                  limitSqrtPrice: request.limitSqrtPrice,
+                },
+              ],
+            })
+          : (`0x${request.tokenIn.slice(2)}${request.tokenOut.slice(2)}` as Hex),
         value: 0n,
       };
       return Promise.resolve(quote);
@@ -168,9 +191,7 @@ export function quoterFor(target: PredictOption, quoter: SwapQuoter, rest: SwapQ
   };
 }
 
-export const ALGEBRA_ROUTER_ABI = parseAbi([
-  "function exactInputSingle((address tokenIn, address tokenOut, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 limitSqrtPrice) params) payable returns (uint256 amountOut)",
-]);
+export { ALGEBRA_ROUTER_ABI };
 
 export interface FakeExactInputQuoter extends ExactInputQuoter {
   readonly requests: ExactInputRequest[];

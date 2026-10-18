@@ -4,14 +4,14 @@ import {
   ContractFunctionRevertedError,
   decodeFunctionData,
   encodeFunctionData,
-  parseAbi,
   toFunctionSelector,
   type Address,
   type Hex,
   type PublicClient,
 } from "viem";
 
-import { NoSwapRouteError, type SwapQuoter } from "./types";
+import { ALGEBRA_ROUTER_ABI } from "./algebraRouter";
+import { NoSwapRouteError, type ExactInputQuoter, type SwapQuoter } from "./types";
 
 /**
  * Seer's on-chain LensQuoter picks the route and returns the router call to make. It simulates
@@ -25,10 +25,7 @@ import { NoSwapRouteError, type SwapQuoter } from "./types";
  */
 const QUOTE_DEADLINE_SECONDS = 30n * 60n;
 
-/** Swapr's Algebra router, which Lens returns for a single-pool route. Lens leaves the limit at zero. */
-const ALGEBRA_ROUTER_ABI = parseAbi([
-  "function exactInputSingle((address tokenIn, address tokenOut, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 limitSqrtPrice) params) payable returns (uint256 amountOut)",
-]);
+// Lens leaves the limit at zero.
 const EXACT_INPUT_SINGLE = toFunctionSelector(ALGEBRA_ROUTER_ABI[0]);
 
 const Q192 = 2n ** 192n;
@@ -124,6 +121,31 @@ export function createLensQuoter(
         }),
         value: result.msgValue,
       };
+    },
+  };
+}
+
+/** Lens' route for an exact-input swap with no price limit, held to Swapr's single-pool call. */
+export function createLensExactInputQuoter(
+  client: PublicClient,
+  chainId: ChainId,
+  chainNow: () => Promise<bigint> = latestBlockTime(client),
+): ExactInputQuoter {
+  const lens = new Lens(client, chainId);
+
+  return {
+    async quote(request) {
+      const deadline = (await chainNow()) + QUOTE_DEADLINE_SECONDS;
+      const result = await lens.quote({ ...request, slippageBps: 0, deadline }).catch((error: unknown) => {
+        if (!answeredNoRoute(error)) throw error;
+        throw new NoSwapRouteError(`Lens found no route from ${request.tokenIn} to ${request.tokenOut}.`, {
+          cause: error,
+        });
+      });
+      if (!result.data.startsWith(EXACT_INPUT_SINGLE)) {
+        throw new NoSwapRouteError(`Lens routed ${request.tokenIn} to ${request.tokenOut} through more than one pool.`);
+      }
+      return { amountOut: result.amountOut, router: result.target as Address, data: result.data as Hex };
     },
   };
 }

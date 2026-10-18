@@ -4,9 +4,9 @@ import { OWNED_DECIMALS } from "@/utils/amount";
 
 import type { CreditsHeld } from "@/lib/trade-executor/credits";
 
-import { MAX_CREDITS_PER_RUN } from "../../oracle/tolerances";
+import { CREDITS_SLIPPAGE_BPS, MAX_CREDITS_PER_RUN } from "../../oracle/tolerances";
 import { creditLines, creditsOffer, MIN_CREDITS } from "../credits";
-import { fundingRequest, fundingSummary, planFunding, shownAmount } from "../funding";
+import { expectedSplit, fundingRequest, fundingSummary, planFunding, shownAmount } from "../funding";
 
 const WAD = 10n ** 18n;
 const sDai = { id: "collateral" as const, symbol: "sDAI", decimals: 18 };
@@ -39,10 +39,10 @@ describe("creditsOffer", () => {
   });
 
   it("caps what is usable at the manager's collateral when it is short", () => {
-    expect(creditsOffer({ wallet: 500n * WAD, tradeWallet: 0n, manager: 200n * WAD })).toEqual({
+    expect(creditsOffer({ wallet: 50n * WAD, tradeWallet: 0n, manager: 20n * WAD })).toEqual({
       state: "short",
-      held: 500n * WAD,
-      usable: 200n * WAD,
+      held: 50n * WAD,
+      usable: 20n * WAD,
     });
   });
 
@@ -99,15 +99,15 @@ describe("planFunding with a credits line", () => {
     expect(summary).toBe("≈ 10 sDAI = 3 in credits + 4 in your trade wallet + 3 from your wallet");
   });
 
-  it("manager short: spends only the 200 credits it covers of 500, the rest from the wallet", () => {
-    const { offer, funding } = fund({ wallet: 500n * WAD, tradeWallet: 0n, manager: 200n * WAD }, 300n * WAD, {
+  it("manager short: spends only the 20 credits it covers of 50, the rest from the wallet", () => {
+    const { offer, funding } = fund({ wallet: 50n * WAD, tradeWallet: 0n, manager: 20n * WAD }, 30n * WAD, {
       ownWallet: 1000n * WAD,
       tradeWallet: 0n,
     });
 
-    expect(offer).toMatchObject({ state: "short", usable: 200n * WAD });
-    expect(funding).toMatchObject({ creditsIn: 200n * WAD, toAdd: 100n * WAD, creditsAvailable: 200n * WAD });
-    expect(funding.available).toBe(1200n * WAD);
+    expect(offer).toMatchObject({ state: "short", usable: 20n * WAD });
+    expect(funding).toMatchObject({ creditsIn: 20n * WAD, toAdd: 10n * WAD, creditsAvailable: 20n * WAD });
+    expect(funding.available).toBe(1020n * WAD);
   });
 
   it("manager empty: no credits line, so the amount is the visitor's own collateral", () => {
@@ -217,5 +217,20 @@ describe("credits signed as shown", () => {
       creditsFromEoa: 0n,
       creditsToSpend: 0n,
     });
+  });
+});
+
+describe("the split a credits run is expected to make", () => {
+  it("counts the sDAI as is and the credits at the floor their swap is held to", () => {
+    const held = { wallet: 4n * WAD, tradeWallet: 0n, manager: 1000n * WAD };
+    const funding = planFunding({
+      amount: 10n * WAD,
+      ownWallet: 20n * WAD,
+      tradeWallet: 0n,
+      credits: creditLines(held, creditsOffer(held)),
+    });
+
+    expect(expectedSplit(funding)).toBe(6n * WAD + (4n * WAD * BigInt(10_000 - CREDITS_SLIPPAGE_BPS)) / 10_000n);
+    expect(expectedSplit(planFunding({ amount: 10n * WAD, ownWallet: 20n * WAD, tradeWallet: 0n }))).toBe(10n * WAD);
   });
 });

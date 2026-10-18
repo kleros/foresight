@@ -1,7 +1,7 @@
 import { decodeFunctionData, erc20Abi, parseAbi, type Address, type Hex } from "viem";
 import { describe, expect, it } from "vitest";
 
-import { creditsManagerAbi, gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
+import { gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
 
 import { CREDITS_MAX_LOSS_BPS, CREDITS_SLIPPAGE_BPS } from "../../oracle/tolerances";
 import {
@@ -29,6 +29,7 @@ import {
 } from "./support/fakes";
 
 const WXDAI_ABI = parseAbi(["function withdraw(uint256 wad)"]);
+const EXECUTE_ABI = parseAbi(["function execute(address to, bytes data, uint256 amount, address outputToken)"]);
 
 /** 2 credits spent, 1.5 of them moved from the wallet, with 3 sDAI split beside them. */
 const creditsRun = (overrides: Partial<PredictSnapshot> = {}): PredictSnapshot =>
@@ -126,7 +127,7 @@ describe("the first batch of a credits run", () => {
     ]);
 
     const [target, swap, amount, outputToken] = decodeFunctionData({
-      abi: creditsManagerAbi,
+      abi: EXECUTE_ABI,
       data: calls[0]!.data,
     }).args;
     expect([target, amount, outputToken]).toEqual([addresses.swapRouter, 2n * WAD, addresses.wxdai]);
@@ -191,7 +192,7 @@ describe("the first batch of a credits run", () => {
 
   it("keeps every call to the allow-list, the owner's trade wallet and the value rule (A5, A6, P5)", async () => {
     const snap = creditsRun();
-    const steps = planPredict(snap, deps());
+    const steps = planPredict(snap, deps({ quoter: fakeQuoter({ asSwapr: true }) }));
     const one = option(1);
     const sessionTokens = [addresses.collateral, one.underlying, one.upToken, one.downToken, one.invalidToken];
 
@@ -213,7 +214,8 @@ describe("the first batch of a credits run", () => {
 
   it("spends credits in the first batch only", async () => {
     const options = [option(1), option(2)];
-    const used = deps({ optionsPerBatch: 1 });
+    // the first batch's parent split already gave every option its underlying
+    const used = deps({ optionsPerBatch: 1, reader: fakeReader({ state: () => chainState({ underlying: WAD }) }) });
     const tx = await build(creditsRun({ options }), used, ctx(), 2);
 
     expect(decodeFunctionData({ abi: tradeExecutorAbi, data: tx.data! }).functionName).toBe("batchExecute");

@@ -172,6 +172,10 @@ vi.mock("@/features/predict/run/reader", async () => {
     createPredictReader: () => ({
       isExecutorDeployed: () => Promise.resolve(chain.deployed),
       collateralBalance: () => Promise.resolve(0n),
+      creditsBalance: () => Promise.resolve(0n),
+      managerCollateral: () => Promise.resolve(0n),
+      previewDeposit: (assets: bigint) => Promise.resolve(assets),
+      vaultValue: (shares: bigint) => Promise.resolve(shares),
       optionStates: ({ options }: { options: PredictOption[] }) => {
         chain.asked.push(options.map((option) => option.targetPriceWad));
         return Promise.resolve(options.map(() => chainState()));
@@ -181,8 +185,8 @@ vi.mock("@/features/predict/run/reader", async () => {
 });
 
 vi.mock("@/lib/swap/lens", async () => {
-  const { fakeQuoter } = await import("@/features/predict/flow/__tests__/support/fakes");
-  return { createLensQuoter: () => fakeQuoter() };
+  const { fakeCreditsQuoter, fakeQuoter } = await import("@/features/predict/flow/__tests__/support/fakes");
+  return { createLensQuoter: () => fakeQuoter(), createLensExactInputQuoter: () => fakeCreditsQuoter() };
 });
 
 vi.mock("@/features/trade-executor/api/getExecutor", async (importOriginal) => ({

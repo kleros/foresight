@@ -1,14 +1,14 @@
 import type { CreditsHeld } from "@/lib/trade-executor/credits";
 
-/** Said while a plan spends credits; the run signs collateral only. */
-export const CREDITS_NOT_SPENDABLE = "Credits can't be spent yet. Untick them to predict with your own funds.";
+import { MAX_CREDITS_PER_RUN } from "../oracle/tolerances";
 
 /** Credits at or below 0.01 are not offered; 18 decimals. */
 export const MIN_CREDITS = 10n ** 16n;
 
 /**
  * What the popup offers: nothing at or below `MIN_CREDITS`; otherwise everything held when the
- * manager covers it, the part it covers when short, or none when what it covers is not worth offering.
+ * manager covers it and a run may spend it, the part it covers or `MAX_CREDITS_PER_RUN` when
+ * either is lower, or none when what it covers is not worth offering.
  */
 export type CreditsOffer =
   | { state: "none" }
@@ -19,9 +19,10 @@ export function creditsOffer(credits: CreditsHeld | null): CreditsOffer {
   if (!credits) return { state: "none" };
   const held = credits.wallet + credits.tradeWallet;
   if (held <= MIN_CREDITS) return { state: "none" };
-  if (credits.manager >= held) return { state: "usable", held, usable: held };
   if (credits.manager <= MIN_CREDITS) return { state: "empty", held, usable: 0n };
-  return { state: "short", held, usable: credits.manager };
+  const cap = credits.manager < MAX_CREDITS_PER_RUN ? credits.manager : MAX_CREDITS_PER_RUN;
+  if (cap >= held) return { state: "usable", held, usable: held };
+  return { state: "short", held, usable: cap };
 }
 
 /**

@@ -6,10 +6,10 @@ import {
   type StepSummary,
   type TxGateway,
 } from "@foresight/tx-orchestrator";
-import { decodeFunctionData, erc20Abi, type Hash, type TransactionReceipt } from "viem";
+import { decodeFunctionData, parseAbi, type Hash, type TransactionReceipt } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { creditsManagerAbi, tradeExecutorAbi } from "@/config/contracts";
+import { tradeExecutorAbi } from "@/config/contracts";
 
 import {
   addresses,
@@ -26,6 +26,9 @@ import { predictSteps } from "../../utils/predictSteps";
 import { createPredictRun } from "../driver";
 import type { PredictDriver } from "../types";
 
+const TRANSFER = parseAbi(["function transfer(address to, uint256 amount)"]);
+const EXECUTE = parseAbi(["function execute(address to, bytes data, uint256 amount, address outputToken)"]);
+
 /**
  * A chain that keeps the credits: a transfer moves them from the owner to the trade wallet, a
  * landed first batch burns what its `execute` names. `revert` lists the sends that revert.
@@ -41,7 +44,7 @@ function creditsChain(start: { owner: bigint; executor: bigint; manager?: bigint
   /** What `tx` does to the credits, applied when it lands. */
   function apply(tx: FlowTx) {
     if (tx.to === addresses.credits) {
-      const [, amount] = decodeFunctionData({ abi: erc20Abi, data: tx.data! }).args;
+      const [, amount] = decodeFunctionData({ abi: TRANSFER, data: tx.data! }).args;
       balances.owner -= amount;
       balances.executor += amount;
       landed.transfers += 1;
@@ -52,7 +55,7 @@ function creditsChain(start: { owner: bigint; executor: bigint; manager?: bigint
     if (decoded.functionName !== "batchValueExecute") return;
     for (const call of decoded.args[0]) {
       if (call.to !== addresses.manager) continue;
-      const [, , amount] = decodeFunctionData({ abi: creditsManagerAbi, data: call.data }).args;
+      const [, , amount] = decodeFunctionData({ abi: EXECUTE, data: call.data }).args;
       balances.executor -= amount;
       landed.spends += 1;
     }
