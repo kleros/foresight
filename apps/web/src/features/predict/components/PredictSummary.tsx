@@ -36,7 +36,8 @@ type Plan = NonNullable<PriceMove["plan"]>;
 /** Keeps a figure, its `≈` and its unit on one line. */
 const nb = (...parts: string[]) => parts.join("\u00a0");
 
-const ROW = "flex min-h-[26px] items-center justify-between gap-3";
+/** A wrapped value keeps its label on its first line. */
+const ROW = "flex items-baseline justify-between gap-3";
 const VALUE = "text-fs-popup-text min-w-0 text-right [overflow-wrap:anywhere]";
 
 function Arrow() {
@@ -59,7 +60,7 @@ function Side({ side, amount }: { side: OptionSide; amount: string }) {
 
 function Leg({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <li className={ROW}>
+    <li className={clsx(ROW, "py-[3px]")}>
       <span className="text-fs-popup-text-2 shrink-0">{label}</span>
       <span data-testid="trade-leg" className={VALUE}>
         {children}
@@ -181,7 +182,7 @@ export function PredictSummary({
             className="type-label mb-1 flex flex-col border-b border-(--fs-popup-line) px-1 pt-1 pb-2 text-[13px] leading-[18px] tabular-nums"
           >
             {mint && mint.amount > 0n ? (
-              <p data-testid="trade-mint" className={clsx(ROW, "min-h-8")}>
+              <p data-testid="trade-mint" className={clsx(ROW, "py-1.5")}>
                 <span className="text-fs-popup-text-2 shrink-0">Mint</span>
                 <span className={clsx(VALUE, "font-medium")}>
                   {nb(amount(mint.amount), collateral.symbol)}
