@@ -443,6 +443,9 @@ describe("credits across recovery (A7)", () => {
     expect(batches(chain)).toHaveLength(1);
     const [second] = batches(chain);
     const decoded = decodeFunctionData({ abi: tradeExecutorAbi, data: second!.data! });
+    if (decoded.functionName !== "batchExecute" && decoded.functionName !== "batchValueExecute") {
+      throw new Error(`Expected a batch, got ${decoded.functionName}`);
+    }
     expect(decoded.args[0].map((call) => call.to)).not.toContain(addresses.manager);
   });
 
