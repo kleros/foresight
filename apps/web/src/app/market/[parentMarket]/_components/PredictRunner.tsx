@@ -9,6 +9,7 @@ import type { PayTokenChoice } from "@/features/predict/components/PredictAmount
 import { PredictDialog } from "@/features/predict/components/PredictDialog";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import type { PayToken, SelectedEstimate } from "@/features/predict/types";
+import { CREDITS_NOT_SPENDABLE } from "@/features/predict/utils/credits";
 import { roundToDisplay } from "@/features/predict/utils/funding";
 import { fundsToAdd, predictSteps, type FundsToAdd } from "@/features/predict/utils/predictSteps";
 import type { SessionDetail } from "@/features/sessions/types";
@@ -43,7 +44,8 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
 
   const [amount, setAmount] = useState<bigint>();
   const [picked, setPicked] = useState<PayToken>();
-  const [useCredits, setUseCredits] = useState(true);
+  // off until a run can spend credits; the notice below holds Predict while they are ticked
+  const [useCredits, setUseCredits] = useState(false);
   // removed in this popup; cleared from the page only once Predict is pressed
   const [removed, setRemoved] = useState<string[]>([]);
   // what the steps say is being added, held from the press so a refreshed balance cannot rewrite it
@@ -203,7 +205,8 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
               owner,
               onRightChain: chainId === DEFAULT_CHAIN_ID,
               ready,
-              spendsCredits: (funding?.creditsIn ?? 0n) > 0n,
+              // a locked form signs the run's snapshot, not the live funding
+              spendsCredits: !canRetry && !recovered && (funding?.creditsIn ?? 0n) > 0n,
             })
       }
       onPredict={predict}
@@ -221,6 +224,5 @@ function notice(args: {
   if (!args.owner) return "Connect a wallet to predict.";
   if (!args.onRightChain) return "Switch to Gnosis to predict.";
   if (!args.ready) return "This session cannot be traded yet.";
-  // the run signs collateral only, so an amount shown as partly credits is not predicted
-  return args.spendsCredits ? "Credits can't be spent yet. Untick them to predict with your own funds." : undefined;
+  return args.spendsCredits ? CREDITS_NOT_SPENDABLE : undefined;
 }

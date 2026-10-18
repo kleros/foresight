@@ -1,5 +1,8 @@
 import type { CreditsHeld } from "@/lib/trade-executor/credits";
 
+/** Said while a plan spends credits; the run signs collateral only. */
+export const CREDITS_NOT_SPENDABLE = "Credits can't be spent yet. Untick them to predict with your own funds.";
+
 /** Credits at or below 0.01 are not offered; 18 decimals. */
 export const MIN_CREDITS = 10n ** 16n;
 

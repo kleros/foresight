@@ -12,7 +12,7 @@ import { usePredictRun, type PredictRunInput } from "@/features/predict/hooks/us
 import type { PredictDriver, PredictProgress, PredictStage } from "@/features/predict/run/types";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import type { PayToken, SelectedEstimate } from "@/features/predict/types";
-import { creditLines, creditsOffer } from "@/features/predict/utils/credits";
+import { CREDITS_NOT_SPENDABLE, creditLines, creditsOffer } from "@/features/predict/utils/credits";
 import { planFunding } from "@/features/predict/utils/funding";
 import { sessionChartKey } from "@/features/sessions/api/getSessionChart";
 import { sessionStatsKey } from "@/features/sessions/api/getSessionStats";
@@ -83,6 +83,7 @@ vi.mock("@/features/predict/components/PredictDialog", () => ({
       <button onClick={props.onClose}>close</button>
       <button onClick={props.onPredict}>predict</button>
       <p data-testid="credits">{props.credits ? String(props.credits.isUsing) : "absent"}</p>
+      <button onClick={() => props.credits?.onUsingChange(true)}>tick credits</button>
       <button onClick={() => props.credits?.onUsingChange(false)}>untick credits</button>
     </div>
   ),
@@ -194,31 +195,47 @@ describe("PredictRunner, what the visitor is told", () => {
     expect(screen.getByTestId("notice")).toBeEmptyDOMElement();
   });
 
-  it("ticks the credits line by default, and stops a prediction that would spend credits until it is unticked", () => {
+  const withCredits = (spendsAnyway = false) => {
     const held = { wallet: 5n * 10n ** 18n, tradeWallet: 0n, manager: 1000n * 10n ** 18n };
     fundingMock.mockImplementation(({ amount, useCredits }) => ({
       funding: planFunding({
         amount,
         ownWallet: 20n * 10n ** 18n,
         tradeWallet: 0n,
-        credits: useCredits ? creditLines(held, creditsOffer(held)) : [],
+        credits: useCredits || spendsAnyway ? creditLines(held, creditsOffer(held)) : [],
       }),
       credits: creditsOffer(held),
       token: "collateral",
       available: () => undefined,
       canPayNative: false,
     }));
+  };
+
+  it("leaves the credits line unticked, and stops a prediction that would spend credits while it is ticked", () => {
+    withCredits();
     mount();
     fireEvent.click(screen.getByText("pay ten"));
 
+    expect(screen.getByTestId("credits")).toHaveTextContent("false");
+    expect(screen.getByTestId("notice")).toBeEmptyDOMElement();
+
+    fireEvent.click(screen.getByText("tick credits"));
+
     expect(screen.getByTestId("credits")).toHaveTextContent("true");
-    expect(screen.getByTestId("notice")).toHaveTextContent(
-      "Credits can't be spent yet. Untick them to predict with your own funds.",
-    );
+    expect(screen.getByTestId("notice")).toHaveTextContent(CREDITS_NOT_SPENDABLE);
 
     fireEvent.click(screen.getByText("untick credits"));
 
-    expect(screen.getByTestId("credits")).toHaveTextContent("false");
+    expect(screen.getByTestId("notice")).toBeEmptyDOMElement();
+  });
+
+  it("does not hold a retry over credits the live balances would spend", () => {
+    withCredits(true);
+    progress = { ...progressAt("halted", true), moneyMoved: true };
+    mount();
+    fireEvent.click(screen.getByText("pay ten"));
+
+    expect(screen.getByTestId("can-retry")).toHaveTextContent("true");
     expect(screen.getByTestId("notice")).toBeEmptyDOMElement();
   });
 
