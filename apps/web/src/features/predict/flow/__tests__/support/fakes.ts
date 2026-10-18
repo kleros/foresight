@@ -1,6 +1,13 @@
-import type { Address, Hex } from "viem";
+import { encodeFunctionData, parseAbi, type Address, type Hex } from "viem";
 
-import { NoSwapRouteError, type SwapQuote, type SwapQuoteRequest, type SwapQuoter } from "@/lib/swap/types";
+import {
+  NoSwapRouteError,
+  type ExactInputQuoter,
+  type ExactInputRequest,
+  type SwapQuote,
+  type SwapQuoteRequest,
+  type SwapQuoter,
+} from "@/lib/swap/types";
 
 import type { OptionChainState, PredictCtx, PredictOption, PredictReader, PredictSnapshot } from "../../types";
 
@@ -20,6 +27,9 @@ export const addresses = {
   parentMarket: "0x0000000000000000000000000000000000000006" as Address,
   sDaiAdapter: "0x0000000000000000000000000000000000000007" as Address,
   swapRouter: "0x0000000000000000000000000000000000000008" as Address,
+  credits: "0x0000000000000000000000000000000000000009" as Address,
+  manager: "0x000000000000000000000000000000000000000A" as Address,
+  wxdai: "0x000000000000000000000000000000000000000b" as Address,
 } as const;
 
 export const ctx = (overrides: Partial<PredictCtx> = {}): PredictCtx => ({
@@ -31,6 +41,12 @@ export const ctx = (overrides: Partial<PredictCtx> = {}): PredictCtx => ({
   collateral: addresses.collateral,
   parentMarket: addresses.parentMarket,
   sDaiAdapter: addresses.sDaiAdapter,
+  credits: {
+    token: addresses.credits,
+    manager: addresses.manager,
+    wxdai: addresses.wxdai,
+    swaprRouter: addresses.swapRouter,
+  },
   ...overrides,
 });
 
@@ -66,6 +82,9 @@ export const snapshot = (overrides: Partial<PredictSnapshot> = {}): PredictSnaps
   collateralIn: WAD,
   collateralBefore: 0n,
   collateralAtStart: 0n,
+  creditsFromEoa: 0n,
+  creditsToSpend: 0n,
+  creditsAtStart: 0n,
   startedAt: 1_700_000_000,
   ...overrides,
 });
@@ -75,15 +94,33 @@ export interface FakeReader extends PredictReader {
   readonly asked: Array<{ options: PredictOption[]; executor: Address }>;
 }
 
+/** 1.25 xDAI per sDAI share, the fakes' vault rate. */
+export const VAULT_RATE = (WAD * 5n) / 4n;
+
 export function fakeReader(
-  opts: { deployed?: boolean; collateral?: bigint; state?: (option: PredictOption) => OptionChainState } = {},
+  opts: {
+    deployed?: boolean;
+    collateral?: bigint;
+    state?: (option: PredictOption) => OptionChainState;
+    /** Credits per holder; a function reads a balance that changes as a test's chain moves. */
+    credits?: Partial<Record<Address, bigint>> | ((holder: Address) => bigint);
+    /** The credits manager's collateral, 1000 by default. */
+    manager?: bigint | (() => bigint);
+  } = {},
 ): FakeReader {
   const asked: FakeReader["asked"] = [];
+  const credits = opts.credits;
+  const manager = opts.manager;
 
   return {
     asked,
     isExecutorDeployed: () => Promise.resolve(opts.deployed ?? false),
     collateralBalance: () => Promise.resolve(opts.collateral ?? 0n),
+    creditsBalance: (holder) =>
+      Promise.resolve(typeof credits === "function" ? credits(holder) : (credits?.[holder] ?? 0n)),
+    managerCollateral: () => Promise.resolve(typeof manager === "function" ? manager() : (manager ?? 1000n * WAD)),
+    previewDeposit: (assets) => Promise.resolve((assets * WAD) / VAULT_RATE),
+    vaultValue: (shares) => Promise.resolve((shares * VAULT_RATE) / WAD),
     optionStates: (args) => {
       asked.push(args);
       return Promise.resolve(args.options.map((each) => opts.state?.(each) ?? chainState()));
@@ -128,5 +165,50 @@ export function quoterFor(target: PredictOption, quoter: SwapQuoter, rest: SwapQ
       tokens.includes(request.tokenIn) || tokens.includes(request.tokenOut)
         ? quoter.quote(request)
         : rest.quote(request),
+  };
+}
+
+export const ALGEBRA_ROUTER_ABI = parseAbi([
+  "function exactInputSingle((address tokenIn, address tokenOut, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 limitSqrtPrice) params) payable returns (uint256 amountOut)",
+]);
+
+export interface FakeExactInputQuoter extends ExactInputQuoter {
+  readonly requests: ExactInputRequest[];
+}
+
+/**
+ * Swaps at the vault rate less `lossBps`, through `router`, encoding the request as Swapr's
+ * `exactInputSingle` with no minimum and no limit, as Lens does.
+ */
+export function fakeCreditsQuoter(
+  opts: { lossBps?: bigint; router?: Address; recipient?: Address; refuse?: boolean } = {},
+): FakeExactInputQuoter {
+  const requests: ExactInputRequest[] = [];
+  return {
+    requests,
+    quote: (request) => {
+      requests.push(request);
+      if (opts.refuse) return Promise.reject(new NoSwapRouteError("No route."));
+      const amountOut = (((request.amount * VAULT_RATE) / WAD) * (10_000n - (opts.lossBps ?? 5n))) / 10_000n;
+      return Promise.resolve({
+        amountOut,
+        router: opts.router ?? addresses.swapRouter,
+        data: encodeFunctionData({
+          abi: ALGEBRA_ROUTER_ABI,
+          functionName: "exactInputSingle",
+          args: [
+            {
+              tokenIn: request.tokenIn,
+              tokenOut: request.tokenOut,
+              recipient: opts.recipient ?? request.recipient,
+              deadline: 1_700_001_800n,
+              amountIn: request.amount,
+              amountOutMinimum: 0n,
+              limitSqrtPrice: 0n,
+            },
+          ],
+        }),
+      });
+    },
   };
 }

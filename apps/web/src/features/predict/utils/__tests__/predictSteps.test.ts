@@ -406,3 +406,79 @@ describe("statusLine", () => {
     expect(statusLine({ steps: halted, skipped: 0 })?.tone).toBe("error");
   });
 });
+
+describe("predictSteps with credits moved to the trade wallet", () => {
+  const withCredits = [
+    { id: "create-wallet", label: "Set up your trade wallet", state: "success" as const },
+    { id: "add-credits", label: "Add credits to your trade wallet", state: "pending" as const },
+    { id: "deposit", label: "Add money to your trade wallet", state: "pending" as const },
+    { id: "predict-1", label: "Making your prediction", state: "pending" as const },
+  ];
+
+  it("names the credits and the money the funds step adds", () => {
+    expect(steps({ credits: (3n * WAD) / 2n }).rows[1]).toEqual({
+      key: "funds",
+      title: "Add funds",
+      subtitle: "1.5 credits + 4 sDAI",
+      view: "idle",
+    });
+  });
+
+  it("names the credits alone when no money is added", () => {
+    expect(steps({ toAdd: 0n, credits: 2n * WAD }).rows[1]).toMatchObject({ subtitle: "2 credits", view: "idle" });
+  });
+
+  it("runs the funds row while the credits move, and finishes it only once the money is in too", () => {
+    const moving = steps({
+      credits: WAD,
+      progress: progress({
+        stage: "signing",
+        steps: withCredits.map((step) => (step.id === "add-credits" ? { ...step, state: "running" as const } : step)),
+      }),
+    });
+    expect(moving.rows[1]).toMatchObject({ view: "running", subtitle: "Confirm in your wallet" });
+
+    const halfway = steps({
+      credits: WAD,
+      progress: progress({
+        stage: "quoting",
+        steps: withCredits.map((step) => (step.id === "add-credits" ? { ...step, state: "success" as const } : step)),
+      }),
+    });
+    expect(halfway.rows[1]!.view).not.toBe("done");
+  });
+
+  it("marks the funds row failed when moving the credits stops the run", () => {
+    const stopped = steps({
+      credits: WAD,
+      progress: progress({
+        stage: "halted",
+        failure: { reason: "rejected", retryable: true },
+        steps: withCredits.map((step) => (step.id === "add-credits" ? { ...step, state: "error" as const } : step)),
+      }),
+    });
+
+    expect(stopped.rows.map((row) => row.view)).toEqual(["done", "failed", "inactive"]);
+  });
+
+  it("says credits cannot be spent right now when the manager cannot cover them", () => {
+    const stopped = steps({
+      progress: progress({ stage: "halted", failure: { reason: "credits", retryable: false } }),
+    });
+
+    expect(stopped.failure).toBe("Credits can't be spent right now. Untick them to predict with your own funds.");
+  });
+
+  it("freezes the credits a run moves along with the money it adds", () => {
+    const funding = planFunding({
+      amount: 5n * WAD,
+      ownWallet: 10n * WAD,
+      tradeWallet: 0n,
+      credits: [{ kind: "foresight", tradeWallet: 0n, wallet: 2n * WAD, usable: 2n * WAD }],
+    });
+
+    expect(
+      fundsToAdd(funding, { id: "collateral", symbol: "sDAI", decimals: 18 }, { symbol: "sDAI", decimals: 18 }),
+    ).toEqual({ toAdd: 3n * WAD, credits: 2n * WAD, symbol: "sDAI", decimals: 18 });
+  });
+});

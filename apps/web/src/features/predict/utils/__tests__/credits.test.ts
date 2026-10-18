@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
+import { OWNED_DECIMALS } from "@/utils/amount";
+
 import type { CreditsHeld } from "@/lib/trade-executor/credits";
 
+import { MAX_CREDITS_PER_RUN } from "../../oracle/tolerances";
 import { creditLines, creditsOffer, MIN_CREDITS } from "../credits";
-import { fundingSummary, planFunding } from "../funding";
+import { fundingRequest, fundingSummary, planFunding, shownAmount } from "../funding";
 
 const WAD = 10n ** 18n;
 const sDai = { id: "collateral" as const, symbol: "sDAI", decimals: 18 };
@@ -149,5 +152,70 @@ describe("planFunding with a credits line", () => {
     expect(fundingSummary({ funding, amount: 10n * WAD, token: xDai, collateral })?.text).toBe(
       "≈ 8 sDAI = 2 in credits + 6 from your wallet",
     );
+  });
+});
+
+describe("credits a run may spend", () => {
+  it("caps what is usable at the most a run may spend, and says the offer is short of what is held", () => {
+    const held = { wallet: MAX_CREDITS_PER_RUN * 2n, tradeWallet: 0n, manager: MAX_CREDITS_PER_RUN * 10n };
+
+    expect(creditsOffer(held)).toEqual({ state: "short", held: MAX_CREDITS_PER_RUN * 2n, usable: MAX_CREDITS_PER_RUN });
+  });
+
+  it("caps at the manager's collateral or the per-run maximum, whichever is lower", () => {
+    const held = { wallet: MAX_CREDITS_PER_RUN * 2n, tradeWallet: 0n, manager: MAX_CREDITS_PER_RUN / 2n };
+
+    expect(creditsOffer(held)).toMatchObject({ state: "short", usable: MAX_CREDITS_PER_RUN / 2n });
+  });
+});
+
+describe("credits signed as shown", () => {
+  const step = 10n ** BigInt(18 - OWNED_DECIMALS);
+
+  it("spends each credit source in whole shown decimals, so the transfer and the burn are the figures shown", () => {
+    // 1.23456789 in the trade wallet and 0.98765432 in the wallet
+    const held = { wallet: 987_654_320_000_000_000n, tradeWallet: 1_234_567_890_000_000_000n, manager: 1000n * WAD };
+    const funding = planFunding({
+      amount: 5n * WAD,
+      ownWallet: 10n * WAD,
+      tradeWallet: 0n,
+      credits: creditLines(held, creditsOffer(held)),
+    });
+    const [use] = funding.credits;
+
+    expect(use).toEqual({ kind: "foresight", fromTradeWallet: 12_345n * step, fromWallet: 9_876n * step });
+    expect(funding.creditsIn % step).toBe(0n);
+    expect(shownAmount(funding.creditsIn, 18)).toBe("2.2221");
+    expect(funding.toAdd).toBe(5n * WAD - funding.creditsIn);
+  });
+
+  it("asks the run for the sDAI split apart from the credits, and the credits by source", () => {
+    const held = { wallet: 2n * WAD, tradeWallet: WAD, manager: 1000n * WAD };
+    const funding = planFunding({
+      amount: 10n * WAD,
+      ownWallet: 20n * WAD,
+      tradeWallet: 4n * WAD,
+      credits: creditLines(held, creditsOffer(held)),
+    });
+
+    expect(fundingRequest(funding, false)).toEqual({
+      deposit: 3n * WAD,
+      depositNative: false,
+      collateralIn: 7n * WAD,
+      collateralBefore: 4n * WAD,
+      creditsFromEoa: 2n * WAD,
+      creditsToSpend: 3n * WAD,
+    });
+  });
+
+  it("asks for no credits when none are ticked", () => {
+    const funding = planFunding({ amount: 10n * WAD, ownWallet: 20n * WAD, tradeWallet: 0n });
+
+    expect(fundingRequest(funding, true)).toMatchObject({
+      depositNative: true,
+      collateralIn: 10n * WAD,
+      creditsFromEoa: 0n,
+      creditsToSpend: 0n,
+    });
   });
 });

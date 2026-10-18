@@ -13,6 +13,7 @@ import {
   type Hash,
   type Hex,
   type Log,
+  type TransactionReceipt,
   type PrivateKeyAccount,
   type PublicClient,
   type WalletClient,
@@ -21,8 +22,19 @@ import { privateKeyToAccount } from "viem/accounts";
 import { gnosis } from "viem/chains";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { planFunding } from "../../utils/funding";
+import { DUST_WEI } from "../../oracle/tolerances";
+import { fundingRequest, planFunding, type Funding } from "../../utils/funding";
 import type { PredictCtx, PredictOption, PredictRequest, PredictSnapshot } from "../types";
+import {
+  gasPaid,
+  moved,
+  outsideRecipients,
+  readLedger,
+  signedOptions,
+  tokensOf,
+  type Ledger,
+  type LedgerScope,
+} from "./support/ledger";
 
 /**
  * The app's modules read validated env when they load, so they are pulled in inside the test
@@ -38,6 +50,10 @@ const load = async () => ({
   ...(await import("../../run/reader")),
   ...(await import("../plan")),
   ...(await import("../../run/driver")),
+  ...(await import("@/lib/trade-executor/credits")),
+  ...(await import("@/lib/trade-executor/funding")),
+  ...(await import("../../utils/credits")),
+  ...(await import("../../utils/plan")),
 });
 
 /**
@@ -181,6 +197,7 @@ describe("the predict flow, against a gnosis fork", () => {
         collateral,
         parentMarket: session.parentMarket,
         sDaiAdapter: route.sDaiAdapter,
+        credits: null,
       };
       const snapshot: PredictSnapshot = {
         options: [option],
@@ -188,6 +205,9 @@ describe("the predict flow, against a gnosis fork", () => {
         depositNative: false,
         collateralIn: DEPOSIT,
         collateralBefore: 0n,
+        creditsFromEoa: 0n,
+        creditsToSpend: 0n,
+        creditsAtStart: 0n,
         // read from the chain the way the run reads it when it starts
         collateralAtStart: await createPredictReader({ client, sessionId: session.id, collateral }).collateralBalance(
           ctx.executor,
@@ -211,6 +231,20 @@ describe("the predict flow, against a gnosis fork", () => {
       const dust = { ...snapshot, deposit: 10n ** 15n, collateralIn: 10n ** 15n };
       await expect(assertRoutes(empty, dust, deps)).rejects.toBeInstanceOf(NoRouteError);
 
+      const scope: LedgerScope = {
+        owner: account.address,
+        executor: predicted,
+        manager: account.address,
+        passThrough: [router, SWAPR_ROUTER, route.sDaiAdapter],
+        collateral,
+        wxdai: collateral,
+        credits: collateral,
+        options: [option],
+      };
+      const ledgerBefore = await readLedger(client, scope);
+      const receipts: TransactionReceipt[] = [];
+      const signed: Array<{ id: string; data: Hex }> = [];
+
       for (const step of steps) {
         if (await step.canSkip?.(ctx, snapshot)) continue;
 
@@ -230,7 +264,20 @@ describe("the predict flow, against a gnosis fork", () => {
         });
         const receipt = await client.waitForTransactionReceipt({ hash });
         expect(receipt.status, `${step.id} reverted`).toBe("success");
+        receipts.push(receipt);
+        signed.push({ id: step.id, data: tx.data ?? "0x" });
       }
+      await expectCoreMoneyKept({
+        client,
+        scope,
+        before: ledgerBefore,
+        after: await readLedger(client, scope),
+        receipts,
+        deposit: DEPOSIT,
+        router,
+        option,
+        sent: signed,
+      });
 
       const after = await readPoolLiquidity(client, optionPoolRefs(await fetchSessionPools(session.id), child.id).up!);
       const priceAfter = priceFromSqrtPriceX96(after.sqrtPriceX96, after.outcomeIsToken0);
@@ -560,6 +607,7 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
       collateral: session.collateralToken,
       parentMarket: session.parentMarket,
       sDaiAdapter: route.sDaiAdapter,
+      credits: null,
     };
     const snapshot: PredictSnapshot = {
       options: [option],
@@ -567,6 +615,9 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
       depositNative: false,
       collateralIn: deposit,
       collateralBefore: 0n,
+      creditsFromEoa: 0n,
+      creditsToSpend: 0n,
+      creditsAtStart: 0n,
       // read from the chain the way the run reads it when it starts
       collateralAtStart: await app
         .createPredictReader({ client, sessionId: session.id, collateral: session.collateralToken })
@@ -579,7 +630,20 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
       slippageBps: tolerances.SLIPPAGE_BPS,
     };
 
+    const scope: LedgerScope = {
+      owner: owner.address,
+      executor: predicted,
+      manager: owner.address,
+      passThrough: [router, SWAPR_ROUTER, route.sDaiAdapter],
+      collateral: session.collateralToken,
+      wxdai: session.collateralToken,
+      credits: session.collateralToken,
+      options: [option],
+    };
+    const before = await readLedger(client, scope);
+
     const sent: Array<{ id: string; status: string; data: Hex; logs: Log[] }> = [];
+    const receipts: TransactionReceipt[] = [];
     for (const step of app.planPredict(snapshot, deps)) {
       if (await step.canSkip?.(ctx, snapshot)) continue;
       const tx = await step.build(ctx, snapshot);
@@ -588,11 +652,18 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
       let status = "success";
       let logs: Log[] = [];
       try {
-        logs = (await send(owner, tx.to, tx.data, tx.value ?? 0n)).logs;
+        const receipt = await send(owner, tx.to, tx.data, tx.value ?? 0n);
+        receipts.push(receipt);
+        logs = receipt.logs;
       } catch (reason) {
         status = `reverted: ${String(reason).split("\n")[0]}`;
       }
       sent.push({ id: step.id, status, data: tx.data ?? "0x", logs });
+    }
+
+    if (sent.every((each) => each.status === "success")) {
+      const after = await readLedger(client, scope);
+      await expectCoreMoneyKept({ client, scope, before, after, receipts, deposit, router, option, sent });
     }
     return sent;
   }
@@ -798,6 +869,57 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
   );
 });
 
+/**
+ * M1 to M3 for a run with no credits that every step of landed: the owner paid the sDAI shown and
+ * gas, the trade wallet split all of it, nothing stayed where money only passes, and the option
+ * received at least what each leg's minimum promised.
+ */
+async function expectCoreMoneyKept(args: {
+  client: PublicClient;
+  scope: LedgerScope;
+  before: Ledger;
+  after: Ledger;
+  receipts: TransactionReceipt[];
+  deposit: bigint;
+  router: Address;
+  option: PredictOption;
+  sent: Array<{ id: string; data: Hex }>;
+}) {
+  const { client, scope, before, after, receipts, deposit, router, option } = args;
+  const { owner, executor, collateral } = scope;
+
+  expect(moved(before, after, owner, collateral), "sDAI from the wallet").toBe(-deposit);
+  expect(moved(before, after, owner, "native"), "the owner paid only gas in xDAI").toBe(-gasPaid(receipts));
+  expect(moved(before, after, executor, collateral), "the trade wallet split all it was given").toBe(0n);
+  expect(moved(before, after, executor, "native")).toBe(0n);
+  for (const holder of scope.passThrough) {
+    for (const token of tokensOf(scope))
+      expect(moved(before, after, holder, token), `${holder} kept ${token}`).toBe(0n);
+    expect(moved(before, after, holder, "native"), `${holder} kept xDAI`).toBe(0n);
+  }
+  expect(await outsideRecipients(client, receipts, scope), "paid to an outside account").toEqual([]);
+
+  const batch = args.sent.find((each) => each.id.startsWith("predict-"))!;
+  const decoded = decodeFunctionData({
+    abi: parseAbi(["function batchExecute((address to, bytes data)[] calls)"]),
+    data: batch.data,
+  });
+  const legs = signedOptions(decoded.args[0], [option], { gnosisRouter: router, swaprRouter: SWAPR_ROUTER }).get(
+    option.childMarket,
+  )!;
+  expect(legs.childSplit, "the option splits what the parent split gave it").toBe(
+    before.tokens.get(executor)!.get(option.underlying)! + deposit,
+  );
+  for (const token of [option.upToken, option.downToken]) {
+    const floor = legs.childSplit - (legs.sold.get(token) ?? 0n) - legs.merge + (legs.boughtAtLeast.get(token) ?? 0n);
+    expect(
+      moved(before, after, executor, token),
+      `${token} received at least the plan's minimum`,
+    ).toBeGreaterThanOrEqual(floor);
+  }
+  expect(moved(before, after, executor, option.invalidToken)).toBe(legs.childSplit - legs.merge);
+}
+
 /** Hardhat's fourth account, whose trade wallet no other fork test touches. */
 const STALE_OWNER_KEY = "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6" as const;
 
@@ -929,6 +1051,8 @@ describe("the split amount when the cached trade-wallet balance is stale, agains
       depositNative: args.native,
       collateralIn: funding.collateralIn,
       collateralBefore: args.cached(real),
+      creditsFromEoa: 0n,
+      creditsToSpend: 0n,
       startedAt: Math.floor(Date.now() / 1000),
     };
     const ctx: PredictCtx = {
@@ -940,6 +1064,7 @@ describe("the split amount when the cached trade-wallet balance is stale, agains
       collateral: session.collateralToken,
       parentMarket: session.parentMarket,
       sDaiAdapter: route.sDaiAdapter,
+      credits: null,
     };
 
     const sent: Array<{ tx: FlowTx; hash: Hash }> = [];
@@ -1014,4 +1139,885 @@ describe("the split amount when the cached trade-wallet balance is stale, agains
       600_000,
     );
   }
+});
+
+/** Gnosis' Foresight credits governor, an admin of the token and the manager's governor. */
+const CREDITS_GOVERNOR = "0x4EDCA105188a0783Ab3A6f09c50567D1E3F8591D" as const;
+const CREDITS_ADMIN_ABI = parseAbi([
+  "function governor() view returns (address)",
+  "function mint(address to, uint256 amount)",
+  "function sweepTokens(address token)",
+]);
+const VAULT_ABI = parseAbi([
+  "function convertToAssets(uint256 shares) view returns (uint256)",
+  "function previewDeposit(uint256 assets) view returns (uint256)",
+  "function totalSupply() view returns (uint256)",
+]);
+const MANAGER_EXECUTE_ABI = parseAbi(["function execute(address to, bytes data, uint256 amount, address outputToken)"]);
+const WXDAI_WITHDRAW_ABI = parseAbi(["function withdraw(uint256 wad)"]);
+const POOL_FEE_ABI = parseAbi([
+  "function globalState() view returns (uint160 price, int24 tick, uint16 fee, uint16 timepointIndex, uint8 communityFeeToken0, uint8 communityFeeToken1, bool unlocked)",
+]);
+
+/** Hardhat's sixth to tenth accounts: each scenario starts from a wallet no other test has used. */
+const FRESH_KEYS = [
+  "0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba",
+  "0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e",
+  "0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356",
+  "0xdbda1821b80551c9d65939329250298aa3472ba22feea921c0cf5d620ea67b97",
+  "0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6",
+] as const;
+
+/** How far each scenario's estimates sit from their pools, small enough for the amounts below to reach. */
+const NUDGE = (WAD * 2n) / 100n;
+
+type Child = ForkSession["children"][number];
+
+interface Scenario {
+  key: Hex;
+  pay: "collateral" | "native";
+  /** In the token paid with. */
+  amount: bigint;
+  /** sDAI minted to the owner first, as xDAI paid to the adapter. */
+  walletCollateral?: bigint;
+  credits?: { wallet?: bigint; tradeWallet?: bigint };
+  /** The credits tick; on whenever the owner holds credits, as the popup's default. */
+  useCredits?: boolean;
+  /** The options and their estimates, picked against the pools as they are. */
+  options: (children: Array<{ child: Child; up: bigint; down: bigint }>) => PredictOption[];
+  /** Runs once, after the first batch is quoted and before it is sent. */
+  beforeBatch?: () => Promise<void>;
+  /** Sends with this gas rather than an estimate, so a batch meant to revert reaches the chain. */
+  gas?: bigint;
+}
+
+interface ScenarioRun {
+  ctx: PredictCtx;
+  funding: Funding;
+  request: PredictRequest;
+  options: PredictOption[];
+  /** Every child of the session, the way the ledger reads them. */
+  children: PredictOption[];
+  before: Ledger;
+  after: Ledger;
+  sent: Array<{ stepId: string; tx: FlowTx; receipt: TransactionReceipt }>;
+  progress: ReturnType<import("../../run/types").PredictDriver["getProgress"]>;
+  driver: import("../../run/types").PredictDriver;
+  /** Each option's pool prices and fees as the run started. */
+  start: Map<Address, { up: bigint; down: bigint; fees: { up: bigint; down: bigint } }>;
+}
+
+describe("money kept by every predict run, against a gnosis fork", () => {
+  let client: PublicClient;
+  let wallet: WalletClient;
+  let session: ForkSession;
+  let snapshotId: string;
+  let app: Awaited<ReturnType<typeof load>>;
+  let tolerances: typeof import("../../oracle/tolerances");
+  let route: NonNullable<ReturnType<Awaited<ReturnType<typeof load>>["creditsRoute"]>>;
+  let fresh = 0;
+
+  beforeAll(async () => {
+    if (!FORK_RPC_URL) return;
+    const transport = http(FORK_RPC_URL, { timeout: FORK_RPC_TIMEOUT_MS });
+    client = createPublicClient({ chain: gnosis, transport }) as PublicClient;
+    wallet = createWalletClient({ chain: gnosis, transport });
+    await requireLensQuoter(FORK_RPC_URL);
+    session = await newestSessionWithPools();
+    app = await load();
+    tolerances = await import("../../oracle/tolerances");
+    const found = app.creditsRoute(session.collateralToken, CHAIN_ID);
+    if (!found) throw new Error("The session's collateral is not the sDAI Foresight credits spend.");
+    route = found;
+
+    // the fixtures act as the governor; a changed governor would make every grant below fail
+    const governor = await client.readContract({
+      address: route.token,
+      abi: CREDITS_ADMIN_ABI,
+      functionName: "governor",
+    });
+    expect(governor.toLowerCase()).toBe(CREDITS_GOVERNOR.toLowerCase());
+    const accounts = await rpc<string[]>("eth_accounts");
+    for (const key of FRESH_KEYS) {
+      expect(accounts.map((each) => each.toLowerCase())).toContain(privateKeyToAccount(key).address.toLowerCase());
+    }
+  }, 120_000);
+
+  beforeEach(async () => {
+    if (!FORK_RPC_URL) return;
+    snapshotId = await rpc<string>("evm_snapshot");
+    for (const address of [...FRESH_KEYS.map((key) => privateKeyToAccount(key).address), CREDITS_GOVERNOR]) {
+      await rpc("hardhat_setBalance", [address, `0x${parseEther("10000").toString(16)}`]);
+    }
+  });
+
+  afterEach(async () => {
+    if (!FORK_RPC_URL) return;
+    await revertTo(snapshotId);
+  });
+
+  const nextKey = () => FRESH_KEYS[fresh++ % FRESH_KEYS.length]!;
+
+  const balance = (token: Address, holder: Address, blockNumber?: bigint) =>
+    client.readContract({
+      address: token,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [holder],
+      ...(blockNumber === undefined ? {} : { blockNumber }),
+    });
+
+  async function sendFrom(from: PrivateKeyAccount, to: Address, data: Hex = "0x", value = 0n) {
+    const gas = ((await client.estimateGas({ account: from, to, data, value })) * 3n) / 2n;
+    const hash = await wallet.sendTransaction({ account: from, chain: gnosis, to, data, value, gas });
+    const receipt = await client.waitForTransactionReceipt({ hash });
+    if (receipt.status !== "success") throw new Error(`${to} reverted`);
+  }
+
+  /** Sends `data` to `to` as the credits governor, impersonated for the one call. */
+  async function asGovernor(to: Address, data: Hex) {
+    await rpc("hardhat_impersonateAccount", [CREDITS_GOVERNOR]);
+    try {
+      const hash = await wallet.sendTransaction({ account: CREDITS_GOVERNOR, chain: gnosis, to, data });
+      const receipt = await client.waitForTransactionReceipt({ hash });
+      if (receipt.status !== "success") throw new Error(`the governor's call to ${to} reverted`);
+    } finally {
+      await rpc("hardhat_stopImpersonatingAccount", [CREDITS_GOVERNOR]);
+    }
+  }
+
+  const grantCredits = (to: Address, amount: bigint) =>
+    asGovernor(route.token, encodeFunctionData({ abi: CREDITS_ADMIN_ABI, functionName: "mint", args: [to, amount] }));
+
+  /** Sends all of the manager's sDAI to the governor. */
+  const drainManager = () =>
+    asGovernor(
+      route.manager,
+      encodeFunctionData({ abi: CREDITS_ADMIN_ABI, functionName: "sweepTokens", args: [session.collateralToken] }),
+    );
+
+  /** Hands the manager `amount` of the sDAI a drain sent the governor. */
+  const refillManager = (amount: bigint) =>
+    asGovernor(
+      session.collateralToken,
+      encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [route.manager, amount] }),
+    );
+
+  const asOption = (child: Child, targetPriceWad = WAD / 2n): PredictOption => ({
+    childMarket: child.id,
+    underlying: child.underlyingToken,
+    upToken: child.upToken,
+    downToken: child.downToken,
+    invalidToken: child.invalidToken,
+    targetPriceWad,
+  });
+
+  const poolRef = async (childMarket: Address, side: "up" | "down") => {
+    const deadline = Date.now() + 60_000;
+    for (;;) {
+      const ref = app.optionPoolRefs(await app.fetchSessionPools(session.id), childMarket)[side];
+      if (ref) return ref;
+      if (Date.now() > deadline) throw new Error(`${childMarket} has no ${side} pool.`);
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+    }
+  };
+
+  const poolPrice = async (childMarket: Address, side: "up" | "down") => {
+    const ref = await poolRef(childMarket, side);
+    const pool = await app.readPoolLiquidity(client, ref);
+    return app.priceFromSqrtPriceX96(pool.sqrtPriceX96, pool.outcomeIsToken0);
+  };
+
+  const poolFee = async (childMarket: Address, side: "up" | "down") => {
+    const [, , fee] = await client.readContract({
+      address: (await poolRef(childMarket, side)).address,
+      abi: POOL_FEE_ABI,
+      functionName: "globalState",
+    });
+    return BigInt(fee);
+  };
+
+  /** Every child whose two pools sit between 0.15 and 0.85, with where they sit. */
+  async function roomyChildren() {
+    const roomy: Array<{ child: Child; up: bigint; down: bigint }> = [];
+    for (const child of session.children) {
+      const refs = app.optionPoolRefs(await app.fetchSessionPools(session.id), child.id);
+      if (!refs.up || !refs.down) continue;
+      const [up, down] = [await poolPrice(child.id, "up"), await poolPrice(child.id, "down")];
+      const inside = (price: bigint) => price > (WAD * 15n) / 100n && price < (WAD * 85n) / 100n;
+      if (inside(up) && inside(down)) roomy.push({ child, up, down });
+    }
+    if (roomy.length === 0)
+      throw new Error("No child pool sits near 0.5. Run `yarn simulate:session:gnosis-fork --liquidity`.");
+    return roomy;
+  }
+
+  /** `price` is within PRICE_TOLERANCE_TICKS of `target`, either way. */
+  function expectAtTarget(price: bigint, target: bigint, what: string) {
+    const ticks = BigInt(tolerances.PRICE_TOLERANCE_TICKS);
+    const [up, down] = [10_001n ** ticks, 10_000n ** ticks];
+    expect(price, `${what} ended past its target ${target}`).toBeLessThanOrEqual((target * up) / down);
+    expect(price, `${what} ended short of its target ${target}`).toBeGreaterThanOrEqual((target * down) / up);
+  }
+
+  /**
+   * Funds a fresh owner as the scenario says, works out the funding as the popup does, and runs
+   * the app's driver to the end with the ledger read either side.
+   */
+  async function runScenario(scenario: Scenario, owner = privateKeyToAccount(scenario.key)): Promise<ScenarioRun> {
+    const factory = app.tradeExecutorFactoryAddress(CHAIN_ID)!;
+    const router = app.gnosisRouterAddress(CHAIN_ID)!;
+    const deposit = app.sDaiDepositRoute(session.collateralToken, CHAIN_ID)!;
+    const { predicted: executor } = await app.fetchExecutorState(client, { factory, owner: owner.address });
+
+    if (scenario.walletCollateral) {
+      await sendFrom(
+        owner,
+        deposit.sDaiAdapter,
+        encodeFunctionData({ abi: app.sDaiAdapterAbi, functionName: "depositXDAI", args: [owner.address] }),
+        scenario.walletCollateral,
+      );
+    }
+    const credits = scenario.credits ?? {};
+    if (credits.wallet || credits.tradeWallet) {
+      await grantCredits(owner.address, (credits.wallet ?? 0n) + (credits.tradeWallet ?? 0n));
+    }
+    if (credits.tradeWallet) {
+      await sendFrom(
+        owner,
+        route.token,
+        encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [executor, credits.tradeWallet] }),
+      );
+    }
+
+    const ctx: PredictCtx = {
+      chainId: CHAIN_ID,
+      owner: owner.address,
+      executor,
+      factory,
+      router,
+      collateral: session.collateralToken,
+      parentMarket: session.parentMarket,
+      sDaiAdapter: deposit.sDaiAdapter,
+      credits: route,
+    };
+    const options = scenario.options(await roomyChildren());
+    const children = session.children.map((child) => asOption(child));
+
+    // what the popup reads, and the funding it shows
+    const native = scenario.pay === "native";
+    const rate = await client.readContract({
+      address: deposit.sDai,
+      abi: VAULT_ABI,
+      functionName: "convertToAssets",
+      args: [WAD],
+    });
+    const held = await app.fetchCredits(client, {
+      contracts: { credits: route.token, manager: route.manager },
+      owner: owner.address,
+      tradeWallet: executor,
+      collateral: session.collateralToken,
+    });
+    const offer = app.creditsOffer(held);
+    const lines = scenario.useCredits === false ? [] : app.creditLines(held, offer);
+    const funding = planFunding({
+      amount: scenario.amount,
+      ownWallet: native
+        ? await client.getBalance({ address: owner.address })
+        : await balance(session.collateralToken, owner.address),
+      tradeWallet: await balance(session.collateralToken, executor),
+      ...(native ? { tokenPerCollateralWad: rate } : {}),
+      credits: lines,
+    });
+    expect(scenario.amount, "the scenario stays within what the popup offers").toBeLessThanOrEqual(funding.available);
+    const request: PredictRequest = {
+      options,
+      ...fundingRequest(funding, native),
+      startedAt: Math.floor(Date.now() / 1000),
+    };
+
+    const start = new Map<Address, { up: bigint; down: bigint; fees: { up: bigint; down: bigint } }>();
+    for (const option of options) {
+      start.set(option.childMarket, {
+        up: await poolPrice(option.childMarket, "up"),
+        down: await poolPrice(option.childMarket, "down"),
+        fees: { up: await poolFee(option.childMarket, "up"), down: await poolFee(option.childMarket, "down") },
+      });
+    }
+
+    const scope: LedgerScope = {
+      owner: owner.address,
+      executor,
+      manager: route.manager,
+      passThrough: [router, route.swaprRouter, deposit.sDaiAdapter],
+      collateral: session.collateralToken,
+      wxdai: route.wxdai,
+      credits: route.token,
+      options: children,
+    };
+    const before = await readLedger(client, scope);
+
+    const sent: ScenarioRun["sent"] = [];
+    let beforeBatch = scenario.beforeBatch;
+    const driver = app.createPredictRun({
+      gateway: createViemTxGateway({
+        client,
+        sendTransaction: async (tx) => {
+          if (beforeBatch && tx.to.toLowerCase() === executor.toLowerCase()) {
+            const hook = beforeBatch;
+            beforeBatch = undefined;
+            await hook();
+          }
+          const data = tx.data ?? "0x";
+          const value = tx.value ?? 0n;
+          const gas =
+            scenario.gas ?? ((await client.estimateGas({ account: owner, to: tx.to, data, value })) * 3n) / 2n;
+          const hash = await wallet.sendTransaction({ account: owner, chain: gnosis, to: tx.to, data, value, gas });
+          const receipt = await client.waitForTransactionReceipt({ hash });
+          sent.push({ stepId: "", tx, receipt });
+          return hash;
+        },
+      }),
+      reader: app.createPredictReader({
+        client,
+        sessionId: session.id,
+        collateral: session.collateralToken,
+        credits: { token: route.token, manager: route.manager },
+      }),
+      quoter: app.createLensQuoter(client, CHAIN_ID),
+      creditsQuoter: app.createLensExactInputQuoter(client, CHAIN_ID),
+      slippageBps: tolerances.SLIPPAGE_BPS,
+      flowId: `predict-money-${owner.address}-${Date.now()}`,
+      ctx: () => ctx,
+      snapshot: () => request,
+    });
+
+    driver.start();
+    await vi.waitFor(() => expect(["halted", "complete"]).toContain(driver.getProgress().stage), {
+      timeout: 300_000,
+      interval: 250,
+    });
+    const after = await readLedger(client, scope);
+    return {
+      ctx,
+      funding,
+      request,
+      options,
+      children,
+      before,
+      after,
+      sent,
+      progress: driver.getProgress(),
+      driver,
+      start,
+    };
+  }
+
+  /** The batch transactions a run sent that landed. */
+  const landedBatches = (run: Pick<ScenarioRun, "sent" | "ctx">) =>
+    run.sent.filter(
+      ({ tx, receipt }) => tx.to.toLowerCase() === run.ctx.executor.toLowerCase() && receipt.status === "success",
+    );
+
+  function batchCalls(data: Hex): Array<{ to: Address; data: Hex; value: bigint }> {
+    const decoded = decodeFunctionData({ abi: app.tradeExecutorAbi, data });
+    if (decoded.functionName === "batchValueExecute") return decoded.args[0].map((call) => ({ ...call }));
+    if (decoded.functionName === "batchExecute") return decoded.args[0].map((call) => ({ ...call, value: 0n }));
+    throw new Error(`Expected a batch, got ${decoded.functionName}`);
+  }
+
+  /**
+   * M1 to M5 for one run that completed: every debit is what the popup showed, nothing is left
+   * anywhere but the trade wallet, every option landed and received at least its minimums.
+   */
+  async function expectMoneyKept(run: ScenarioRun, opts: { landing?: boolean } = {}) {
+    const { ctx, funding, request, before, after, sent } = run;
+    const { owner, executor } = ctx;
+    const collateral = session.collateralToken;
+    const receipts = sent.map((each) => each.receipt);
+    expect(run.progress.stage, JSON.stringify(run.progress.failure)).toBe("complete");
+
+    // M2: the owner is debited exactly what the popup showed, gas aside
+    expect(moved(before, after, owner, route.token), "credits moved from the wallet").toBe(-request.creditsFromEoa);
+    if (request.depositNative) {
+      expect(moved(before, after, owner, collateral)).toBe(0n);
+      expect(moved(before, after, owner, "native")).toBe(-request.deposit - gasPaid(receipts));
+    } else {
+      expect(moved(before, after, owner, collateral), "sDAI from the wallet").toBe(-request.deposit);
+      expect(moved(before, after, owner, "native")).toBe(-gasPaid(receipts));
+    }
+    expect(request.deposit, "the deposit is the one the popup showed").toBe(funding.deposit);
+    expect(request.creditsToSpend, "the credits spent are the ones the popup showed").toBe(funding.creditsIn);
+
+    // credits burned are the credits shown, paid by the manager one sDAI each
+    expect(before.creditsSupply - after.creditsSupply, "credits burned").toBe(request.creditsToSpend);
+    expect(moved(before, after, route.manager, collateral), "the manager's sDAI").toBe(-request.creditsToSpend);
+    expect(moved(before, after, executor, route.token), "the trade wallet's credits").toBe(
+      request.creditsFromEoa - request.creditsToSpend,
+    );
+    expect(moved(before, after, executor, "native"), "xDAI left in the trade wallet").toBe(0n);
+
+    // M1: what only routes money keeps none of it
+    for (const holder of [app.gnosisRouterAddress(CHAIN_ID)!, route.swaprRouter, ctx.sDaiAdapter!]) {
+      for (const token of tokensOf({ ...SCOPE_TOKENS(run), credits: route.token })) {
+        expect(moved(before, after, holder, token), `${holder} kept ${token}`).toBe(0n);
+      }
+      expect(moved(before, after, holder, "native"), `${holder} kept xDAI`).toBe(0n);
+    }
+    expect(await outsideRecipients(client, receipts, { owner, executor }), "paid to an outside account").toEqual([]);
+    // the manager pays from its own sDAI, so the trade wallet never approves its sDAI to Swapr
+    expect(
+      await client.readContract({
+        address: collateral,
+        abi: erc20Abi,
+        functionName: "allowance",
+        args: [executor, route.swaprRouter],
+      }),
+    ).toBe(0n);
+
+    // P2, A4: the parent split is the sDAI shown, and the credits add what their xDAI mints
+    const batches = landedBatches(run);
+    expect(batches.length, "every batch landed").toBeGreaterThan(0);
+    const first = batchCalls(batches[0]!.tx.data!);
+    const parent = first
+      .filter((call) => call.to.toLowerCase() === ctx.router.toLowerCase())
+      .map((call) => decodeFunctionData({ abi: app.gnosisRouterAbi, data: call.data }));
+    const sDaiSplit = parent
+      .filter(
+        (call) =>
+          call.functionName === "splitPosition" && call.args[1].toLowerCase() === ctx.parentMarket.toLowerCase(),
+      )
+      .reduce((sum, call) => sum + (call.args[2] as bigint), 0n);
+
+    let landed = 0n;
+    for (const { tx, receipt } of sent) {
+      const to = tx.to.toLowerCase();
+      if (receipt.status !== "success") continue;
+      if (to !== collateral.toLowerCase() && to !== ctx.sDaiAdapter!.toLowerCase()) continue;
+      if (
+        to === collateral.toLowerCase() &&
+        tx.data &&
+        !tx.data.toLowerCase().includes(executor.slice(2).toLowerCase())
+      )
+        continue;
+      landed +=
+        (await balance(collateral, executor, receipt.blockNumber)) -
+        (await balance(collateral, executor, receipt.blockNumber - 1n));
+    }
+    const shownSDai = funding.collateralIn - funding.creditsIn;
+    if (request.depositNative) {
+      const off = sDaiSplit > shownSDai ? sDaiSplit - shownSDai : shownSDai - sDaiSplit;
+      expect(off, `the sDAI split ${sDaiSplit} against the ${shownSDai} shown`).toBeLessThanOrEqual(DUST_WEI);
+    } else {
+      expect(sDaiSplit, "the sDAI split is the sDAI shown").toBe(shownSDai);
+    }
+    expect(moved(before, after, executor, collateral), "the trade wallet's sDAI").toBe(landed - sDaiSplit);
+
+    let minted = 0n;
+    const execute = first.find((call) => call.to.toLowerCase() === route.manager.toLowerCase());
+    if (request.creditsToSpend > 0n) {
+      expect(execute, "the first batch spends the credits").toBeDefined();
+      const [target, swap, amount, outputToken] = decodeFunctionData({
+        abi: MANAGER_EXECUTE_ABI,
+        data: execute!.data,
+      }).args;
+      expect([target.toLowerCase(), amount, outputToken.toLowerCase()]).toEqual([
+        route.swaprRouter.toLowerCase(),
+        request.creditsToSpend,
+        route.wxdai.toLowerCase(),
+      ]);
+      const [leg] = decodeFunctionData({ abi: SWAPR_ROUTER_ABI, data: swap }).args;
+      expect(leg.recipient.toLowerCase()).toBe(executor.toLowerCase());
+      const unwrap = first.find((call) => call.to.toLowerCase() === route.wxdai.toLowerCase())!;
+      const [floor] = decodeFunctionData({ abi: WXDAI_WITHDRAW_ABI, data: unwrap.data }).args;
+      expect(floor).toBe(leg.amountOutMinimum);
+      const base = first.find((call) => call.value > 0n)!;
+      expect(base.value).toBe(floor);
+
+      // what splitFromBase minted is the vault's preview of the floor
+      const block = batches[0]!.receipt.blockNumber;
+      const supply = (blockNumber: bigint) =>
+        client.readContract({ address: collateral, abi: VAULT_ABI, functionName: "totalSupply", blockNumber });
+      minted = (await supply(block)) - (await supply(block - 1n));
+      const preview = await client.readContract({
+        address: collateral,
+        abi: VAULT_ABI,
+        functionName: "previewDeposit",
+        args: [floor],
+        blockNumber: block - 1n,
+      });
+      const off = minted > preview ? minted - preview : preview - minted;
+      expect(off, `minted ${minted} against the vault's preview ${preview}`).toBeLessThanOrEqual(DUST_WEI);
+
+      // the credits leg loses no more to the pool than the caps allow, against the vault rate
+      const value = (shares: bigint) =>
+        client.readContract({
+          address: collateral,
+          abi: VAULT_ABI,
+          functionName: "convertToAssets",
+          args: [shares],
+          blockNumber: block - 1n,
+        });
+      const kept = 10_000n - BigInt(tolerances.CREDITS_MAX_LOSS_BPS) - BigInt(tolerances.CREDITS_SLIPPAGE_BPS);
+      expect(await value(minted)).toBeGreaterThanOrEqual(((await value(request.creditsToSpend)) * kept) / 10_000n);
+
+      // the swap's surplus over the floor stays in the trade wallet as WXDAI, within the slippage allowance
+      const dust = moved(before, after, executor, route.wxdai);
+      expect(dust).toBeGreaterThanOrEqual(0n);
+      const slip = BigInt(tolerances.CREDITS_SLIPPAGE_BPS);
+      expect(dust).toBeLessThanOrEqual((floor * slip) / (10_000n - slip) + 1n);
+    } else {
+      expect(execute, "no credits spent").toBeUndefined();
+      expect(moved(before, after, executor, route.wxdai)).toBe(0n);
+    }
+    const perChild = sDaiSplit + minted;
+
+    // M3: every option split what both sources minted, received at least its minimums, and landed
+    const calls = batches.flatMap((batch) => batchCalls(batch.tx.data!));
+    const signed = signedOptions(calls, run.options, { gnosisRouter: ctx.router, swaprRouter: route.swaprRouter });
+    const skipped = run.progress.skipped.map((market) => market.toLowerCase());
+    for (const child of run.children) {
+      const option = run.options.find((each) => each.childMarket === child.childMarket);
+      const legs = signed.get(child.childMarket);
+      const held = before.tokens.get(executor)!.get(child.underlying)!;
+      if (!option || !legs || legs.legInputs.length === 0) {
+        if (option)
+          expect(skipped, `${option.childMarket} was left out without saying so`).toContain(
+            option.childMarket.toLowerCase(),
+          );
+        // an option the run did not trade keeps what the parent split gave it
+        expect(moved(before, after, executor, child.underlying), `${child.childMarket}'s underlying`).toBe(perChild);
+        continue;
+      }
+      expect(legs.childSplit, `${child.childMarket} splits all it holds`).toBe(held + perChild);
+      for (const token of [option.upToken, option.downToken]) {
+        const floor =
+          legs.childSplit - (legs.sold.get(token) ?? 0n) - legs.merge + (legs.boughtAtLeast.get(token) ?? 0n);
+        expect(
+          moved(before, after, executor, token),
+          `${token} received at least the plan's minimum`,
+        ).toBeGreaterThanOrEqual(floor);
+      }
+      expect(moved(before, after, executor, option.invalidToken)).toBe(legs.childSplit - legs.merge);
+
+      const [up, down] = [await poolPrice(option.childMarket, "up"), await poolPrice(option.childMarket, "down")];
+      if (opts.landing !== false) {
+        expectAtTarget(up, option.targetPriceWad, `${option.childMarket} UP`);
+        expectAtTarget(down, WAD - option.targetPriceWad, `${option.childMarket} DOWN`);
+      }
+
+      // M1: valued at where the pools end, the option gained what was split into it, less fees
+      const startAt = run.start.get(option.childMarket)!;
+      const fees = { up: startAt.fees.up, down: startAt.fees.down };
+      for (const side of ["up", "down"] as const) {
+        const now = await poolFee(option.childMarket, side);
+        if (now > fees[side]) fees[side] = now;
+      }
+      const worth = (ledger: Ledger) => {
+        const row = ledger.tokens.get(executor)!;
+        return (
+          row.get(option.underlying)! +
+          (row.get(option.upToken)! * up) / WAD +
+          (row.get(option.downToken)! * down) / WAD
+        );
+      };
+      const feesPaid = legs.legInputs.reduce((sum, leg) => sum + (leg.amountIn * fees[leg.pool]) / FEE_DENOMINATOR, 0n);
+      const slack = (perChild * 2n) / 10_000n + 10n;
+      expect(worth(after) - worth(before), `${option.childMarket} lost value beyond its fees`).toBeGreaterThanOrEqual(
+        perChild - feesPaid - slack,
+      );
+    }
+  }
+
+  /** The tokens the ledger reads, for the pass-through check. */
+  const SCOPE_TOKENS = (run: ScenarioRun): LedgerScope => ({
+    owner: run.ctx.owner,
+    executor: run.ctx.executor,
+    manager: route.manager,
+    passThrough: [],
+    collateral: session.collateralToken,
+    wxdai: route.wxdai,
+    credits: route.token,
+    options: run.children,
+  });
+
+  const nudged = (count: number) => (children: Array<{ child: Child; up: bigint }>) =>
+    children.slice(0, count).map(({ child, up }) => asOption(child, up + NUDGE));
+
+  it.skipIf(!FORK_RPC_URL)(
+    "sDAI only: debits the sDAI shown and lands the estimate",
+    async () => {
+      const run = await runScenario({
+        key: nextKey(),
+        pay: "collateral",
+        amount: parseEther("40"),
+        walletCollateral: parseEther("100"),
+        options: nudged(1),
+      });
+      expect(run.request.creditsToSpend).toBe(0n);
+      await expectMoneyKept(run);
+    },
+    600_000,
+  );
+
+  it.skipIf(!FORK_RPC_URL)(
+    "xDAI only: debits the xDAI shown and splits what it minted",
+    async () => {
+      const run = await runScenario({ key: nextKey(), pay: "native", amount: parseEther("50"), options: nudged(1) });
+      await expectMoneyKept(run);
+    },
+    600_000,
+  );
+
+  it.skipIf(!FORK_RPC_URL)(
+    "credits only: moves and burns exactly the credits shown, and nothing else of the visitor's",
+    async () => {
+      const run = await runScenario({
+        key: nextKey(),
+        pay: "collateral",
+        amount: parseEther("30"),
+        credits: { wallet: parseEther("40") },
+        options: nudged(1),
+      });
+      expect(run.request).toMatchObject({
+        creditsFromEoa: parseEther("30"),
+        creditsToSpend: parseEther("30"),
+        deposit: 0n,
+      });
+      await expectMoneyKept(run);
+    },
+    600_000,
+  );
+
+  it.skipIf(!FORK_RPC_URL)(
+    "credits and sDAI: spends the credits first and the sDAI for the rest (A9)",
+    async () => {
+      const run = await runScenario({
+        key: nextKey(),
+        pay: "collateral",
+        amount: parseEther("40"),
+        walletCollateral: parseEther("100"),
+        credits: { wallet: parseEther("15") },
+        options: nudged(1),
+      });
+      expect(run.request).toMatchObject({ creditsToSpend: parseEther("15"), collateralIn: parseEther("25") });
+      await expectMoneyKept(run);
+    },
+    600_000,
+  );
+
+  it.skipIf(!FORK_RPC_URL)(
+    "credits and xDAI: spends the credits and deposits xDAI for the rest",
+    async () => {
+      const run = await runScenario({
+        key: nextKey(),
+        pay: "native",
+        amount: parseEther("50"),
+        credits: { wallet: parseEther("12") },
+        options: nudged(1),
+      });
+      expect(run.request.creditsToSpend).toBe(parseEther("12"));
+      expect(run.request.depositNative).toBe(true);
+      await expectMoneyKept(run);
+    },
+    600_000,
+  );
+
+  it.skipIf(!FORK_RPC_URL)(
+    "credits already in the trade wallet are spent first, with no transfer signed",
+    async () => {
+      const run = await runScenario({
+        key: nextKey(),
+        pay: "collateral",
+        amount: parseEther("30"),
+        walletCollateral: parseEther("100"),
+        credits: { tradeWallet: parseEther("10"), wallet: parseEther("5") },
+        options: nudged(1),
+      });
+      expect(run.request).toMatchObject({ creditsToSpend: parseEther("15"), creditsFromEoa: parseEther("5") });
+      expect(run.funding.credits).toEqual([
+        { kind: "foresight", fromTradeWallet: parseEther("10"), fromWallet: parseEther("5") },
+      ]);
+      await expectMoneyKept(run);
+
+      const held = await runScenario({
+        key: FRESH_KEYS[(fresh - 1) % FRESH_KEYS.length]!,
+        pay: "collateral",
+        amount: parseEther("10"),
+        credits: { tradeWallet: parseEther("10") },
+        options: nudged(1),
+      });
+      expect(held.request.creditsFromEoa).toBe(0n);
+      expect(held.sent.some(({ tx }) => tx.to.toLowerCase() === route.token.toLowerCase())).toBe(false);
+      await expectMoneyKept(held, { landing: false });
+    },
+    900_000,
+  );
+
+  it.skipIf(!FORK_RPC_URL)(
+    "an empty manager offers no credits and moves none; a short one is used for what it holds",
+    async () => {
+      await drainManager();
+      const empty = await runScenario({
+        key: nextKey(),
+        pay: "collateral",
+        amount: parseEther("20"),
+        walletCollateral: parseEther("50"),
+        credits: { wallet: parseEther("10") },
+        options: nudged(1),
+      });
+      expect(
+        app.creditsOffer(
+          await app.fetchCredits(client, {
+            contracts: { credits: route.token, manager: route.manager },
+            owner: empty.ctx.owner,
+            tradeWallet: empty.ctx.executor,
+            collateral: session.collateralToken,
+          }),
+        ).state,
+      ).toBe("empty");
+      expect(empty.request).toMatchObject({ creditsToSpend: 0n, creditsFromEoa: 0n });
+      await expectMoneyKept(empty, { landing: false });
+
+      await refillManager(parseEther("3"));
+      const short = await runScenario({
+        key: nextKey(),
+        pay: "collateral",
+        amount: parseEther("20"),
+        walletCollateral: parseEther("50"),
+        credits: { wallet: parseEther("10") },
+        options: nudged(1),
+      });
+      expect(short.request).toMatchObject({ creditsToSpend: parseEther("3"), collateralIn: parseEther("17") });
+      await expectMoneyKept(short, { landing: false });
+    },
+    900_000,
+  );
+
+  it.skipIf(!FORK_RPC_URL)(
+    "a first batch that reverts leaves the credits in the trade wallet, and the retry spends them once (A8)",
+    async () => {
+      const key = nextKey();
+      const run = await runScenario({
+        key,
+        pay: "collateral",
+        amount: parseEther("30"),
+        walletCollateral: parseEther("100"),
+        credits: { wallet: parseEther("10") },
+        options: nudged(1),
+        beforeBatch: drainManager,
+        gas: 8_000_000n,
+      });
+      expect(run.progress.failure?.reason).toBe("reverted");
+      const owner = privateKeyToAccount(key);
+      const executor = run.ctx.executor;
+      expect(await balance(route.token, executor), "the credits wait in the trade wallet").toBe(parseEther("10"));
+      expect(await balance(route.token, owner.address)).toBe(0n);
+
+      // the trade wallet shows them and they can be withdrawn
+      const shown = await app.fetchCredits(client, {
+        contracts: { credits: route.token, manager: route.manager },
+        owner: owner.address,
+        tradeWallet: executor,
+        collateral: session.collateralToken,
+      });
+      expect(shown?.tradeWallet).toBe(parseEther("10"));
+      const withdraw = app.withdrawTx({
+        executor,
+        recipient: owner.address,
+        assets: [{ token: route.token, amount: parseEther("10") }],
+      });
+      await client.call({ account: owner, to: withdraw.to, data: withdraw.data });
+
+      // the manager is refilled and the run resumes from the batch, spending the credits once
+      await refillManager(parseEther("100"));
+      run.driver.retry();
+      await vi.waitFor(() => expect(["halted", "complete"]).toContain(run.driver.getProgress().stage), {
+        timeout: 300_000,
+        interval: 250,
+      });
+      const after = await readLedger(client, SCOPE_TOKENS(run));
+      const transfers = run.sent.filter(({ tx }) => tx.to.toLowerCase() === route.token.toLowerCase());
+      expect(transfers).toHaveLength(1);
+      // the manager lost what the governor swept and got back the refill, then paid the credits
+      await expectMoneyKept(
+        {
+          ...run,
+          after,
+          progress: run.driver.getProgress(),
+          before: {
+            ...run.before,
+            tokens: new Map(
+              [...run.before.tokens].map(([holder, row]) => [
+                holder,
+                holder === route.manager
+                  ? new Map(
+                      [...row].map(([token, value]) => [
+                        token,
+                        token === session.collateralToken ? parseEther("100") : value,
+                      ]),
+                    )
+                  : row,
+              ]),
+            ),
+          },
+        },
+        { landing: false },
+      );
+    },
+    900_000,
+  );
+
+  it.skipIf(!FORK_RPC_URL)(
+    "many options at once, some already at their estimate, lands each one moved and names each left out",
+    async () => {
+      const run = await runScenario({
+        key: nextKey(),
+        pay: "collateral",
+        amount: parseEther("120"),
+        walletCollateral: parseEther("200"),
+        credits: { wallet: parseEther("20") },
+        options: (children) =>
+          children.slice(0, 5).map(({ child, up }, index) => asOption(child, index % 2 === 0 ? up + NUDGE : up)),
+      });
+      const stays = run.options.filter((_, index) => index % 2 === 1).map((each) => each.childMarket.toLowerCase());
+      // an estimate at the UP price can still leave the DOWN pool to move, so only those may be left out
+      for (const market of run.progress.skipped) expect(stays).toContain(market.toLowerCase());
+      await expectMoneyKept(run);
+    },
+    900_000,
+  );
+
+  it.skipIf(!FORK_RPC_URL)(
+    "a returning predictor's second run trades from the positions the first left, and keeps the money",
+    async () => {
+      const key = nextKey();
+      const first = await runScenario({
+        key,
+        pay: "collateral",
+        amount: parseEther("30"),
+        walletCollateral: parseEther("100"),
+        credits: { wallet: parseEther("5") },
+        options: nudged(1),
+      });
+      await expectMoneyKept(first);
+
+      const second = await runScenario({
+        key,
+        pay: "collateral",
+        amount: parseEther("20"),
+        credits: { wallet: parseEther("5") },
+        options: (children) => {
+          const target = first.options[0]!;
+          const now = children.find(({ child }) => child.id === target.childMarket);
+          if (!now) throw new Error("The first run's option left the roomy band.");
+          return [asOption(now.child, now.up - NUDGE * 2n)];
+        },
+      });
+      const held = second.before.tokens.get(second.ctx.executor)!;
+      expect(held.get(first.options[0]!.upToken)! + held.get(first.options[0]!.downToken)!).toBeGreaterThan(0n);
+      await expectMoneyKept(second);
+    },
+    900_000,
+  );
 });
