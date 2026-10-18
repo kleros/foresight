@@ -152,6 +152,7 @@ const success = (
 
 function Harness() {
   const [skipped, setSkipped] = useState(initialSkipped);
+  const [typed, setTyped] = useState(amount);
   useEffect(() => {
     const onSkipped = (event: Event) => setSkipped((event as CustomEvent<number>).detail);
     window.addEventListener("harness-skipped", onSkipped);
@@ -167,8 +168,8 @@ function Harness() {
         selected={selected}
         onRemove={() => {}}
         preview={state === "recovered" ? undefined : preview}
-        amount={amount}
-        onAmountChange={() => {}}
+        amount={typed}
+        onAmountChange={setTyped}
         tokens={tokens}
         token={sDai}
         onTokenChange={() => {}}

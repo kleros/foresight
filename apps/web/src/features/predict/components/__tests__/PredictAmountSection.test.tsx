@@ -1,4 +1,6 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
+
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { parseUnits } from "viem";
 import { describe, expect, it, vi } from "vitest";
@@ -166,6 +168,89 @@ describe("the amount field", () => {
     renderSection(sDai, 10n ** 18n);
 
     expect(screen.getByLabelText("Amount")).toBeInTheDocument();
+  });
+});
+
+/** The section as the popup holds it: the amount it reports is the amount it is given back. */
+function Held({ initial, held, onAmountChange }: { initial?: bigint; held: bigint; onAmountChange: (amount: bigint | undefined) => void }) {
+  const [amount, setAmount] = useState(initial);
+  return (
+    <PredictAmountSection
+      amount={amount}
+      onAmountChange={(next) => {
+        onAmountChange(next);
+        setAmount(next);
+      }}
+      tokens={[sDai]}
+      token={sDai}
+      onTokenChange={vi.fn()}
+      funding={planFunding({ amount: amount ?? 0n, ownWallet: held, tradeWallet: 0n })}
+      collateral={{ symbol: "sDAI", decimals: 18 }}
+      isFirstPrediction
+      isReadOnly={false}
+    />
+  );
+}
+
+describe("the amount's digits", () => {
+  // the library groups on its own blur, and on a 3s timer; a read within a second tells the two apart
+  const grouped = { timeout: 1000 };
+
+  it("group a value Max sets at once, as its balance beside it is grouped", async () => {
+    render(<Held held={123_456_789n * WAD} onAmountChange={vi.fn()} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Max" }));
+
+    await waitFor(() => expect(screen.getByLabelText("Amount")).toHaveValue("123,456,789"), grouped);
+  });
+
+  it("group a value set from outside the field, its fraction whole", async () => {
+    const props = {
+      onAmountChange: vi.fn(),
+      tokens: [sDai],
+      token: sDai,
+      onTokenChange: vi.fn(),
+      funding: planFunding({ amount: 0n, ownWallet: 10n * WAD, tradeWallet: 0n }),
+      collateral: { symbol: "sDAI", decimals: 18 },
+      isFirstPrediction: true,
+      isReadOnly: false,
+    };
+    const view = render(<PredictAmountSection amount={WAD} {...props} />);
+
+    view.rerender(<PredictAmountSection amount={1_234_567n * WAD + 1n} {...props} />);
+
+    await waitFor(() => expect(screen.getByLabelText("Amount")).toHaveValue("1,234,567.000000000000000001"), grouped);
+  });
+
+  it("stay ungrouped while typed, report exactly what was typed, and group once the field is left", async () => {
+    const onAmountChange = vi.fn();
+    render(<Held held={10_000_000n * WAD} onAmountChange={onAmountChange} />);
+    const input = screen.getByLabelText("Amount");
+
+    await userEvent.type(input, "1234567.25");
+    expect(input).toHaveValue("1234567.25");
+    expect(lastAmount(onAmountChange)).toBe(parseUnits("1234567.25", 18));
+
+    await userEvent.tab();
+    await waitFor(() => expect(input).toHaveValue("1,234,567.25"), grouped);
+
+    // back in the field, a digit typed at the start lands at the caret
+    await userEvent.type(input, "9", { initialSelectionStart: 0, initialSelectionEnd: 0 });
+    expect(input).toHaveValue("91234567.25");
+    expect(lastAmount(onAmountChange)).toBe(parseUnits("91234567.25", 18));
+  });
+
+  it("take a pasted amount as typed", async () => {
+    const onAmountChange = vi.fn();
+    render(<Held held={10_000n * WAD} onAmountChange={onAmountChange} />);
+    const input = screen.getByLabelText("Amount");
+
+    await userEvent.click(input);
+    await userEvent.paste("2500.5");
+    expect(lastAmount(onAmountChange)).toBe(parseUnits("2500.5", 18));
+
+    await userEvent.tab();
+    await waitFor(() => expect(input).toHaveValue("2,500.5"), grouped);
   });
 });
 

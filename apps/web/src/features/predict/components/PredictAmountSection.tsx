@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { BigNumberField, Slider } from "@kleros/ui-components-library";
 import clsx from "clsx";
@@ -9,7 +9,7 @@ import { Select } from "@/components/ui/Select";
 
 import DaiIcon from "@/assets/svg/dai.svg";
 
-import { ownedAmount } from "@/utils/amount";
+import { formatDisplayAmount, ownedAmount } from "@/utils/amount";
 
 import type { PayToken } from "../types";
 import { fundingSummary, percentOf, roundToDisplay, shareOf, type Funding } from "../utils/funding";
@@ -69,6 +69,9 @@ export function PredictAmountSection({
         : fundingSummary({ funding, amount, token, collateral });
 
   const { field, fit } = useFittedAmount();
+  const [isEditing, setIsEditing] = useState(false);
+  // the library groups only in its own blur handler, so a value set from outside shows ungrouped until then
+  const atRest = !isEditing && amount ? { value: formatDisplayAmount(amount, token.decimals, token.decimals) } : undefined;
   const noBalance = Boolean(note) || isDisconnected;
   const isRead = !isDisconnected && available !== undefined;
   const figure = isDisconnected
@@ -138,8 +141,12 @@ export function PredictAmountSection({
         ref={field}
         data-testid="amount-input"
         onInput={fit}
+        onFocus={(event) => event.target instanceof HTMLInputElement && setIsEditing(true)}
         // the library rewrites the value after a blur, in its own render
-        onBlur={() => requestAnimationFrame(fit)}
+        onBlur={(event) => {
+          if (event.target instanceof HTMLInputElement) setIsEditing(false);
+          requestAnimationFrame(fit);
+        }}
         className={clsx(
           "mt-2 flex h-11 flex-row items-center gap-3 short:mt-1.5 short:h-10",
           "transition-opacity duration-(--fs-dur-enter) ease-(--fs-ease-enter)",
@@ -170,6 +177,7 @@ export function PredictAmountSection({
           // toString goes exponential below 1e-7, which parseUnits refuses
           onChange={(entered) => onAmountChange(toUnits(entered.toFixed(), token.decimals))}
           isReadOnly={isReadOnly}
+          inputProps={atRest}
         />
         <Select
           label="Token"

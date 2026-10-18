@@ -830,6 +830,30 @@ for (const [width, tokens] of [
   });
 }
 
+test.describe("an amount set by Max", () => {
+  test.use({ viewport: { width: 375, height: 812 } });
+
+  test("groups its digits at once, as the balance beside it does, and ungroups them for typing", async ({ page }) => {
+    const dialog = await openPopup(page, 2, "idle", undefined, "&held=123456789");
+    const input = dialog.getByLabel("Amount");
+    await expect(dialog.getByTestId("balance-figure")).toHaveText("123,456,795 sDAI");
+
+    await dialog.getByRole("button", { name: "Max" }).click();
+    // the library groups a set value on its own after 3s
+    await expect(input).toHaveValue("123,456,795", { timeout: 1000 });
+
+    await input.focus();
+    await expect(input).toHaveValue("123456795");
+    // Home is the spinbutton's jump to its minimum, so the caret is placed directly
+    await input.evaluate((element) => (element as HTMLInputElement).setSelectionRange(0, 0));
+    await input.pressSequentially("9");
+    await expect(input).toHaveValue("9123456795");
+    expect(await input.evaluate((element) => (element as HTMLInputElement).selectionStart)).toBe(1);
+    await dialog.getByRole("heading", { name: "Predict", exact: true }).click();
+    await expect(input).toHaveValue("9,123,456,795", { timeout: 1000 });
+  });
+});
+
 test.describe("an amount over the balance", () => {
   test.use({ viewport: { width: 375, height: 812 } });
 
