@@ -7,8 +7,8 @@ const CREDIT_STATES = ["enough", "partial", "short", "long", "empty"] as const;
 const NOTES: Record<(typeof CREDIT_STATES)[number], string> = {
   enough: "15 credits available",
   partial: "4 credits available",
-  short: "200 of 500 usable now",
-  long: "1,321.7347 of 2,000 usable now",
+  short: "20 of 50 usable now",
+  long: "81.7347 of 2,000 usable now",
   empty: "None of your 120 usable now",
 };
 const TICK = "Use Foresight credits";
@@ -106,11 +106,13 @@ for (const viewport of VIEWPORTS) {
             )
             .toBe(true);
 
-          // the tick starts off, so the popup opens with its own funds and Predict free
+          // the tick starts on wherever credits are usable, and Predict stays free
           const tick = dialog.getByRole("checkbox", { name: TICK });
           await expect.soft(tick).toHaveCount(credits === "empty" ? 0 : 1);
-          if (credits !== "empty") await expect.soft(tick).not.toBeChecked();
-          await expect.soft(dialog.getByRole("button", { name: "Max credits" })).toBeHidden();
+          if (credits !== "empty") await expect.soft(tick).toBeChecked();
+          const max = dialog.getByRole("button", { name: "Max credits" });
+          if (credits === "empty") await expect.soft(max).toBeHidden();
+          else await expect.soft(max).toBeVisible();
           await expect.soft(dialog.getByRole("status")).toBeEmpty();
           await expect.soft(dialog.getByRole("button", { name: "Predict", exact: true })).toBeEnabled();
 
@@ -137,7 +139,7 @@ for (const viewport of VIEWPORTS) {
         expect.soft(pageErrors, "page errors").toEqual([]);
       });
 
-      test("ticking shows Max credits and holds Predict with the reason, moving nothing; unticking frees it", async ({
+      test("starts ticked with Max credits and Predict free; unticking and ticking move nothing", async ({
         page,
       }, testInfo) => {
         const dialog = await openCredits(page, "enough", theme);
@@ -147,13 +149,11 @@ for (const viewport of VIEWPORTS) {
         const predict = dialog.getByRole("button", { name: "Predict", exact: true });
         const status = dialog.getByRole("status");
 
-        await tickLabel(dialog).click();
         await expect(tick).toBeChecked();
         await expect(useMax).toBeVisible();
-        await expect(status).toHaveText("Credits can't be spent yet. Untick them to predict with your own funds.");
-        await expect(predict).toBeDisabled();
+        await expect(status).toBeEmpty();
+        await expect(predict).toBeEnabled();
         await expect(dialog.getByText("≈ 10 sDAI from your credits")).toBeVisible();
-        expect(await footprint(dialog)).toEqual(before);
         await testInfo.attach(`credits-${viewport.width}x${viewport.height}-${theme}-ticked.png`, {
           body: await page.screenshot({ animations: "disabled" }),
           contentType: "image/png",
@@ -164,6 +164,10 @@ for (const viewport of VIEWPORTS) {
         await expect(useMax).toBeHidden();
         await expect(status).toBeEmpty();
         await expect(predict).toBeEnabled();
+        expect(await footprint(dialog)).toEqual(before);
+
+        await tickLabel(dialog).click();
+        await expect(tick).toBeChecked();
         expect(await footprint(dialog)).toEqual(before);
       });
 

@@ -42,6 +42,7 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
   quote: "Could not get prices. Try again shortly.",
   funds: OUT_OF_FUNDS_COPY,
   balance: "Trade wallet balance is lower than shown. Check the amount.",
+  credits: "Credits can't be spent right now. Untick them to predict with your own funds.",
   "deposit-unconfirmed": "Your last deposit may still be confirming. Check your wallet.",
   "wrong-wallet": "Started from another wallet. Connect it to finish.",
   "wrong-chain": "Started on another network. Switch to it to finish.",
@@ -49,6 +50,9 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
 
 /** Once the deposit is in the amount is fixed, so the only thing short is the fee in the wallet. */
 const FEE_SHORT_COPY = "Not enough xDAI for the fee. Add some, then try the rest.";
+
+/** Once the credits are in the trade wallet the run is locked to them, so only waiting helps. */
+const CREDITS_LOCKED_COPY = "Credits can't be spent right now. Try again shortly.";
 
 /** A transaction is out there and nothing has said how it ended, so it is neither a success nor a failure. */
 const PENDING_COPY = "Sent, not confirmed yet.";
@@ -78,6 +82,8 @@ export interface FundsToAdd {
   decimals: number;
   /** The collateral `toAdd` becomes, when the visitor pays in another token. */
   collateral?: TokenAmount;
+  /** Credits moved from the visitor's wallet to the trade wallet; absent when none move. */
+  credits?: bigint;
 }
 
 /** An xDAI payment adds its deposit, which becomes `toAdd` collateral; a collateral payment adds `toAdd` itself. */
@@ -87,12 +93,15 @@ export function fundsToAdd(
   collateral: { symbol: string; decimals: number },
 ): FundsToAdd {
   const toAdd = funding?.toAdd ?? 0n;
-  if (pay.id === "collateral") return { toAdd, ...collateral };
+  const moved = (funding?.credits ?? []).reduce((sum, use) => sum + use.fromWallet, 0n);
+  const credits = moved > 0n ? { credits: moved } : {};
+  if (pay.id === "collateral") return { toAdd, ...collateral, ...credits };
   return {
     toAdd: funding?.deposit ?? 0n,
     symbol: pay.symbol,
     decimals: pay.decimals,
     collateral: { amount: toAdd, ...collateral },
+    ...credits,
   };
 }
 
@@ -106,7 +115,7 @@ export function predictSteps(
     progress: PredictProgress | null;
   },
 ): PredictSteps {
-  const { wallet, toAdd, symbol, decimals, collateral, progress } = args;
+  const { wallet, toAdd, symbol, decimals, collateral, credits = 0n, progress } = args;
   // the driver reads a sent transaction's receipt under "confirming" with no step of its own running
   const reconciling =
     progress?.stage === "confirming" &&
@@ -122,7 +131,18 @@ export function predictSteps(
   const walletRow = row(STEP_ID.createExecutor);
   const walletReady = Boolean(wallet?.deployed) || walletRow?.state === "success";
 
-  const fundsRow = row(STEP_ID.deposit);
+  // the credits transfer and the deposit share the one funds row
+  const fundsSteps = [row(STEP_ID.addCredits), row(STEP_ID.deposit)].filter((step) => step !== undefined);
+  const fundsState =
+    fundsSteps.length === 0
+      ? undefined
+      : fundsSteps.some((step) => step.state === "error")
+        ? "error"
+        : fundsSteps.some((step) => step.state === "running")
+          ? "running"
+          : fundsSteps.every((step) => step.state === "success")
+            ? "success"
+            : "pending";
 
   const batches = runSteps.filter((step) => step.id.startsWith("predict-"));
   const runningBatch = batches.findIndex((step) => step.state === "running");
@@ -131,7 +151,10 @@ export function predictSteps(
   const predictRunning = runningBatch >= 0;
   const stageCopy = progress ? (STAGE_COPY[progress.stage] ?? "") : "";
   const becomes = collateral && ` (≈ ${shownAmount(collateral.amount, collateral.decimals)} ${collateral.symbol})`;
-  const adding = toAdd === 0n ? "" : `${shownAmount(toAdd, decimals)} ${symbol}${becomes ?? ""}`;
+  const adding = [
+    ...(credits > 0n ? [`${shownAmount(credits, 18)} credits`] : []),
+    ...(toAdd > 0n ? [`${shownAmount(toAdd, decimals)} ${symbol}${becomes ?? ""}`] : []),
+  ].join(" + ");
   // only a batch quotes, so the steps before one say only what the wallet is waiting on
   const txWait = progress?.stage === "signing" || progress?.stage === "confirming" ? stageCopy : "";
 
@@ -141,7 +164,7 @@ export function predictSteps(
     halted && !progress.pendingHash
       ? walletRow?.state === "error"
         ? "wallet"
-        : fundsRow?.state === "error"
+        : fundsState === "error"
           ? "funds"
           : "predict"
       : undefined;
@@ -161,13 +184,13 @@ export function predictSteps(
       key: "funds",
       title: "Add funds",
       // while it runs the amount is in the locked field above, so the row shows only the wait
-      subtitle: fundsRow?.state === "running" ? txWait : adding,
+      subtitle: fundsState === "running" ? txWait : adding,
       view:
-        fundsRow?.state === "running"
+        fundsState === "running"
           ? "running"
-          : fundsRow?.state === "success"
+          : fundsState === "success"
             ? "done"
-            : halted || toAdd === 0n
+            : halted || adding === ""
               ? "inactive"
               : "idle",
     },
@@ -201,9 +224,11 @@ export function predictSteps(
     ? PENDING_COPY
     : progress.failure?.reason === "funds" && progress.moneyMoved
       ? FEE_SHORT_COPY
-      : progress.failure
-        ? FAILURE_COPY[progress.failure.reason]
-        : FAILURE_COPY.unknown;
+      : progress.failure?.reason === "credits" && progress.moneyMoved
+        ? CREDITS_LOCKED_COPY
+        : progress.failure
+          ? FAILURE_COPY[progress.failure.reason]
+          : FAILURE_COPY.unknown;
   return { rows: marked, failure: reason, ...started, ...(progress.pendingHash ? { pending: true as const } : {}) };
 }
 

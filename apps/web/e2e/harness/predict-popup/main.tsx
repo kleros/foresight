@@ -8,7 +8,7 @@ import { PredictDialog } from "@/features/predict/components/PredictDialog";
 import type { ListedEstimate } from "@/features/predict/components/PredictList";
 import { SLIPPAGE_BPS } from "@/features/predict/oracle/tolerances";
 import type { PredictFailureReason, PredictProgress } from "@/features/predict/run/types";
-import { CREDITS_NOT_SPENDABLE, creditLines, creditsOffer } from "@/features/predict/utils/credits";
+import { creditLines, creditsOffer } from "@/features/predict/utils/credits";
 import { planFunding } from "@/features/predict/utils/funding";
 import { previewTrades } from "@/features/predict/utils/plan";
 import { fundsToAdd, predictSteps } from "@/features/predict/utils/predictSteps";
@@ -61,15 +61,15 @@ const signingIn = params.get("signin") === "busy";
 /** `?skipped=N` estimates the run left out, said on the status line; a `harness-skipped` event changes it after open. */
 const initialSkipped = Number(params.get("skipped") ?? "0");
 
-/** `?credits=` the visitor's Foresight credits, as CREDITS names them; none by default. The tick starts off, as in the app. */
+/** `?credits=` the visitor's Foresight credits, as CREDITS names them; none by default. The tick starts on, as in the app. */
 const creditsState = params.get("credits") as keyof typeof CREDITS | null;
 const CREDITS = {
   enough: { wallet: 15n * WAD, tradeWallet: 0n, manager: 1000n * WAD },
   partial: { wallet: 3n * WAD, tradeWallet: 1n * WAD, manager: 1000n * WAD },
-  short: { wallet: 500n * WAD, tradeWallet: 0n, manager: 200n * WAD },
+  short: { wallet: 50n * WAD, tradeWallet: 0n, manager: 20n * WAD },
   empty: { wallet: 120n * WAD, tradeWallet: 0n, manager: 0n },
-  /** the live manager's figures: four decimals, short of a larger holding */
-  long: { wallet: 2000n * WAD, tradeWallet: 0n, manager: parseUnits("1321.7347", 18) },
+  /** a four-decimal manager balance, short of a larger holding and under the per-run cap */
+  long: { wallet: 2000n * WAD, tradeWallet: 0n, manager: parseUnits("81.7347", 18) },
 };
 const heldCredits = creditsState ? (CREDITS[creditsState] ?? null) : null;
 const offer = creditsOffer(heldCredits);
@@ -229,7 +229,7 @@ const success = (
 function Harness() {
   const [skipped, setSkipped] = useState(initialSkipped);
   const [typed, setTyped] = useState(amount);
-  const [isUsing, setIsUsing] = useState(false);
+  const [isUsing, setIsUsing] = useState(true);
   const shown = isUsing ? fundingFor(true) : funding;
   useEffect(() => {
     const onSkipped = (event: Event) => setSkipped((event as CustomEvent<number>).detail);
@@ -263,13 +263,7 @@ function Harness() {
         canRetry={state === "failed" || state === "pending" || state === "recovered"}
         isPending={state === "pending"}
         recovered={state === "recovered" ? { deposit: 4n * WAD, token: sDai } : undefined}
-        notice={
-          state === "disconnected"
-            ? "Connect a wallet to predict."
-            : (shown?.creditsIn ?? 0n) > 0n
-              ? CREDITS_NOT_SPENDABLE
-              : undefined
-        }
+        notice={state === "disconnected" ? "Connect a wallet to predict." : undefined}
         onPredict={() => {}}
       />
     </>

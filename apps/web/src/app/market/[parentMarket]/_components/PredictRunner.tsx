@@ -9,8 +9,7 @@ import type { PayTokenChoice } from "@/features/predict/components/PredictAmount
 import { PredictDialog } from "@/features/predict/components/PredictDialog";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import type { PayToken, SelectedEstimate } from "@/features/predict/types";
-import { CREDITS_NOT_SPENDABLE } from "@/features/predict/utils/credits";
-import { roundToDisplay } from "@/features/predict/utils/funding";
+import { expectedSplit, roundToDisplay } from "@/features/predict/utils/funding";
 import { fundsToAdd, predictSteps, type FundsToAdd } from "@/features/predict/utils/predictSteps";
 import type { SessionDetail } from "@/features/sessions/types";
 import { optionNounSingular } from "@/features/sessions/utils/optionNoun";
@@ -44,8 +43,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
 
   const [amount, setAmount] = useState<bigint>();
   const [picked, setPicked] = useState<PayToken>();
-  // off until a run can spend credits; the notice below holds Predict while they are ticked
-  const [useCredits, setUseCredits] = useState(false);
+  const [useCredits, setUseCredits] = useState(true);
   // removed in this popup; cleared from the page only once Predict is pressed
   const [removed, setRemoved] = useState<string[]>([]);
   // what the steps say is being added, held from the press so a refreshed balance cannot rewrite it
@@ -84,7 +82,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
     session,
     selected: kept,
     tradeWallet: predicted,
-    collateralIn: funding?.collateralIn ?? 0n,
+    collateralIn: funding ? expectedSplit(funding) : 0n,
   });
 
   const { driver, progress, ready } = usePredictExecution({
@@ -108,7 +106,10 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
   // a recovered run placed its stored options and collateral, not what this popup's form holds;
   // an estimate with no tradeable option never enters a run
   const placedCount = recovered ? recovered.options.length : toPredictOptions(session, kept).length;
-  const placedAmount = recovered ? recovered.collateralIn : amount;
+  // a recovered run's collateral leaves its credits apart, which it spent one sDAI each
+  const placedAmount = recovered
+    ? recovered.collateralIn + (recovered.creditsToSpend > 0n ? recovered.creditsToSpend : 0n)
+    : amount;
   const placedToken = recovered ? collateral : token;
   const { symbol: placedSymbol, decimals: placedDecimals } = placedToken;
 
@@ -159,7 +160,12 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
   const steps = predictSteps({
     wallet: predicted ? { address: predicted, deployed: Boolean(executor.data?.deployed) } : null,
     ...(recovered
-      ? { toAdd: recovered.deposit, symbol: runToken.symbol, decimals: runToken.decimals }
+      ? {
+          toAdd: recovered.deposit,
+          symbol: runToken.symbol,
+          decimals: runToken.decimals,
+          ...(recovered.creditsFromEoa > 0n ? { credits: recovered.creditsFromEoa } : {}),
+        }
       : // held only while the form is locked to the run; otherwise the form is what the next press signs
         ((isRunning || canRetry) && frozenToAdd) || fundsToAdd(overBalance ? null : funding, token, collateral)),
     progress,
@@ -199,15 +205,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
       recovered={recovered && { deposit: recovered.deposit, token: runToken }}
       notice={
         // once a run is going its own state is the story, not what the wallet is doing now
-        isRunning
-          ? undefined
-          : notice({
-              owner,
-              onRightChain: chainId === DEFAULT_CHAIN_ID,
-              ready,
-              // a locked form signs the run's snapshot, not the live funding
-              spendsCredits: !canRetry && !recovered && (funding?.creditsIn ?? 0n) > 0n,
-            })
+        isRunning ? undefined : notice({ owner, onRightChain: chainId === DEFAULT_CHAIN_ID, ready })
       }
       onPredict={predict}
     />
@@ -215,14 +213,9 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
 }
 
 /** Why this prediction cannot be made, in the words of the thing the visitor has to do. */
-function notice(args: {
-  owner?: string;
-  onRightChain: boolean;
-  ready: boolean;
-  spendsCredits: boolean;
-}): string | undefined {
+function notice(args: { owner?: string; onRightChain: boolean; ready: boolean }): string | undefined {
   if (!args.owner) return "Connect a wallet to predict.";
   if (!args.onRightChain) return "Switch to Gnosis to predict.";
   if (!args.ready) return "This session cannot be traded yet.";
-  return args.spendsCredits ? CREDITS_NOT_SPENDABLE : undefined;
+  return undefined;
 }

@@ -12,7 +12,7 @@ import { usePredictRun, type PredictRunInput } from "@/features/predict/hooks/us
 import type { PredictDriver, PredictProgress, PredictStage } from "@/features/predict/run/types";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import type { PayToken, SelectedEstimate } from "@/features/predict/types";
-import { CREDITS_NOT_SPENDABLE, creditLines, creditsOffer } from "@/features/predict/utils/credits";
+import { creditLines, creditsOffer } from "@/features/predict/utils/credits";
 import { planFunding } from "@/features/predict/utils/funding";
 import { sessionChartKey } from "@/features/sessions/api/getSessionChart";
 import { sessionStatsKey } from "@/features/sessions/api/getSessionStats";
@@ -211,32 +211,28 @@ describe("PredictRunner, what the visitor is told", () => {
     }));
   };
 
-  it("leaves the credits line unticked, and stops a prediction that would spend credits while it is ticked", () => {
+  it("ticks the credits line by default and lets a prediction spend them, ticked or not", () => {
     withCredits();
     mount();
     fireEvent.click(screen.getByText("pay ten"));
 
-    expect(screen.getByTestId("credits")).toHaveTextContent("false");
-    expect(screen.getByTestId("notice")).toBeEmptyDOMElement();
-
-    fireEvent.click(screen.getByText("tick credits"));
-
     expect(screen.getByTestId("credits")).toHaveTextContent("true");
-    expect(screen.getByTestId("notice")).toHaveTextContent(CREDITS_NOT_SPENDABLE);
+    expect(screen.getByTestId("notice")).toBeEmptyDOMElement();
 
     fireEvent.click(screen.getByText("untick credits"));
 
+    expect(screen.getByTestId("credits")).toHaveTextContent("false");
     expect(screen.getByTestId("notice")).toBeEmptyDOMElement();
   });
 
-  it("does not hold a retry over credits the live balances would spend", () => {
-    withCredits(true);
-    progress = { ...progressAt("halted", true), moneyMoved: true };
+  it("plans the funding with the credits while the line is ticked, and without once it is not", () => {
+    withCredits();
     mount();
     fireEvent.click(screen.getByText("pay ten"));
 
-    expect(screen.getByTestId("can-retry")).toHaveTextContent("true");
-    expect(screen.getByTestId("notice")).toBeEmptyDOMElement();
+    expect(fundingMock).toHaveBeenLastCalledWith(expect.objectContaining({ useCredits: true }));
+    fireEvent.click(screen.getByText("untick credits"));
+    expect(fundingMock).toHaveBeenLastCalledWith(expect.objectContaining({ useCredits: false }));
   });
 
   it("shows no credits line where the visitor holds none", () => {
