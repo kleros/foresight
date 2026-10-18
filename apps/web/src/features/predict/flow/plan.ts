@@ -305,7 +305,7 @@ async function predictCalls(args: {
 
 const withoutValue = (call: ExecutorCall): ExecutorValueCall => ({ ...call, value: 0n });
 
-/** `batchValueExecute` only when a call carries native value, so a run without credits signs what it always has. */
+/** `batchValueExecute` only when a call carries native value, so a run without credits signs `batchExecute`. */
 function batchTx(executor: Address, calls: ExecutorValueCall[]): FlowTx {
   return calls.some((call) => call.value > 0n)
     ? batchValueExecuteTx(executor, calls)

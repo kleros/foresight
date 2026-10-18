@@ -922,7 +922,11 @@ async function expectCoreMoneyKept(args: {
     before.tokens.get(executor)!.get(option.underlying)! + deposit,
   );
   for (const token of [option.upToken, option.downToken]) {
-    const floor = legs.childSplit - (legs.sold.get(token.toLowerCase() as Address) ?? 0n) - legs.merge + (legs.boughtAtLeast.get(token.toLowerCase() as Address) ?? 0n);
+    const floor =
+      legs.childSplit -
+      (legs.sold.get(token.toLowerCase() as Address) ?? 0n) -
+      legs.merge +
+      (legs.boughtAtLeast.get(token.toLowerCase() as Address) ?? 0n);
     expect(
       moved(before, after, executor, token),
       `${token} received at least the plan's minimum`,
@@ -1713,7 +1717,10 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       expect(legs.childSplit, `${child.childMarket} splits all it holds`).toBe(held + perChild);
       for (const token of [option.upToken, option.downToken]) {
         const floor =
-          legs.childSplit - (legs.sold.get(token.toLowerCase() as Address) ?? 0n) - legs.merge + (legs.boughtAtLeast.get(token.toLowerCase() as Address) ?? 0n);
+          legs.childSplit -
+          (legs.sold.get(token.toLowerCase() as Address) ?? 0n) -
+          legs.merge +
+          (legs.boughtAtLeast.get(token.toLowerCase() as Address) ?? 0n);
         expect(
           moved(before, after, executor, token),
           `${token} received at least the plan's minimum; legs ${JSON.stringify(legs, (_, v) => (typeof v === "bigint" ? v.toString() : v instanceof Map ? Object.fromEntries(v) : v))} option ${option.childMarket} up ${option.upToken} down ${option.downToken}`,

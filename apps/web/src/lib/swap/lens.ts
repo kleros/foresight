@@ -25,7 +25,6 @@ import { NoSwapRouteError, type ExactInputQuoter, type SwapQuoter } from "./type
  */
 const QUOTE_DEADLINE_SECONDS = 30n * 60n;
 
-// Lens leaves the limit at zero.
 const EXACT_INPUT_SINGLE = toFunctionSelector(ALGEBRA_ROUTER_ABI[0]);
 
 const Q192 = 2n ** 192n;
