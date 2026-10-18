@@ -182,9 +182,8 @@ export interface PreviewTrades {
 }
 
 /**
- * The trades `planSells` and `planBuys` make for one option, each sell filled by the pool maths alone, and
- * where they leave the UP price. The run quotes against the pools as they are when it signs, so it can land elsewhere.
- * Null where the UP pool never priced.
+ * The trades `planSells` and `planBuys` make for one option, each filled by the pool maths alone, and where they
+ * leave the UP price; null where the UP pool never priced. The run quotes the pools as they are when it signs.
  */
 export function previewTrades(option: OptionTarget, slippageBps: number): PreviewTrades | null {
   const up = option.pools.up;
