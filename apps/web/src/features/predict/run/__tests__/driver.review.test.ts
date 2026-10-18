@@ -2,7 +2,7 @@ import { createFlowRunStore, createMemoryStorage, type FlowTx, type TxGateway } 
 import { decodeFunctionData, erc20Abi, type Hash, type Hex, type TransactionReceipt } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { addresses, ctx, fakeQuoter, fakeReader, snapshot, WAD } from "../../flow/__tests__/support/fakes";
+import { addresses, ctx, fakeQuoter, fakeReader, option, snapshot, WAD } from "../../flow/__tests__/support/fakes";
 import { STEP_ID } from "../../flow/plan";
 import type { PredictCtx, PredictSnapshot } from "../../flow/types";
 import { createPredictRun } from "../driver";
@@ -31,6 +31,7 @@ function fakeGateway(): TxGateway & { readonly signRequests: FlowTx[] } {
 /** A run whose deposit the visitor turned down before the tab closed, or one already broadcast. */
 function storedRejectedDeposit(
   deposit: { status: "pending" } | { status: "submitted"; hash: Hash } = { status: "pending" },
+  saved: PredictSnapshot = SAVED,
 ) {
   const store = createFlowRunStore({ storage: createMemoryStorage() });
   store.save<PredictSnapshot, PredictCtx>({
@@ -40,7 +41,7 @@ function storedRejectedDeposit(
     reason: "error",
     error: { stepId: STEP_ID.deposit, message: "rejected", cause: "rejected" },
     ctx: ctx(),
-    snapshot: SAVED,
+    snapshot: saved,
     steps: [
       { stepId: STEP_ID.createExecutor, label: "Set up your trade wallet", outcome: { status: "skipped" } },
       { stepId: STEP_ID.deposit, label: "Add money to your trade wallet", outcome: deposit },
@@ -88,6 +89,19 @@ describe("createPredictRun with a stored run", () => {
 
     expect(driver.getProgress().recovered).toEqual(SAVED);
     expect(gateway.signRequests).toEqual([]);
+  });
+
+  it("names the options its settled batches left out, from review through to the end", async () => {
+    const leftOut = option(9).childMarket;
+    const { driver } = setup({ store: storedRejectedDeposit(undefined, { ...SAVED, skipped: [leftOut] }) });
+    driver.recover();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("review"));
+    expect(driver.getProgress().skipped).toEqual([leftOut]);
+
+    driver.resume();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("complete"));
+
+    expect(driver.getProgress().skipped).toEqual([leftOut]);
   });
 
   it("ignores start and retry while under review", async () => {
