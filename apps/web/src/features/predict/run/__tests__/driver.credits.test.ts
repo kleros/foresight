@@ -13,15 +13,17 @@ import { tradeExecutorAbi } from "@/config/contracts";
 
 import {
   addresses,
+  chainState,
   ctx,
   fakeCreditsQuoter,
   fakeQuoter,
   fakeReader,
+  option,
   snapshot,
   WAD,
 } from "../../flow/__tests__/support/fakes";
 import { STEP_ID } from "../../flow/plan";
-import type { PredictCtx, PredictSnapshot } from "../../flow/types";
+import type { OptionChainState, PredictCtx, PredictOption, PredictSnapshot } from "../../flow/types";
 import { predictSteps } from "../../utils/predictSteps";
 import { createPredictRun } from "../driver";
 import type { PredictDriver } from "../types";
@@ -33,7 +35,10 @@ const EXECUTE = parseAbi(["function execute(address to, bytes data, uint256 amou
  * A chain that keeps the credits: a transfer moves them from the owner to the trade wallet, a
  * landed first batch burns what its `execute` names. `revert` lists the sends that revert.
  */
-function creditsChain(start: { owner: bigint; executor: bigint; manager?: bigint }, revert: number[] = []) {
+function creditsChain(
+  start: { owner: bigint; executor: bigint; manager?: bigint; state?: (option: PredictOption) => OptionChainState },
+  revert: number[] = [],
+) {
   const balances = { owner: start.owner, executor: start.executor };
   const signRequests: FlowTx[] = [];
   const landed = { transfers: 0, spends: 0 };
@@ -90,14 +95,19 @@ function creditsChain(start: { owner: bigint; executor: bigint; manager?: bigint
     collateral: 0n,
     credits: (holder) => (holder === addresses.executor ? balances.executor : balances.owner),
     manager: start.manager ?? 1000n * WAD,
+    state: start.state,
   });
 
-  return { gateway, reader, balances, landed, signRequests, apply };
+  /** Records `hash` as mined with `status`, for a run stored with a hash this chain has seen. */
+  const mined = (hash: Hash, status: "success" | "reverted") => void chain.set(hash, status);
+
+  return { gateway, reader, balances, landed, signRequests, apply, mined };
 }
 
 /** 2 credits spent: 0.5 already in the trade wallet and 1.5 moved from the wallet; no money added. */
-const request = (): Omit<PredictSnapshot, "collateralAtStart" | "creditsAtStart"> => {
+const request = (options = [option(1)]): Omit<PredictSnapshot, "collateralAtStart" | "creditsAtStart"> => {
   const { collateralAtStart, creditsAtStart, ...rest } = snapshot({
+    options,
     deposit: 0n,
     collateralIn: 0n,
     creditsFromEoa: (3n * WAD) / 2n,
@@ -113,7 +123,12 @@ afterEach(() => {
   for (const driver of drivers.splice(0)) driver.dispose();
 });
 
-function drive(chain: ReturnType<typeof creditsChain>, store?: FlowRunStore, flowId = `credits-${drivers.length}`) {
+function drive(
+  chain: ReturnType<typeof creditsChain>,
+  store?: FlowRunStore,
+  flowId = `credits-${drivers.length}`,
+  options = [option(1)],
+) {
   const driver = createPredictRun({
     gateway: chain.gateway,
     reader: chain.reader,
@@ -122,7 +137,8 @@ function drive(chain: ReturnType<typeof creditsChain>, store?: FlowRunStore, flo
     flowId,
     store,
     ctx: () => ctx(),
-    snapshot: request,
+    snapshot: () => request(options),
+    optionsPerBatch: 1,
   });
   drivers.push(driver);
   return driver;
@@ -211,7 +227,7 @@ describe("credits withdrawn between a reverted first batch and its retry", () =>
 describe("credits across recovery (A7)", () => {
   const FLOW_ID = "predict-credits-recovery";
 
-  function savedRun(steps: StepSummary[]): FlowRunStore {
+  function savedRun(steps: StepSummary[], options = [option(1)]): FlowRunStore {
     const store = createFlowRunStore({ storage: createMemoryStorage() });
     store.save<PredictSnapshot, PredictCtx>({
       flowId: FLOW_ID,
@@ -219,7 +235,7 @@ describe("credits across recovery (A7)", () => {
       status: "paused",
       reason: "rejected",
       ctx: ctx(),
-      snapshot: { ...request(), collateralAtStart: 0n, creditsAtStart: WAD / 2n },
+      snapshot: { ...request(options), collateralAtStart: 0n, creditsAtStart: WAD / 2n },
       steps,
     });
     return store;
@@ -281,6 +297,153 @@ describe("credits across recovery (A7)", () => {
 
     expect(chain.signRequests).toEqual([]);
     expect(chain.landed.spends).toBe(0);
+  });
+
+  const confirmed = (letter: string): StepSummary["outcome"] => ({
+    status: "confirmed",
+    hash: `0x${letter.repeat(64)}`,
+    blockNumber: 1n,
+  });
+  const transfers = (chain: ReturnType<typeof creditsChain>) =>
+    chain.signRequests.filter((tx) => tx.to === addresses.credits);
+  const batches = (chain: ReturnType<typeof creditsChain>) =>
+    chain.signRequests.filter((tx) => tx.to === addresses.executor);
+
+  it("moves the credits once when the transfer was in flight at recovery and lands before the retry", async () => {
+    const chain = creditsChain({ owner: 3n * WAD, executor: WAD / 2n });
+    const store = savedRun([
+      row(STEP_ID.createExecutor, { status: "skipped" }),
+      row(STEP_ID.addCredits, { status: "awaiting-signature" }),
+      row(STEP_ID.predict(1), { status: "pending" }),
+    ]);
+    const driver = drive(chain, store, FLOW_ID);
+
+    driver.recover();
+    await settled(driver);
+    expect(driver.getProgress().failure?.reason).toBe("deposit-unconfirmed");
+
+    // the transfer signed as the tab died mines while the visitor waits
+    chain.balances.owner -= (3n * WAD) / 2n;
+    chain.balances.executor += (3n * WAD) / 2n;
+    driver.retry();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("complete"));
+
+    expect(transfers(chain)).toEqual([]);
+    expect(chain.landed.spends).toBe(1);
+    expect(chain.balances).toEqual({ owner: (3n * WAD) / 2n, executor: 0n });
+  });
+
+  it("rebuilds the first batch once when Add credits had landed and the batch was not yet signed", async () => {
+    const chain = creditsChain({ owner: (3n * WAD) / 2n, executor: 2n * WAD });
+    const store = savedRun([
+      row(STEP_ID.createExecutor, { status: "skipped" }),
+      row(STEP_ID.addCredits, confirmed("a")),
+      row(STEP_ID.predict(1), { status: "pending" }),
+    ]);
+    const driver = drive(chain, store, FLOW_ID);
+
+    driver.recover();
+    await settled(driver);
+    driver.resume();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("complete"));
+
+    expect(transfers(chain)).toEqual([]);
+    expect(batches(chain)).toHaveLength(1);
+    expect(chain.landed).toEqual({ transfers: 0, spends: 1 });
+  });
+
+  it("rebuilds the first batch once when it was signed as the tab died and its credits are not burned", async () => {
+    const chain = creditsChain({ owner: (3n * WAD) / 2n, executor: 2n * WAD });
+    const store = savedRun([
+      row(STEP_ID.createExecutor, { status: "skipped" }),
+      row(STEP_ID.addCredits, confirmed("a")),
+      row(STEP_ID.predict(1), { status: "awaiting-signature" }),
+    ]);
+    const driver = drive(chain, store, FLOW_ID);
+
+    driver.recover();
+    await settled(driver);
+    expect(driver.getProgress().stage).toBe("review");
+    driver.resume();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("complete"));
+
+    expect(transfers(chain)).toEqual([]);
+    expect(batches(chain)).toHaveLength(1);
+    expect(chain.landed).toEqual({ transfers: 0, spends: 1 });
+    expect(chain.balances.executor).toBe(0n);
+  });
+
+  it("rebuilds a first batch found reverted at recovery without moving the credits again", async () => {
+    const chain = creditsChain({ owner: (3n * WAD) / 2n, executor: 2n * WAD });
+    const sent: Hash = `0x${"b".repeat(64)}`;
+    chain.mined(sent, "reverted");
+    const store = savedRun([
+      row(STEP_ID.createExecutor, { status: "skipped" }),
+      row(STEP_ID.addCredits, confirmed("a")),
+      row(STEP_ID.predict(1), { status: "submitted", hash: sent }),
+    ]);
+    const driver = drive(chain, store, FLOW_ID);
+
+    driver.recover();
+    await settled(driver);
+    expect(driver.getProgress().failure).toEqual({ reason: "reverted", retryable: true });
+    expect(chain.signRequests).toEqual([]);
+
+    driver.retry();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("complete"));
+
+    expect(transfers(chain)).toEqual([]);
+    expect(chain.landed).toEqual({ transfers: 0, spends: 1 });
+  });
+
+  it("signs nothing again when the first batch's hash was kept and it mined while the tab was away", async () => {
+    const chain = creditsChain({ owner: (3n * WAD) / 2n, executor: 0n });
+    const sent: Hash = `0x${"b".repeat(64)}`;
+    chain.mined(sent, "success");
+    const store = savedRun([
+      row(STEP_ID.createExecutor, { status: "skipped" }),
+      row(STEP_ID.addCredits, confirmed("a")),
+      row(STEP_ID.predict(1), { status: "submitted", hash: sent }),
+    ]);
+    const driver = drive(chain, store, FLOW_ID);
+
+    driver.recover();
+    await settled(driver);
+    driver.resume();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("complete"));
+
+    expect(chain.signRequests).toEqual([]);
+  });
+
+  it("spends no credits in a later batch when the tab died after the first one landed", async () => {
+    // the first batch's split left every option its underlying
+    const chain = creditsChain({
+      owner: (3n * WAD) / 2n,
+      executor: 0n,
+      state: () => chainState({ underlying: 2n * WAD }),
+    });
+    const options = [option(1), option(2)];
+    const store = savedRun(
+      [
+        row(STEP_ID.createExecutor, { status: "skipped" }),
+        row(STEP_ID.addCredits, confirmed("a")),
+        row(STEP_ID.predict(1), confirmed("b")),
+        row(STEP_ID.predict(2), { status: "awaiting-signature" }),
+      ],
+      options,
+    );
+    const driver = drive(chain, store, FLOW_ID, options);
+
+    driver.recover();
+    await settled(driver);
+    driver.resume();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("complete"));
+
+    expect(transfers(chain)).toEqual([]);
+    expect(batches(chain)).toHaveLength(1);
+    const [second] = batches(chain);
+    const decoded = decodeFunctionData({ abi: tradeExecutorAbi, data: second!.data! });
+    expect(decoded.args[0].map((call) => call.to)).not.toContain(addresses.manager);
   });
 
   it("pins the trade wallet's credits as the run starts, before anything moves", async () => {
