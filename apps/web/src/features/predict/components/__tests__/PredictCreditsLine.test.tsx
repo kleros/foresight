@@ -107,7 +107,7 @@ describe("the credits line", () => {
     expect(tick()).not.toBeChecked();
     expect(tick()).toBeDisabled();
     expect(useMax()).toBeDisabled();
-    expect(note()).toHaveTextContent("None usable right now. Predict with your own sDAI.");
+    expect(note()).toHaveTextContent("None usable right now. Add your own sDAI.");
   });
 
   it("is locked with the rest of the form while a run holds it", () => {

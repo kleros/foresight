@@ -21,7 +21,7 @@ export function creditsNote(offer: CreditsOffer, collateralSymbol: string): stri
   const count = (value: bigint) => ownedAmount(value, CREDIT_DECIMALS);
   if (offer.state === "usable") return `${count(offer.usable)} credits available`;
   if (offer.state === "short") return `${count(offer.usable)} of your ${count(offer.held)} credits usable right now`;
-  return `None usable right now. Predict with your own ${collateralSymbol}.`;
+  return `None usable right now. Add your own ${collateralSymbol}.`;
 }
 
 /**

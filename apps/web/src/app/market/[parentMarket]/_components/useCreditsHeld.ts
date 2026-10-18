@@ -9,7 +9,6 @@ import { STALE_TIME } from "@/lib/query";
 import { fetchCredits } from "@/lib/trade-executor/credits";
 import { publicClient } from "@/lib/web3/public-client";
 
-
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
 import { creditsContracts } from "@/config/contracts";
 

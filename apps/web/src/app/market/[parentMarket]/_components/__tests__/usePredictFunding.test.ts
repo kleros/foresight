@@ -6,7 +6,6 @@ import { GAS_RESERVE_WEI } from "@/features/predict/oracle/tolerances";
 
 import type { CreditsHeld } from "@/lib/trade-executor/credits";
 
-
 import { usePredictFunding } from "../usePredictFunding";
 
 const OWNER = "0x9999999999999999999999999999999999999999" as Address;
