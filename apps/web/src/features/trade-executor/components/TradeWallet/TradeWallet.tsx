@@ -10,7 +10,7 @@ import { shortenAddress } from "@/utils/address";
 import { ownedAmount } from "@/utils/amount";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
-import { gnosisRouterAddress, sDaiDepositRoute } from "@/config/contracts";
+import { creditsContracts, gnosisRouterAddress, sDaiDepositRoute } from "@/config/contracts";
 import { explorerAddressUrl } from "@/config/site";
 
 import { AmountDialog } from "./AmountDialog";
@@ -59,6 +59,9 @@ export function TradeWallet({
   const positionBalances = useTokenBalances(deployed ?? undefined, positionTokens);
   const held = positionBalances.data;
   const heldByToken = held && new Map(positionTokens.map((token, index) => [token, held[index]]));
+
+  const creditsToken = creditsContracts(DEFAULT_CHAIN_ID)?.credits;
+  const creditsHeld = useTokenBalances(deployed ?? undefined, creditsToken ? [creditsToken] : []).data?.[0];
 
   const deposit = useDepositToExecutor(close);
   const withdraw = useWithdrawFromExecutor(close);
@@ -181,6 +184,11 @@ export function TradeWallet({
           source={deployed}
           collateral={collateral}
           native={chain && { symbol: chain.nativeCurrency.symbol, decimals: chain.nativeCurrency.decimals }}
+          credits={
+            creditsToken && creditsHeld !== undefined && creditsHeld > 0n
+              ? { address: creditsToken, symbol: "credits", decimals: 18, balance: creditsHeld }
+              : undefined
+          }
           onSubmit={(asset) => withdraw.mutate({ executor: deployed, recipient: owner, assets: [asset] })}
           isPending={withdraw.isPending}
           // what is shown is cut to four decimals, and a cut Max would leave dust behind
