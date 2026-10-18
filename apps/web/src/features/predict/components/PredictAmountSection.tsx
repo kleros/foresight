@@ -165,6 +165,8 @@ export function PredictAmountSection({
             "[&_.input-wrapper>div:has(>button)]:hidden!",
             "[&_input]:tracking-[-0.02em] [&_input]:tabular-nums [&_input]:placeholder:text-fs-popup-text-3",
             "[&_input]:focus:shadow-none",
+            // a focus scroll on a phone on its side keeps the line under the field above the sticky button
+            "landscape-phone:[&_input]:scroll-mb-12",
             // the line under the field names the limit, so too much tints the digits rather than adding an icon
             notEnough
               ? "[&_input]:text-fs-tone-error-text [&_.input-wrapper>svg]:hidden"
