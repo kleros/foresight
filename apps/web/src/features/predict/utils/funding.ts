@@ -2,15 +2,25 @@ import { cutToOwned, formatAmount, formatDisplayAmount, OWNED_DECIMALS } from "@
 
 import { GAS_RESERVE_WEI } from "../oracle/tolerances";
 import type { PayToken } from "../types";
+import type { CreditLine } from "./credits";
 
 const WAD = 10n ** 18n;
 
 /** Where the money for one prediction comes from, worked out as futarchy's popup does. */
 export interface Funding {
-  /** What the visitor can put in, in the token they chose: their wallet less any gas reserve, plus the trade wallet. */
+  /**
+   * What the visitor can put in, in the token they chose: their wallet less any gas reserve, the
+   * trade wallet, and the credits the lines can spend.
+   */
   available: bigint;
-  /** Collateral the prediction splits. */
+  /** The credits part of `available`, in the token they chose. */
+  creditsAvailable: bigint;
+  /** Collateral the prediction splits, credits included. */
   collateralIn: bigint;
+  /** Credits the prediction spends, one per collateral unit, line by line. */
+  credits: CreditUse[];
+  /** The sum of `credits`. */
+  creditsIn: bigint;
   /** Collateral in the trade wallet before anything is added. */
   tradeWallet: bigint;
   /** The part of it the prediction uses. */
@@ -19,6 +29,12 @@ export interface Funding {
   toAdd: bigint;
   /** What the deposit sends, in the token they chose. */
   deposit: bigint;
+}
+
+export interface CreditUse {
+  kind: CreditLine["kind"];
+  fromTradeWallet: bigint;
+  fromWallet: bigint;
 }
 
 export interface FundingArgs {
@@ -33,9 +49,17 @@ export interface FundingArgs {
    * token is the collateral itself; present means native xDAI, which keeps `GAS_RESERVE_WEI` back.
    */
   tokenPerCollateralWad?: bigint;
+  /** Spent before any collateral, in order, each from the trade wallet before the visitor's wallet. */
+  credits?: CreditLine[];
 }
 
-export function planFunding({ amount, ownWallet, tradeWallet, tokenPerCollateralWad }: FundingArgs): Funding {
+export function planFunding({
+  amount,
+  ownWallet,
+  tradeWallet,
+  tokenPerCollateralWad,
+  credits = [],
+}: FundingArgs): Funding {
   const rate = tokenPerCollateralWad ?? WAD;
   const toToken = (collateral: bigint) => (collateral * rate) / WAD;
   const toCollateral = (token: bigint) => (rate > 0n ? (token * WAD) / rate : 0n);
@@ -43,19 +67,35 @@ export function planFunding({ amount, ownWallet, tradeWallet, tokenPerCollateral
   const spendable = ownWallet > reserve ? ownWallet - reserve : 0n;
 
   const collateralIn = toCollateral(amount);
-  const toAdd = collateralIn > tradeWallet ? collateralIn - tradeWallet : 0n;
+  let left = collateralIn;
+  const uses = credits.map((line): CreditUse => {
+    const usable = min(left, line.usable);
+    const fromTradeWallet = min(usable, line.tradeWallet);
+    const fromWallet = min(usable - fromTradeWallet, line.wallet);
+    left -= fromTradeWallet + fromWallet;
+    return { kind: line.kind, fromTradeWallet, fromWallet };
+  });
+  const toAdd = left > tradeWallet ? left - tradeWallet : 0n;
   // rounded up, so what lands covers the shortfall
   const depositNeeded = rate === WAD ? toAdd : (toAdd * rate + WAD - 1n) / WAD;
+  const creditsAvailable = toToken(
+    credits.reduce((sum, line) => sum + min(line.usable, line.tradeWallet + line.wallet), 0n),
+  );
 
   return {
-    available: spendable + toToken(tradeWallet),
+    available: spendable + toToken(tradeWallet) + creditsAvailable,
+    creditsAvailable,
     collateralIn,
+    credits: uses,
+    creditsIn: collateralIn - left,
     tradeWallet,
-    fromTradeWallet: collateralIn - toAdd,
+    fromTradeWallet: left - toAdd,
     toAdd,
     deposit: depositNeeded > spendable ? spendable : depositNeeded,
   };
 }
+
+const min = (a: bigint, b: bigint) => (a < b ? a : b);
 
 /** Rounded down to the decimals the popup shows, so the signed amount is the shown amount. */
 export const roundToDisplay = cutToOwned;
@@ -108,14 +148,17 @@ export function fundingSummary(args: {
     return { text, tone: "error" };
   }
 
-  const total = `${token.id === "native" ? "≈ " : ""}${shownAmount(funding.collateralIn, collateral.decimals)} ${collateral.symbol}`;
-  const fromTrade = funding.fromTradeWallet > 0n;
-  const fromWallet = funding.toAdd > 0n;
+  // credits reach the split through a swap, so their part is approximate, as an xDAI deposit is
+  const approx = token.id === "native" || funding.creditsIn > 0n;
+  const total = `${approx ? "≈ " : ""}${shownAmount(funding.collateralIn, collateral.decimals)} ${collateral.symbol}`;
+  const parts = [
+    { amount: funding.creditsIn, from: "in credits", alone: "from your credits" },
+    { amount: funding.fromTradeWallet, from: "in your trade wallet", alone: "from your trade wallet" },
+    { amount: funding.toAdd, from: "from your wallet", alone: "from your wallet" },
+  ].filter((part) => part.amount > 0n);
   const text =
-    fromTrade && fromWallet
-      ? `${total} = ${shownAmount(funding.fromTradeWallet, collateral.decimals)} in your trade wallet + ${shownAmount(funding.toAdd, collateral.decimals)} from your wallet`
-      : fromTrade
-        ? `${total} from your trade wallet`
-        : `${total} from your wallet`;
+    parts.length > 1
+      ? `${total} = ${parts.map((part) => `${shownAmount(part.amount, collateral.decimals)} ${part.from}`).join(" + ")}`
+      : `${total} ${parts[0]?.alone ?? "from your wallet"}`;
   return { text, tone: "neutral" };
 }

@@ -11,7 +11,10 @@ describe("planFunding, paying in the collateral", () => {
   it("adds only what the trade wallet is short of", () => {
     expect(planFunding({ amount: 10n * WAD, ownWallet: 20n * WAD, tradeWallet: 6n * WAD })).toEqual({
       available: 26n * WAD,
+      creditsAvailable: 0n,
       collateralIn: 10n * WAD,
+      credits: [],
+      creditsIn: 0n,
       tradeWallet: 6n * WAD,
       fromTradeWallet: 6n * WAD,
       toAdd: 4n * WAD,
