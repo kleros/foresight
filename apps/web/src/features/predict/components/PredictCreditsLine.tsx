@@ -16,7 +16,7 @@ export interface CreditsChoice {
 const CREDIT_DECIMALS = 18;
 
 /** What the visitor's credits can cover, said under the tick. */
-export function creditsNote(offer: CreditsOffer, collateralSymbol: string): string {
+function creditsNote(offer: CreditsOffer, collateralSymbol: string): string {
   if (offer.state === "none") return "";
   const count = (value: bigint) => ownedAmount(value, CREDIT_DECIMALS);
   if (offer.state === "usable") return `${count(offer.usable)} credits available`;

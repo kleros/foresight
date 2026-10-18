@@ -42,7 +42,7 @@ async function openCredits(page: Page, credits: string, theme: string) {
   return dialog;
 }
 
-/** The boxes the credits line must hold still: the line, the dialog, its button and the steps. */
+/** The boxes the credits line must hold still: the line, the dialog, its button and the body's height. */
 async function footprint(dialog: Locator) {
   const round = (value: number) => Math.round(value * 10) / 10;
   const box = async (locator: Locator) => {
