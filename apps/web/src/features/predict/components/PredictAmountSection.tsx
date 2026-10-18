@@ -71,7 +71,8 @@ export function PredictAmountSection({
   const { field, fit } = useFittedAmount();
   const [isEditing, setIsEditing] = useState(false);
   // the library groups only in its own blur handler, so a value set from outside shows ungrouped until then
-  const atRest = !isEditing && amount ? { value: formatDisplayAmount(amount, token.decimals, token.decimals) } : undefined;
+  const atRest =
+    !isEditing && amount ? { value: formatDisplayAmount(amount, token.decimals, token.decimals) } : undefined;
   const noBalance = Boolean(note) || isDisconnected;
   const isRead = !isDisconnected && available !== undefined;
   const figure = isDisconnected

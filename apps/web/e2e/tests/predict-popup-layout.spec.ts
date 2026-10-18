@@ -723,7 +723,11 @@ for (const viewport of [
               );
               if (scroller) scroller.scrollTop = 0;
             });
-            for (let step = 0; step < 80 && !(await input.evaluate((node) => node === document.activeElement)); step++) {
+            for (
+              let step = 0;
+              step < 80 && !(await input.evaluate((node) => node === document.activeElement));
+              step++
+            ) {
               await page.keyboard.press("Tab");
             }
             await expect(input).toBeFocused();
@@ -1534,7 +1538,11 @@ test.describe("an inactive step", () => {
             const [r = 0, g = 0, b = 0, a = 1] = channels(getComputedStyle(node).color);
             const ground = fill ?? [255, 255, 255];
             const mix = [r, g, b].map((c, i) => Math.round(c * a * alpha + ground[i]! * (1 - a * alpha)));
-            return { text: node.textContent!.trim(), color: `rgb(${mix.join(", ")})`, ground: `rgb(${ground.join(", ")})` };
+            return {
+              text: node.textContent!.trim(),
+              color: `rgb(${mix.join(", ")})`,
+              ground: `rgb(${ground.join(", ")})`,
+            };
           }),
       ),
     );
@@ -1555,7 +1563,9 @@ test.describe("an inactive step", () => {
         const full = await tokenValue(page, "color", "var(--fs-popup-text)");
         for (const { text, color, ground } of rows) {
           expect.soft(contrast(color, ground), `"${text}" on ${ground}`).toBeGreaterThanOrEqual(4.5);
-          expect.soft(contrast(color, ground), `"${text}" dimmer than a running title`).toBeLessThan(contrast(full, ground));
+          expect
+            .soft(contrast(color, ground), `"${text}" dimmer than a running title`)
+            .toBeLessThan(contrast(full, ground));
         }
       });
     }

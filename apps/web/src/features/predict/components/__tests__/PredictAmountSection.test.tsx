@@ -172,7 +172,15 @@ describe("the amount field", () => {
 });
 
 /** The section as the popup holds it: the amount it reports is the amount it is given back. */
-function Held({ initial, held, onAmountChange }: { initial?: bigint; held: bigint; onAmountChange: (amount: bigint | undefined) => void }) {
+function Held({
+  initial,
+  held,
+  onAmountChange,
+}: {
+  initial?: bigint;
+  held: bigint;
+  onAmountChange: (amount: bigint | undefined) => void;
+}) {
   const [amount, setAmount] = useState(initial);
   return (
     <PredictAmountSection
