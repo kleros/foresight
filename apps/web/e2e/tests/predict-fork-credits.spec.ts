@@ -77,7 +77,6 @@ test.describe("a credits prediction on the gnosis fork", () => {
   test("spends the credits the popup shows, adds nothing from the wallet, and counts the estimate placed", async ({
     page,
     wallet,
-    indexer,
   }) => {
     test.skip((await chainId()) !== GNOSIS_CHAIN_ID, "needs `yarn local-stack gnosis-fork`");
     test.setTimeout(300_000);
@@ -97,7 +96,7 @@ test.describe("a credits prediction on the gnosis fork", () => {
     await grantCredits(contracts.credits, VISITOR, GRANT);
     const before = { wallet: await credits(VISITOR), tradeWallet: await credits(executor), supply: await supply() };
 
-    await indexer.caughtUp();
+    // the session is one the indexer already holds; the run itself reads the chain
     await page.goto(`/market/${await seededParent()}`);
     await wallet.connect(VISITOR);
 
@@ -117,6 +116,9 @@ test.describe("a credits prediction on the gnosis fork", () => {
     // ticked by default once credits can be spent
     await expect(popup.getByRole("checkbox", { name: "Use Foresight credits" })).toBeChecked({ timeout: 30_000 });
 
+    // the visitor holds only xDAI, which the popup picks by default; credits are sDAI shares
+    await popup.getByRole("button", { name: /Token/ }).click();
+    await page.getByRole("option", { name: "sDAI" }).click();
     const amount = popup.getByRole("spinbutton", { name: "Amount" });
     await amount.fill("2");
     await amount.blur();
