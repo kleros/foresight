@@ -22,9 +22,6 @@ import { privateKeyToAccount } from "viem/accounts";
 import { gnosis } from "viem/chains";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { DUST_WEI } from "../../oracle/tolerances";
-import { fundingRequest, planFunding, type Funding } from "../../utils/funding";
-import type { PredictCtx, PredictOption, PredictRequest, PredictSnapshot } from "../types";
 import {
   gasPaid,
   moved,
@@ -35,6 +32,9 @@ import {
   type Ledger,
   type LedgerScope,
 } from "./support/ledger";
+import { DUST_WEI } from "../../oracle/tolerances";
+import { fundingRequest, planFunding, type Funding } from "../../utils/funding";
+import type { PredictCtx, PredictOption, PredictRequest, PredictSnapshot } from "../types";
 
 /**
  * The app's modules read validated env when they load, so they are pulled in inside the test

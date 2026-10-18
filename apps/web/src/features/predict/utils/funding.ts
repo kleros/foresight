@@ -1,9 +1,9 @@
 import { cutToOwned, formatAmount, formatDisplayAmount, OWNED_DECIMALS } from "@/utils/amount";
 
+import type { CreditLine } from "./credits";
 import type { PredictRequest } from "../flow/types";
 import { CREDITS_SLIPPAGE_BPS, GAS_RESERVE_WEI } from "../oracle/tolerances";
 import type { PayToken } from "../types";
-import type { CreditLine } from "./credits";
 
 const WAD = 10n ** 18n;
 
