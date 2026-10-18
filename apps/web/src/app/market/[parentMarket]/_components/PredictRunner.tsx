@@ -18,7 +18,7 @@ import { useExecutor } from "@/features/trade-executor/api/getExecutor";
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
 import type { PlacedPrediction } from "./PredictSuccessView";
-import { toSavedEstimates } from "./toPredictOptions";
+import { toPredictOptions, toSavedEstimates } from "./toPredictOptions";
 import { useHasPredicted } from "./useHasPredicted";
 import { usePredictExecution } from "./usePredictExecution";
 import { usePredictFunding } from "./usePredictFunding";
@@ -100,8 +100,9 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
     driver?.recover();
   }, [driver]);
 
-  // a recovered run placed its stored options and collateral, not what this popup's form holds
-  const placedCount = recovered ? recovered.options.length : kept.length;
+  // a recovered run placed its stored options and collateral, not what this popup's form holds;
+  // an estimate with no tradeable option never enters a run
+  const placedCount = recovered ? recovered.options.length : toPredictOptions(session, kept).length;
   const placedAmount = recovered ? recovered.collateralIn : amount;
   const placedToken = recovered ? collateral : token;
   const { symbol: placedSymbol, decimals: placedDecimals } = placedToken;
