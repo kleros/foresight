@@ -13,6 +13,7 @@ import {
   type OptionTarget,
   type SwapLeg,
 } from "../plan";
+import { swapToward } from "../poolMath";
 
 const WAD = 10n ** 18n;
 
@@ -244,6 +245,41 @@ describe("planBuys", () => {
       { side: "up", amountIn: (budget * 8n) / 11n },
       { side: "down", amountIn: (budget * 3n) / 11n },
     ]);
+  });
+
+  describe("when both sides are bought and one needs less than its share", () => {
+    // both pools at 0.25 against an estimate of 0.5 each; UP is thin, DOWN thirty times deeper
+    const both = option({
+      pools: { up: pool(AT["0.25"], WAD), down: pool(AT["0.25"], WAD * 30n) },
+      targetPriceWad: WAD / 2n,
+      held: { up: WAD * 10n, down: WAD * 10n, invalid: WAD * 10n },
+      splitAmount: 0n,
+    });
+
+    it("gives the deeper side what the thin one leaves, so both reach the estimate the budget covers", () => {
+      const plan = planBuys(both, [], SLIPPAGE_BPS);
+      const need = plan.legs.reduce((sum, leg) => sum + leg.amountInAtLimit, 0n);
+
+      expect(need).toBeLessThan((WAD * 10n * 98n) / 100n);
+      for (const leg of plan.legs) {
+        expect(leg.amountIn, `${leg.side} is given what reaching its target takes`).toBeGreaterThanOrEqual(
+          leg.amountInAtLimit,
+        );
+      }
+    });
+
+    it("previews DOWN reaching its estimate", () => {
+      const down = previewTrades(both, SLIPPAGE_BPS)!.buys.find((leg) => leg.side === "down")!;
+
+      expect(swapToward(both.pools.down, WAD / 2n, down.amountIn).priceWad).toBe(WAD / 2n);
+    });
+
+    it("never spends more than the budget across both buys", () => {
+      const plan = planBuys(both, [], SLIPPAGE_BPS);
+      const budget = (WAD * 10n * buyBudgetShareBps(SLIPPAGE_BPS)) / 10_000n;
+
+      expect(plan.legs.reduce((sum, leg) => sum + leg.amountIn, 0n)).toBeLessThanOrEqual(budget);
+    });
   });
 
   it("keeps the pool's own limit when it is the smaller of the two", () => {
