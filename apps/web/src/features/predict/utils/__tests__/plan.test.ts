@@ -8,7 +8,8 @@ import {
   MIN_LEG_WEI,
   planBuys,
   planSells,
-  previewUpPrice,
+  LEG_HEADROOM_BPS,
+  previewTrades,
   type OptionTarget,
   type SwapLeg,
 } from "../plan";
@@ -305,42 +306,90 @@ describe("the buy budget's share of what the sells and merge return", () => {
   }
 });
 
-describe("previewUpPrice", () => {
+describe("previewTrades", () => {
   const near = (actual: bigint, expected: bigint) =>
     expect(actual > expected ? actual - expected : expected - actual).toBeLessThan(10n ** 12n);
 
-  it("moves UP to the estimate when the split covers the sell", () => {
-    // selling 1 UP into a 1-liquidity pool at sqrtP 1 lands on sqrtP 0.5, price 0.25
-    const move = previewUpPrice(option(), SLIPPAGE_BPS);
+  it("splits what the option is given, exactly", () => {
+    expect(previewTrades(option({ splitAmount: 3n * WAD }), SLIPPAGE_BPS)?.split).toBe(3n * WAD);
+  });
 
-    expect(move?.from).toBe(WAD);
-    near(move!.to, WAD / 4n);
+  it("sells as much as the split holds, and expects what the pool pays down to the estimate", () => {
+    // selling 1 UP into a 1-liquidity pool at sqrtP 1 lands on sqrtP 0.5: 0.5 underlying out
+    const trades = previewTrades(option(), SLIPPAGE_BPS)!;
+
+    expect(trades.sells.map(({ side, amountIn }) => ({ side, amountIn }))).toEqual([{ side: "up", amountIn: WAD }]);
+    near(trades.sells[0]!.underlyingOut, WAD / 2n);
+  });
+
+  it("sells what reaching the estimate takes plus headroom, and merges the pairs left, exactly", () => {
+    // reaching 0.25 takes 1 UP; the 2 split leave the rest paired with DOWN
+    const sold = (WAD * (10_000n + LEG_HEADROOM_BPS)) / 10_000n;
+    const trades = previewTrades(option({ splitAmount: 2n * WAD }), SLIPPAGE_BPS)!;
+
+    expect(trades.sells[0]!.amountIn).toBe(sold);
+    expect(trades.merge).toBe(2n * WAD - sold);
+    // the limit stops the sell at the estimate, so the headroom pays nothing more
+    near(trades.sells[0]!.underlyingOut, WAD / 2n);
+  });
+
+  it("buys with the expected proceeds and the merge, and expects what the pool returns for them", () => {
+    // DOWN at 0.25 in a deep pool returns about 4 DOWN per underlying
+    const trades = previewTrades(option(), SLIPPAGE_BPS)!;
+
+    expect(trades.buys.map(({ side }) => side)).toEqual(["down"]);
+    near(trades.buys[0]!.amountIn, ((WAD / 2n) * buyBudgetShareBps(SLIPPAGE_BPS)) / 10_000n);
+    near(trades.buys[0]!.outcomeOut, 4n * trades.buys[0]!.amountIn);
+  });
+
+  it("moves UP to the estimate when the split covers the sell", () => {
+    const trades = previewTrades(option(), SLIPPAGE_BPS);
+
+    expect(trades?.from).toBe(WAD);
+    near(trades!.to, WAD / 4n);
   });
 
   it("stops short of the estimate when the split runs out", () => {
     // 0.5 UP lands on sqrtP 2/3
-    const move = previewUpPrice(option({ splitAmount: WAD / 2n }), SLIPPAGE_BPS);
+    const trades = previewTrades(option({ splitAmount: WAD / 2n }), SLIPPAGE_BPS);
 
-    near(move!.to, 444444444444444444n);
+    near(trades!.to, 444444444444444444n);
   });
 
   it("lifts UP toward an estimate above the market with what the DOWN sale pays", () => {
-    const move = previewUpPrice(
+    const trades = previewTrades(
       option({ pools: { up: pool(AT["0.25"]), down: pool(AT["1"]) }, targetPriceWad: WAD / 2n }),
       SLIPPAGE_BPS,
     );
 
-    expect(move!.to).toBeGreaterThan(move!.from);
-    expect(move!.to).toBeLessThanOrEqual(WAD / 2n);
+    expect(trades!.to).toBeGreaterThan(trades!.from);
+    expect(trades!.to).toBeLessThanOrEqual(WAD / 2n);
+  });
+
+  it("has no legs, no split and no merge for an option the market already agrees with", () => {
+    const agreed = option({
+      pools: { up: pool(AT["0.25"], DEEP), down: pool(0n) },
+      held: { up: WAD, down: WAD, invalid: WAD },
+      splitAmount: WAD,
+    });
+
+    expect(previewTrades(agreed, SLIPPAGE_BPS)).toEqual({
+      split: 0n,
+      sells: [],
+      merge: 0n,
+      buys: [],
+      from: WAD / 4n,
+      to: WAD / 4n,
+    });
   });
 
   it("leaves the market where it is with nothing to trade", () => {
-    const move = previewUpPrice(option({ splitAmount: 0n }), SLIPPAGE_BPS);
+    const trades = previewTrades(option({ splitAmount: 0n }), SLIPPAGE_BPS);
 
-    expect(move).toEqual({ from: WAD, to: WAD });
+    expect(trades).toMatchObject({ sells: [], buys: [], from: WAD, to: WAD });
   });
 
   it("has nothing to show for an UP pool that never priced", () => {
-    expect(previewUpPrice(option({ pools: { up: pool(0n), down: pool(AT["0.25"]) } }), SLIPPAGE_BPS)).toBeNull();
+    expect(previewTrades(option({ pools: { up: pool(0n), down: pool(AT["0.25"]) } }), SLIPPAGE_BPS)).toBeNull();
   });
 });
