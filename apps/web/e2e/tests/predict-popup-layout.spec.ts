@@ -1432,6 +1432,11 @@ test.describe("the amount panel's tint", () => {
 
       expect(image.match(/linear-gradient/g)).toHaveLength(1);
       expect(image).not.toContain("radial-gradient");
+      // a color-mix() stop computes to color(srgb r g b / alpha)
+      const alphas = [...image.matchAll(/color\(srgb [\d.]+ [\d.]+ [\d.]+ \/ ([\d.]+)\)/g)].map((match) =>
+        Number(match[1]),
+      );
+      expect(alphas).toEqual(theme === "dark" ? [0.14, 0.1] : [0.06, 0.06]);
     });
   }
 });
@@ -1445,10 +1450,21 @@ test.describe("the price check before a run", () => {
     await expect(dialog.locator('[data-bullet="running"]')).toHaveCount(0);
     await expect(dialog.getByTestId("predict-summary").getByRole("button")).toHaveText("Checking prices…");
     await expect(dialog.locator(".predict-cta")).toHaveText("Checking prices…");
-    await expect(dialog.getByText("Finding prices…")).toHaveCount(0);
+    const rows = dialog.getByRole("listitem", { name: /^Timeline item/ });
+    await expect(rows).toHaveCount(3);
+    const subtitles = await rows.evaluateAll((items) =>
+      Object.fromEntries(
+        items.map((item) => [item.querySelector("h2")?.textContent, item.querySelector("h2 + p")?.textContent ?? ""]),
+      ),
+    );
+    // only the funds row names something, the amount it adds; no row says it is waiting
+    expect(subtitles).toMatchObject({ "Create a trade wallet": "", "Place prediction": "" });
+    expect(Object.values(subtitles).join(" ")).not.toContain("…");
   });
 
-  test("stretches and shrinks its line as it crosses, by transform alone", async ({ page }) => {
+  test("travels linearly and is widest mid-track, by transform alone, after a delay a quick quote ends within", async ({
+    page,
+  }) => {
     const dialog = await openPopup(page, 2, "quoting");
     const sweep = await dialog.locator("[data-testid=pricing-sweep] > i").evaluate((node) => {
       const properties = (animations: Animation[]) => [
@@ -1461,9 +1477,14 @@ test.describe("the price check before a run", () => {
       ];
       const all = node.getAnimations({ subtree: true });
       const bar = all.filter((animation) => (animation.effect as KeyframeEffect).pseudoElement === "::before");
-      const easings = all.map((animation) => (animation.effect as KeyframeEffect).getKeyframes()[0]?.easing);
+      const easings = all.flatMap((animation) =>
+        (animation.effect as KeyframeEffect).getKeyframes().map((frame) => frame.easing),
+      );
+      const widest = bar[0] && (bar[0].effect as KeyframeEffect).getKeyframes().find((frame) => frame.offset === 0.5);
       return {
-        easings: easings.sort(),
+        easings: [...new Set(easings)],
+        delays: all.map((animation) => (animation.effect as KeyframeEffect).getTiming().delay),
+        widest: widest?.transform,
         names: all.map((animation) => (animation as CSSAnimation).animationName).sort(),
         properties: properties(all),
         barProperties: properties(bar),
@@ -1473,8 +1494,10 @@ test.describe("the price check before a run", () => {
     expect(sweep.names).toEqual(["predict-sweep-stretch", "predict-sweep-travel"]);
     expect(sweep.properties).toEqual(["transform"]);
     expect(sweep.barProperties).toEqual(["transform"]);
-    // the motion tokens' structural and enter curves, resolved inside the keyframes
-    expect(sweep.easings).toEqual(["cubic-bezier(0, 0, 0.2, 1)", "cubic-bezier(0.2, 0, 0, 1)"]);
+    expect(sweep.easings).toEqual(["linear"]);
+    expect(sweep.delays).toEqual([250, 250]);
+    // the travel is linear, so halfway through the loop the bar's centre is the track's
+    expect(sweep.widest).toBe("scaleX(0.6)");
   });
 });
 
@@ -1489,15 +1512,27 @@ test.describe("the popup under reduced motion", () => {
       await expect(dialog.getByTestId("predict-spinner")).toBeHidden();
       await expect(dialog.locator(".predict-cta")).toHaveAttribute("data-busy");
       const animations = await dialog
-        .locator("li, li *, button svg, [data-testid=predict-spinner], [data-testid=pricing-sweep] *")
+        .locator("li, li *, button svg, [data-testid=predict-spinner]")
         .evaluateAll((items) => items.map((item) => getComputedStyle(item).animationName));
 
       expect(animations.every((name) => name === "none")).toBe(true);
       if (state === "quoting") {
-        const bar = await dialog
-          .locator("[data-testid=pricing-sweep] > i")
-          .evaluate((node) => getComputedStyle(node, "::before").animationName);
-        expect(bar).toBe("none");
+        // the line pulses its opacity in place, so it does not read as a finished divider
+        const line = await dialog.locator("[data-testid=pricing-sweep] > i").evaluate((node) => ({
+          name: getComputedStyle(node).animationName,
+          transform: getComputedStyle(node).transform,
+          bar: getComputedStyle(node, "::before").animationName,
+          properties: [
+            ...new Set(
+              node
+                .getAnimations()
+                .flatMap((animation) => (animation.effect as KeyframeEffect).getKeyframes())
+                .flatMap((frame) => Object.keys(frame))
+                .filter((key) => !["offset", "easing", "composite", "computedOffset"].includes(key)),
+            ),
+          ],
+        }));
+        expect(line).toEqual({ name: "predict-sweep-pulse", transform: "none", bar: "none", properties: ["opacity"] });
       }
     });
   }
@@ -1796,10 +1831,12 @@ for (const viewport of [
       );
       for (const name of ["Berlin", "Lisbon metropolitan area"]) {
         const legs = summary.getByRole("list", { name: `Trades for ${name}` });
-        await expect(legs.getByRole("listitem").first()).toHaveText(/^Split/);
+        await expect(legs.getByRole("listitem").first()).toHaveText(/^Split.*\+.*held/);
         await expect(legs).toHaveCSS("border-left-style", "dotted");
+        await expect(legs).toHaveCSS("border-left-width", "1px");
         expect(await legs.getByRole("listitem").count(), `${name}'s legs`).toBeGreaterThanOrEqual(2);
-        expect((await legs.getByRole("listitem").first().boundingBox())!.height, "a one-line leg").toBe(26);
+        // the type-label role sets 14/20 in the legs, with 3px above and below
+        expect((await legs.getByRole("listitem").last().boundingBox())!.height, "a one-line leg").toBe(26);
       }
       await expect(summary.getByTestId("trades-note")).toBeVisible();
       for (const figure of await figuresShownWhole(dialog)) expect.soft(figure.whole, figure.text!).toBe(true);

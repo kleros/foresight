@@ -543,13 +543,13 @@
   border-radius: 1px;
 }
 /* an indeterminate linear progress bar: the track-wide wrapper travels while its child scales about
-   its centre, so the bar stretches on its way in and shrinks on its way out; transform only */
+   its centre, so the bar is widest mid-track; transform only. A quote quicker than the delay draws nothing */
 .predict-sweep > i {
   position: absolute;
   inset: 0;
   border-radius: inherit;
   transform: translateX(-60%);
-  animation: predict-sweep-travel 1.6s linear infinite;
+  animation: predict-sweep-travel 1.6s linear 250ms infinite;
 }
 .predict-sweep > i::before {
   content: "";
@@ -558,32 +558,31 @@
   border-radius: inherit;
   background: var(--fs-popup-axis);
   transform: scaleX(0.08);
-  animation: predict-sweep-stretch 1.6s linear infinite;
+  animation: predict-sweep-stretch 1.6s linear 250ms infinite;
 }
-/* at 8% wide the bar is off the line at ±60%, so the loop's seam never shows. Chromium ignores var()
-   in a keyframe's timing function, so the curves are --fs-ease-structural, -enter and -exit written out */
+/* at 8% wide the bar is off the line at ±60%, so the loop's seam and the delay show nothing */
 @keyframes predict-sweep-travel {
   from {
     transform: translateX(-60%);
-    animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
   }
   to {
     transform: translateX(60%);
   }
 }
 @keyframes predict-sweep-stretch {
-  0% {
+  0%,
+  15% {
     transform: scaleX(0.08);
-    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
   }
-  45% {
+  50% {
     transform: scaleX(0.6);
-    animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
   }
+  85%,
   100% {
     transform: scaleX(0.08);
   }
 }
+/* still, a full-width line would read as a divider, so it pulses instead */
 @media (prefers-reduced-motion: reduce) {
   .predict-sweep > i,
   .predict-sweep > i::before {
@@ -591,7 +590,13 @@
     animation: none;
   }
   .predict-sweep > i {
-    opacity: 0.5;
+    opacity: 0.35;
+    animation: predict-sweep-pulse 1.6s linear infinite alternate;
+  }
+}
+@keyframes predict-sweep-pulse {
+  to {
+    opacity: 0.8;
   }
 }
 /* the popup's button: the screen's one full-strength gradient, over the library Button's own fills */

@@ -66,10 +66,11 @@
   --fs-popup-cta-disabled-text: #9aa6c6;
   --fs-popup-track: #392c74;
   --fs-popup-track-dot: #5b4e9c;
+  /* the dark panel takes 6% of either end without a visible change, so it mixes more */
   --fs-popup-wash: linear-gradient(
     100deg,
-    color-mix(in srgb, var(--fs-popup-axis-from) 6%, transparent),
-    color-mix(in srgb, var(--fs-popup-axis-to) 6%, transparent)
+    color-mix(in srgb, var(--fs-popup-axis-from) 14%, transparent),
+    color-mix(in srgb, var(--fs-popup-axis-to) 10%, transparent)
   );
   /* a shadow is invisible on #1b003f, so a hairline marks the edge instead */
   --fs-popup-shadow: 0 24px 60px rgb(0 0 0 / 0.55);
