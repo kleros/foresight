@@ -225,6 +225,25 @@ describe("credits signed as shown", () => {
     });
   });
 
+  it("counts only the credits the cut can spend as available, so an amount it accepts is covered", () => {
+    // 1.00009 credits in the trade wallet and 0.00009 in the wallet: each cut spends 1 and 0
+    const dust = 9n * 10n ** 13n;
+    const line = { kind: "foresight" as const, tradeWallet: WAD + dust, wallet: dust, usable: WAD + 2n * dust };
+    const money = { ownWallet: WAD, tradeWallet: 0n, credits: [line] };
+
+    expect(planFunding({ amount: WAD, ...money }).creditsAvailable).toBe(WAD);
+    const over = planFunding({ amount: 2n * WAD + step, ...money });
+    expect(over.available).toBe(2n * WAD);
+
+    // every amount the popup accepts asks for no more sDAI than the deposit and the trade wallet hold
+    for (const amount of [2n * WAD, 2n * WAD - step, WAD + step, WAD / 2n]) {
+      const funding = planFunding({ amount, ...money });
+      expect(amount).toBeLessThanOrEqual(funding.available);
+      const request = fundingRequest(funding, false);
+      expect(request.collateralIn).toBeLessThanOrEqual(request.deposit + funding.fromTradeWallet);
+    }
+  });
+
   it("asks for no credits when none are ticked", () => {
     const funding = planFunding({ amount: 10n * WAD, ownWallet: 20n * WAD, tradeWallet: 0n });
 
