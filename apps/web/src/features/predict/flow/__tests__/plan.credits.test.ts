@@ -250,21 +250,23 @@ describe("the first batch of a credits run", () => {
   });
 
   it("skips the first batch once its credits are burned, so a recovered run never spends them twice (A7)", async () => {
-    const snap = creditsRun();
+    const unseen = { ...creditsRun(), firstBatchUnseen: true as const };
     // start 0.5 + moved 1.5 = 2 in the trade wallet; the batch burns all 2
-    const at = (balance: bigint, mayHaveLanded = true) =>
+    const at = (balance: bigint, sent = false) =>
       planPredict(
-        snap,
+        unseen,
         deps({
           reader: fakeReader({ credits: { [addresses.executor]: balance } }),
-          batchMayHaveLanded: () => mayHaveLanded,
+          firstBatchSent: () => sent,
         }),
       ).find((each) => each.id === STEP_ID.predict(1))!;
 
-    await expect(at(0n).canSkip!(ctx(), snap)).resolves.toBe(true);
-    await expect(at(2n * WAD).canSkip!(ctx(), snap)).resolves.toBe(false);
+    await expect(at(0n).canSkip!(ctx(), unseen)).resolves.toBe(true);
+    await expect(at(2n * WAD).canSkip!(ctx(), unseen)).resolves.toBe(false);
     // outside a hash-less recovery, credits gone from the trade wallet were withdrawn, not burned
-    await expect(at(0n, false).canSkip!(ctx(), snap)).resolves.toBe(false);
+    await expect(at(0n).canSkip!(ctx(), creditsRun())).resolves.toBe(false);
+    // once a first batch is sent, its hash says whether it landed
+    await expect(at(0n, true).canSkip!(ctx(), unseen)).resolves.toBe(false);
   });
 
   it("never skips the first batch of a run that spends no credits", async () => {

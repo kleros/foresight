@@ -449,6 +449,104 @@ describe("credits across recovery (A7)", () => {
     expect(decoded.args[0].map((call) => call.to)).not.toContain(addresses.manager);
   });
 
+  it("signs nothing again when a first batch signed with no hash is recovered twice before it is resumed", async () => {
+    const chain = creditsChain({ owner: (3n * WAD) / 2n, executor: 0n });
+    const store = savedRun([
+      row(STEP_ID.createExecutor, { status: "skipped" }),
+      row(STEP_ID.addCredits, confirmed("a")),
+      row(STEP_ID.predict(1), { status: "awaiting-signature" }),
+    ]);
+    // the popup is opened and closed once before the visitor resumes
+    const first = drive(chain, store, FLOW_ID);
+    first.recover();
+    await settled(first);
+    first.dispose();
+
+    const driver = drive(chain, store, FLOW_ID);
+    driver.recover();
+    await settled(driver);
+    driver.resume();
+    await settled(driver);
+
+    expect(driver.getProgress().stage, JSON.stringify(driver.getProgress().failure)).toBe("complete");
+    expect(chain.signRequests).toEqual([]);
+  });
+
+  it("signs nothing again when one driver recovers the same run twice, as a remounted popup does", async () => {
+    const chain = creditsChain({ owner: (3n * WAD) / 2n, executor: 0n });
+    const store = savedRun([
+      row(STEP_ID.createExecutor, { status: "skipped" }),
+      row(STEP_ID.addCredits, confirmed("a")),
+      row(STEP_ID.predict(1), { status: "awaiting-signature" }),
+    ]);
+    const driver = drive(chain, store, FLOW_ID);
+
+    driver.recover();
+    await settled(driver);
+    driver.dispose();
+    driver.recover();
+    await settled(driver);
+    driver.resume();
+    await settled(driver);
+
+    expect(driver.getProgress().stage, JSON.stringify(driver.getProgress().failure)).toBe("complete");
+    expect(chain.signRequests).toEqual([]);
+  });
+
+  it("reads withdrawn credits as withdrawn once the recovered run's rebuilt batch reverts", async () => {
+    // the rebuilt first batch is the first send, and reverts
+    const chain = creditsChain({ owner: (3n * WAD) / 2n, executor: 2n * WAD }, [1]);
+    const store = savedRun([
+      row(STEP_ID.createExecutor, { status: "skipped" }),
+      row(STEP_ID.addCredits, confirmed("a")),
+      row(STEP_ID.predict(1), { status: "awaiting-signature" }),
+    ]);
+    const driver = drive(chain, store, FLOW_ID);
+
+    driver.recover();
+    await settled(driver);
+    driver.resume();
+    await settled(driver);
+    expect(driver.getProgress().failure?.reason).toBe("reverted");
+
+    chain.balances.owner += chain.balances.executor;
+    chain.balances.executor = 0n;
+    driver.retry();
+    await settled(driver);
+
+    expect(driver.getProgress().stage).not.toBe("complete");
+    expect(chain.landed.spends).toBe(0);
+  });
+
+  it("reads withdrawn credits as withdrawn when a reload finds the rebuilt batch reverted", async () => {
+    const chain = creditsChain({ owner: 2n * WAD, executor: 0n });
+    const store = createFlowRunStore({ storage: createMemoryStorage() });
+    store.save<PredictSnapshot, PredictCtx>({
+      flowId: FLOW_ID,
+      adapterId: "predict-flow",
+      status: "failed",
+      error: { stepId: STEP_ID.predict(1), message: "reverted", cause: "reverted", hash: `0x${"c".repeat(64)}` },
+      ctx: ctx(),
+      snapshot: { ...request(), collateralAtStart: 0n, creditsAtStart: WAD / 2n, firstBatchUnseen: true },
+      steps: [
+        row(STEP_ID.createExecutor, { status: "skipped" }),
+        row(STEP_ID.addCredits, confirmed("a")),
+        row(STEP_ID.predict(1), { status: "pending" }),
+      ],
+    });
+    const driver = drive(chain, store, FLOW_ID);
+
+    driver.recover();
+    await settled(driver);
+    expect(store.load<PredictSnapshot, PredictCtx>(FLOW_ID)?.snapshot.firstBatchUnseen).toBeUndefined();
+    expect(driver.getProgress().stage).toBe("review");
+    driver.resume();
+    await settled(driver);
+
+    expect(driver.getProgress().stage).not.toBe("complete");
+    expect(chain.landed.spends).toBe(0);
+  });
+
   it("pins the trade wallet's credits as the run starts, before anything moves", async () => {
     const chain = creditsChain({ owner: 3n * WAD, executor: WAD / 2n });
     const store = createFlowRunStore({ storage: createMemoryStorage() });

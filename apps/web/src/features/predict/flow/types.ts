@@ -72,6 +72,8 @@ export interface PredictSnapshot {
   startedAt: number;
   /** Options that settled batches left out for lack of a route; absent until one does. */
   skipped?: Address[];
+  /** Set by recovery while a credits run's first batch may have landed with no hash kept. */
+  firstBatchUnseen?: true;
 }
 
 /** What the visitor asked for; the run adds the chain-read starting balance when it starts. */

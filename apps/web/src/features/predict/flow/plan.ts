@@ -52,11 +52,8 @@ export interface PredictDeps {
   quoter: SwapQuoter;
   /** Quotes the swap the credits manager makes; needed only by a run that spends credits. */
   creditsQuoter?: ExactInputQuoter;
-  /**
-   * True while the first batch may have been signed with no hash kept, the one case burned credits
-   * witness it landed; otherwise a withdrawal of the credits would read as the batch.
-   */
-  batchMayHaveLanded?: () => boolean;
+  /** True once this run sent a first batch, whose hash then says whether it landed. */
+  firstBatchSent?: () => boolean;
   /** Hundredths of a percent a quote may move against the executor before the swap reverts. */
   slippageBps?: number;
   optionsPerBatch?: number;
@@ -401,11 +398,13 @@ export function planPredict(snapshot: PredictRequest, deps: PredictDeps): Step[]
         id,
         label:
           batches.length === 1 ? "Making your prediction" : `Making your prediction, ${index + 1} of ${batches.length}`,
-        // the batch is atomic, so burned credits show it landed when a closed tab left no hash
+        // the batch is atomic, so burned credits show it landed when a closed tab left no hash;
+        // outside that case, credits gone from the trade wallet may have been withdrawn
         ...(spends
           ? {
               canSkip: async (ctx: PredictCtx, snap: Readonly<PredictSnapshot>) =>
-                Boolean(deps.batchMayHaveLanded?.()) &&
+                Boolean(snap.firstBatchUnseen) &&
+                !deps.firstBatchSent?.() &&
                 (await deps.reader.creditsBalance(ctx.executor)) + snap.creditsToSpend <=
                   snap.creditsAtStart + snap.creditsFromEoa,
             }

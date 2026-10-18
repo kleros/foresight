@@ -8,6 +8,7 @@ import {
   type FlowError,
   type FlowRunStore,
   type OrchestratorRun,
+  type PersistedFlowRun,
   type TxGateway,
 } from "@foresight/tx-orchestrator";
 import type { Address, Hash } from "viem";
@@ -33,6 +34,20 @@ import type { PredictCtx, PredictReader, PredictRequest, PredictSnapshot } from 
 
 /** The trade wallet, or the wallet's credits, hold less than the prediction was shown to draw on. */
 class TradeWalletShortError extends Error {}
+
+/**
+ * Whether a stored credits run's first batch may have landed with no hash kept: signed as the tab
+ * closed, and not sent again since.
+ */
+function firstBatchUnseen(run: PersistedFlowRun<PredictSnapshot, PredictCtx>): boolean {
+  if (run.snapshot.creditsToSpend === 0n) return false;
+  const outcome = run.steps.find((step) => step.stepId === STEP_ID.predict(1))?.outcome.status;
+  if (outcome === "awaiting-signature") return true;
+  if (outcome === "submitted" || outcome === "confirmed") return false;
+  const error = run.status === "running" ? undefined : run.error;
+  if (error?.stepId === STEP_ID.predict(1) && error.hash) return false;
+  return Boolean(run.snapshot.firstBatchUnseen);
+}
 
 /** Why a saved run cannot be continued from the connected wallet, if it cannot. */
 function foreign(saved: PredictCtx, current: PredictCtx): "wrong-wallet" | "wrong-chain" | undefined {
@@ -75,8 +90,8 @@ export function createPredictRun(args: {
   let reviewing = false;
   /** Set once this run sends a transaction that moves money; a failed step put back to pending does not clear it. */
   let moneyMoved = false;
-  /** Set when a restored run's first batch was signed with no hash kept, until the run stops or ends. */
-  let batchMayHaveLanded = false;
+  /** Set once this run sends a first batch; its hash, not the credits, then says whether it landed. */
+  let firstBatchSent = false;
   let cached: PredictProgress;
 
   const deps: PredictDeps = {
@@ -85,7 +100,7 @@ export function createPredictRun(args: {
     creditsQuoter: args.creditsQuoter,
     slippageBps: args.slippageBps,
     optionsPerBatch: args.optionsPerBatch,
-    batchMayHaveLanded: () => batchMayHaveLanded,
+    firstBatchSent: () => firstBatchSent,
     onSkip: (option, _reason, stepId) => {
       const left = skipping.get(stepId) ?? [];
       if (!left.includes(option.childMarket)) skipping.set(stepId, [...left, option.childMarket]);
@@ -210,16 +225,15 @@ export function createPredictRun(args: {
   orchestrator.subscribe(notify);
   orchestrator.on("step:submitted", (event) => {
     if (event.stepId !== STEP_ID.createExecutor) moneyMoved = true;
+    if (event.stepId === STEP_ID.predict(1)) firstBatchSent = true;
   });
   orchestrator.on("flow:paused", () => {
-    batchMayHaveLanded = false;
     const run = orchestrator.getRun();
     const reason = buildFailure ?? errorOf(run)?.cause;
     buildFailure = undefined;
     report(reason, pendingHashOf(run) ? reconcileRun : resumeRun);
   });
   orchestrator.on("flow:failed", (event) => {
-    batchMayHaveLanded = false;
     const reason = buildFailure ?? event.error.cause;
     buildFailure = undefined;
     // A failed wait keeps its hash, so the chain is asked how it ended before anything is signed again.
@@ -229,7 +243,6 @@ export function createPredictRun(args: {
     else report(reason);
   });
   orchestrator.on("flow:completed", () => {
-    batchMayHaveLanded = false;
     args.onComplete?.();
     notify();
   });
@@ -279,6 +292,14 @@ export function createPredictRun(args: {
       return;
     }
 
+    // persisted before the reconcile below rewrites the step as unsigned, so a second recovery keeps it
+    const unseen = firstBatchUnseen(stored);
+    if (unseen !== Boolean(stored.snapshot.firstBatchUnseen)) {
+      const { firstBatchUnseen: _, ...snapshot } = stored.snapshot;
+      args.store?.save({ ...stored, snapshot: unseen ? { ...snapshot, firstBatchUnseen: true } : snapshot });
+    }
+    firstBatchSent = false;
+
     const steps = planPredict(stored.snapshot, deps);
     const restored = orchestrator.restore({ flowId: args.flowId, steps });
     if (!restored) return;
@@ -291,7 +312,6 @@ export function createPredictRun(args: {
       reconciling = false;
     });
     if (found.outcome === "reverted") return;
-    batchMayHaveLanded = found.outcome === "unknown" && found.stepId === STEP_ID.predict(1);
     // A transfer signed as the tab died left no hash, and the balance cannot show it until it mines.
     if (found.outcome === "unknown" && (found.stepId === STEP_ID.deposit || found.stepId === STEP_ID.addCredits)) {
       const transfer = steps.find((step) => step.id === found.stepId);
@@ -324,7 +344,7 @@ export function createPredictRun(args: {
     report(undefined);
     skipping.clear();
     moneyMoved = false;
-    batchMayHaveLanded = false;
+    firstBatchSent = false;
 
     const requested = args.snapshot();
     const ctx = args.ctx();
@@ -385,7 +405,7 @@ export function createPredictRun(args: {
       recovered = false;
       reviewing = false;
       moneyMoved = false;
-      batchMayHaveLanded = false;
+      firstBatchSent = false;
       buildFailure = undefined;
       skipping.clear();
       planned = [];
