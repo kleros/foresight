@@ -80,10 +80,18 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
     setDiscards((count) => count + 1);
   };
 
-  const depositShown = (run: PredictSnapshot) =>
-    run.depositNative
+  const runShown = (run: PredictSnapshot) => {
+    const deposit = run.depositNative
       ? `${ownedAmount(run.deposit, 18)} xDAI`
       : `${ownedAmount(run.deposit, session.collateralDecimals ?? 18)} ${session.collateralSymbol ?? "sDAI"}`;
+    const parts = [
+      ...(run.deposit > 0n ? [`a deposit of ${deposit}`] : []),
+      ...(run.creditsToSpend > 0n ? [`${ownedAmount(run.creditsToSpend, 18)} in credits`] : []),
+    ];
+    return parts.length > 0
+      ? `A prediction with ${parts.join(" and ")} did not finish.`
+      : "A prediction did not finish.";
+  };
 
   const estimates = useSessionEstimates(session.parentMarket);
   const selected = selectedEstimates(session.options, estimates, marketEstimates);
@@ -135,7 +143,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
       {interrupted ? (
         <div className="flex w-full flex-wrap items-center justify-between gap-3">
           <p className="text-fs-text-secondary text-sm">
-            {`A prediction with a deposit of ${depositShown(interrupted)} did not finish.`}
+            {runShown(interrupted)}
             {isPending ? " A transaction from it may still be pending." : null}
           </p>
           <div className="flex gap-3">
