@@ -710,7 +710,7 @@ button.predict-cta.predict-cta[data-busy]:has(> .button-text) > .button-text {
   border-radius: 999px;
   background: var(--fs-popup-axis);
   color: var(--fs-popup-on-axis);
-  /* the panel's tone, so the ring belongs to the panel below rather than to one end of the disc */
+  /* the panel's tone, so the ring reads as part of the panel below */
   box-shadow: 0 0 0 8px var(--fs-popup-panel);
   animation: predict-success-pop var(--fs-dur-structural) var(--fs-ease-spring) both;
 }
