@@ -1402,6 +1402,19 @@ test.describe("the running step", () => {
   });
 });
 
+test.describe("the price check before a run", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("says Checking prices… on the summary and the button while every step waits", async ({ page }) => {
+    const dialog = await openPopup(page, 2, "quoting");
+
+    await expect(dialog.locator('[data-bullet="running"]')).toHaveCount(0);
+    await expect(dialog.getByTestId("predict-summary").getByRole("button")).toHaveText("Checking prices…");
+    await expect(dialog.locator(".predict-cta")).toHaveText("Checking prices…");
+    await expect(dialog.getByText("Finding prices…")).toHaveCount(0);
+  });
+});
+
 test.describe("the popup under reduced motion", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 

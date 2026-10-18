@@ -8,6 +8,7 @@ import { formatEstimate } from "@/utils/formatEstimate";
 import { INERT } from "@/utils/inert";
 
 import type { ListedEstimate, PriceMove } from "./PredictList";
+import { CHECKING_PRICES } from "../utils/predictSteps";
 
 /** Where an estimate's market goes: `250 → 280 $M`, `Stays at 250 $M`, or `Now 250 $M` before a preview is read. */
 export function marketMove(estimate: ListedEstimate, move: PriceMove | undefined): string {
@@ -66,7 +67,7 @@ export function PredictSummary({
       >
         <span className="text-fs-popup-text flex min-w-0 items-center gap-1.5">
           <TrendIcon />
-          <span className="truncate tabular-nums">{isPricing ? "Checking prices…" : headline(selected, preview)}</span>
+          <span className="truncate tabular-nums">{isPricing ? CHECKING_PRICES : headline(selected, preview)}</span>
         </span>
         <ChevronIcon className={clsx("fs-chevron size-4 shrink-0", isOpen && "rotate-180")} />
         {isPricing ? (

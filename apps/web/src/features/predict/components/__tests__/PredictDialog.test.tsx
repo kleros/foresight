@@ -48,6 +48,25 @@ const steps: PredictSteps = {
   ],
 };
 
+/** Before the run's first step, while its routes are priced. */
+const pricing = predictSteps({
+  wallet: { address: "0xdcee0000000000000000000000000000000c664f", deployed: false },
+  toAdd: 4n * WAD,
+  symbol: "sDAI",
+  decimals: 18,
+  progress: {
+    stage: "quoting",
+    steps: [
+      { id: "create-wallet", label: "", state: "pending" },
+      { id: "deposit", label: "", state: "pending" },
+      { id: "predict-1", label: "", state: "pending" },
+    ],
+    skipped: [],
+    batchesDone: 0,
+    batches: 1,
+  },
+});
+
 const subtitleOf = (title: string) =>
   screen.getByRole("listitem", { name: `Timeline item: ${title}` }).querySelector("h2 + p")?.textContent ?? "";
 
@@ -506,11 +525,44 @@ describe("the summary under the amount", () => {
     expect(summaryHead()).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("says it is checking prices while a run prices its routes", () => {
-    render(<PredictDialog {...props()} isRunning isPricing />);
+  it("says it is checking prices on the summary and the button, with every step still waiting", () => {
+    render(<PredictDialog {...props()} isRunning steps={pricing} />);
 
     expect(summaryHead()).toHaveTextContent("Checking prices…");
     expect(screen.getByTestId("pricing-sweep")).toBeInTheDocument();
+    expect(document.querySelector(".predict-cta")).toHaveTextContent("Checking prices…");
+    expect(document.querySelector(".predict-cta")).toHaveAttribute("data-busy", "true");
+    expect(subtitleOf("Place prediction")).toBe("");
+  });
+
+  it("leaves a batch quoting mid-run to its step, with the summary and button as they are", () => {
+    const quoting = predictSteps({
+      wallet: { address: "0xdcee0000000000000000000000000000000c664f", deployed: true },
+      ...fundsToAdd(funding(), sDai, sDai),
+      progress: {
+        stage: "quoting",
+        steps: [
+          { id: "predict-1", label: "", state: "success" },
+          { id: "predict-2", label: "", state: "running" },
+        ],
+        skipped: [],
+        batchesDone: 1,
+        batches: 2,
+      },
+    });
+    render(
+      <PredictDialog
+        {...props()}
+        isRunning
+        steps={quoting}
+        preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 355 } }}
+      />,
+    );
+
+    expect(subtitleOf("Place prediction")).toBe("2 of 2 · Checking prices…");
+    expect(summaryHead()).toHaveTextContent("1 market moves");
+    expect(screen.queryByTestId("pricing-sweep")).toBeNull();
+    expect(screen.getByRole("button", { name: "Checking prices…" })).toHaveAttribute("data-busy", "true");
   });
 
   it("lists only figures the app computes: each market's move, and no fee, minimum or time", async () => {
@@ -532,7 +584,7 @@ describe("the summary under the amount", () => {
     const view = render(<PredictDialog {...props()} preview={preview} />);
     await userEvent.click(summaryHead());
 
-    view.rerender(<PredictDialog {...props()} preview={preview} isRunning isPricing />);
+    view.rerender(<PredictDialog {...props()} preview={preview} isRunning steps={pricing} />);
     expect(summaryHead()).toHaveAttribute("aria-expanded", "true");
     view.rerender(<PredictDialog {...props()} preview={preview} isRunning />);
     expect(summaryHead()).toHaveAttribute("aria-expanded", "true");

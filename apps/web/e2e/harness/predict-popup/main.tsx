@@ -180,7 +180,6 @@ function Harness() {
         steps={steps}
         skipped={skipped}
         isRunning={isRunning}
-        isPricing={state === "quoting"}
         canRetry={state === "failed" || state === "pending" || state === "recovered"}
         isPending={state === "pending"}
         recovered={state === "recovered" ? { deposit: 4n * WAD, token: sDai } : undefined}
