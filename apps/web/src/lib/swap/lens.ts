@@ -43,22 +43,27 @@ function answeredNoRoute(error: unknown): boolean {
   return reverted instanceof ContractFunctionRevertedError && NO_ROUTE_ERRORS.has(reverted.data?.errorName ?? "");
 }
 
+/** Algebra's fee unit: millionths of the input. */
+const FEE_DENOMINATOR = 1_000_000n;
+
 /**
- * What `amountIn` returns at no worse than the limit price, before the pool fee, less `slippageBps`.
- * Algebra's token0 is the lower address, and the squared sqrt price is token1 per token0.
+ * What `amountIn` returns at no worse than the limit price once the pool's fee is taken from it,
+ * less `slippageBps`. Algebra's token0 is the lower address, and the squared sqrt price is token1 per token0.
  */
 function minOutAtLimit(
   tokenIn: Address,
   tokenOut: Address,
   amountIn: bigint,
   limitSqrtPrice: bigint,
+  poolFee: bigint,
   slippageBps: number,
 ) {
   const priceX192 = limitSqrtPrice * limitSqrtPrice;
   const kept = 10_000n - BigInt(slippageBps);
+  const net = (amountIn * (FEE_DENOMINATOR - poolFee)) / FEE_DENOMINATOR;
   return BigInt(tokenIn) < BigInt(tokenOut)
-    ? (amountIn * priceX192 * kept) / (Q192 * 10_000n)
-    : (amountIn * Q192 * kept) / (priceX192 * 10_000n);
+    ? (net * priceX192 * kept) / (Q192 * 10_000n)
+    : (net * Q192 * kept) / (priceX192 * 10_000n);
 }
 
 /** The latest block's time, in seconds: what the router checks a deadline against, whatever the visitor's clock says. */
@@ -106,6 +111,7 @@ export function createLensQuoter(
         params.tokenOut,
         swapped,
         request.limitSqrtPrice,
+        request.poolFee,
         request.slippageBps,
       );
       const amountOutMinimum = scaled > floor ? scaled : floor;

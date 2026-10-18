@@ -21,6 +21,8 @@ export interface SwapQuoteRequest {
   amountInAtLimit: bigint;
   /** What the swap returns if it stops at the limit, which caps the quoted output. */
   amountOutAtLimit: bigint;
+  /** The pool's fee in millionths of the input, as read with its price. */
+  poolFee: bigint;
 }
 
 export interface SwapQuote {

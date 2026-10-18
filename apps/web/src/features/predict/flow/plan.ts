@@ -137,6 +137,7 @@ async function optionCalls(
       limitSqrtPrice: leg.limitSqrtPrice,
       amountInAtLimit: leg.amountInAtLimit,
       amountOutAtLimit: leg.amountOutAtLimit,
+      poolFee: state.pools[leg.side].fee,
     });
     sells.push({ tokenIn, quote });
     sold.push({ ...leg, underlyingOut: quote.amountOut });
@@ -155,6 +156,7 @@ async function optionCalls(
       limitSqrtPrice: leg.limitSqrtPrice,
       amountInAtLimit: leg.amountInAtLimit,
       amountOutAtLimit: leg.amountOutAtLimit,
+      poolFee: state.pools[leg.side].fee,
     });
     buys.push({ tokenIn: option.underlying, quote });
   }
