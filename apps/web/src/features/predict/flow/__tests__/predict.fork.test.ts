@@ -135,6 +135,17 @@ describe("the predict flow, against a gnosis fork", () => {
     session = await newestSessionWithPools();
   }, 120_000);
 
+  // the later describes need the pools where the session seeded them
+  let snapshotId: string;
+  beforeEach(async () => {
+    if (!FORK_RPC_URL) return;
+    snapshotId = await rpc<string>("evm_snapshot");
+  });
+  afterEach(async () => {
+    if (!FORK_RPC_URL) return;
+    await revertTo(snapshotId);
+  });
+
   it.skipIf(!FORK_RPC_URL)(
     "moves the pools toward the visitor's estimates",
     async () => {
@@ -911,7 +922,7 @@ async function expectCoreMoneyKept(args: {
     before.tokens.get(executor)!.get(option.underlying)! + deposit,
   );
   for (const token of [option.upToken, option.downToken]) {
-    const floor = legs.childSplit - (legs.sold.get(token) ?? 0n) - legs.merge + (legs.boughtAtLeast.get(token) ?? 0n);
+    const floor = legs.childSplit - (legs.sold.get(token.toLowerCase() as Address) ?? 0n) - legs.merge + (legs.boughtAtLeast.get(token.toLowerCase() as Address) ?? 0n);
     expect(
       moved(before, after, executor, token),
       `${token} received at least the plan's minimum`,
@@ -1356,8 +1367,8 @@ describe("money kept by every predict run, against a gnosis fork", () => {
   function expectAtTarget(price: bigint, target: bigint, what: string) {
     const ticks = BigInt(tolerances.PRICE_TOLERANCE_TICKS);
     const [up, down] = [10_001n ** ticks, 10_000n ** ticks];
-    expect(price, `${what} ended past its target ${target}`).toBeLessThanOrEqual((target * up) / down);
-    expect(price, `${what} ended short of its target ${target}`).toBeGreaterThanOrEqual((target * down) / up);
+    expect(price, `${what} ended above its target ${target}`).toBeLessThanOrEqual((target * up) / down);
+    expect(price, `${what} ended below its target ${target}`).toBeGreaterThanOrEqual((target * down) / up);
   }
 
   /**
@@ -1472,10 +1483,20 @@ describe("money kept by every predict run, against a gnosis fork", () => {
           const value = tx.value ?? 0n;
           const gas =
             scenario.gas ?? ((await client.estimateGas({ account: owner, to: tx.to, data, value })) * 3n) / 2n;
-          const hash = await wallet.sendTransaction({ account: owner, chain: gnosis, to: tx.to, data, value, gas });
-          const receipt = await client.waitForTransactionReceipt({ hash });
-          sent.push({ stepId: "", tx, receipt });
-          return hash;
+          const nonce = await client.getTransactionCount({ address: owner.address, blockTag: "pending" });
+          try {
+            const hash = await wallet.sendTransaction({ account: owner, chain: gnosis, to: tx.to, data, value, gas });
+            sent.push({ stepId: "", tx, receipt: await client.waitForTransactionReceipt({ hash }) });
+            return hash;
+          } catch (error) {
+            // hardhat mines a reverting send and answers it with an error, so its fee is found by nonce
+            const block = await client.getBlock({ blockTag: "latest", includeTransactions: true });
+            const mined = block.transactions.find(
+              (each) => each.from.toLowerCase() === owner.address.toLowerCase() && each.nonce === nonce,
+            );
+            if (mined) sent.push({ stepId: "", tx, receipt: await client.getTransactionReceipt({ hash: mined.hash }) });
+            throw error;
+          }
         },
       }),
       reader: app.createPredictReader({
@@ -1692,10 +1713,10 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       expect(legs.childSplit, `${child.childMarket} splits all it holds`).toBe(held + perChild);
       for (const token of [option.upToken, option.downToken]) {
         const floor =
-          legs.childSplit - (legs.sold.get(token) ?? 0n) - legs.merge + (legs.boughtAtLeast.get(token) ?? 0n);
+          legs.childSplit - (legs.sold.get(token.toLowerCase() as Address) ?? 0n) - legs.merge + (legs.boughtAtLeast.get(token.toLowerCase() as Address) ?? 0n);
         expect(
           moved(before, after, executor, token),
-          `${token} received at least the plan's minimum`,
+          `${token} received at least the plan's minimum; legs ${JSON.stringify(legs, (_, v) => (typeof v === "bigint" ? v.toString() : v instanceof Map ? Object.fromEntries(v) : v))} option ${option.childMarket} up ${option.upToken} down ${option.downToken}`,
         ).toBeGreaterThanOrEqual(floor);
       }
       expect(moved(before, after, executor, option.invalidToken)).toBe(legs.childSplit - legs.merge);

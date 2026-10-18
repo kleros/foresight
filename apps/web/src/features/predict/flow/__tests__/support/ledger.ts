@@ -124,11 +124,13 @@ export const ALGEBRA_SWAP_ABI = parseAbi([
 export interface SignedOption {
   childSplit: bigint;
   merge: bigint;
-  /** token → what the legs give in and the least they take out */
+  /** lower-case token → what the legs give in and the least they take out */
   sold: Map<Address, bigint>;
   boughtAtLeast: Map<Address, bigint>;
   legInputs: { tokenIn: Address; amountIn: bigint; pool: "up" | "down" }[];
 }
+
+const lower = (address: Address) => address.toLowerCase() as Address;
 
 /** What a batch's calls sign for each option: its child split, its merge, and each swap leg. */
 export function signedOptions(
@@ -167,11 +169,9 @@ export function signedOptions(
     if (!option) continue;
     const entry = row(option);
     const outcomeIn = !isAddressEqual(params.tokenIn, option.underlying);
-    entry.sold.set(params.tokenIn, (entry.sold.get(params.tokenIn) ?? 0n) + params.amountIn);
-    entry.boughtAtLeast.set(
-      params.tokenOut,
-      (entry.boughtAtLeast.get(params.tokenOut) ?? 0n) + params.amountOutMinimum,
-    );
+    const [tokenIn, tokenOut] = [lower(params.tokenIn), lower(params.tokenOut)];
+    entry.sold.set(tokenIn, (entry.sold.get(tokenIn) ?? 0n) + params.amountIn);
+    entry.boughtAtLeast.set(tokenOut, (entry.boughtAtLeast.get(tokenOut) ?? 0n) + params.amountOutMinimum);
     const outcome = outcomeIn ? params.tokenIn : params.tokenOut;
     entry.legInputs.push({
       tokenIn: params.tokenIn,
