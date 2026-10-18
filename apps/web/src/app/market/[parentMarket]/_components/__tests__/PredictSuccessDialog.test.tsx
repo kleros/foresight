@@ -11,10 +11,12 @@ vi.mock("@kleros/kleros-app", async (importOriginal) => ({
   useAtlasProvider: () => atlas,
 }));
 
-vi.mock("wagmi", () => ({ useAccount: () => ({ address: "0xa11ce000000000000000000000000000000a11ce" }) }));
+let address: string | undefined;
+vi.mock("wagmi", () => ({ useAccount: () => ({ address }) }));
 
 beforeEach(() => {
   atlas = { user: { email: "visitor@example.com" }, userExists: true };
+  address = "0xa11ce000000000000000000000000000000a11ce";
 });
 
 describe("PredictSuccessDialog", () => {
@@ -68,5 +70,22 @@ describe("PredictSuccessDialog", () => {
     expect(button).toHaveAttribute("data-busy", "true");
     expect(within(button).getByText("Signing in…")).not.toHaveClass("invisible");
     expect(within(button).getByTestId("predict-spinner")).toBeInTheDocument();
+  });
+
+  it("asks the wallet to sign once when the sign-in is pressed", async () => {
+    const authoriseUser = vi.fn().mockResolvedValue(undefined);
+    atlas = { userExists: false, isVerified: false, isSigningIn: false, authoriseUser };
+    render(<PredictSuccessDialog isOpen leftOut={[]} onClose={vi.fn()} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Sign in to subscribe" }));
+    expect(authoriseUser).toHaveBeenCalledTimes(1);
+  });
+
+  it("cannot be pressed to sign in with no wallet connected", () => {
+    address = undefined;
+    atlas = { userExists: false, isVerified: false, isSigningIn: false, authoriseUser: vi.fn() };
+    render(<PredictSuccessDialog isOpen leftOut={[]} onClose={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: "Sign in to subscribe" })).toBeDisabled();
   });
 });
