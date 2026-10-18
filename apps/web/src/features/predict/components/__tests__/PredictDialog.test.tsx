@@ -33,6 +33,9 @@ const sDai = { id: "collateral" as const, symbol: "sDAI", decimals: 18 };
 const funding = (overrides: Partial<Funding> = {}): Funding => ({
   available: 25n * WAD,
   collateralIn: 10n * WAD,
+  creditsAvailable: 0n,
+  credits: [],
+  creditsIn: 0n,
   tradeWallet: 6n * WAD,
   fromTradeWallet: 6n * WAD,
   toAdd: 4n * WAD,

@@ -390,6 +390,21 @@
   opacity: 1;
   transform: none;
 }
+/* the credits tick: the box fills, then its check draws; 15 is the path's length, rounded up */
+.predict-check {
+  transition:
+    background var(--fs-dur-echo) var(--fs-ease-enter),
+    border-color var(--fs-dur-echo) var(--fs-ease-enter);
+}
+.predict-check path {
+  stroke-dasharray: 15;
+  stroke-dashoffset: 15;
+  transition: stroke-dashoffset var(--fs-dur-echo) var(--fs-ease-exit);
+}
+:checked + .predict-check path {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset var(--fs-dur-enter) var(--fs-ease-enter) var(--fs-dur-echo);
+}
 .predict-steps > li > div:first-child {
   padding-top: 8px;
 }

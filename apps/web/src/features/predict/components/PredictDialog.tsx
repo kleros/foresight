@@ -13,6 +13,7 @@ import CloseIcon from "@/assets/svg/close.svg";
 import type { PayToken } from "../types";
 import { PredictAmountSection, type PayTokenChoice } from "./PredictAmountSection";
 import { PredictButton } from "./PredictButton";
+import type { CreditsChoice } from "./PredictCreditsLine";
 import { PredictList, type ListedEstimate, type PriceMove } from "./PredictList";
 import { PredictStepsTimeline } from "./PredictStepsTimeline";
 import { PredictSummary } from "./PredictSummary";
@@ -34,6 +35,8 @@ interface PredictDialogProps {
   /** Null while the balances are still being read. */
   funding: Funding | null;
   collateral: { symbol: string; decimals: number };
+  /** The visitor's credits and their tick; absent where they hold none. */
+  credits?: CreditsChoice;
   /** One option, as the session names it: `city`. */
   optionNoun: string;
   isFirstPrediction: boolean;
@@ -93,6 +96,7 @@ export function PredictDialog({
   onTokenChange,
   funding,
   collateral,
+  credits,
   optionNoun,
   isFirstPrediction,
   isDisconnected,
@@ -224,6 +228,7 @@ export function PredictDialog({
               isReadOnly={isLocked}
               isDisconnected={isDisconnected}
               note={recovered ? "Locked to the amount this prediction started with." : undefined}
+              credits={credits}
             />
             <PredictSummary
               selected={selected}

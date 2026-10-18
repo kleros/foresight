@@ -12,6 +12,7 @@ import DaiIcon from "@/assets/svg/dai.svg";
 import { formatDisplayAmount, ownedAmount } from "@/utils/amount";
 
 import type { PayToken } from "../types";
+import { PredictCreditsLine, type CreditsChoice } from "./PredictCreditsLine";
 import { fundingSummary, percentOf, roundToDisplay, shareOf, type Funding } from "../utils/funding";
 
 export interface PayTokenChoice {
@@ -35,6 +36,8 @@ interface PredictAmountSectionProps {
   isDisconnected?: boolean;
   /** Said in place of the funding summary and the balance, for an amount the visitor cannot change. */
   note?: string;
+  /** The visitor's credits; no line where they hold none worth offering. */
+  credits?: CreditsChoice;
 }
 
 const RETURNING_COPY = "You've predicted before, so you can change it without adding funds.";
@@ -53,6 +56,7 @@ export function PredictAmountSection({
   isReadOnly,
   isDisconnected = false,
   note,
+  credits,
 }: PredictAmountSectionProps) {
   const available = funding?.available;
   const over = amount !== undefined && available !== undefined && amount > available;
@@ -75,11 +79,14 @@ export function PredictAmountSection({
     !isEditing && amount ? { value: formatDisplayAmount(amount, token.decimals, token.decimals) } : undefined;
   const noBalance = Boolean(note) || isDisconnected;
   const isRead = !isDisconnected && available !== undefined;
+  // the credits line says what they add, so the balance is the visitor's money alone
+  const money = available === undefined ? undefined : available - (funding?.creditsAvailable ?? 0n);
   const figure = isDisconnected
     ? "No wallet connected"
-    : available === undefined
+    : money === undefined
       ? "Reading balance…"
-      : `${ownedAmount(available, token.decimals)} ${token.symbol}`;
+      : `${ownedAmount(money, token.decimals)} ${token.symbol}`;
+  const creditsMax = funding && funding.creditsAvailable > 0n ? roundDown(funding.creditsAvailable) : 0n;
 
   return (
     <section
@@ -230,6 +237,15 @@ export function PredictAmountSection({
         isDisabled={isReadOnly || !max}
         onChange={(percent) => max !== undefined && onAmountChange(roundDown(shareOf(max, percent)))}
       />
+
+      {credits && credits.offer.state !== "none" && !note ? (
+        <PredictCreditsLine
+          credits={credits}
+          collateralSymbol={collateral.symbol}
+          isReadOnly={isReadOnly}
+          onUseMax={creditsMax > 0n ? () => onAmountChange(creditsMax) : undefined}
+        />
+      ) : null}
     </section>
   );
 }
