@@ -14,9 +14,8 @@ import { ALGEBRA_ROUTER_ABI } from "./algebraRouter";
 import { NoSwapRouteError, type ExactInputQuoter, type SwapQuoter } from "./types";
 
 /**
- * Seer's on-chain LensQuoter picks the route and returns the router call to make. It simulates
- * against a gas cap first, so a pool thin enough to quote but not to execute throws rather than
- * reverting later from inside a batch.
+ * Seer's on-chain LensQuoter picks the route and returns the router call to make. Its execution
+ * check overrides balances at ERC-20 slot 0 only, so for Wrapped1155 legs it checks nothing.
  */
 /**
  * Seconds. The SDK's own default is five minutes from the moment each leg is quoted, and a batch
