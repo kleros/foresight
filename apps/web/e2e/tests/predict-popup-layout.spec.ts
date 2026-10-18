@@ -45,6 +45,8 @@ const VIEWPORTS = [
   { width: 1280, height: 800 },
 ];
 const SIDE_MARGIN = 16;
+/** The states a run passes through from idle, which hold idle's amount and so list the same trades. */
+const SAME_TRADES: readonly string[] = ["idle", "quoting", "signing", "confirming", "failed", "pending", "success"];
 /** Windows, or a window and an option count, too short for every step at rest, where the body scrolls with its cue. */
 const SCROLLING = ["320x568", "360x640", "1366x657", "1280x720-10"];
 
@@ -323,13 +325,29 @@ for (const viewport of VIEWPORTS) {
             .toBe(true);
         }
 
-        // open, the summary adds its rows; every state then keeps the open idle popup's footprint
+        // open, the summary adds its rows; a run then keeps the open idle popup's footprint
         await openSummary(await openPopup(page, options, "idle"));
         const idleOpen = await footprint(page, page.getByRole("dialog"));
+        // where the dialog's top, sides and button sit; its height follows the trades it lists
+        const frame = ({ dialog: [x, y, width], footer: [fx, , fwidth, fheight], steps }: typeof idleOpen) => ({
+          dialog: [x, y, width],
+          footer: [fx, fwidth, fheight],
+          steps,
+        });
         for (const [state, extra] of [...STATES.map((state) => [state, ""] as const), ["idle", "&first=0"] as const]) {
           const dialog = await openPopup(page, options, state, undefined, extra);
           await openSummary(dialog);
-          expect.soft(await footprint(page, dialog), `${state}${extra} with the summary open`).toEqual(idleOpen);
+          const open = await footprint(page, dialog);
+          if (SAME_TRADES.includes(state) && extra === "") {
+            expect.soft(open, `${state} with the summary open`).toEqual(idleOpen);
+          } else {
+            // another amount, or a stored run, lists other trades
+            expect.soft(frame(open), `${state}${extra} with the summary open`).toEqual(frame(idleOpen));
+            const box = (await dialog.boundingBox())!;
+            expect
+              .soft(box.y + box.height, `${state}${extra} open: bottom edge in the window`)
+              .toBeLessThanOrEqual(viewport.height);
+          }
         }
         expect.soft(pageErrors, "page errors").toEqual([]);
 
@@ -1737,6 +1755,88 @@ test.describe("the popup's numbers", () => {
     }
   });
 });
+
+/** Each figure in the open summary: true when nothing of it is cut and it sits inside its row. */
+function figuresShownWhole(dialog: Locator) {
+  return dialog
+    .getByTestId("predict-summary")
+    .locator('[data-testid="trade-leg"], [data-testid="trade-mint"] > span, [data-testid="market-move"]')
+    .evaluateAll((figures) =>
+      figures.map((figure) => {
+        const row = figure.closest("li, p")!.getBoundingClientRect();
+        const box = figure.getBoundingClientRect();
+        return {
+          text: figure.textContent,
+          whole:
+            figure.scrollWidth <= figure.clientWidth + 1 &&
+            box.left >= row.left - 0.5 &&
+            box.right <= row.right + 0.5 &&
+            box.bottom <= row.bottom + 0.5,
+        };
+      }),
+    );
+}
+
+for (const viewport of [
+  { width: 1280, height: 800 },
+  { width: 375, height: 667 },
+]) {
+  test.describe(`the trades in the summary at ${viewport.width} x ${viewport.height}`, () => {
+    test.use({ viewport });
+
+    test("lists the mint, each option's legs on its connector and the closing note, every figure whole", async ({
+      page,
+    }, testInfo) => {
+      const dialog = await openPopup(page, 2);
+      await openSummary(dialog);
+      const summary = dialog.getByTestId("predict-summary");
+
+      expect(await summary.getByTestId("trade-mint").evaluate((mint) => mint.textContent!.replace(/\s+/g, " "))).toBe(
+        "Mint10 sDAI → 10 tokens of every city",
+      );
+      for (const name of ["Berlin", "Lisbon metropolitan area"]) {
+        const legs = summary.getByRole("list", { name: `Trades for ${name}` });
+        await expect(legs.getByRole("listitem").first()).toHaveText(/^Split/);
+        await expect(legs).toHaveCSS("border-left-style", "dotted");
+        expect(await legs.getByRole("listitem").count(), `${name}'s legs`).toBeGreaterThanOrEqual(2);
+        expect((await legs.getByRole("listitem").first().boundingBox())!.height, "a one-line leg").toBe(26);
+      }
+      await expect(summary.getByTestId("trades-note")).toBeVisible();
+      for (const figure of await figuresShownWhole(dialog)) expect.soft(figure.whole, figure.text!).toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
+
+      await summary.getByTestId("trades-note").scrollIntoViewIfNeeded();
+      await testInfo.attach(`trades-${viewport.width}x${viewport.height}`, {
+        body: await page.screenshot(),
+        contentType: "image/png",
+      });
+    });
+
+    test("wraps seven-digit figures under themselves, truncates a long name and says which option is left out", async ({
+      page,
+    }, testInfo) => {
+      const dialog = await openPopup(page, 2, "idle", undefined, "&trades=worst");
+      await openSummary(dialog);
+      const summary = dialog.getByTestId("predict-summary");
+
+      expect(await summary.getByTestId("trade-mint").evaluate((mint) => mint.textContent!.replace(/\s+/g, " "))).toBe(
+        "Mint1,234,567.89 sDAI → 1,234,567.89 tokens of every city",
+      );
+      const name = summary.getByTitle(/^Greater Lisbon/);
+      expect(await name.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+      await expect(summary.getByRole("list", { name: "Trades for Lisbon metropolitan area" })).toHaveText(
+        "No tradeAlready at your estimate; left out",
+      );
+      for (const figure of await figuresShownWhole(dialog)) expect.soft(figure.whole, figure.text!).toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
+
+      await testInfo.attach(`trades-worst-${viewport.width}x${viewport.height}`, {
+        body: await page.screenshot(),
+        contentType: "image/png",
+      });
+    });
+  });
+}
 
 test.describe("the summary opening and closing", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
