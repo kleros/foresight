@@ -8,7 +8,7 @@ import { shownAmount } from "@/features/predict/utils/funding";
 import { LOCAL_RPC_URL } from "@/config/chains";
 import { creditsContracts, tradeExecutorFactoryAbi, tradeExecutorFactoryAddress } from "@/config/contracts";
 
-import { expect, test } from "../fixtures";
+import { expect, test, WalletFixture } from "../fixtures";
 import { grantCredits } from "../fixtures/hardhat";
 import { INDEXER_URL } from "../fixtures/indexer";
 
@@ -93,18 +93,24 @@ async function gasPaidSince(from: Address, since: bigint): Promise<bigint> {
   return paid;
 }
 
+/** The newest indexed session's page, with the visitor connected. */
+async function openSession(page: Page, wallet: { connect: (account: Address) => Promise<void> }) {
+  // the session is one the indexer already holds; the run itself reads the chain
+  await page.goto(`/market/${await seededParent()}`);
+  await wallet.connect(VISITOR);
+}
+
 /**
- * Opens the newest indexed session as the visitor, nudges its first option two steps `toward` and
- * opens the popup. The two tests nudge opposite ways, so each leaves the other's estimate to move to.
+ * Opens the newest indexed session as the visitor, nudges its first option `presses` steps `toward`
+ * and opens the popup. Each test nudges to its own estimate, so each leaves the next one a move.
  */
 async function openPopup(
   page: Page,
   wallet: { connect: (account: Address) => Promise<void> },
   toward: "ArrowLeft" | "ArrowRight",
+  presses = 2,
 ) {
-  // the session is one the indexer already holds; the run itself reads the chain
-  await page.goto(`/market/${await seededParent()}`);
-  await wallet.connect(VISITOR);
+  await openSession(page, wallet);
 
   await page
     .getByRole("button")
@@ -114,14 +120,54 @@ async function openPopup(
   const slider = page.getByRole("slider").first();
   await expect(slider).toBeEnabled({ timeout: 30_000 });
   await slider.focus();
-  await page.keyboard.press(toward);
-  await page.keyboard.press(toward);
+  for (let press = 0; press < presses; press++) await page.keyboard.press(toward);
 
   await page.getByRole("button", { name: /^Predict (\d+ )?estimates?$/ }).click();
   const popup = page.getByRole("dialog");
   // ticked by default once credits can be spent
   await expect(popup.getByRole("checkbox", { name: "Use Foresight credits" })).toBeChecked({ timeout: 30_000 });
   return popup;
+}
+
+/**
+ * Closes the tab at the trade wallet's first batch: before the node sees it, or once it has mined
+ * with its hash kept from the page. Resolves when the batch is reached.
+ */
+async function closeAtBatch(page: Page, executor: Address, when: "before" | "after"): Promise<void> {
+  return new Promise((reached) => {
+    void page.route(
+      (url) => url.port === "8545",
+      async (route) => {
+        const body = route.request().postDataJSON() as unknown;
+        const calls = (Array.isArray(body) ? body : [body]) as Array<{ method?: string; params?: [{ to?: string }] }>;
+        const isBatch = calls.some(
+          (call) =>
+            call.method === "eth_sendTransaction" && call.params?.[0]?.to?.toLowerCase() === executor.toLowerCase(),
+        );
+        if (!isBatch) return route.continue();
+        if (when === "after") {
+          const response = await route.fetch();
+          const { result } = (await response.json()) as { result: `0x${string}` };
+          await chain.waitForTransactionReceipt({ hash: result });
+        }
+        // the page never hears back, as a closed tab would not
+        reached();
+      },
+    );
+  });
+}
+
+/** How many transactions `from` sent to `to` after block `since`. */
+async function sentSince(from: Address, to: Address, since: bigint): Promise<number> {
+  let count = 0;
+  const head = await chain.getBlockNumber({ cacheTime: 0 });
+  for (let number = since + 1n; number <= head; number++) {
+    const block = await chain.getBlock({ blockNumber: number, includeTransactions: true });
+    count += block.transactions.filter(
+      (tx) => tx.from.toLowerCase() === from.toLowerCase() && tx.to?.toLowerCase() === to.toLowerCase(),
+    ).length;
+  }
+  return count;
 }
 
 test.describe("a credits prediction on the gnosis fork", () => {
@@ -221,4 +267,65 @@ test.describe("a credits prediction on the gnosis fork", () => {
     const off = paid > deposit ? paid - deposit : deposit - paid;
     expect(off, `paid ${paid} xDAI wei against the ${deposit} shown`).toBeLessThanOrEqual(HALF_SHOWN_STEP);
   });
+
+  for (const [when, toward] of [
+    ["before", "ArrowLeft"],
+    ["after", "ArrowRight"],
+  ] as const) {
+    test(`resumed after the tab closed ${when === "before" ? "after Add credits" : "as the batch landed"}, moves and burns the credits once`, async ({
+      page,
+      wallet,
+      context,
+    }) => {
+      const executor = await executorOf(VISITOR);
+      const shown = parseEther("2");
+      if ((await credits(VISITOR)) + (await credits(executor)) < shown) {
+        await grantCredits(contracts.credits, VISITOR, shown);
+      }
+      const before = await ledger(executor);
+      const fromWallet = shown > before.tradeWallet ? shown - before.tradeWallet : 0n;
+
+      const popup = await openPopup(page, wallet, toward, 4);
+      await popup.getByRole("button", { name: /Token/ }).click();
+      await page.getByRole("option", { name: "sDAI" }).click();
+      const amount = popup.getByRole("spinbutton", { name: "Amount" });
+      await amount.fill("2");
+      await amount.blur();
+      await expect(popup.getByText("≈ 2 sDAI from your credits")).toBeVisible();
+
+      const closed = closeAtBatch(page, executor, when);
+      await popup.getByRole("button", { name: "Predict", exact: true }).click();
+      await closed;
+      // closing skips the page's own handling of the unanswered send, as a closed tab would
+      await page.close({ runBeforeUnload: false });
+      expect(await credits(executor), "the trade wallet's credits as the tab closed").toBe(
+        when === "before" ? before.tradeWallet + fromWallet : before.tradeWallet + fromWallet - shown,
+      );
+
+      const reopened = await context.newPage();
+      await openSession(reopened, new WalletFixture({ page: reopened }));
+      await expect(reopened.getByText("A prediction with 2 in credits did not finish.")).toBeVisible({
+        timeout: 30_000,
+      });
+      await reopened.getByRole("button", { name: "Resume", exact: true }).click();
+      const resume = reopened.getByRole("dialog").getByRole("button", { name: "Resume", exact: true });
+      await expect(resume).toBeEnabled({ timeout: 60_000 });
+      await resume.click();
+      const success = reopened.getByRole("dialog", { name: "Prediction placed" });
+      await expect(success).toBeVisible({ timeout: 240_000 });
+      await expect(success.getByText("1 estimate · 2 sDAI")).toBeVisible();
+
+      // one transfer, one batch, and the credits shown burned once
+      const after = await ledger(executor);
+      expect(await sentSince(VISITOR, contracts.credits, before.block), "credits transfers").toBe(
+        fromWallet > 0n ? 1 : 0,
+      );
+      expect(await sentSince(VISITOR, executor, before.block), "batches sent").toBe(1);
+      expect(before.wallet - after.wallet, "credits moved from the wallet").toBe(fromWallet);
+      expect(before.supply - after.supply, "credits burned").toBe(shown);
+      expect(after.tradeWallet, "credits left in the trade wallet").toBe(before.tradeWallet + fromWallet - shown);
+      expect(after.sDai, "the wallet's sDAI").toBe(before.sDai);
+      expect(before.xdai - after.xdai, "the wallet's xDAI, gas aside").toBe(await gasPaidSince(VISITOR, before.block));
+    });
+  }
 });
