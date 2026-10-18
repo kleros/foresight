@@ -44,6 +44,7 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
   balance: "Trade wallet balance is lower than shown. Check the amount.",
   credits: "Credits can't be spent right now. Untick them to predict with your own funds.",
   "deposit-unconfirmed": "Your last deposit may still be confirming. Check your wallet.",
+  pending: "A transaction from your wallet is still confirming. Try again once it lands.",
   "wrong-wallet": "Started from another wallet. Connect it to finish.",
   "wrong-chain": "Started on another network. Switch to it to finish.",
 };

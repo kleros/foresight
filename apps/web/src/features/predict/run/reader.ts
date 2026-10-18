@@ -1,6 +1,6 @@
 "use client";
 
-import { erc20Abi, erc4626Abi, type Address, type PublicClient } from "viem";
+import { erc20Abi, erc4626Abi, getAbiItem, isAddressEqual, type Address, type Hash, type PublicClient } from "viem";
 
 import { readPoolLiquidity, type PoolRef } from "@/lib/swap/algebraPool";
 import { fetchTokenBalances } from "@/lib/trade-executor/balances";
@@ -8,10 +8,12 @@ import { fetchTokenBalances } from "@/lib/trade-executor/balances";
 import type { PoolLiquidity } from "@/types/pool";
 
 import { fetchSessionPools, optionPoolRefs } from "../api/getOptionPools";
-import type { OptionChainState, PredictReader } from "../flow/types";
+import type { LandedTx, OptionChainState, PredictReader } from "../flow/types";
 import { sqrtPriceX96FromPrice } from "../utils/poolMath";
 
 const WAD = 10n ** 18n;
+
+const TRANSFER = getAbiItem({ abi: erc20Abi, name: "Transfer" });
 
 /** A side with no pool, which `volumeUntilPrice` sizes to nothing. */
 const UNPRICED: PoolLiquidity = { sqrtPriceX96: 0n, tick: 0, liquidity: 0n, fee: 0n, ticks: [], outcomeIsToken0: true };
@@ -69,6 +71,43 @@ export function createPredictReader(args: {
         functionName: "convertToAssets",
         args: [shares],
       });
+    },
+
+    latestBlock() {
+      return args.client.getBlockNumber();
+    },
+
+    async landedSince({ owner, executor, fromBlock }) {
+      const tokens = [args.collateral, ...(args.credits ? [args.credits.token] : [])];
+      const [outgoing, incoming] = await Promise.all([
+        args.client.getLogs({ address: tokens, event: TRANSFER, args: { from: executor }, fromBlock }),
+        args.client.getLogs({ address: tokens, event: TRANSFER, args: { to: executor }, fromBlock }),
+      ]);
+
+      const received = new Map<Hash, bigint>();
+      for (const log of [...outgoing, ...incoming]) {
+        if (log.transactionHash === null) continue;
+        const into = isAddressEqual(log.address, args.collateral) && isAddressEqual(log.args.to!, executor);
+        received.set(log.transactionHash, (received.get(log.transactionHash) ?? 0n) + (into ? log.args.value! : 0n));
+      }
+
+      // a log exists only for a transaction that succeeded
+      const landed = await Promise.all(
+        [...received].map(async ([hash, collateralReceived]): Promise<LandedTx | null> => {
+          const tx = await args.client.getTransaction({ hash });
+          if (tx.to === null || !isAddressEqual(tx.from, owner)) return null;
+          return { to: tx.to, value: tx.value, input: tx.input, collateralReceived };
+        }),
+      );
+      return landed.filter((tx): tx is LandedTx => tx !== null);
+    },
+
+    async hasPending(owner) {
+      const [pending, latest] = await Promise.all([
+        args.client.getTransactionCount({ address: owner, blockTag: "pending" }),
+        args.client.getTransactionCount({ address: owner, blockTag: "latest" }),
+      ]);
+      return pending > latest;
     },
 
     async optionStates({ options, executor }) {

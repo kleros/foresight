@@ -9,8 +9,9 @@ import {
 import { decodeFunctionData, encodeFunctionData, parseAbi, type Hash, type TransactionReceipt } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
 import { batchExecuteTx } from "@/lib/trade-executor/executor";
+
+import { gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
 
 import {
   addresses,
@@ -20,7 +21,6 @@ import {
   fakeReader,
   landedTx,
   mintLog,
-  option,
   snapshot,
   VAULT_RATE,
   WAD,

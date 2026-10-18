@@ -118,6 +118,29 @@ describe("a cached trade-wallet balance above the real one", () => {
   });
 });
 
+describe("an sDAI request that splits more than it deposits and the trade wallet holds", () => {
+  it("refuses before signing anything", async () => {
+    // 1 sDAI deposited, none in the trade wallet, 1.0001 asked for
+    const snap = snapshot({ deposit: WAD, collateralIn: WAD + 10n ** 14n, collateralBefore: 0n });
+    const world = chain({ balance: 0n });
+    const driver = createPredictRun({
+      gateway: world.gateway,
+      reader: world.reader,
+      quoter: fakeQuoter(),
+      flowId: "predict-split-over-deposit",
+      ctx: () => ctx(),
+      snapshot: () => snap,
+    });
+    drivers.push(driver);
+
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("halted"));
+
+    expect(driver.getProgress().failure?.reason).toBe("balance");
+    expect(world.signRequests).toEqual([]);
+  });
+});
+
 describe("recovering a run whose deposit was signed but has not mined", () => {
   it.each([
     ["an sDAI deposit", false],

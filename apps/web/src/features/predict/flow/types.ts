@@ -1,4 +1,4 @@
-import type { Address } from "viem";
+import type { Address, Hex } from "viem";
 
 import type { CreditsRoute } from "@/config/contracts";
 
@@ -32,6 +32,15 @@ export interface OptionChainState {
   underlying: bigint;
 }
 
+/** A transaction the run's owner sent that landed, as the chain's logs show it. */
+export interface LandedTx {
+  to: Address;
+  value: bigint;
+  input: Hex;
+  /** Collateral it moved into the trade wallet. */
+  collateralReceived: bigint;
+}
+
 export interface PredictReader {
   /** False until the owner has paid for their executor. */
   isExecutorDeployed(executor: Address): Promise<boolean>;
@@ -46,6 +55,14 @@ export interface PredictReader {
   previewDeposit(assets: bigint): Promise<bigint>;
   /** The underlying `shares` of the collateral redeem for now. */
   vaultValue(shares: bigint): Promise<bigint>;
+  latestBlock(): Promise<bigint>;
+  /**
+   * What `owner` sent from `fromBlock` on that landed and moved the collateral or the credits
+   * into or out of `executor`.
+   */
+  landedSince(args: { owner: Address; executor: Address; fromBlock: bigint }): Promise<LandedTx[]>;
+  /** True while `owner` has a transaction broadcast and not yet mined. */
+  hasPending(owner: Address): Promise<boolean>;
 }
 
 export interface PredictSnapshot {
@@ -69,15 +86,15 @@ export interface PredictSnapshot {
   collateralBefore: bigint;
   /** The executor's collateral read from the chain as the run started, before any deposit. */
   collateralAtStart: bigint;
+  /** The latest block as the run started, before anything was signed; its transactions land after it. */
+  fromBlock: bigint;
   startedAt: number;
   /** Options that settled batches left out for lack of a route; absent until one does. */
   skipped?: Address[];
-  /** Set by recovery while a credits run's first batch may have landed with no hash kept. */
-  firstBatchUnseen?: true;
 }
 
-/** What the visitor asked for; the run adds the chain-read starting balance when it starts. */
-export type PredictRequest = Omit<PredictSnapshot, "collateralAtStart" | "creditsAtStart">;
+/** What the visitor asked for; the run adds the chain-read starting balances and block when it starts. */
+export type PredictRequest = Omit<PredictSnapshot, "collateralAtStart" | "creditsAtStart" | "fromBlock">;
 
 export interface PredictCtx {
   chainId: number;

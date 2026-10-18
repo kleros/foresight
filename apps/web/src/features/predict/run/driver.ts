@@ -8,7 +8,6 @@ import {
   type FlowError,
   type FlowRunStore,
   type OrchestratorRun,
-  type PersistedFlowRun,
   type TxGateway,
 } from "@foresight/tx-orchestrator";
 import type { Address, Hash } from "viem";
@@ -28,26 +27,13 @@ import {
   QuoteFailedError,
   STEP_ID,
   tradeWalletShare,
+  TxPendingError,
   type PredictDeps,
 } from "../flow/plan";
 import type { PredictCtx, PredictReader, PredictRequest, PredictSnapshot } from "../flow/types";
 
 /** The trade wallet, or the wallet's credits, hold less than the prediction was shown to draw on. */
 class TradeWalletShortError extends Error {}
-
-/**
- * Whether a stored credits run's first batch may have landed with no hash kept: signed as the tab
- * closed, and not sent again since.
- */
-function firstBatchUnseen(run: PersistedFlowRun<PredictSnapshot, PredictCtx>): boolean {
-  if (run.snapshot.creditsToSpend === 0n) return false;
-  const outcome = run.steps.find((step) => step.stepId === STEP_ID.predict(1))?.outcome.status;
-  if (outcome === "awaiting-signature") return true;
-  if (outcome === "submitted" || outcome === "confirmed") return false;
-  const error = run.status === "running" ? undefined : run.error;
-  if (error?.stepId === STEP_ID.predict(1) && error.hash) return false;
-  return Boolean(run.snapshot.firstBatchUnseen);
-}
 
 /** Why a saved run cannot be continued from the connected wallet, if it cannot. */
 function foreign(saved: PredictCtx, current: PredictCtx): "wrong-wallet" | "wrong-chain" | undefined {
@@ -81,7 +67,7 @@ export function createPredictRun(args: {
   /** Set while the routes are checked, before the orchestrator has a run; reset and dispose clear it. */
   let checking: object | undefined;
   /** The reason a step failed with, which the orchestrator's own causes cannot carry. */
-  let buildFailure: "no-route" | "quote" | "funds" | "credits" | undefined;
+  let buildFailure: "no-route" | "quote" | "funds" | "credits" | "pending" | undefined;
   /** Set while a sent transaction's outcome is read from the chain; the run itself stays stopped meanwhile. */
   let reconciling = false;
   /** Set once a stored run is restored, until it is thrown away: the popup shows its snapshot, not the form. */
@@ -90,8 +76,6 @@ export function createPredictRun(args: {
   let reviewing = false;
   /** Set once this run sends a transaction that moves money; a failed step put back to pending does not clear it. */
   let moneyMoved = false;
-  /** Set once this run sends a first batch; its hash, not the credits, then says whether it landed. */
-  let firstBatchSent = false;
   let cached: PredictProgress;
 
   const deps: PredictDeps = {
@@ -100,7 +84,6 @@ export function createPredictRun(args: {
     creditsQuoter: args.creditsQuoter,
     slippageBps: args.slippageBps,
     optionsPerBatch: args.optionsPerBatch,
-    firstBatchSent: () => firstBatchSent,
     onSkip: (option, _reason, stepId) => {
       const left = skipping.get(stepId) ?? [];
       if (!left.includes(option.childMarket)) skipping.set(stepId, [...left, option.childMarket]);
@@ -131,8 +114,10 @@ export function createPredictRun(args: {
             ? "quote"
             : error instanceof CreditsUnavailableError
               ? "credits"
-              : undefined;
-      if (buildFailure === "quote" || buildFailure === "credits") return "rpc";
+              : error instanceof TxPendingError
+                ? "pending"
+                : undefined;
+      if (buildFailure === "quote" || buildFailure === "credits" || buildFailure === "pending") return "rpc";
       if (buildFailure === "no-route" || error instanceof PredictConfigError) return "unknown";
       if (error instanceof Error && !("cause" in error)) return "rpc";
       const cause = classifyTxError(error);
@@ -225,7 +210,6 @@ export function createPredictRun(args: {
   orchestrator.subscribe(notify);
   orchestrator.on("step:submitted", (event) => {
     if (event.stepId !== STEP_ID.createExecutor) moneyMoved = true;
-    if (event.stepId === STEP_ID.predict(1)) firstBatchSent = true;
   });
   orchestrator.on("flow:paused", () => {
     const run = orchestrator.getRun();
@@ -253,6 +237,7 @@ export function createPredictRun(args: {
         if (error instanceof NoRouteError) report("no-route");
         else if (error instanceof QuoteFailedError) report("quote", action);
         else if (error instanceof CreditsUnavailableError) report("credits");
+        else if (error instanceof TxPendingError) report("pending", action);
         else if (error instanceof TradeWalletShortError) report("balance");
         else if (error instanceof PredictConfigError) report("unknown");
         else report(classifyTxError(error), action);
@@ -292,14 +277,6 @@ export function createPredictRun(args: {
       return;
     }
 
-    // persisted before the reconcile below rewrites the step as unsigned, so a second recovery keeps it
-    const unseen = firstBatchUnseen(stored);
-    if (unseen !== Boolean(stored.snapshot.firstBatchUnseen)) {
-      const { firstBatchUnseen: _, ...snapshot } = stored.snapshot;
-      args.store?.save({ ...stored, snapshot: unseen ? { ...snapshot, firstBatchUnseen: true } : snapshot });
-    }
-    firstBatchSent = false;
-
     const steps = planPredict(stored.snapshot, deps);
     const restored = orchestrator.restore({ flowId: args.flowId, steps });
     if (!restored) return;
@@ -312,10 +289,14 @@ export function createPredictRun(args: {
       reconciling = false;
     });
     if (found.outcome === "reverted") return;
-    // A transfer signed as the tab died left no hash, and the balance cannot show it until it mines.
+    // A transfer signed as the tab died left no hash, and its own transaction shows only once it mines.
     if (found.outcome === "unknown" && (found.stepId === STEP_ID.deposit || found.stepId === STEP_ID.addCredits)) {
       const transfer = steps.find((step) => step.id === found.stepId);
-      if (!(await transfer?.canSkip?.(stored.ctx, stored.snapshot))) {
+      const landed = await Promise.resolve(transfer?.canSkip?.(stored.ctx, stored.snapshot)).catch((error: unknown) => {
+        if (error instanceof TxPendingError) return false;
+        throw error;
+      });
+      if (!landed) {
         report("deposit-unconfirmed", resumeRun);
         return;
       }
@@ -326,16 +307,21 @@ export function createPredictRun(args: {
 
   /** Pins the trade wallet's balance before anything is signed, and checks a route exists. */
   async function prepare(ctx: PredictCtx, requested: PredictRequest): Promise<PredictSnapshot> {
-    const [collateralAtStart, creditsAtStart] = await Promise.all([
+    const [collateralAtStart, creditsAtStart, fromBlock] = await Promise.all([
       args.reader.collateralBalance(ctx.executor),
       args.reader.creditsBalance(ctx.executor),
+      args.reader.latestBlock(),
     ]);
     if (collateralAtStart < tradeWalletShare(requested)) throw new TradeWalletShortError();
+    // an sDAI deposit lands as sent, so the split may not ask for more than it and the trade wallet's share
+    if (!requested.depositNative && requested.collateralIn > requested.deposit + tradeWalletShare(requested)) {
+      throw new TradeWalletShortError();
+    }
     if (creditsAtStart + requested.creditsFromEoa < requested.creditsToSpend) throw new TradeWalletShortError();
     if (requested.creditsFromEoa > 0n && (await args.reader.creditsBalance(ctx.owner)) < requested.creditsFromEoa) {
       throw new TradeWalletShortError();
     }
-    const snapshot = { ...requested, collateralAtStart, creditsAtStart };
+    const snapshot = { ...requested, collateralAtStart, creditsAtStart, fromBlock };
     await assertRoutes(ctx, snapshot, deps);
     return snapshot;
   }
@@ -344,7 +330,6 @@ export function createPredictRun(args: {
     report(undefined);
     skipping.clear();
     moneyMoved = false;
-    firstBatchSent = false;
 
     const requested = args.snapshot();
     const ctx = args.ctx();
@@ -405,7 +390,6 @@ export function createPredictRun(args: {
       recovered = false;
       reviewing = false;
       moneyMoved = false;
-      firstBatchSent = false;
       buildFailure = undefined;
       skipping.clear();
       planned = [];

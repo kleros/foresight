@@ -1,5 +1,13 @@
 import type { FlowHooks, FlowTx, TxStep } from "@foresight/tx-orchestrator";
-import { decodeFunctionData, encodeFunctionData, erc20Abi, isAddressEqual, type Address } from "viem";
+import {
+  decodeFunctionData,
+  encodeFunctionData,
+  erc20Abi,
+  isAddressEqual,
+  parseEventLogs,
+  type Address,
+  type Log,
+} from "viem";
 
 import { ALGEBRA_ROUTER_ABI } from "@/lib/swap/algebraRouter";
 import {
@@ -20,10 +28,11 @@ import { depositNativeTx, depositTx } from "@/lib/trade-executor/funding";
 import { splitCalls } from "@/lib/trade-executor/positions";
 import { optionTradeCalls, type QuotedSwap } from "@/lib/trade-executor/predict";
 
-import { creditsManagerAbi, gnosisRouterAbi, wxdaiAbi } from "@/config/contracts";
+import { creditsManagerAbi, gnosisRouterAbi, tradeExecutorAbi, wxdaiAbi } from "@/config/contracts";
 
 import { STEP_ID } from "./stepIds";
 import type {
+  LandedTx,
   OptionChainState,
   PredictCtx,
   PredictOption,
@@ -52,8 +61,6 @@ export interface PredictDeps {
   quoter: SwapQuoter;
   /** Quotes the swap the credits manager makes; needed only by a run that spends credits. */
   creditsQuoter?: ExactInputQuoter;
-  /** True once this run sent a first batch, whose hash then says whether it landed. */
-  firstBatchSent?: () => boolean;
   /** Hundredths of a percent a quote may move against the executor before the swap reverts. */
   slippageBps?: number;
   optionsPerBatch?: number;
@@ -93,6 +100,14 @@ export class CreditsUnavailableError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = "CreditsUnavailableError";
+  }
+}
+
+/** The owner has a transaction broadcast and not mined, which may be the one a step would sign again. */
+export class TxPendingError extends Error {
+  constructor() {
+    super("A transaction from this wallet has not been mined yet.");
+    this.name = "TxPendingError";
   }
 }
 
@@ -323,12 +338,102 @@ export function tradeWalletShare(snap: Pick<PredictSnapshot, "collateralIn" | "c
   return snap.collateralIn < shown ? snap.collateralIn : shown;
 }
 
+function addCreditsTx(ctx: PredictCtx, snap: Readonly<PredictSnapshot>): FlowTx {
+  if (ctx.credits === null) throw new PredictConfigError("Credits cannot fund this session on this network.");
+  return {
+    to: ctx.credits.token,
+    data: encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [ctx.executor, snap.creditsFromEoa] }),
+  };
+}
+
+function depositStepTx(ctx: PredictCtx, snap: Readonly<PredictSnapshot>): FlowTx {
+  if (!snap.depositNative) {
+    return depositTx({ executor: ctx.executor, asset: { token: ctx.collateral, amount: snap.deposit } });
+  }
+  if (ctx.sDaiAdapter === null) {
+    throw new PredictConfigError("This network has no xDAI route into the trade wallet.");
+  }
+  return depositNativeTx({ executor: ctx.executor, sDaiAdapter: ctx.sDaiAdapter, amount: snap.deposit });
+}
+
+const landedSince = (deps: Pick<PredictDeps, "reader">, ctx: PredictCtx, snap: Readonly<PredictSnapshot>) =>
+  deps.reader.landedSince({ owner: ctx.owner, executor: ctx.executor, fromBlock: snap.fromBlock });
+
+/** `landed` is `tx` itself: the same target, value and calldata. */
+const isTx = (landed: LandedTx, tx: FlowTx): boolean =>
+  isAddressEqual(landed.to, tx.to) &&
+  landed.value === (tx.value ?? 0n) &&
+  landed.input.toLowerCase() === (tx.data ?? "0x").toLowerCase();
+
 /**
- * The executor balance that shows the deposit has landed. An xDAI deposit mints an amount only
- * the chain knows, so any rise over the starting balance counts.
+ * `landed` is this run's first batch: a batch on its trade wallet that splits its sDAI and spends
+ * its credits at its parent market. Its trades are rebuilt from fresh quotes, so they are not compared.
  */
-export function depositLandedAt(snap: PredictSnapshot): bigint {
-  return snap.collateralAtStart + (snap.depositNative ? 1n : snap.deposit);
+function isFirstBatch(landed: LandedTx, ctx: PredictCtx, snap: Readonly<PredictSnapshot>): boolean {
+  if (!isAddressEqual(landed.to, ctx.executor)) return false;
+  let calls: readonly { to: Address; data: `0x${string}` }[];
+  try {
+    const batch = decodeFunctionData({ abi: tradeExecutorAbi, data: landed.input });
+    if (batch.functionName !== "batchExecute" && batch.functionName !== "batchValueExecute") return false;
+    calls = batch.args[0];
+  } catch {
+    return false;
+  }
+
+  const decoded = (abi: typeof gnosisRouterAbi | typeof creditsManagerAbi, data: `0x${string}`) => {
+    try {
+      return decodeFunctionData({ abi, data });
+    } catch {
+      return undefined;
+    }
+  };
+  const routerCalls = calls.filter((call) => isAddressEqual(call.to, ctx.router));
+  const splits =
+    snap.collateralIn === 0n ||
+    routerCalls.some((call) => {
+      const inner = decoded(gnosisRouterAbi, call.data);
+      return (
+        inner?.functionName === "splitPosition" &&
+        isAddressEqual(inner.args[0], ctx.collateral) &&
+        isAddressEqual(inner.args[1], ctx.parentMarket) &&
+        inner.args[2] === snap.collateralIn
+      );
+    });
+  const manager = ctx.credits?.manager;
+  const spends =
+    snap.creditsToSpend === 0n ||
+    (manager !== undefined &&
+      calls.some((call) => {
+        const inner = isAddressEqual(call.to, manager) ? decoded(creditsManagerAbi, call.data) : undefined;
+        return inner?.functionName === "execute" && inner.args[2] === snap.creditsToSpend;
+      }) &&
+      routerCalls.some((call) => {
+        const inner = decoded(gnosisRouterAbi, call.data);
+        return inner?.functionName === "splitFromBase" && isAddressEqual(inner.args[0], ctx.parentMarket);
+      }));
+  return splits && spends;
+}
+
+/**
+ * Whether a money step already landed, found by its own transaction since the run's pinned block.
+ * A transaction still in the mempool shows in no log, so while one is out nothing is signed again.
+ */
+async function landedOrPending(
+  deps: Pick<PredictDeps, "reader">,
+  ctx: PredictCtx,
+  snap: Readonly<PredictSnapshot>,
+  matches: (landed: LandedTx) => boolean,
+): Promise<boolean> {
+  if ((await landedSince(deps, ctx, snap)).some(matches)) return true;
+  if (await deps.reader.hasPending(ctx.owner)) throw new TxPendingError();
+  return false;
+}
+
+/** The collateral a receipt's logs show moving into the trade wallet. */
+function collateralInto(logs: Log[], ctx: PredictCtx): bigint {
+  return parseEventLogs({ abi: erc20Abi, eventName: "Transfer", logs })
+    .filter((log) => isAddressEqual(log.address, ctx.collateral) && isAddressEqual(log.args.to, ctx.executor))
+    .reduce((sum, log) => sum + log.args.value, 0n);
 }
 
 export function planPredict(snapshot: PredictRequest, deps: PredictDeps): Step[] {
@@ -349,20 +454,8 @@ export function planPredict(snapshot: PredictRequest, deps: PredictDeps): Step[]
     steps.push({
       id: STEP_ID.addCredits,
       label: "Add credits to your trade wallet",
-      // the trade wallet's credits only grow by this transfer until the first batch burns them
-      canSkip: async (ctx, snap) =>
-        (await deps.reader.creditsBalance(ctx.executor)) >= snap.creditsAtStart + snap.creditsFromEoa,
-      build: (ctx, snap) => {
-        if (ctx.credits === null) throw new PredictConfigError("Credits cannot fund this session on this network.");
-        return {
-          to: ctx.credits.token,
-          data: encodeFunctionData({
-            abi: erc20Abi,
-            functionName: "transfer",
-            args: [ctx.executor, snap.creditsFromEoa],
-          }),
-        };
-      },
+      canSkip: (ctx, snap) => landedOrPending(deps, ctx, snap, (landed) => isTx(landed, addCreditsTx(ctx, snap))),
+      build: addCreditsTx,
     });
   }
 
@@ -370,19 +463,8 @@ export function planPredict(snapshot: PredictRequest, deps: PredictDeps): Step[]
     steps.push({
       id: STEP_ID.deposit,
       label: "Add money to your trade wallet",
-      // A tab that died with the wallet open leaves no hash to reconcile, so the balance is the
-      // only witness that the money already moved. It cannot tell this deposit from an earlier
-      // one, which is the safe way round: a skipped deposit spends nothing twice.
-      canSkip: async (ctx, snap) => (await deps.reader.collateralBalance(ctx.executor)) >= depositLandedAt(snap),
-      build: (ctx, snap) => {
-        if (!snap.depositNative) {
-          return depositTx({ executor: ctx.executor, asset: { token: ctx.collateral, amount: snap.deposit } });
-        }
-        if (ctx.sDaiAdapter === null) {
-          throw new PredictConfigError("This network has no xDAI route into the trade wallet.");
-        }
-        return depositNativeTx({ executor: ctx.executor, sDaiAdapter: ctx.sDaiAdapter, amount: snap.deposit });
-      },
+      canSkip: (ctx, snap) => landedOrPending(deps, ctx, snap, (landed) => isTx(landed, depositStepTx(ctx, snap))),
+      build: depositStepTx,
     });
   }
 
@@ -398,15 +480,10 @@ export function planPredict(snapshot: PredictRequest, deps: PredictDeps): Step[]
         id,
         label:
           batches.length === 1 ? "Making your prediction" : `Making your prediction, ${index + 1} of ${batches.length}`,
-        // the batch is atomic, so burned credits show it landed when a closed tab left no hash;
-        // outside that case, credits gone from the trade wallet may have been withdrawn
-        ...(spends
+        ...(index === 0
           ? {
-              canSkip: async (ctx: PredictCtx, snap: Readonly<PredictSnapshot>) =>
-                Boolean(snap.firstBatchUnseen) &&
-                !deps.firstBatchSent?.() &&
-                (await deps.reader.creditsBalance(ctx.executor)) + snap.creditsToSpend <=
-                  snap.creditsAtStart + snap.creditsFromEoa,
+              canSkip: (ctx: PredictCtx, snap: Readonly<PredictSnapshot>) =>
+                landedOrPending(deps, ctx, snap, (landed) => isFirstBatch(landed, ctx, snap)),
             }
           : {}),
         // Only the first batch splits collateral: it hands every option its underlying at once.
@@ -449,7 +526,7 @@ export function createPredictHooks(
   },
 ): FlowHooks<PredictSnapshot, PredictCtx> {
   return {
-    async afterStep({ ctx, snapshot, completed }) {
+    async afterStep({ ctx, snapshot, completed, receipt }) {
       const left = deps.takeSkips?.(completed.stepId) ?? [];
       if (left.length > 0) {
         const before = snapshot.skipped ?? [];
@@ -457,8 +534,12 @@ export function createPredictHooks(
       }
       if (completed.stepId !== STEP_ID.deposit || !snapshot.depositNative) return;
 
-      // The adapter mints whatever the xDAI was worth, which is only knowable once it lands.
-      const minted = (await deps.reader.collateralBalance(ctx.executor)) - snapshot.collateralAtStart;
+      // The adapter mints whatever the xDAI was worth, which only the deposit's own logs show.
+      const minted = receipt
+        ? collateralInto(receipt.logs, ctx)
+        : (await landedSince(deps, ctx, snapshot)).find((landed) => isTx(landed, depositStepTx(ctx, snapshot)))
+            ?.collateralReceived;
+      if (minted === undefined) throw new Error("The deposit's transaction was not found on chain.");
       return { snapshotPatch: { collateralIn: minted + tradeWalletShare(snapshot) } };
     },
   };

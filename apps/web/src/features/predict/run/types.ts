@@ -9,6 +9,7 @@ import type { PredictSnapshot } from "../flow/types";
  * `balance`: the trade wallet, or the wallet's credits, hold less than the popup counted on.
  * `credits`: the credits manager cannot cover the credits, or its swap would lose too much.
  * `deposit-unconfirmed`: a recovered run's deposit may have been signed with no hash kept.
+ * `pending`: the wallet has a transaction not yet mined, which may be the step about to be signed again.
  * `wrong-wallet`, `wrong-chain`: a saved run belongs to another wallet or network than the connected one.
  */
 export type PredictFailureReason =
@@ -19,6 +20,7 @@ export type PredictFailureReason =
   | "balance"
   | "credits"
   | "deposit-unconfirmed"
+  | "pending"
   | "wrong-wallet"
   | "wrong-chain";
 

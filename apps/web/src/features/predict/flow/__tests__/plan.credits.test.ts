@@ -1,6 +1,8 @@
 import { decodeFunctionData, erc20Abi, parseAbi, type Address, type Hex } from "viem";
 import { describe, expect, it } from "vitest";
 
+import { withdrawTx } from "@/lib/trade-executor/funding";
+
 import { gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
 
 import { CREDITS_MAX_LOSS_BPS, CREDITS_SLIPPAGE_BPS } from "../../oracle/tolerances";
@@ -10,9 +12,10 @@ import {
   planPredict,
   PredictConfigError,
   STEP_ID,
+  TxPendingError,
   type PredictDeps,
 } from "../plan";
-import type { PredictCtx, PredictSnapshot } from "../types";
+import type { LandedTx, PredictCtx, PredictSnapshot } from "../types";
 import { departures, resolvedFrom } from "./support/allowed";
 import {
   addresses,
@@ -22,6 +25,7 @@ import {
   fakeCreditsQuoter,
   fakeQuoter,
   fakeReader,
+  landedTx,
   option,
   snapshot,
   VAULT_RATE,
@@ -93,14 +97,19 @@ describe("planPredict with credits", () => {
     expect(decodeFunctionData({ abi: erc20Abi, data: tx.data! }).args).toEqual([addresses.executor, (3n * WAD) / 2n]);
   });
 
-  it("skips Add credits once the trade wallet holds what it held at the start plus the transfer", async () => {
-    const at = (balance: bigint) =>
-      planPredict(creditsRun(), deps({ reader: fakeReader({ credits: { [addresses.executor]: balance } }) })).find(
+  it("skips Add credits once its own transfer has landed, not on credits that arrived some other way", async () => {
+    const step = (landed: LandedTx[], pending = false) =>
+      planPredict(creditsRun(), deps({ reader: fakeReader({ landed, pending: () => pending }) })).find(
         (each) => each.id === STEP_ID.addCredits,
       )!;
+    const transfer = await step([]).build(ctx(), creditsRun());
+    const other = { ...transfer, data: transfer.data!.replace(/.{2}$/, "01") as Hex };
 
-    await expect(at(2n * WAD).canSkip!(ctx(), creditsRun())).resolves.toBe(true);
-    await expect(at(2n * WAD - 1n).canSkip!(ctx(), creditsRun())).resolves.toBe(false);
+    await expect(step([landedTx(transfer)]).canSkip!(ctx(), creditsRun())).resolves.toBe(true);
+    await expect(step([landedTx(other)]).canSkip!(ctx(), creditsRun())).resolves.toBe(false);
+    await expect(step([]).canSkip!(ctx(), creditsRun())).resolves.toBe(false);
+    // a transfer still in the mempool may be this one, so it is neither skipped nor signed again
+    await expect(step([], true).canSkip!(ctx(), creditsRun())).rejects.toBeInstanceOf(TxPendingError);
   });
 
   it("refuses a credits run on a network the credits contracts are not on", () => {
@@ -249,30 +258,23 @@ describe("the first batch of a credits run", () => {
     await expect(build(creditsRun(), deps({ creditsQuoter: undefined }))).rejects.toBeInstanceOf(PredictConfigError);
   });
 
-  it("skips the first batch once its credits are burned, so a recovered run never spends them twice (A7)", async () => {
-    const unseen = { ...creditsRun(), firstBatchUnseen: true as const };
-    // start 0.5 + moved 1.5 = 2 in the trade wallet; the batch burns all 2
-    const at = (balance: bigint, sent = false) =>
-      planPredict(
-        unseen,
-        deps({
-          reader: fakeReader({ credits: { [addresses.executor]: balance } }),
-          firstBatchSent: () => sent,
-        }),
-      ).find((each) => each.id === STEP_ID.predict(1))!;
+  it("skips the first batch once its own batch has landed, not when the credits left some other way (A7)", async () => {
+    const run = creditsRun();
+    const step = (landed: LandedTx[]) =>
+      planPredict(run, deps({ reader: fakeReader({ landed }) })).find((each) => each.id === STEP_ID.predict(1))!;
+    const batch = await step([]).build(ctx(), run);
+    const withdraw = withdrawTx({
+      executor: addresses.executor,
+      recipient: addresses.owner,
+      assets: [{ token: addresses.credits, amount: 2n * WAD }],
+    });
+    const elsewhere = await step([]).build(ctx({ parentMarket: "0x00000000000000000000000000000000000000ff" }), run);
 
-    await expect(at(0n).canSkip!(ctx(), unseen)).resolves.toBe(true);
-    await expect(at(2n * WAD).canSkip!(ctx(), unseen)).resolves.toBe(false);
-    // outside a hash-less recovery, credits gone from the trade wallet were withdrawn, not burned
-    await expect(at(0n).canSkip!(ctx(), creditsRun())).resolves.toBe(false);
-    // once a first batch is sent, its hash says whether it landed
-    await expect(at(0n, true).canSkip!(ctx(), unseen)).resolves.toBe(false);
-  });
-
-  it("never skips the first batch of a run that spends no credits", async () => {
-    const step = planPredict(snapshot(), deps()).find((each) => each.id === STEP_ID.predict(1))!;
-
-    expect(step.canSkip === undefined || !(await step.canSkip(ctx(), snapshot()))).toBe(true);
+    await expect(step([landedTx(batch)]).canSkip!(ctx(), run)).resolves.toBe(true);
+    await expect(step([landedTx(withdraw)]).canSkip!(ctx(), run)).resolves.toBe(false);
+    await expect(step([landedTx(elsewhere)]).canSkip!(ctx(), run)).resolves.toBe(false);
+    // a batch spending other credits than this run's is another run's
+    await expect(step([landedTx(batch)]).canSkip!(ctx(), { ...run, creditsToSpend: WAD })).resolves.toBe(false);
   });
 });
 

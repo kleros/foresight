@@ -1,6 +1,8 @@
 import { createFlowRunStore, createMemoryStorage, type FlowTx, type TxGateway } from "@foresight/tx-orchestrator";
-import { decodeFunctionData, type Hash, type Hex, type TransactionReceipt } from "viem";
+import { decodeFunctionData, type Hash, type Hex, type Log, type TransactionReceipt } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { depositTx } from "@/lib/trade-executor/funding";
 
 import { gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
 
@@ -10,6 +12,8 @@ import {
   ctx,
   fakeQuoter,
   fakeReader,
+  landedTx,
+  mintLog,
   option,
   snapshot,
   WAD,
@@ -22,11 +26,18 @@ import { predictSteps } from "../../utils/predictSteps";
 import { createPredictRun } from "../driver";
 import type { PredictDriver, PredictProgress } from "../types";
 
-/** A wallet that signs everything and a chain that mines it. */
-function fakeGateway(): TxGateway & { readonly signRequests: FlowTx[] } {
+/** A wallet that signs everything and a chain that mines it; `logs` are what each mined transaction emits. */
+function fakeGateway(logs: (tx: FlowTx) => Log[] = () => []): TxGateway & { readonly signRequests: FlowTx[] } {
   const signRequests: FlowTx[] = [];
-  const receipt = (hash: Hash): TransactionReceipt =>
-    ({ transactionHash: hash, status: "success", blockNumber: 19_000_000n }) as TransactionReceipt;
+  const receipt = (hash: Hash): TransactionReceipt => {
+    const tx = signRequests[Number(BigInt(hash)) - 1];
+    return {
+      transactionHash: hash,
+      status: "success",
+      blockNumber: 19_000_000n,
+      logs: tx ? logs(tx) : [],
+    } as unknown as TransactionReceipt;
+  };
 
   return {
     signRequests,
@@ -166,16 +177,10 @@ function parentSplit(data: Hex): bigint | undefined {
 describe("createPredictRun and the trade wallet's balance", () => {
   it("splits what an xDAI deposit minted plus the share shown, when the cached balance was low", async () => {
     // the adapter mints 1 collateral per 2 xDAI here, so the minted amount is not the deposit
-    let balance = WAD * 5n;
-    const gateway = fakeGateway();
-    const send = gateway.sendTransaction;
-    gateway.sendTransaction = (tx) => {
-      if (tx.to === addresses.sDaiAdapter) balance += (tx.value ?? 0n) / 2n;
-      return send(tx);
-    };
+    const gateway = fakeGateway((tx) => (tx.to === addresses.sDaiAdapter ? [mintLog((tx.value ?? 0n) / 2n)] : []));
     const driver = createPredictRun({
       gateway,
-      reader: { ...fakeReader({ deployed: true }), collateralBalance: () => Promise.resolve(balance) },
+      reader: fakeReader({ deployed: true, collateral: WAD * 5n }),
       quoter: fakeQuoter(),
       flowId: "predict-xdai-low-cache",
       ctx: () => ctx(),
@@ -225,9 +230,14 @@ describe("createPredictRun and the trade wallet's balance", () => {
       ],
     });
     const gateway = fakeGateway();
+    // the deposit signed as the tab closed mined meanwhile
+    const deposit = depositTx({
+      executor: addresses.executor,
+      asset: { token: addresses.collateral, amount: WAD * 3n },
+    });
     const driver = createPredictRun({
       gateway,
-      reader: fakeReader({ deployed: true, collateral: WAD * 5n }),
+      reader: fakeReader({ deployed: true, collateral: WAD * 5n, landed: [landedTx(deposit)] }),
       quoter: fakeQuoter(),
       flowId,
       store,

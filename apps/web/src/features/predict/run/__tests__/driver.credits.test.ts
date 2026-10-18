@@ -18,12 +18,13 @@ import {
   fakeCreditsQuoter,
   fakeQuoter,
   fakeReader,
+  landedTx,
   option,
   snapshot,
   WAD,
 } from "../../flow/__tests__/support/fakes";
-import { STEP_ID } from "../../flow/plan";
-import type { OptionChainState, PredictCtx, PredictOption, PredictSnapshot } from "../../flow/types";
+import { planPredict, STEP_ID } from "../../flow/plan";
+import type { LandedTx, OptionChainState, PredictCtx, PredictOption, PredictSnapshot } from "../../flow/types";
 import { predictSteps } from "../../utils/predictSteps";
 import { createPredictRun } from "../driver";
 import type { PredictDriver } from "../types";
@@ -36,10 +37,18 @@ const EXECUTE = parseAbi(["function execute(address to, bytes data, uint256 amou
  * landed first batch burns what its `execute` names. `revert` lists the sends that revert.
  */
 function creditsChain(
-  start: { owner: bigint; executor: bigint; manager?: bigint; state?: (option: PredictOption) => OptionChainState },
+  start: {
+    owner: bigint;
+    executor: bigint;
+    manager?: bigint;
+    state?: (option: PredictOption) => OptionChainState;
+    /** What landed before the test starts, as the reader finds it. */
+    landed?: FlowTx[];
+  },
   revert: number[] = [],
 ) {
   const balances = { owner: start.owner, executor: start.executor };
+  const ledger: LandedTx[] = (start.landed ?? []).map((tx) => landedTx(tx));
   const signRequests: FlowTx[] = [];
   const landed = { transfers: 0, spends: 0 };
   const chain = new Map<Hash, "success" | "reverted">();
@@ -58,6 +67,7 @@ function creditsChain(
 
   /** What `tx` does to the credits, applied when it lands. */
   function apply(tx: FlowTx) {
+    ledger.push(landedTx(tx));
     if (tx.to === addresses.credits) {
       const [, amount] = decodeFunctionData({ abi: TRANSFER, data: tx.data! }).args;
       balances.owner -= amount;
@@ -96,6 +106,7 @@ function creditsChain(
     credits: (holder) => (holder === addresses.executor ? balances.executor : balances.owner),
     manager: start.manager ?? 1000n * WAD,
     state: start.state,
+    landed: () => ledger,
   });
 
   /** Records `hash` as mined with `status`, for a run stored with a hash this chain has seen. */
@@ -105,8 +116,10 @@ function creditsChain(
 }
 
 /** 2 credits spent: 0.5 already in the trade wallet and 1.5 moved from the wallet; no money added. */
-const request = (options = [option(1)]): Omit<PredictSnapshot, "collateralAtStart" | "creditsAtStart"> => {
-  const { collateralAtStart, creditsAtStart, ...rest } = snapshot({
+const request = (
+  options = [option(1)],
+): Omit<PredictSnapshot, "collateralAtStart" | "creditsAtStart" | "fromBlock"> => {
+  const { collateralAtStart, creditsAtStart, fromBlock, ...rest } = snapshot({
     options,
     deposit: 0n,
     collateralIn: 0n,
@@ -115,8 +128,18 @@ const request = (options = [option(1)]): Omit<PredictSnapshot, "collateralAtStar
   });
   void collateralAtStart;
   void creditsAtStart;
+  void fromBlock;
   return rest;
 };
+
+/** The run's own credits transfer and first batch, as a tab that closed on them left them on chain. */
+async function sent(stepId: string): Promise<FlowTx> {
+  const snap = { ...request(), collateralAtStart: 0n, creditsAtStart: WAD / 2n, fromBlock: 1n };
+  const deps = { reader: fakeReader(), quoter: fakeQuoter(), creditsQuoter: fakeCreditsQuoter() };
+  return planPredict(snap, deps)
+    .find((step) => step.id === stepId)!
+    .build(ctx(), snap);
+}
 
 const drivers: PredictDriver[] = [];
 afterEach(() => {
@@ -235,7 +258,7 @@ describe("credits across recovery (A7)", () => {
       status: "paused",
       reason: "rejected",
       ctx: ctx(),
-      snapshot: { ...request(options), collateralAtStart: 0n, creditsAtStart: WAD / 2n },
+      snapshot: { ...request(options), collateralAtStart: 0n, creditsAtStart: WAD / 2n, fromBlock: 1n },
       steps,
     });
     return store;
@@ -243,8 +266,12 @@ describe("credits across recovery (A7)", () => {
 
   const row = (stepId: string, outcome: StepSummary["outcome"]): StepSummary => ({ stepId, label: stepId, outcome });
 
-  it("skips Add credits when the tab died with the transfer signed and the credits show it landed", async () => {
-    const chain = creditsChain({ owner: (3n * WAD) / 2n, executor: 2n * WAD });
+  it("skips Add credits when the tab died with the transfer signed and the transfer shows it landed", async () => {
+    const chain = creditsChain({
+      owner: (3n * WAD) / 2n,
+      executor: 2n * WAD,
+      landed: [await sent(STEP_ID.addCredits)],
+    });
     const store = savedRun([
       row(STEP_ID.createExecutor, { status: "skipped" }),
       row(STEP_ID.addCredits, { status: "awaiting-signature" }),
@@ -281,8 +308,8 @@ describe("credits across recovery (A7)", () => {
     expect(chain.signRequests).toEqual([]);
   });
 
-  it("signs nothing again when the tab died with the first batch signed and its credits already burned", async () => {
-    const chain = creditsChain({ owner: (3n * WAD) / 2n, executor: 0n });
+  it("signs nothing again when the tab died with the first batch signed and it landed", async () => {
+    const chain = creditsChain({ owner: (3n * WAD) / 2n, executor: 0n, landed: [await sent(STEP_ID.predict(1))] });
     const store = savedRun([
       row(STEP_ID.createExecutor, { status: "skipped" }),
       row(STEP_ID.addCredits, { status: "confirmed", hash: `0x${"a".repeat(64)}`, blockNumber: 1n }),
@@ -323,8 +350,7 @@ describe("credits across recovery (A7)", () => {
     expect(driver.getProgress().failure?.reason).toBe("deposit-unconfirmed");
 
     // the transfer signed as the tab died mines while the visitor waits
-    chain.balances.owner -= (3n * WAD) / 2n;
-    chain.balances.executor += (3n * WAD) / 2n;
+    chain.apply(await sent(STEP_ID.addCredits));
     driver.retry();
     await vi.waitFor(() => expect(driver.getProgress().stage).toBe("complete"));
 
@@ -450,7 +476,7 @@ describe("credits across recovery (A7)", () => {
   });
 
   it("signs nothing again when a first batch signed with no hash is recovered twice before it is resumed", async () => {
-    const chain = creditsChain({ owner: (3n * WAD) / 2n, executor: 0n });
+    const chain = creditsChain({ owner: (3n * WAD) / 2n, executor: 0n, landed: [await sent(STEP_ID.predict(1))] });
     const store = savedRun([
       row(STEP_ID.createExecutor, { status: "skipped" }),
       row(STEP_ID.addCredits, confirmed("a")),
@@ -473,7 +499,7 @@ describe("credits across recovery (A7)", () => {
   });
 
   it("signs nothing again when one driver recovers the same run twice, as a remounted popup does", async () => {
-    const chain = creditsChain({ owner: (3n * WAD) / 2n, executor: 0n });
+    const chain = creditsChain({ owner: (3n * WAD) / 2n, executor: 0n, landed: [await sent(STEP_ID.predict(1))] });
     const store = savedRun([
       row(STEP_ID.createExecutor, { status: "skipped" }),
       row(STEP_ID.addCredits, confirmed("a")),
@@ -527,7 +553,7 @@ describe("credits across recovery (A7)", () => {
       status: "failed",
       error: { stepId: STEP_ID.predict(1), message: "reverted", cause: "reverted", hash: `0x${"c".repeat(64)}` },
       ctx: ctx(),
-      snapshot: { ...request(), collateralAtStart: 0n, creditsAtStart: WAD / 2n, firstBatchUnseen: true },
+      snapshot: { ...request(), collateralAtStart: 0n, creditsAtStart: WAD / 2n, fromBlock: 1n },
       steps: [
         row(STEP_ID.createExecutor, { status: "skipped" }),
         row(STEP_ID.addCredits, confirmed("a")),
@@ -538,7 +564,6 @@ describe("credits across recovery (A7)", () => {
 
     driver.recover();
     await settled(driver);
-    expect(store.load<PredictSnapshot, PredictCtx>(FLOW_ID)?.snapshot.firstBatchUnseen).toBeUndefined();
     expect(driver.getProgress().stage).toBe("review");
     driver.resume();
     await settled(driver);
