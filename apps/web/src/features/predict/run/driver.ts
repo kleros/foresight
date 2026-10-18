@@ -75,6 +75,8 @@ export function createPredictRun(args: {
   let reviewing = false;
   /** Set once this run sends a transaction that moves money; a failed step put back to pending does not clear it. */
   let moneyMoved = false;
+  /** Set when a restored run's first batch was signed with no hash kept, until the run stops or ends. */
+  let batchMayHaveLanded = false;
   let cached: PredictProgress;
 
   const deps: PredictDeps = {
@@ -83,6 +85,7 @@ export function createPredictRun(args: {
     creditsQuoter: args.creditsQuoter,
     slippageBps: args.slippageBps,
     optionsPerBatch: args.optionsPerBatch,
+    batchMayHaveLanded: () => batchMayHaveLanded,
     onSkip: (option, _reason, stepId) => {
       const left = skipping.get(stepId) ?? [];
       if (!left.includes(option.childMarket)) skipping.set(stepId, [...left, option.childMarket]);
@@ -209,12 +212,14 @@ export function createPredictRun(args: {
     if (event.stepId !== STEP_ID.createExecutor) moneyMoved = true;
   });
   orchestrator.on("flow:paused", () => {
+    batchMayHaveLanded = false;
     const run = orchestrator.getRun();
     const reason = buildFailure ?? errorOf(run)?.cause;
     buildFailure = undefined;
     report(reason, pendingHashOf(run) ? reconcileRun : resumeRun);
   });
   orchestrator.on("flow:failed", (event) => {
+    batchMayHaveLanded = false;
     const reason = buildFailure ?? event.error.cause;
     buildFailure = undefined;
     // A failed wait keeps its hash, so the chain is asked how it ended before anything is signed again.
@@ -224,6 +229,7 @@ export function createPredictRun(args: {
     else report(reason);
   });
   orchestrator.on("flow:completed", () => {
+    batchMayHaveLanded = false;
     args.onComplete?.();
     notify();
   });
@@ -285,6 +291,7 @@ export function createPredictRun(args: {
       reconciling = false;
     });
     if (found.outcome === "reverted") return;
+    batchMayHaveLanded = found.outcome === "unknown" && found.stepId === STEP_ID.predict(1);
     // A transfer signed as the tab died left no hash, and the balance cannot show it until it mines.
     if (found.outcome === "unknown" && (found.stepId === STEP_ID.deposit || found.stepId === STEP_ID.addCredits)) {
       const transfer = steps.find((step) => step.id === found.stepId);
@@ -317,6 +324,7 @@ export function createPredictRun(args: {
     report(undefined);
     skipping.clear();
     moneyMoved = false;
+    batchMayHaveLanded = false;
 
     const requested = args.snapshot();
     const ctx = args.ctx();
@@ -377,6 +385,7 @@ export function createPredictRun(args: {
       recovered = false;
       reviewing = false;
       moneyMoved = false;
+      batchMayHaveLanded = false;
       buildFailure = undefined;
       skipping.clear();
       planned = [];

@@ -52,6 +52,11 @@ export interface PredictDeps {
   quoter: SwapQuoter;
   /** Quotes the swap the credits manager makes; needed only by a run that spends credits. */
   creditsQuoter?: ExactInputQuoter;
+  /**
+   * True while the first batch may have been signed with no hash kept, the one case burned credits
+   * witness it landed; otherwise a withdrawal of the credits would read as the batch.
+   */
+  batchMayHaveLanded?: () => boolean;
   /** Hundredths of a percent a quote may move against the executor before the swap reverts. */
   slippageBps?: number;
   optionsPerBatch?: number;
@@ -400,8 +405,9 @@ export function planPredict(snapshot: PredictRequest, deps: PredictDeps): Step[]
         ...(spends
           ? {
               canSkip: async (ctx: PredictCtx, snap: Readonly<PredictSnapshot>) =>
+                Boolean(deps.batchMayHaveLanded?.()) &&
                 (await deps.reader.creditsBalance(ctx.executor)) + snap.creditsToSpend <=
-                snap.creditsAtStart + snap.creditsFromEoa,
+                  snap.creditsAtStart + snap.creditsFromEoa,
             }
           : {}),
         // Only the first batch splits collateral: it hands every option its underlying at once.

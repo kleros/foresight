@@ -41,6 +41,16 @@ function creditsChain(start: { owner: bigint; executor: bigint; manager?: bigint
   const receipt = (hash: Hash, status: "success" | "reverted") =>
     ({ transactionHash: hash, status, blockNumber: 19_000_000n }) as TransactionReceipt;
 
+  /** The credits `tx` burns, as the manager checks them against the caller's balance. */
+  function burns(tx: FlowTx): bigint {
+    if (tx.to !== addresses.executor) return 0n;
+    const decoded = decodeFunctionData({ abi: tradeExecutorAbi, data: tx.data! });
+    if (decoded.functionName !== "batchValueExecute") return 0n;
+    return decoded.args[0]
+      .filter((call) => call.to === addresses.manager)
+      .reduce((sum, call) => sum + decodeFunctionData({ abi: EXECUTE, data: call.data }).args[2], 0n);
+  }
+
   /** What `tx` does to the credits, applied when it lands. */
   function apply(tx: FlowTx) {
     if (tx.to === addresses.credits) {
@@ -65,7 +75,7 @@ function creditsChain(start: { owner: bigint; executor: bigint; manager?: bigint
     sendTransaction: (tx) => {
       signRequests.push(tx);
       const hash = `0x${signRequests.length.toString(16).padStart(64, "0")}` as Hash;
-      const reverts = revert.includes(signRequests.length);
+      const reverts = revert.includes(signRequests.length) || burns(tx) > balances.executor;
       chain.set(hash, reverts ? "reverted" : "success");
       if (!reverts) apply(tx);
       return Promise.resolve(hash);
@@ -174,6 +184,27 @@ describe("credits across a retry (A7, A8)", () => {
 
     expect(chain.landed).toEqual({ transfers: 1, spends: 1 });
     expect(chain.signRequests.filter((tx) => tx.to === addresses.credits)).toHaveLength(1);
+  });
+});
+
+describe("credits withdrawn between a reverted first batch and its retry", () => {
+  it("rebuilds the batch rather than read the missing credits as burned, so no prediction is reported that was not placed", async () => {
+    const chain = creditsChain({ owner: 3n * WAD, executor: WAD / 2n }, [2]);
+    const driver = drive(chain);
+
+    driver.start();
+    await settled(driver);
+    expect(driver.getProgress().failure?.reason).toBe("reverted");
+
+    // the owner withdraws the parked credits from the trade wallet, then presses Retry
+    chain.balances.owner += chain.balances.executor;
+    chain.balances.executor = 0n;
+    driver.retry();
+    await settled(driver);
+
+    expect(driver.getProgress().stage).not.toBe("complete");
+    expect(chain.signRequests.filter((tx) => tx.to === addresses.executor)).toHaveLength(2);
+    expect(chain.landed.spends).toBe(0);
   });
 });
 

@@ -252,13 +252,19 @@ describe("the first batch of a credits run", () => {
   it("skips the first batch once its credits are burned, so a recovered run never spends them twice (A7)", async () => {
     const snap = creditsRun();
     // start 0.5 + moved 1.5 = 2 in the trade wallet; the batch burns all 2
-    const at = (balance: bigint) =>
-      planPredict(snap, deps({ reader: fakeReader({ credits: { [addresses.executor]: balance } }) })).find(
-        (each) => each.id === STEP_ID.predict(1),
-      )!;
+    const at = (balance: bigint, mayHaveLanded = true) =>
+      planPredict(
+        snap,
+        deps({
+          reader: fakeReader({ credits: { [addresses.executor]: balance } }),
+          batchMayHaveLanded: () => mayHaveLanded,
+        }),
+      ).find((each) => each.id === STEP_ID.predict(1))!;
 
     await expect(at(0n).canSkip!(ctx(), snap)).resolves.toBe(true);
     await expect(at(2n * WAD).canSkip!(ctx(), snap)).resolves.toBe(false);
+    // outside a hash-less recovery, credits gone from the trade wallet were withdrawn, not burned
+    await expect(at(0n, false).canSkip!(ctx(), snap)).resolves.toBe(false);
   });
 
   it("never skips the first batch of a run that spends no credits", async () => {
