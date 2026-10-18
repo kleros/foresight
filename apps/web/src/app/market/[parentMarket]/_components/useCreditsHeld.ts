@@ -30,5 +30,7 @@ export function useCreditsHeld(
         ? () => fetchCredits(publicClient, { contracts, owner, tradeWallet, collateral })
         : skipToken,
     staleTime: STALE_TIME.balance,
+    // optional to a prediction, so a failed read gives way to the visitor's own money at once
+    retry: false,
   });
 }
