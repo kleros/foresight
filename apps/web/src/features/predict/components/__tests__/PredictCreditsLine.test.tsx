@@ -39,8 +39,8 @@ function renderLine(held: CreditsHeld, options: { isUsing?: boolean; isReadOnly?
   return { onAmountChange, onUsingChange };
 }
 
-const tick = () => screen.getByRole("checkbox", { name: "Use your Foresight credits" });
-const useMax = () => screen.getByRole("button", { name: "Use max", hidden: true });
+const tick = () => screen.getByRole("checkbox", { name: "Use Foresight credits" });
+const useMax = () => screen.getByRole("button", { name: "Max credits", hidden: true });
 const note = () => screen.getByTestId("credits-note");
 
 describe("the credits line", () => {
@@ -50,7 +50,7 @@ describe("the credits line", () => {
     expect(screen.queryByTestId("credits-line")).toBeNull();
   });
 
-  it("is ticked with Use max when the manager covers every credit, and says how many", () => {
+  it("is ticked with Max credits when the manager covers every credit, and says how many", () => {
     const { onAmountChange } = renderLine({ wallet: 3n * WAD, tradeWallet: 2n * WAD, manager: 1000n * WAD });
 
     expect(tick()).toBeChecked();
@@ -62,12 +62,16 @@ describe("the credits line", () => {
     expect(onAmountChange).toHaveBeenLastCalledWith(5n * WAD);
   });
 
-  it("keeps the balance to the visitor's money while Max counts the credits too", () => {
-    const { onAmountChange } = renderLine({ wallet: 5n * WAD, tradeWallet: 0n, manager: 1000n * WAD });
+  it("keeps the balance, Max and the slider's share to the visitor's money while the credits are ticked", () => {
+    const { onAmountChange } = renderLine(
+      { wallet: 5n * WAD, tradeWallet: 0n, manager: 1000n * WAD },
+      { amount: 19n * WAD },
+    );
 
     expect(screen.getByTestId("balance-figure")).toHaveTextContent("19 sDAI");
+    expect(screen.getByTestId("amount-share")).toHaveTextContent("100%");
     fireEvent.click(screen.getByRole("button", { name: "Max" }));
-    expect(onAmountChange).toHaveBeenLastCalledWith(24n * WAD);
+    expect(onAmountChange).toHaveBeenLastCalledWith(19n * WAD);
   });
 
   it("names the credits part of a typed amount", () => {
@@ -76,7 +80,7 @@ describe("the credits line", () => {
     expect(screen.getByText("≈ 5 sDAI = 2 in credits + 3 from your wallet")).toBeInTheDocument();
   });
 
-  it("unticked, hides Use max but keeps its room, and still says what is available", () => {
+  it("unticked, hides Max credits but keeps its room, and still says what is available", () => {
     const { onUsingChange } = renderLine(
       { wallet: 5n * WAD, tradeWallet: 0n, manager: 1000n * WAD },
       { isUsing: false },
@@ -91,23 +95,23 @@ describe("the credits line", () => {
     expect(onUsingChange).toHaveBeenLastCalledWith(true);
   });
 
-  it("when the manager is short, says how many are usable right now and Use max takes only those", () => {
+  it("when the manager is short, says how many are usable now and Max credits takes only those", () => {
     const { onAmountChange } = renderLine({ wallet: 500n * WAD, tradeWallet: 0n, manager: 200n * WAD });
 
     expect(tick()).toBeChecked();
-    expect(note()).toHaveTextContent("200 of your 500 credits usable right now");
+    expect(note()).toHaveTextContent("200 of 500 usable now");
 
     fireEvent.click(useMax());
     expect(onAmountChange).toHaveBeenLastCalledWith(200n * WAD);
   });
 
-  it("when the manager is empty, cannot be ticked and asks for the visitor's own collateral", () => {
+  it("when the manager is empty, offers no tick and says none of them is usable", () => {
     renderLine({ wallet: 5n * WAD, tradeWallet: 0n, manager: 0n });
 
-    expect(tick()).not.toBeChecked();
-    expect(tick()).toBeDisabled();
+    expect(screen.queryByRole("checkbox")).toBeNull();
     expect(useMax()).toBeDisabled();
-    expect(note()).toHaveTextContent("None usable right now. Add your own sDAI.");
+    expect(screen.getByText("Foresight credits")).toBeInTheDocument();
+    expect(note()).toHaveTextContent("None of your 5 usable now");
   });
 
   it("is locked with the rest of the form while a run holds it", () => {

@@ -390,11 +390,26 @@
   opacity: 1;
   transform: none;
 }
-/* the credits tick: the box fills, then its check draws; 15 is the path's length, rounded up */
+/* the credits tick: the fill fades in on a layer, as a gradient cannot interpolate, while the check draws; 15 is the path's length, rounded up */
 .predict-check {
-  transition:
-    background var(--fs-dur-echo) var(--fs-ease-enter),
-    border-color var(--fs-dur-echo) var(--fs-ease-enter);
+  position: relative;
+  transition: border-color var(--fs-dur-echo) var(--fs-ease-enter);
+}
+.predict-check::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: var(--fs-popup-axis);
+  opacity: 0;
+  transition: opacity var(--fs-dur-echo) var(--fs-ease-exit);
+}
+:checked + .predict-check::before {
+  opacity: 1;
+  transition: opacity var(--fs-dur-echo) var(--fs-ease-enter);
+}
+.predict-check svg {
+  position: relative;
 }
 .predict-check path {
   stroke-dasharray: 15;
@@ -403,7 +418,7 @@
 }
 :checked + .predict-check path {
   stroke-dashoffset: 0;
-  transition: stroke-dashoffset var(--fs-dur-enter) var(--fs-ease-enter) var(--fs-dur-echo);
+  transition: stroke-dashoffset var(--fs-dur-enter) var(--fs-ease-enter);
 }
 .predict-steps > li > div:first-child {
   padding-top: 8px;

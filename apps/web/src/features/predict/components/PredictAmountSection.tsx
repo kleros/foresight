@@ -63,7 +63,9 @@ export function PredictAmountSection({
   // a locked amount is the one a run started with; a balance read since cannot make it too much
   const notEnough = over && !isReadOnly;
   const roundDown = (value: bigint) => roundToDisplay(value, token.decimals);
-  const max = available === undefined ? undefined : roundDown(available);
+  // the balance, Max and the slider name the visitor's money alone; the credits line has its own max
+  const money = available === undefined ? undefined : available - (funding?.creditsAvailable ?? 0n);
+  const max = money === undefined ? undefined : roundDown(money);
   const summary = note
     ? { text: note, tone: "neutral" }
     : over && isReadOnly
@@ -79,8 +81,6 @@ export function PredictAmountSection({
     !isEditing && amount ? { value: formatDisplayAmount(amount, token.decimals, token.decimals) } : undefined;
   const noBalance = Boolean(note) || isDisconnected;
   const isRead = !isDisconnected && available !== undefined;
-  // the credits line says what they add, so the balance is the visitor's money alone
-  const money = available === undefined ? undefined : available - (funding?.creditsAvailable ?? 0n);
   const figure = isDisconnected
     ? "No wallet connected"
     : money === undefined
@@ -241,7 +241,6 @@ export function PredictAmountSection({
       {credits && credits.offer.state !== "none" && !note ? (
         <PredictCreditsLine
           credits={credits}
-          collateralSymbol={collateral.symbol}
           isReadOnly={isReadOnly}
           onUseMax={creditsMax > 0n ? () => onAmountChange(creditsMax) : undefined}
         />
