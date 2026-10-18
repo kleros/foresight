@@ -1394,6 +1394,15 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       );
     }
     const credits = scenario.credits ?? {};
+    // the forked chain may already have given these hardhat accounts credits
+    const inherited = await balance(route.token, owner.address);
+    if (inherited > 0n) {
+      await sendFrom(
+        owner,
+        route.token,
+        encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [CREDITS_GOVERNOR, inherited] }),
+      );
+    }
     if (credits.wallet || credits.tradeWallet) {
       await grantCredits(owner.address, (credits.wallet ?? 0n) + (credits.tradeWallet ?? 0n));
     }
@@ -1433,6 +1442,10 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       tradeWallet: executor,
       collateral: session.collateralToken,
     });
+    expect(
+      { wallet: held?.wallet, tradeWallet: held?.tradeWallet },
+      "the owner and trade wallet hold the credits the scenario states",
+    ).toEqual({ wallet: credits.wallet ?? 0n, tradeWallet: credits.tradeWallet ?? 0n });
     const offer = app.creditsOffer(held);
     const lines = scenario.useCredits === false ? [] : app.creditLines(held, offer);
     const funding = planFunding({
