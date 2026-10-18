@@ -360,6 +360,12 @@
 .step-bullet[data-bullet="failed"] {
   color: var(--fs-tone-error-text);
 }
+.step-bullet[data-bullet="inactive"] {
+  color: var(--fs-popup-text-3);
+}
+.step-bullet[data-bullet="inactive"]::after {
+  opacity: 0.5;
+}
 .step-bullet[data-bullet="failed"]::after {
   border-color: var(--fs-tone-error);
 }
@@ -451,6 +457,12 @@
 }
 .predict-steps li:has([data-bullet="failed"]) h2 + p {
   color: var(--fs-tone-error-text);
+}
+.predict-steps li:has([data-bullet="inactive"]) h2 {
+  color: var(--fs-popup-text-2);
+}
+.predict-steps li:has([data-bullet="inactive"]) h2 + p {
+  color: var(--fs-popup-text-3);
 }
 /* the step's detail sits under its title where the two do not fit one line; both columns then
    start at the row's top, so the 24px bullet and the title 2px down share a centre */

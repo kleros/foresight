@@ -1457,6 +1457,56 @@ test.describe("accent text in the dark theme", () => {
   });
 });
 
+test.describe("an inactive step", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  /** Each inactive row's title, detail and digit as painted: colour blended by every ancestor's opacity over the first opaque fill. */
+  const painted = (dialog: Locator) =>
+    dialog.locator('.predict-steps > li:has([data-bullet="inactive"])').evaluateAll((rows) =>
+      rows.flatMap((row) =>
+        [row.querySelector("h2"), row.querySelector("h2 + p"), row.querySelector('[data-glyph="digit"]')]
+          .filter((node): node is Element => node !== null && node.textContent!.trim() !== "")
+          .map((node) => {
+            const channels = (css: string) => css.match(/[\d.]+/g)!.map(Number);
+            let alpha = 1;
+            let fill: number[] | undefined;
+            // an opacity above the fill fades text and ground alike
+            for (let at: Element | null = node; at && !fill; at = at.parentElement) {
+              alpha *= Number(getComputedStyle(at).opacity);
+              const [r = 0, g = 0, b = 0, a = 1] = channels(getComputedStyle(at).backgroundColor);
+              if (a === 1) fill = [r, g, b];
+            }
+            const [r = 0, g = 0, b = 0, a = 1] = channels(getComputedStyle(node).color);
+            const ground = fill ?? [255, 255, 255];
+            const mix = [r, g, b].map((c, i) => Math.round(c * a * alpha + ground[i]! * (1 - a * alpha)));
+            return { text: node.textContent!.trim(), color: `rgb(${mix.join(", ")})`, ground: `rgb(${ground.join(", ")})` };
+          }),
+      ),
+    );
+
+  for (const theme of ["light", "dark"]) {
+    for (const [state, extra] of [
+      ["idle", "&first=0"],
+      ["over", ""],
+      ["disconnected", ""],
+      ["pending", ""],
+    ] as const) {
+      test(`stays dimmer than a step that will run, its words and digit at 4.5:1 or more, ${state}${extra} in the ${theme} theme`, async ({
+        page,
+      }) => {
+        const dialog = await openPopup(page, 2, state, undefined, `${extra}&theme=${theme}`);
+        const rows = await painted(dialog);
+        expect(rows.length, "an inactive step is shown").toBeGreaterThan(0);
+        const full = await tokenValue(page, "color", "var(--fs-popup-text)");
+        for (const { text, color, ground } of rows) {
+          expect.soft(contrast(color, ground), `"${text}" on ${ground}`).toBeGreaterThanOrEqual(4.5);
+          expect.soft(contrast(color, ground), `"${text}" dimmer than a running title`).toBeLessThan(contrast(full, ground));
+        }
+      });
+    }
+  }
+});
+
 test.describe("the steps' connector", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 

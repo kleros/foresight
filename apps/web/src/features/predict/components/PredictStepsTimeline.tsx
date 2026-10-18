@@ -29,12 +29,15 @@ const BULLETS: Record<PredictStepRow["key"], () => React.ReactNode> = {
   predict: PredictBullet,
 };
 
-/** Dimmed only when it will not run; a finished step stays at full strength, as futarchy-ui keeps it. */
+/**
+ * Dimmed only when it will not run, by the stylesheet's quieter text tokens: the library's disabled state is
+ * opacity 0.5, under 4.5:1. A finished step stays at full strength, as futarchy-ui keeps it.
+ */
 const TIMELINE_STATE: Record<StepView, TimelineItem["state"]> = {
   idle: undefined,
   running: "loading",
   done: undefined,
-  inactive: "disabled",
+  inactive: undefined,
   failed: undefined,
 };
 
