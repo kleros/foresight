@@ -229,7 +229,7 @@ describe("the predict flow, against a gnosis fork", () => {
         collateralAtStart: await createPredictReader({ client, sessionId: session.id, collateral }).collateralBalance(
           ctx.executor,
         ),
-        fromBlock: await client.getBlockNumber(),
+        fromBlock: (await client.getBlockNumber()) + 1n,
         startedAt: Math.floor(Date.now() / 1000),
       };
 
@@ -640,7 +640,7 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
       collateralAtStart: await app
         .createPredictReader({ client, sessionId: session.id, collateral: session.collateralToken })
         .collateralBalance(ctx.executor),
-      fromBlock: await client.getBlockNumber(),
+      fromBlock: (await client.getBlockNumber()) + 1n,
       startedAt: Math.floor(Date.now() / 1000),
     };
     const deps = {

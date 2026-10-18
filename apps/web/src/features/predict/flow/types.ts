@@ -86,7 +86,7 @@ export interface PredictSnapshot {
   collateralBefore: bigint;
   /** The executor's collateral read from the chain as the run started, before any deposit. */
   collateralAtStart: bigint;
-  /** The latest block as the run started, before anything was signed; its transactions land after it. */
+  /** The block after the latest as the run started: the first this run's transactions can land in. */
   fromBlock: bigint;
   startedAt: number;
   /** Options that settled batches left out for lack of a route; absent until one does. */

@@ -572,7 +572,7 @@ describe("credits across recovery (A7)", () => {
     expect(chain.landed.spends).toBe(0);
   });
 
-  it("pins the trade wallet's credits as the run starts, before anything moves", async () => {
+  it("pins the trade wallet's credits and the block after the latest as the run starts, before anything moves", async () => {
     const chain = creditsChain({ owner: 3n * WAD, executor: WAD / 2n });
     const store = createFlowRunStore({ storage: createMemoryStorage() });
     const driver = drive(chain, store, "credits-pinned");
@@ -587,5 +587,7 @@ describe("credits across recovery (A7)", () => {
     await settled(driver);
 
     expect(saved[0]?.creditsAtStart).toBe(WAD / 2n);
+    // the fake chain's latest block is 1: an earlier run's transactions in it are not this run's
+    expect(saved[0]?.fromBlock).toBe(2n);
   });
 });

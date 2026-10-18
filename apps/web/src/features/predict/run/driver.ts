@@ -307,11 +307,13 @@ export function createPredictRun(args: {
 
   /** Pins the trade wallet's balance before anything is signed, and checks a route exists. */
   async function prepare(ctx: PredictCtx, requested: PredictRequest): Promise<PredictSnapshot> {
-    const [collateralAtStart, creditsAtStart, fromBlock] = await Promise.all([
+    const [collateralAtStart, creditsAtStart, latest] = await Promise.all([
       args.reader.collateralBalance(ctx.executor),
       args.reader.creditsBalance(ctx.executor),
       args.reader.latestBlock(),
     ]);
+    // nothing this run sends can land in a block already mined, which may hold an earlier run's
+    const fromBlock = latest + 1n;
     if (collateralAtStart < tradeWalletShare(requested)) throw new TradeWalletShortError();
     // an sDAI deposit lands as sent, so the split may not ask for more than it and the trade wallet's share
     if (!requested.depositNative && requested.collateralIn > requested.deposit + tradeWalletShare(requested)) {
