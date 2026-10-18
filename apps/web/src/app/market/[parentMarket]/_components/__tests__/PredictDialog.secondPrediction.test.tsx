@@ -54,6 +54,7 @@ vi.mock("@/features/trade-executor/api/getExecutor", async (importOriginal) => (
 const balances = vi.hoisted(() => ({ funding: null as Funding | null }));
 vi.mock("../usePredictFunding", () => ({
   usePredictFunding: () => ({
+    credits: { state: "none" },
     funding: balances.funding,
     token: "collateral",
     available: () => balances.funding?.available,
@@ -138,6 +139,9 @@ const marketAt = (value: number) => Object.fromEntries(OPTIONS.map((option) => [
 const fundingCoveredByTradeWallet = (): Funding => ({
   available: 20n * WAD,
   collateralIn: 0n,
+  creditsAvailable: 0n,
+  credits: [],
+  creditsIn: 0n,
   tradeWallet: 5n * WAD,
   fromTradeWallet: 0n,
   toAdd: 0n,

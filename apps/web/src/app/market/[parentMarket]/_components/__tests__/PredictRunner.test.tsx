@@ -12,6 +12,7 @@ import { usePredictRun, type PredictRunInput } from "@/features/predict/hooks/us
 import type { PredictDriver, PredictProgress, PredictStage } from "@/features/predict/run/types";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import type { PayToken, SelectedEstimate } from "@/features/predict/types";
+import { creditLines, creditsOffer } from "@/features/predict/utils/credits";
 import { planFunding } from "@/features/predict/utils/funding";
 import { sessionChartKey } from "@/features/sessions/api/getSessionChart";
 import { sessionStatsKey } from "@/features/sessions/api/getSessionStats";
@@ -81,6 +82,8 @@ vi.mock("@/features/predict/components/PredictDialog", () => ({
       <button onClick={() => props.onTokenChange("native")}>pay in xDAI</button>
       <button onClick={props.onClose}>close</button>
       <button onClick={props.onPredict}>predict</button>
+      <p data-testid="credits">{props.credits ? String(props.credits.isUsing) : "absent"}</p>
+      <button onClick={() => props.credits?.onUsingChange(false)}>untick credits</button>
     </div>
   ),
 }));
@@ -153,6 +156,7 @@ beforeEach(() => {
   nativeAvailable = undefined;
   fundingMock.mockImplementation(({ token }) => ({
     funding: null,
+    credits: { state: "none" },
     token: token ?? heldMore,
     available: (choice) => (choice === "native" ? nativeAvailable : undefined),
     canPayNative: true,
@@ -188,6 +192,40 @@ describe("PredictRunner, what the visitor is told", () => {
     mount();
 
     expect(screen.getByTestId("notice")).toBeEmptyDOMElement();
+  });
+
+  it("ticks the credits line by default, and stops a prediction that would spend credits until it is unticked", () => {
+    const held = { wallet: 5n * 10n ** 18n, tradeWallet: 0n, manager: 1000n * 10n ** 18n };
+    fundingMock.mockImplementation(({ amount, useCredits }) => ({
+      funding: planFunding({
+        amount,
+        ownWallet: 20n * 10n ** 18n,
+        tradeWallet: 0n,
+        credits: useCredits ? creditLines(held, creditsOffer(held)) : [],
+      }),
+      credits: creditsOffer(held),
+      token: "collateral",
+      available: () => undefined,
+      canPayNative: false,
+    }));
+    mount();
+    fireEvent.click(screen.getByText("pay ten"));
+
+    expect(screen.getByTestId("credits")).toHaveTextContent("true");
+    expect(screen.getByTestId("notice")).toHaveTextContent(
+      "Credits can't be spent yet. Untick them to predict with your own funds.",
+    );
+
+    fireEvent.click(screen.getByText("untick credits"));
+
+    expect(screen.getByTestId("credits")).toHaveTextContent("false");
+    expect(screen.getByTestId("notice")).toBeEmptyDOMElement();
+  });
+
+  it("shows no credits line where the visitor holds none", () => {
+    mount();
+
+    expect(screen.getByTestId("credits")).toHaveTextContent("absent");
   });
 
   it("drops the notice while a run is going", () => {
@@ -411,6 +449,7 @@ describe("PredictRunner, the dialog's controls", () => {
   it("shows the amount now typed, not the one pressed, once a run stops before money moved", () => {
     fundingMock.mockImplementation(({ amount }) => ({
       funding: planFunding({ amount, ownWallet: 100n * 10n ** 18n, tradeWallet: 0n }),
+      credits: { state: "none" },
       token: "collateral",
       available: () => undefined,
       canPayNative: false,
@@ -424,6 +463,7 @@ describe("PredictRunner, the dialog's controls", () => {
 
     fundingMock.mockImplementation(() => ({
       funding: planFunding({ amount: 4n * 10n ** 18n, ownWallet: 100n * 10n ** 18n, tradeWallet: 0n }),
+      credits: { state: "none" },
       token: "collateral",
       available: () => undefined,
       canPayNative: false,

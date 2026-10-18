@@ -4,6 +4,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GAS_RESERVE_WEI } from "@/features/predict/oracle/tolerances";
 
+import type { CreditsHeld } from "@/lib/trade-executor/credits";
+
+
 import { usePredictFunding } from "../usePredictFunding";
 
 const OWNER = "0x9999999999999999999999999999999999999999" as Address;
@@ -16,6 +19,7 @@ const chain = vi.hoisted(() => ({
   xDai: 0n,
   route: true,
   rate: { data: undefined as bigint | undefined, isError: false },
+  credits: { data: undefined as CreditsHeld | null | undefined, isLoading: false },
 }));
 
 vi.mock("@/config/contracts", async (importOriginal) => ({
@@ -36,16 +40,21 @@ vi.mock("@/features/predict/api/getSavingsRate", () => ({
     sDai ? { ...chain.rate, isPending: chain.rate.data === undefined && !chain.rate.isError } : { isPending: true },
 }));
 
-const defaultToken = () =>
+vi.mock("../useCreditsHeld", () => ({ useCreditsHeld: () => chain.credits }));
+
+const fund = (args: { amount?: bigint; useCredits?: boolean } = {}) =>
   renderHook(() =>
     usePredictFunding({
       owner: OWNER,
       tradeWallet: TRADE_WALLET,
       collateral: COLLATERAL,
       token: undefined,
-      amount: 0n,
+      amount: args.amount ?? 0n,
+      useCredits: args.useCredits ?? true,
     }),
-  ).result.current.token;
+  ).result.current;
+
+const defaultToken = () => fund().token;
 
 beforeEach(() => {
   chain.sDai = 0n;
@@ -53,6 +62,7 @@ beforeEach(() => {
   chain.route = true;
   // 1.25 xDAI per sDAI
   chain.rate = { data: (5n * WAD) / 4n, isError: false };
+  chain.credits = { data: undefined, isLoading: false };
 });
 
 describe("usePredictFunding, the default pay token", () => {
@@ -83,5 +93,41 @@ describe("usePredictFunding, the default pay token", () => {
     chain.route = false;
 
     expect(defaultToken()).toBe("collateral");
+  });
+});
+
+describe("usePredictFunding, the visitor's credits", () => {
+  beforeEach(() => {
+    chain.sDai = 10n * WAD;
+    chain.route = false;
+  });
+
+  it("offers nothing and plans from money alone where the chain has no credits", () => {
+    const { credits, funding } = fund({ amount: 3n * WAD });
+
+    expect(credits).toEqual({ state: "none" });
+    expect(funding).toMatchObject({ creditsIn: 0n, toAdd: 3n * WAD });
+  });
+
+  it("waits for the credits read before planning", () => {
+    chain.credits = { data: undefined, isLoading: true };
+
+    expect(fund({ amount: 3n * WAD }).funding).toBeNull();
+  });
+
+  it("spends ticked credits first", () => {
+    chain.credits = { data: { wallet: 2n * WAD, tradeWallet: 0n, manager: 1000n * WAD }, isLoading: false };
+    const { credits, funding } = fund({ amount: 5n * WAD });
+
+    expect(credits).toEqual({ state: "usable", held: 2n * WAD, usable: 2n * WAD });
+    expect(funding).toMatchObject({ creditsIn: 2n * WAD, toAdd: 3n * WAD, available: 12n * WAD });
+  });
+
+  it("still offers unticked credits but spends none of them", () => {
+    chain.credits = { data: { wallet: 2n * WAD, tradeWallet: 0n, manager: 1000n * WAD }, isLoading: false };
+    const { credits, funding } = fund({ amount: 5n * WAD, useCredits: false });
+
+    expect(credits.state).toBe("usable");
+    expect(funding).toMatchObject({ creditsIn: 0n, creditsAvailable: 0n, toAdd: 5n * WAD, available: 10n * WAD });
   });
 });

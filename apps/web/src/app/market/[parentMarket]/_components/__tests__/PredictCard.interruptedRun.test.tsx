@@ -192,8 +192,12 @@ vi.mock("@/features/trade-executor/api/getExecutor", async (importOriginal) => (
 
 vi.mock("../usePredictFunding", () => ({
   usePredictFunding: () => ({
+    credits: { state: "none" },
     funding: {
       available: 10n * 10n ** 18n,
+      creditsAvailable: 0n,
+      credits: [],
+      creditsIn: 0n,
       collateralIn: form.deposit,
       tradeWallet: 0n,
       fromTradeWallet: 0n,

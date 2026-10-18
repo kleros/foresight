@@ -70,7 +70,7 @@ vi.mock("@/features/trade-executor/api/getExecutor", async (importOriginal) => (
 }));
 
 vi.mock("../usePredictFunding", () => ({
-  usePredictFunding: () => ({ funding: null, canPayNative: false, isPending: false }),
+  usePredictFunding: () => ({ funding: null, credits: { state: "none" }, canPayNative: false, isPending: false }),
 }));
 
 vi.mock("../useHasPredicted", () => ({ useHasPredicted: () => false }));

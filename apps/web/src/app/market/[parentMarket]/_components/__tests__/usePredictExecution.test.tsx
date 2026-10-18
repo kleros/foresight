@@ -63,6 +63,9 @@ const session = (overrides: Partial<SessionDetailRow> = {}): SessionDetail =>
 const FUNDING: Funding = {
   available: 11n * WAD,
   collateralIn: 7n * WAD,
+  creditsAvailable: 0n,
+  credits: [],
+  creditsIn: 0n,
   tradeWallet: 5n * WAD,
   fromTradeWallet: 4n * WAD,
   toAdd: 3n * WAD,

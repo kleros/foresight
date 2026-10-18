@@ -43,6 +43,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
 
   const [amount, setAmount] = useState<bigint>();
   const [picked, setPicked] = useState<PayToken>();
+  const [useCredits, setUseCredits] = useState(true);
   // removed in this popup; cleared from the page only once Predict is pressed
   const [removed, setRemoved] = useState<string[]>([]);
   // what the steps say is being added, held from the press so a refreshed balance cannot rewrite it
@@ -57,6 +58,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
   const collateral = { symbol: session.collateralSymbol ?? "sDAI", decimals: session.collateralDecimals ?? 18 };
   const {
     funding,
+    credits,
     token: tokenId,
     available,
     canPayNative,
@@ -66,6 +68,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
     collateral: collateralToken,
     token: picked,
     amount: amount ?? 0n,
+    useCredits,
   });
   // the default is chosen once, so a balance refresh cannot switch the token under a typed amount
   if (picked === undefined && tokenId !== undefined) setPicked(tokenId);
@@ -179,6 +182,9 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
       }}
       funding={funding}
       collateral={collateral}
+      credits={
+        credits.state === "none" ? undefined : { offer: credits, isUsing: useCredits, onUsingChange: setUseCredits }
+      }
       optionNoun={optionNounSingular(session.itemName)}
       isFirstPrediction={isFirstPrediction}
       isDisconnected={owner === undefined}
@@ -190,7 +196,14 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
       recovered={recovered && { deposit: recovered.deposit, token: runToken }}
       notice={
         // once a run is going its own state is the story, not what the wallet is doing now
-        isRunning ? undefined : notice({ owner, onRightChain: chainId === DEFAULT_CHAIN_ID, ready })
+        isRunning
+          ? undefined
+          : notice({
+              owner,
+              onRightChain: chainId === DEFAULT_CHAIN_ID,
+              ready,
+              spendsCredits: (funding?.creditsIn ?? 0n) > 0n,
+            })
       }
       onPredict={predict}
     />
@@ -198,8 +211,15 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
 }
 
 /** Why this prediction cannot be made, in the words of the thing the visitor has to do. */
-function notice(args: { owner?: string; onRightChain: boolean; ready: boolean }): string | undefined {
+function notice(args: {
+  owner?: string;
+  onRightChain: boolean;
+  ready: boolean;
+  spendsCredits: boolean;
+}): string | undefined {
   if (!args.owner) return "Connect a wallet to predict.";
   if (!args.onRightChain) return "Switch to Gnosis to predict.";
-  return args.ready ? undefined : "This session cannot be traded yet.";
+  if (!args.ready) return "This session cannot be traded yet.";
+  // the run signs collateral only, so an amount shown as partly credits is not predicted
+  return args.spendsCredits ? "Credits can't be spent yet. Untick them to predict with your own funds." : undefined;
 }

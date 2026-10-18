@@ -47,7 +47,7 @@ vi.mock("@/features/trade-executor/api/getExecutor", async (importOriginal) => (
   useExecutor: () => ({ data: { predicted: "0x8888888888888888888888888888888888888888", deployed: true } }),
 }));
 vi.mock("../usePredictFunding", () => ({
-  usePredictFunding: () => ({ funding: null, canPayNative: false, isPending: false }),
+  usePredictFunding: () => ({ funding: null, credits: { state: "none" }, canPayNative: false, isPending: false }),
 }));
 vi.mock("../useHasPredicted", () => ({ useHasPredicted: () => true }));
 vi.mock("@/components/wallet/EnsureChain", () => ({ default: ({ children }: { children: ReactNode }) => children }));
