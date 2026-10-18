@@ -1413,6 +1413,35 @@ test.describe("the price check before a run", () => {
     await expect(dialog.locator(".predict-cta")).toHaveText("Checking prices…");
     await expect(dialog.getByText("Finding prices…")).toHaveCount(0);
   });
+
+  test("stretches and shrinks its line as it crosses, by transform alone", async ({ page }) => {
+    const dialog = await openPopup(page, 2, "quoting");
+    const sweep = await dialog.locator("[data-testid=pricing-sweep] > i").evaluate((node) => {
+      const properties = (animations: Animation[]) => [
+        ...new Set(
+          animations
+            .flatMap((animation) => (animation.effect as KeyframeEffect).getKeyframes())
+            .flatMap((frame) => Object.keys(frame))
+            .filter((key) => !["offset", "easing", "composite", "computedOffset"].includes(key)),
+        ),
+      ];
+      const all = node.getAnimations({ subtree: true });
+      const bar = all.filter((animation) => (animation.effect as KeyframeEffect).pseudoElement === "::before");
+      const easings = all.map((animation) => (animation.effect as KeyframeEffect).getKeyframes()[0]?.easing);
+      return {
+        easings: easings.sort(),
+        names: all.map((animation) => (animation as CSSAnimation).animationName).sort(),
+        properties: properties(all),
+        barProperties: properties(bar),
+      };
+    });
+
+    expect(sweep.names).toEqual(["predict-sweep-stretch", "predict-sweep-travel"]);
+    expect(sweep.properties).toEqual(["transform"]);
+    expect(sweep.barProperties).toEqual(["transform"]);
+    // the motion tokens' structural and enter curves, resolved inside the keyframes
+    expect(sweep.easings).toEqual(["cubic-bezier(0, 0, 0.2, 1)", "cubic-bezier(0.2, 0, 0, 1)"]);
+  });
 });
 
 test.describe("the popup under reduced motion", () => {
@@ -1430,6 +1459,12 @@ test.describe("the popup under reduced motion", () => {
         .evaluateAll((items) => items.map((item) => getComputedStyle(item).animationName));
 
       expect(animations.every((name) => name === "none")).toBe(true);
+      if (state === "quoting") {
+        const bar = await dialog
+          .locator("[data-testid=pricing-sweep] > i")
+          .evaluate((node) => getComputedStyle(node, "::before").animationName);
+        expect(bar).toBe("none");
+      }
     });
   }
 });
