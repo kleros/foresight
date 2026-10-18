@@ -706,39 +706,32 @@ for (const viewport of [
       });
     }
 
-    // at 568 x 320 the gap between header and button is shorter than the panel's input and line together
-    if (viewport.height >= 375) {
-      for (const [state, line] of [
-        ["idle", /in your trade wallet/],
-        ["over", /^Not enough balance/],
-      ] as const) {
-        test(`keeps the amount's line above the button when Tab reaches the field, ${state}`, async ({ page }) => {
-          await page.emulateMedia({ reducedMotion: "reduce" });
-          for (const options of [2, 10]) {
-            const dialog = await openPopup(page, options, state);
-            const input = dialog.getByLabel("Amount");
-            await dialog.evaluate((element) => {
-              const scroller = [...element.querySelectorAll("div")].find(
-                (node) => getComputedStyle(node).overflowY === "auto" && node.scrollHeight > node.clientHeight,
-              );
-              if (scroller) scroller.scrollTop = 0;
-            });
-            for (
-              let step = 0;
-              step < 80 && !(await input.evaluate((node) => node === document.activeElement));
-              step++
-            ) {
-              await page.keyboard.press("Tab");
-            }
-            await expect(input).toBeFocused();
-            await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
-            const summary = dialog.locator('[data-panel="amount"] > p').filter({ hasText: line });
-            await expect(summary).toHaveCount(1);
-            expect.soft(await isFullyShown(input), `${options} options: the field`).toBe(true);
-            expect.soft(await isFullyShown(summary), `${options} options: the line under it`).toBe(true);
+    for (const [state, line] of [
+      ["idle", /in your trade wallet/],
+      ["over", /^Not enough balance/],
+    ] as const) {
+      test(`keeps the amount's line above the button when Tab reaches the field, ${state}`, async ({ page }) => {
+        await page.emulateMedia({ reducedMotion: "reduce" });
+        for (const options of [2, 10]) {
+          const dialog = await openPopup(page, options, state);
+          const input = dialog.getByLabel("Amount");
+          await dialog.evaluate((element) => {
+            const scroller = [...element.querySelectorAll("div")].find(
+              (node) => getComputedStyle(node).overflowY === "auto" && node.scrollHeight > node.clientHeight,
+            );
+            if (scroller) scroller.scrollTop = 0;
+          });
+          for (let step = 0; step < 80 && !(await input.evaluate((node) => node === document.activeElement)); step++) {
+            await page.keyboard.press("Tab");
           }
-        });
-      }
+          await expect(input).toBeFocused();
+          await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+          const summary = dialog.locator('[data-panel="amount"] > p').filter({ hasText: line });
+          await expect(summary).toHaveCount(1);
+          expect.soft(await isFullyShown(input), `${options} options: the field`).toBe(true);
+          expect.soft(await isFullyShown(summary), `${options} options: the line under it`).toBe(true);
+        }
+      });
     }
 
     for (const state of ["idle", "failed"] as const) {
