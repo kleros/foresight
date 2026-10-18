@@ -1,14 +1,6 @@
-import {
-  createTestClient,
-  createWalletClient,
-  encodeFunctionData,
-  erc20Abi,
-  http,
-  parseAbi,
-  parseEther,
-  publicActions,
-  type Address,
-} from "viem";
+import { gnosis as gnosisContracts } from "@foresight/contracts";
+import type { Page } from "@playwright/test";
+import { createTestClient, erc20Abi, http, parseAbi, parseEther, publicActions, type Address } from "viem";
 import { gnosis } from "viem/chains";
 
 import { shownAmount } from "@/features/predict/utils/funding";
@@ -17,6 +9,7 @@ import { LOCAL_RPC_URL } from "@/config/chains";
 import { creditsContracts, tradeExecutorFactoryAbi, tradeExecutorFactoryAddress } from "@/config/contracts";
 
 import { expect, test } from "../fixtures";
+import { grantCredits } from "../fixtures/hardhat";
 import { INDEXER_URL } from "../fixtures/indexer";
 
 /**
@@ -27,13 +20,22 @@ import { INDEXER_URL } from "../fixtures/indexer";
 const GNOSIS_CHAIN_ID = 100;
 /** Hardhat's tenth account; the fork node keeps it unlocked, so the mock wallet can send as it. */
 const VISITOR: Address = "0xa0Ee7A142d267C1f36714E4a8F75612F20a79720";
-const CREDITS_GOVERNOR: Address = "0x4EDCA105188a0783Ab3A6f09c50567D1E3F8591D";
-const GRANT = parseEther("3");
+/** Gnosis' sDAI, the session collateral the credits spend as. */
+const S_DAI: Address = gnosisContracts.savingsXDaiAddress[GNOSIS_CHAIN_ID];
+const WAD = parseEther("1");
+/** Half the last decimal the popup shows, the most a shown amount can sit from the wei it stands for. */
+const HALF_SHOWN_STEP = 10n ** 14n / 2n;
 
 const chain = createTestClient({ chain: gnosis, mode: "hardhat", transport: http(LOCAL_RPC_URL) }).extend(
   publicActions,
 );
-const governor = createWalletClient({ account: CREDITS_GOVERNOR, chain: gnosis, transport: http(LOCAL_RPC_URL) });
+
+const contracts = creditsContracts(GNOSIS_CHAIN_ID)!;
+const credits = (holder: Address) =>
+  chain.readContract({ address: contracts.credits, abi: erc20Abi, functionName: "balanceOf", args: [holder] });
+const supply = () => chain.readContract({ address: contracts.credits, abi: erc20Abi, functionName: "totalSupply" });
+const sDai = (holder: Address) =>
+  chain.readContract({ address: S_DAI, abi: erc20Abi, functionName: "balanceOf", args: [holder] });
 
 async function chainId(): Promise<number | null> {
   return chain.getChainId().catch(() => null);
@@ -54,68 +56,92 @@ async function seededParent(): Promise<string> {
   return parent;
 }
 
-/** Mints credits to `to` as the governor, impersonated for the one call. */
-async function grantCredits(token: Address, to: Address, amount: bigint) {
-  await chain.impersonateAccount({ address: CREDITS_GOVERNOR });
-  try {
-    await chain.setBalance({ address: CREDITS_GOVERNOR, value: parseEther("10") });
-    const hash = await governor.sendTransaction({
-      to: token,
-      data: encodeFunctionData({
-        abi: parseAbi(["function mint(address to, uint256 amount)"]),
-        functionName: "mint",
-        args: [to, amount],
-      }),
-    });
-    await chain.waitForTransactionReceipt({ hash });
-  } finally {
-    await chain.stopImpersonatingAccount({ address: CREDITS_GOVERNOR });
+/** The visitor's trade wallet, deployed or not. */
+function executorOf(owner: Address): Promise<Address> {
+  return chain.readContract({
+    address: tradeExecutorFactoryAddress(GNOSIS_CHAIN_ID)!,
+    abi: tradeExecutorFactoryAbi,
+    functionName: "predictExecutor",
+    args: [owner],
+  });
+}
+
+/** Everything the run touches of the visitor's, read at one moment. */
+async function ledger(executor: Address) {
+  return {
+    block: await chain.getBlockNumber({ cacheTime: 0 }),
+    wallet: await credits(VISITOR),
+    tradeWallet: await credits(executor),
+    supply: await supply(),
+    xdai: await chain.getBalance({ address: VISITOR }),
+    sDai: await sDai(VISITOR),
+  };
+}
+
+/** The xDAI `from` paid in fees for the transactions it sent after block `since`. */
+async function gasPaidSince(from: Address, since: bigint): Promise<bigint> {
+  let paid = 0n;
+  const head = await chain.getBlockNumber({ cacheTime: 0 });
+  for (let number = since + 1n; number <= head; number++) {
+    const block = await chain.getBlock({ blockNumber: number, includeTransactions: true });
+    for (const tx of block.transactions) {
+      if (tx.from.toLowerCase() !== from.toLowerCase()) continue;
+      const receipt = await chain.getTransactionReceipt({ hash: tx.hash });
+      paid += receipt.gasUsed * receipt.effectiveGasPrice;
+    }
   }
+  return paid;
+}
+
+/**
+ * Opens the newest indexed session as the visitor, nudges its first option two steps `toward` and
+ * opens the popup. The two tests nudge opposite ways, so each leaves the other's estimate to move to.
+ */
+async function openPopup(
+  page: Page,
+  wallet: { connect: (account: Address) => Promise<void> },
+  toward: "ArrowLeft" | "ArrowRight",
+) {
+  // the session is one the indexer already holds; the run itself reads the chain
+  await page.goto(`/market/${await seededParent()}`);
+  await wallet.connect(VISITOR);
+
+  await page
+    .getByRole("button")
+    .filter({ has: page.getByRole("heading", { level: 3 }) })
+    .first()
+    .click();
+  const slider = page.getByRole("slider").first();
+  await expect(slider).toBeEnabled({ timeout: 30_000 });
+  await slider.focus();
+  await page.keyboard.press(toward);
+  await page.keyboard.press(toward);
+
+  await page.getByRole("button", { name: /^Predict (\d+ )?estimates?$/ }).click();
+  const popup = page.getByRole("dialog");
+  // ticked by default once credits can be spent
+  await expect(popup.getByRole("checkbox", { name: "Use Foresight credits" })).toBeChecked({ timeout: 30_000 });
+  return popup;
 }
 
 test.describe("a credits prediction on the gnosis fork", () => {
+  test.beforeEach(async () => {
+    test.skip((await chainId()) !== GNOSIS_CHAIN_ID, "needs `yarn local-stack gnosis-fork`");
+    test.setTimeout(300_000);
+  });
+
   test("spends the credits the popup shows, adds nothing from the wallet, and counts the estimate placed", async ({
     page,
     wallet,
   }) => {
-    test.skip((await chainId()) !== GNOSIS_CHAIN_ID, "needs `yarn local-stack gnosis-fork`");
-    test.setTimeout(300_000);
-    const contracts = creditsContracts(GNOSIS_CHAIN_ID)!;
-    const factory = tradeExecutorFactoryAddress(GNOSIS_CHAIN_ID)!;
-    const executor = await chain.readContract({
-      address: factory,
-      abi: tradeExecutorFactoryAbi,
-      functionName: "predictExecutor",
-      args: [VISITOR],
-    });
+    const executor = await executorOf(VISITOR);
+    const shown = parseEther("2");
+    if ((await credits(VISITOR)) + (await credits(executor)) < shown) {
+      await grantCredits(contracts.credits, VISITOR, shown);
+    }
+    const before = await ledger(executor);
 
-    const credits = (holder: Address) =>
-      chain.readContract({ address: contracts.credits, abi: erc20Abi, functionName: "balanceOf", args: [holder] });
-    const supply = () => chain.readContract({ address: contracts.credits, abi: erc20Abi, functionName: "totalSupply" });
-
-    await grantCredits(contracts.credits, VISITOR, GRANT);
-    const before = { wallet: await credits(VISITOR), tradeWallet: await credits(executor), supply: await supply() };
-
-    // the session is one the indexer already holds; the run itself reads the chain
-    await page.goto(`/market/${await seededParent()}`);
-    await wallet.connect(VISITOR);
-
-    await page
-      .getByRole("button")
-      .filter({ has: page.getByRole("heading", { level: 3 }) })
-      .first()
-      .click();
-    const slider = page.getByRole("slider").first();
-    await expect(slider).toBeEnabled({ timeout: 30_000 });
-    await slider.focus();
-    await page.keyboard.press("ArrowRight");
-    await page.keyboard.press("ArrowRight");
-
-    await page.getByRole("button", { name: /^Predict (\d+ )?estimates?$/ }).click();
-    const popup = page.getByRole("dialog");
-    // ticked by default once credits can be spent
-    await expect(popup.getByRole("checkbox", { name: "Use Foresight credits" })).toBeChecked({ timeout: 30_000 });
-
+    const popup = await openPopup(page, wallet, "ArrowLeft");
     // the visitor holds only xDAI, which the popup picks by default; credits are sDAI shares
     await popup.getByRole("button", { name: /Token/ }).click();
     await page.getByRole("option", { name: "sDAI" }).click();
@@ -124,20 +150,75 @@ test.describe("a credits prediction on the gnosis fork", () => {
     await amount.blur();
     await expect(popup.getByText("≈ 2 sDAI from your credits")).toBeVisible();
     await expect(popup.getByText("Add funds")).toBeVisible();
-    await expect(popup.getByText("2 credits", { exact: true })).toBeVisible();
+    const fromWallet = shown > before.tradeWallet ? shown - before.tradeWallet : 0n;
+    if (fromWallet > 0n)
+      await expect(popup.getByText(`${shownAmount(fromWallet, 18)} credits`, { exact: true })).toBeVisible();
 
     await popup.getByRole("button", { name: "Predict", exact: true }).click();
     const success = page.getByRole("dialog", { name: "Prediction placed" });
     await expect(success).toBeVisible({ timeout: 240_000 });
     await expect(success.getByText("1 estimate · 2 sDAI")).toBeVisible();
 
-    // what the popup showed is what moved and burned, to the wei
-    const after = { wallet: await credits(VISITOR), tradeWallet: await credits(executor), supply: await supply() };
-    const shown = parseEther("2");
-    const fromWallet = shown > before.tradeWallet ? shown - before.tradeWallet : 0n;
-    expect(before.wallet - after.wallet).toBe(fromWallet);
-    expect(before.supply - after.supply).toBe(shown);
-    expect(after.tradeWallet).toBe(before.tradeWallet + fromWallet - shown);
-    expect(shownAmount(before.supply - after.supply, 18)).toBe("2");
+    // what the popup showed is what moved and burned, to the wei, and nothing else of the visitor's
+    const after = await ledger(executor);
+    expect(before.wallet - after.wallet, "credits moved from the wallet").toBe(fromWallet);
+    expect(before.supply - after.supply, "credits burned").toBe(shown);
+    expect(after.tradeWallet, "credits left in the trade wallet").toBe(before.tradeWallet + fromWallet - shown);
+    expect(after.sDai, "the wallet's sDAI").toBe(before.sDai);
+    expect(before.xdai - after.xdai, "the wallet's xDAI, gas aside").toBe(await gasPaidSince(VISITOR, before.block));
+  });
+
+  test("with xDAI, spends every credit held first and deposits the xDAI shown for the rest", async ({
+    page,
+    wallet,
+  }) => {
+    const executor = await executorOf(VISITOR);
+    if ((await credits(VISITOR)) + (await credits(executor)) < parseEther("2")) {
+      await grantCredits(contracts.credits, VISITOR, parseEther("2"));
+    }
+    const before = await ledger(executor);
+    const held = before.wallet + before.tradeWallet;
+    expect(held % 10n ** 14n, "whole shown decimals, so every credit held is spent").toBe(0n);
+
+    // one sDAI's worth of xDAI past the credits, in whole xDAI, so the wallet pays a part
+    const rate = await chain.readContract({
+      address: S_DAI,
+      abi: parseAbi(["function convertToAssets(uint256 shares) view returns (uint256)"]),
+      functionName: "convertToAssets",
+      args: [WAD],
+    });
+    const typed = ((held + WAD) * rate) / WAD / WAD + 1n;
+
+    const popup = await openPopup(page, wallet, "ArrowRight");
+    await expect(popup.getByRole("button", { name: /Token/ })).toContainText("xDAI");
+    const amount = popup.getByRole("spinbutton", { name: "Amount" });
+    await amount.fill(typed.toString());
+    await amount.blur();
+    await expect(
+      popup.getByText(
+        new RegExp(
+          `^≈ [\\d.,]+ sDAI = ${shownAmount(held, 18).replace(/[.,]/g, "\\$&")} in credits \\+ [\\d.,]+ from your wallet$`,
+        ),
+      ),
+    ).toBeVisible();
+    const step = popup.getByText(/(^|\+ )[\d.,]+ xDAI \(≈ [\d.,]+ sDAI\)$/);
+    await expect(step).toBeVisible();
+    const deposit = parseEther((await step.textContent())!.match(/([\d.,]+) xDAI \(/)![1]!.replace(/,/g, ""));
+
+    await popup.getByRole("button", { name: "Predict", exact: true }).click();
+    const success = page.getByRole("dialog", { name: "Prediction placed" });
+    await expect(success).toBeVisible({ timeout: 240_000 });
+    await expect(success.getByText(`1 estimate · ${typed} xDAI`)).toBeVisible();
+
+    // every credit held burned once, the wallet's moved and none left; the xDAI paid is the xDAI shown
+    const after = await ledger(executor);
+    expect(before.supply - after.supply, "credits burned").toBe(held);
+    expect(after.wallet, "credits left in the wallet").toBe(0n);
+    expect(after.tradeWallet, "credits left in the trade wallet").toBe(0n);
+    expect(after.sDai, "the wallet's sDAI").toBe(before.sDai);
+    expect(deposit, "the wallet pays a part in xDAI").toBeGreaterThan(0n);
+    const paid = before.xdai - after.xdai - (await gasPaidSince(VISITOR, before.block));
+    const off = paid > deposit ? paid - deposit : deposit - paid;
+    expect(off, `paid ${paid} xDAI wei against the ${deposit} shown`).toBeLessThanOrEqual(HALF_SHOWN_STEP);
   });
 });
