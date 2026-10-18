@@ -2185,10 +2185,11 @@ describe("money kept by every predict run, against a gnosis fork", () => {
     it.skipIf(!FORK_RPC_URL)(
       `a tab closed ${closeTab === "before-batch" ? "after Add credits" : "as the first batch landed"} moves and spends the credits once on reload (A7)`,
       async () => {
+        // enough to sell DOWN to a NUDGE-away estimate at the forked pools' depth
         const run = await runScenario({
           key: nextKey(),
           pay: "collateral",
-          amount: parseEther("12"),
+          amount: parseEther("40"),
           walletCollateral: parseEther("50"),
           credits: { wallet: parseEther("5") },
           options: nudged(1),
