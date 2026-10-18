@@ -1178,6 +1178,7 @@ const VAULT_ABI = parseAbi([
 ]);
 const MANAGER_EXECUTE_ABI = parseAbi(["function execute(address to, bytes data, uint256 amount, address outputToken)"]);
 const WXDAI_WITHDRAW_ABI = parseAbi(["function withdraw(uint256 wad)"]);
+const WXDAI_DEPOSIT_ABI = parseAbi(["function deposit() payable"]);
 const POOL_FEE_ABI = parseAbi([
   "function globalState() view returns (uint160 price, int24 tick, uint16 fee, uint16 timepointIndex, uint8 communityFeeToken0, uint8 communityFeeToken1, bool unlocked)",
 ]);
@@ -2111,6 +2112,60 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       );
     },
     900_000,
+  );
+
+  /** Raises sDAI's rate the way interest landing in the vault does: WXDAI paid in with no shares minted. */
+  async function payVaultInterest(xdai: bigint) {
+    await rpc("hardhat_impersonateAccount", [CREDITS_GOVERNOR]);
+    try {
+      for (const call of [
+        { to: route.wxdai, data: encodeFunctionData({ abi: WXDAI_DEPOSIT_ABI, functionName: "deposit" }), value: xdai },
+        {
+          to: route.wxdai,
+          data: encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [session.collateralToken, xdai] }),
+          value: 0n,
+        },
+      ]) {
+        const hash = await wallet.sendTransaction({ account: CREDITS_GOVERNOR, chain: gnosis, ...call });
+        const receipt = await client.waitForTransactionReceipt({ hash });
+        if (receipt.status !== "success") throw new Error("paying the vault's interest reverted");
+      }
+    } finally {
+      await rpc("hardhat_stopImpersonatingAccount", [CREDITS_GOVERNOR]);
+    }
+  }
+
+  it.skipIf(!FORK_RPC_URL)(
+    "a credits batch lands when the vault's rate rises between its quote and its send",
+    async () => {
+      let previewBefore = 0n;
+      let previewAfter = 0n;
+      const preview = () =>
+        client.readContract({
+          address: session.collateralToken,
+          abi: VAULT_ABI,
+          functionName: "previewDeposit",
+          args: [parseEther("5")],
+        });
+      const run = await runScenario({
+        key: nextKey(),
+        pay: "collateral",
+        amount: parseEther("40"),
+        walletCollateral: parseEther("100"),
+        credits: { wallet: parseEther("5") },
+        options: nudged(1),
+        beforeBatch: async () => {
+          previewBefore = await preview();
+          await payVaultInterest(parseEther("100"));
+          previewAfter = await preview();
+        },
+      });
+      expect(previewAfter, "the vault's rate rose before the send").toBeLessThan(previewBefore);
+      expect(run.progress.stage, JSON.stringify(run.progress.failure)).toBe("complete");
+      expect(landedBatches(run)).toHaveLength(1);
+      await expectMoneyKept(run);
+    },
+    600_000,
   );
 
   for (const closeTab of ["before-batch", "after-batch"] as const) {
