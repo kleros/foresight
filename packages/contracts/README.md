@@ -5,7 +5,7 @@ SessionFactory contracts, deploy scripts, and the generated viem/wagmi artifacts
 ## Local development
 
 ```bash
-yarn start             # compile + hardhat node on :8545 (deploys SessionFactory + mocks)
+yarn start             # compile + hardhat node on :8545 (deploys SessionFactory, credits + mocks)
 yarn deploy:local      # redeploy to a running node + wagmi codegen
 yarn test              # hardhat test suite
 yarn simulate:session  # deploy a sample session through the running local factory

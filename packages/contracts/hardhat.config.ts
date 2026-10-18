@@ -53,6 +53,13 @@ const config: HardhatUserConfig = {
     deployer: {
       default: 0,
     },
+    // the app's mock accounts; credits are seeded to them on a local chain
+    alice: {
+      default: 0,
+    },
+    bob: {
+      default: 1,
+    },
   },
   networks: {
     hardhat: {

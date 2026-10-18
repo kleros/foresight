@@ -12,7 +12,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SESSION="foresight"
 DEPLOYMENTS="$ROOT/packages/contracts/deployments/localhost"
-DEPLOY_MARKER="$DEPLOYMENTS/SessionFactory.json"
+# the last artifact the local node deploys, so codegen sees every contract
+DEPLOY_MARKER="$DEPLOYMENTS/CreditsManager.json"
 GNOSIS_DEPLOYMENTS="$ROOT/packages/contracts/deployments/gnosis"
 RPC_URL="http://127.0.0.1:8545"
 HASURA_URL="http://127.0.0.1:8080"
@@ -157,7 +158,7 @@ cmd_start() {
   tmux kill-session -t "$SESSION" 2>/dev/null || true
   # commands are passed as pane argv, never send-keys: send-keys types into the
   # pane's shell and silently loses characters if the shell is still starting up.
-  # hardhat node deploys SessionFactory itself on boot (--tags SessionFactory);
+  # hardhat node deploys the local contracts itself on boot (the --tags in local-node);
   # the gnosis fork carries the live deployment instead.
   tmux new-session -d -s "$SESSION" -n stack -c "$ROOT" "$node_cmd"
   tmux set-option -t "$SESSION" remain-on-exit on # keep a crashed pane's output readable
