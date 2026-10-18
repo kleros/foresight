@@ -126,7 +126,8 @@ export function planSells(option: OptionTarget): SwapLeg[] {
 /**
  * What the sells paid for, once they are quoted: the pairs left over merge back to underlying,
  * and the total buys the sides the market holds below the estimate, each weighted by how far it
- * has to travel. `slippageBps` is how far, in hundredths of a percent, a sell may pay under its quote.
+ * has to travel, with what one side does not need going to the other. `slippageBps` is how far,
+ * in hundredths of a percent, a sell may pay under its quote.
  */
 export function planBuys(option: OptionTarget, sold: readonly SoldLeg[], slippageBps: number): BuyPlan {
   let proceeds = 0n;
@@ -146,12 +147,14 @@ export function planBuys(option: OptionTarget, sold: readonly SoldLeg[], slippag
   const buying = SIDES.map((side) => ({ side, state: sideState(option, side) })).filter(
     (entry): entry is { side: OptionSide; state: SideState } => entry.state !== null && entry.state.gap > 0n,
   );
-  const totalGap = buying.reduce((sum, { state }) => sum + state.gap, 0n);
+  const amounts = allot(
+    budget,
+    buying.map(({ state }) => ({ weight: state.gap, cap: withHeadroom(state.volumes.underlying) })),
+  );
 
   const legs: SwapLeg[] = [];
-  for (const { side, state } of buying) {
-    const share = (budget * state.gap) / totalGap;
-    const amountIn = min(withHeadroom(state.volumes.underlying), share);
+  for (const [index, { side, state }] of buying.entries()) {
+    const amountIn = amounts[index]!;
     if (amountIn >= MIN_LEG_WEI) {
       legs.push({
         side,
@@ -166,6 +169,33 @@ export function planBuys(option: OptionTarget, sold: readonly SoldLeg[], slippag
   // A sell leaves pairs behind, and a pair left unmerged is money sitting in two halves. An
   // option nothing was done to is left alone instead, rather than paying gas to rearrange it.
   return { mergeAmount: legs.length > 0 || sold.length > 0 ? mergeAmount : 0n, legs };
+}
+
+/**
+ * Shares `budget` by weight, none above its cap; what a capped share leaves goes to the others
+ * by weight, until the budget is spent or every share is at its cap.
+ */
+function allot(budget: bigint, shares: readonly { weight: bigint; cap: bigint }[]): bigint[] {
+  const amounts = shares.map(() => 0n);
+  let left = budget;
+  let open = shares.map((_, index) => index);
+  while (left > 0n && open.length > 0) {
+    const weight = open.reduce((sum, index) => sum + shares[index]!.weight, 0n);
+    const uncapped: number[] = [];
+    let given = 0n;
+    for (const index of open) {
+      const share = (left * shares[index]!.weight) / weight;
+      const room = shares[index]!.cap - amounts[index]!;
+      const take = min(share, room);
+      amounts[index]! += take;
+      given += take;
+      if (take === share) uncapped.push(index);
+    }
+    left -= given;
+    if (uncapped.length === open.length) break;
+    open = uncapped;
+  }
+  return amounts;
 }
 
 /** A leg as the preview shows it. */
