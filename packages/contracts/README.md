@@ -22,6 +22,13 @@ included), so the indexer has something to index. Flags:
 | `--metadata-uri <uri>` | `@foresight/session-metadata` example | `metadataUri` emitted with the session                     |
 | `--liquidity`          | off                                   | run `simulate-liquidity` on the session (gnosis-fork only) |
 
+### Credits on the local chain
+
+The `Credits` tag deploys Seer's trading-credits contracts (vendored in `contracts/vendor/trading-credits`)
+as `ForesightCredits` and `CreditsManager`, backed by a mintable `SavingsXDai`. A fresh manager seeds
+alice and bob with 100 credits each and itself with 1000 sDAI. Its whitelist is empty and there is no
+swap router locally, so credits can be read here but only spent on the gnosis fork.
+
 ## Gnosis fork
 
 ```bash
