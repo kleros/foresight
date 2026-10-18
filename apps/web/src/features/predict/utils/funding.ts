@@ -67,7 +67,7 @@ export function planFunding({
   const reserve = tokenPerCollateralWad === undefined ? 0n : GAS_RESERVE_WEI;
   const spendable = ownWallet > reserve ? ownWallet - reserve : 0n;
 
-  const collateralIn = toCollateral(amount);
+  let collateralIn = toCollateral(amount);
   let left = collateralIn;
   // each part in whole shown decimals, so what is signed and burned is what the popup shows
   const uses = credits.map((line): CreditUse => {
@@ -77,6 +77,11 @@ export function planFunding({
     left -= fromTradeWallet + fromWallet;
     return { kind: line.kind, fromTradeWallet, fromWallet };
   });
+  // what the cut leaves below a shown decimal is not worth a deposit of its own
+  if (left < CREDIT_STEP && uses.some((use) => use.fromTradeWallet + use.fromWallet > 0n)) {
+    collateralIn -= left;
+    left = 0n;
+  }
   const toAdd = left > tradeWallet ? left - tradeWallet : 0n;
   // rounded up, so what lands covers the shortfall
   const depositNeeded = rate === WAD ? toAdd : (toAdd * rate + WAD - 1n) / WAD;
@@ -100,6 +105,9 @@ export function planFunding({
 const min = (a: bigint, b: bigint) => (a < b ? a : b);
 
 const CREDIT_DECIMALS = 18;
+
+/** One unit of the last decimal the popup shows a credit amount to. */
+const CREDIT_STEP = 10n ** BigInt(CREDIT_DECIMALS - OWNED_DECIMALS);
 
 /** What a run is asked to sign for `funding`: the sDAI split apart from the credits, and the credits by source. */
 export function fundingRequest(

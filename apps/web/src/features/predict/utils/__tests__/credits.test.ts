@@ -189,6 +189,23 @@ describe("credits signed as shown", () => {
     expect(funding.toAdd).toBe(5n * WAD - funding.creditsIn);
   });
 
+  it("drops what the cut leaves below a shown decimal rather than deposit it, when credits cover the rest", () => {
+    // 2 xDAI at 1.2543 xDAI per sDAI is 1.594515... sDAI, cut to 1.5945 credits
+    const held = { wallet: 6n * WAD, tradeWallet: 0n, manager: 1000n * WAD };
+    const funding = planFunding({
+      amount: 2n * WAD,
+      ownWallet: 10n * WAD,
+      tradeWallet: 0n,
+      tokenPerCollateralWad: 1_254_300_000_000_000_000n,
+      credits: creditLines(held, creditsOffer(held)),
+    });
+
+    expect(funding).toMatchObject({ creditsIn: 15_945n * step, collateralIn: 15_945n * step, toAdd: 0n, deposit: 0n });
+    expect(fundingSummary({ funding, amount: 2n * WAD, token: xDai, collateral })?.text).toBe(
+      "≈ 1.5945 sDAI from your credits",
+    );
+  });
+
   it("asks the run for the sDAI split apart from the credits, and the credits by source", () => {
     const held = { wallet: 2n * WAD, tradeWallet: WAD, manager: 1000n * WAD };
     const funding = planFunding({
