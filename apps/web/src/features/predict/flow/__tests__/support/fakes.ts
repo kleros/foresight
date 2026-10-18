@@ -1,4 +1,14 @@
-import { encodeFunctionData, type Address, type Hex } from "viem";
+import type { FlowTx } from "@foresight/tx-orchestrator";
+import {
+  encodeAbiParameters,
+  encodeEventTopics,
+  encodeFunctionData,
+  erc20Abi,
+  zeroAddress,
+  type Address,
+  type Hex,
+  type Log,
+} from "viem";
 
 import { ALGEBRA_ROUTER_ABI } from "@/lib/swap/algebraRouter";
 import {
@@ -10,7 +20,14 @@ import {
   type SwapQuoter,
 } from "@/lib/swap/types";
 
-import type { OptionChainState, PredictCtx, PredictOption, PredictReader, PredictSnapshot } from "../../types";
+import type {
+  LandedTx,
+  OptionChainState,
+  PredictCtx,
+  PredictOption,
+  PredictReader,
+  PredictSnapshot,
+} from "../../types";
 
 /** Sqrt prices exact at X96, so a volume to target is a round number. */
 export const AT = { "0.25": 2n ** 95n, "1": 2n ** 96n } as const;
@@ -86,6 +103,7 @@ export const snapshot = (overrides: Partial<PredictSnapshot> = {}): PredictSnaps
   creditsFromEoa: 0n,
   creditsToSpend: 0n,
   creditsAtStart: 0n,
+  fromBlock: 1n,
   startedAt: 1_700_000_000,
   ...overrides,
 });
@@ -107,6 +125,10 @@ export function fakeReader(
     credits?: Partial<Record<Address, bigint>> | ((holder: Address) => bigint);
     /** The credits manager's collateral, 1000 by default. */
     manager?: bigint | (() => bigint);
+    /** The owner's transactions the chain shows landed; a function reads a ledger that grows. */
+    landed?: LandedTx[] | (() => LandedTx[]);
+    /** True while the owner has a transaction broadcast and not mined. */
+    pending?: () => boolean;
   } = {},
 ): FakeReader {
   const asked: FakeReader["asked"] = [];
@@ -122,6 +144,9 @@ export function fakeReader(
     managerCollateral: () => Promise.resolve(typeof manager === "function" ? manager() : (manager ?? 1000n * WAD)),
     previewDeposit: (assets) => Promise.resolve((assets * WAD) / VAULT_RATE),
     vaultValue: (shares) => Promise.resolve((shares * VAULT_RATE) / WAD),
+    latestBlock: () => Promise.resolve(1n),
+    landedSince: () => Promise.resolve(typeof opts.landed === "function" ? opts.landed() : (opts.landed ?? [])),
+    hasPending: () => Promise.resolve(opts.pending?.() ?? false),
     optionStates: (args) => {
       asked.push(args);
       return Promise.resolve(args.options.map((each) => opts.state?.(each) ?? chainState()));
@@ -233,3 +258,23 @@ export function fakeCreditsQuoter(
     },
   };
 }
+
+/** `tx` as the chain shows it once landed, with the collateral it moved into the trade wallet. */
+export const landedTx = (tx: FlowTx, collateralReceived = 0n): LandedTx => ({
+  to: tx.to,
+  value: tx.value ?? 0n,
+  input: tx.data ?? "0x",
+  collateralReceived,
+});
+
+/** The collateral `Transfer` an xDAI deposit's receipt carries, minting `amount` to the trade wallet. */
+export const mintLog = (amount: bigint): Log =>
+  ({
+    address: addresses.collateral,
+    topics: encodeEventTopics({
+      abi: erc20Abi,
+      eventName: "Transfer",
+      args: { from: zeroAddress, to: addresses.executor },
+    }),
+    data: encodeAbiParameters([{ type: "uint256" }], [amount]),
+  }) as unknown as Log;
