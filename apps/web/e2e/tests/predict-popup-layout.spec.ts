@@ -1402,6 +1402,22 @@ test.describe("the running step", () => {
   });
 });
 
+test.describe("the amount panel's tint", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  for (const theme of ["light", "dark"]) {
+    test(`is one even linear tint along the axis, with no corner hotspot, in the ${theme} theme`, async ({ page }) => {
+      await openHarness(page, `${harness.url}?options=2&theme=${theme}`);
+      const image = await page
+        .locator("[data-panel=amount]")
+        .evaluate((panel) => getComputedStyle(panel).backgroundImage);
+
+      expect(image.match(/linear-gradient/g)).toHaveLength(1);
+      expect(image).not.toContain("radial-gradient");
+    });
+  }
+});
+
 test.describe("the price check before a run", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
