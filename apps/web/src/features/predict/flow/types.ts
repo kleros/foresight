@@ -54,6 +54,8 @@ export interface PredictSnapshot {
   /** The executor's collateral read from the chain as the run started, before any deposit. */
   collateralAtStart: bigint;
   startedAt: number;
+  /** Options that settled batches left out for lack of a route; absent until one does. */
+  skipped?: Address[];
 }
 
 /** What the visitor asked for; the run adds the chain-read starting balance when it starts. */

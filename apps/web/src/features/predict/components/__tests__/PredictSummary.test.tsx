@@ -52,6 +52,7 @@ function renderSummary(
   isOpen = false,
   list = selected,
   mint?: { amount: bigint; noun: string },
+  isEstimated = false,
 ) {
   return render(
     <PredictSummary
@@ -61,18 +62,30 @@ function renderSummary(
       mint={mint}
       isOpen={isOpen}
       onToggle={vi.fn()}
+      isEstimated={isEstimated}
     />,
   );
 }
 
 type Plan = NonNullable<PriceMove["plan"]>;
-const NO_TRADES: Plan = { split: 0n, sells: [], merge: 0n, buys: [] };
+const NO_TRADES: Plan = { split: 0n, sells: [], merge: 0n, buys: [], held: 0n };
 /** `units` hundredths of a token. */
 const cents = (units: bigint) => (units * WAD) / 100n;
 
 describe("PredictSummary's headline", () => {
-  it("counts only the markets whose shown value moves", () => {
+  it("counts the markets whose shown value moves, not one a preview leaves where it is", () => {
     renderSummary({ [GERWIG]: { from: 312, to: 355 }, [COOGLER]: { from: 296, to: 296.0001 } });
+
+    expect(head()).toHaveTextContent(/^1 market moves$/);
+  });
+
+  it("counts a market whose trades move it by less than its shown value", () => {
+    const plan: Plan = {
+      ...NO_TRADES,
+      split: WAD,
+      sells: [{ side: "down", amountIn: cents(2n), underlyingOut: cents(1n), toTarget: false }],
+    };
+    renderSummary({ [GERWIG]: { from: 312, to: 312.0001, plan } });
 
     expect(head()).toHaveTextContent(/^1 market moves$/);
   });
@@ -117,10 +130,11 @@ describe("PredictSummary's rows", () => {
 describe("PredictSummary's trades", () => {
   it("lists an option's legs in the order the run makes them, with ≈ on every figure the pool maths simulates", () => {
     const plan: Plan = {
+      held: 0n,
       split: 10n * WAD,
-      sells: [{ side: "down", amountIn: cents(720n), underlyingOut: cents(310n) }],
+      sells: [{ side: "down", amountIn: cents(720n), underlyingOut: cents(310n), toTarget: false }],
       merge: cents(280n),
-      buys: [{ side: "up", amountIn: cents(580n), outcomeOut: cents(840n) }],
+      buys: [{ side: "up", amountIn: cents(580n), outcomeOut: cents(840n), toTarget: false }],
     };
     renderSummary({ [GERWIG]: { from: 312, to: 355, plan } }, true);
 
@@ -134,10 +148,11 @@ describe("PredictSummary's trades", () => {
 
   it("names a buy the merge alone pays for exactly", () => {
     const plan: Plan = {
+      held: 0n,
       split: WAD,
       sells: [],
       merge: WAD,
-      buys: [{ side: "down", amountIn: cents(98n), outcomeOut: 2n * WAD }],
+      buys: [{ side: "down", amountIn: cents(98n), outcomeOut: 2n * WAD, toTarget: false }],
     };
     renderSummary({ [GERWIG]: { from: 312, to: 300, plan } }, true);
 
@@ -148,7 +163,7 @@ describe("PredictSummary's trades", () => {
     const plan: Plan = {
       ...NO_TRADES,
       split: WAD,
-      sells: [{ side: "down", amountIn: WAD, underlyingOut: cents(40n) }],
+      sells: [{ side: "down", amountIn: WAD, underlyingOut: cents(40n), toTarget: false }],
     };
     renderSummary({ [GERWIG]: { from: 312, to: 355, plan } }, true);
     const trades = within(screen.getByRole("list", { name: "Trades for Greta Gerwig" }));
@@ -158,26 +173,139 @@ describe("PredictSummary's trades", () => {
   });
 
   it("leaves out a split and a merge of nothing", () => {
-    const plan: Plan = { ...NO_TRADES, sells: [{ side: "up", amountIn: WAD, underlyingOut: cents(25n) }] };
+    const plan: Plan = {
+      ...NO_TRADES,
+      sells: [{ side: "up", amountIn: WAD, underlyingOut: cents(25n), toTarget: false }],
+    };
     renderSummary({ [GERWIG]: { from: 312, to: 280, plan } }, true);
 
     expect(legs("Greta Gerwig")).toEqual(["Sell1 UP → ≈ 0.25 tokens"]);
   });
 
-  it("says an option with no trades is left out", () => {
-    renderSummary({ [GERWIG]: { from: 312, to: 312, plan: NO_TRADES } }, true);
+  it("says an option with no trades is left out, and why", () => {
+    const atEstimate = { ...estimate(GERWIG, "Greta Gerwig", 312), value: 312 };
+    renderSummary({ [GERWIG]: { from: 312, to: 312, plan: NO_TRADES } }, true, [atEstimate]);
 
     expect(legs("Greta Gerwig")).toEqual(["No tradeAlready at your estimate; left out"]);
   });
 
-  it("groups a large figure and cuts it to two decimals", () => {
+  it("says an option far from its estimate with no trades has too little to move it", () => {
+    renderSummary({ [GERWIG]: { from: 312, to: 312, plan: NO_TRADES } }, true);
+
+    expect(legs("Greta Gerwig")).toEqual(["No tradeToo little to move it; left out"]);
+  });
+
+  it("names the underlying already held that the split adds to what goes in", () => {
+    renderSummary(
+      {
+        [GERWIG]: {
+          from: 312,
+          to: 355,
+          plan: {
+            ...NO_TRADES,
+            split: 12n * WAD,
+            held: 2n * WAD,
+            buys: [{ side: "up", amountIn: WAD, outcomeOut: 2n * WAD, toTarget: false }],
+          },
+        },
+      },
+      true,
+    );
+
+    expect(legs("Greta Gerwig")[0]).toBe("Split10 tokens + 2 held → 12 UP + 12 DOWN");
+  });
+
+  it("names a split of held underlying alone as held", () => {
+    renderSummary(
+      {
+        [GERWIG]: {
+          from: 312,
+          to: 355,
+          plan: {
+            ...NO_TRADES,
+            split: 2n * WAD,
+            held: 2n * WAD,
+            buys: [{ side: "up", amountIn: WAD, outcomeOut: 2n * WAD, toTarget: false }],
+          },
+        },
+      },
+      true,
+    );
+
+    expect(legs("Greta Gerwig")[0]).toBe("Split2 held tokens → 2 UP + 2 DOWN");
+  });
+
+  it("marks a leg the price limit stops at the estimate as simulated", () => {
     const plan: Plan = {
       ...NO_TRADES,
-      sells: [{ side: "down", amountIn: 1_234_567_891n * 10n ** 15n, underlyingOut: WAD }],
+      split: 2n * WAD,
+      sells: [{ side: "up", amountIn: WAD, underlyingOut: cents(50n), toTarget: true }],
+      merge: cents(99n),
+      buys: [{ side: "down", amountIn: cents(30n), outcomeOut: WAD, toTarget: false }],
+    };
+    renderSummary({ [GERWIG]: { from: 312, to: 280, plan } }, true);
+
+    expect(legs("Greta Gerwig").slice(1)).toEqual([
+      "Sell≈ 1 UP → ≈ 0.5 tokens",
+      "Merge0.99 pairs → 0.99 tokens",
+      "Buy≈ 0.3 tokens → ≈ 1 DOWN",
+    ]);
+  });
+
+  it("marks a buy the merge alone pays for as simulated when the limit stops it at the estimate", () => {
+    const plan: Plan = {
+      ...NO_TRADES,
+      split: WAD,
+      merge: WAD,
+      buys: [{ side: "down", amountIn: cents(98n), outcomeOut: 2n * WAD, toTarget: true }],
+    };
+    renderSummary({ [GERWIG]: { from: 312, to: 300, plan } }, true);
+
+    expect(legs("Greta Gerwig").at(-1)).toBe("Buy≈ 0.98 tokens → ≈ 2 DOWN");
+  });
+
+  it("marks every figure as estimated when the collateral going in is an estimate", () => {
+    const plan: Plan = {
+      ...NO_TRADES,
+      split: 10n * WAD,
+      merge: WAD,
+      buys: [{ side: "up", amountIn: WAD, outcomeOut: 3n * WAD, toTarget: false }],
+    };
+    renderSummary(
+      { [GERWIG]: { from: 312, to: 355, plan } },
+      true,
+      selected,
+      { amount: 10n * WAD, noun: "city" },
+      true,
+    );
+
+    expect(screen.getByTestId("trade-mint")).toHaveTextContent(/^Mint≈ 10 sDAI → ≈ 10 tokens of every city$/);
+    expect(legs("Greta Gerwig")).toEqual([
+      "Split≈ 10 tokens → ≈ 10 UP + ≈ 10 DOWN",
+      "Merge≈ 1 pair → ≈ 1 token",
+      "Buy≈ 1 token → ≈ 3 UP",
+    ]);
+  });
+
+  it("names one of a unit in the singular", () => {
+    const plan: Plan = {
+      ...NO_TRADES,
+      sells: [{ side: "up", amountIn: 2n * WAD, underlyingOut: WAD, toTarget: false }],
+    };
+    renderSummary({ [GERWIG]: { from: 312, to: 280, plan } }, true, selected, { amount: WAD, noun: "city" });
+
+    expect(legs("Greta Gerwig")).toEqual(["Sell2 UP → ≈ 1 token"]);
+    expect(screen.getByTestId("trade-mint")).toHaveTextContent(/^Mint1 sDAI → 1 token of every city$/);
+  });
+
+  it("groups a large figure and rounds it to the amount field's four decimals", () => {
+    const plan: Plan = {
+      ...NO_TRADES,
+      sells: [{ side: "down", amountIn: 1_234_567_891n * 10n ** 15n, underlyingOut: WAD, toTarget: false }],
     };
     renderSummary({ [GERWIG]: { from: 312, to: 355, plan } }, true);
 
-    expect(legs("Greta Gerwig")).toEqual(["Sell1,234,567.89 DOWN → ≈ 1 tokens"]);
+    expect(legs("Greta Gerwig")).toEqual(["Sell1,234,567.891 DOWN → ≈ 1 token"]);
   });
 
   it("closes with a note that prices are checked again, once any option is planned", () => {
@@ -198,6 +326,23 @@ describe("PredictSummary's trades", () => {
     renderSummary({}, true, selected, { amount: 10n * WAD, noun: "city" });
 
     expect(screen.getByTestId("trade-mint")).toHaveTextContent(/^Mint10 sDAI → 10 tokens of every city$/);
+  });
+
+  it("mints what the amount field shows, to four decimals, and names a sliver under them", () => {
+    renderSummary({}, true, selected, { amount: 12_345n * 10n ** 14n, noun: "city" });
+    expect(screen.getByTestId("trade-mint")).toHaveTextContent(/^Mint1.2345 sDAI → 1.2345 tokens of every city$/);
+  });
+
+  it("names a merge under the last decimal as less than it", () => {
+    const plan: Plan = {
+      ...NO_TRADES,
+      split: WAD,
+      merge: 10n ** 13n,
+      sells: [{ side: "up", amountIn: WAD, underlyingOut: cents(25n), toTarget: false }],
+    };
+    renderSummary({ [GERWIG]: { from: 312, to: 280, plan } }, true);
+
+    expect(legs("Greta Gerwig")).toContain("Mergeless than 0.0001 pairs → less than 0.0001 tokens");
   });
 
   it("names no mint with nothing going in", () => {

@@ -418,6 +418,45 @@ describe("PredictRunner, the dialog's controls", () => {
     });
   });
 
+  it("hands the success dialog the amount typed and the token paid in", () => {
+    const view = mount();
+    fireEvent.click(screen.getByText("pay ten"));
+    fireEvent.click(screen.getByText("pay in xDAI"));
+
+    progress = progressAt("complete");
+    view.rerenderAt();
+
+    expect(view.onSuccess).toHaveBeenCalledWith([], {
+      estimates: 1,
+      amount: 10n * 10n ** 18n,
+      symbol: "xDAI",
+      decimals: 18,
+    });
+  });
+
+  it("does not count an estimate whose option has no tokens to trade as placed", () => {
+    const detail = toSessionDetail({ ...sessionDetailColumns, children: [sessionChildRow({ upToken: "" })] }, GATEWAY);
+    progress = progressAt("complete");
+    const view = mount(detail);
+
+    expect(view.onSuccess).toHaveBeenCalledWith([], expect.objectContaining({ estimates: 0 }));
+  });
+
+  it("hands the success dialog a recovered run's own options and collateral, less what it left out", () => {
+    const detail = session();
+    const recovered = snapshot({ deposit: 3n * 10n ** 18n, collateralIn: 5n * 10n ** 18n });
+    const left = recovered.options[0]!.childMarket;
+    progress = { ...progressAt("complete"), recovered, skipped: [left] };
+    const view = mount(detail);
+
+    expect(view.onSuccess).toHaveBeenCalledWith([left], {
+      estimates: recovered.options.length - 1,
+      amount: 5n * 10n ** 18n,
+      symbol: detail.collateralSymbol ?? "sDAI",
+      decimals: detail.collateralDecimals ?? 18,
+    });
+  });
+
   it("starts a run when predict is pressed", () => {
     mount();
     fireEvent.click(screen.getByText("predict"));

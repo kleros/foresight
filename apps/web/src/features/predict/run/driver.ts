@@ -56,7 +56,8 @@ export function createPredictRun(args: {
   now?: () => number;
 }): PredictDriver {
   const listeners = new Set<() => void>();
-  const skipped: Address[] = [];
+  /** Options left out by each batch not yet settled, by step id; a settled batch's are kept in the run's snapshot. */
+  const skipping = new Map<string, Address[]>();
   let failure: PredictProgress["failure"];
   let retryFailed: (() => void) | undefined;
   let planned: PredictStepRow[] = [];
@@ -79,15 +80,23 @@ export function createPredictRun(args: {
     quoter: args.quoter,
     slippageBps: args.slippageBps,
     optionsPerBatch: args.optionsPerBatch,
-    onSkip: (option) => {
-      if (!skipped.includes(option.childMarket)) skipped.push(option.childMarket);
+    onSkip: (option, _reason, stepId) => {
+      const left = skipping.get(stepId) ?? [];
+      if (!left.includes(option.childMarket)) skipping.set(stepId, [...left, option.childMarket]);
     },
   };
 
   const orchestrator = createTxOrchestrator<PredictSnapshot, PredictCtx>({
     adapterId: "predict-flow",
     gateway: args.gateway,
-    hooks: createPredictHooks({ reader: args.reader }),
+    hooks: createPredictHooks({
+      reader: args.reader,
+      takeSkips: (stepId) => {
+        const left = skipping.get(stepId) ?? [];
+        skipping.delete(stepId);
+        return left;
+      },
+    }),
     store: args.store,
     now: args.now,
     // A build reads the chain and the indexer before it signs anything. Those failures are
@@ -168,10 +177,13 @@ export function createPredictRun(args: {
     const rows = steps.length > 0 ? steps : planned;
     const batchRows = rows.filter((row) => row.id.startsWith("predict-"));
 
+    const settledSkips = run?.snapshot.skipped ?? [];
+    const skipped = [...settledSkips, ...[...skipping.values()].flat()];
+
     return {
       stage: stage(),
       steps: rows,
-      skipped: [...skipped],
+      skipped: skipped.filter((market, index) => skipped.indexOf(market) === index),
       batchesDone: batchRows.filter((row) => row.state === "success").length,
       batches: batchRows.length,
       failure,
@@ -286,7 +298,7 @@ export function createPredictRun(args: {
 
   const startRun = detached(async () => {
     report(undefined);
-    skipped.length = 0;
+    skipping.clear();
     moneyMoved = false;
 
     const requested = args.snapshot();
@@ -333,8 +345,10 @@ export function createPredictRun(args: {
 
     retry() {
       const again = retryFailed;
-      // An option that would not route last time gets another go, so last time's list is dropped.
-      skipped.length = 0;
+      // A batch that is rebuilt gives its options another go; a sent one's skips stand until its receipt is read.
+      const run = orchestrator.getRun();
+      const sent = run && pendingHashOf(run) ? currentEntry(run.steps)?.stepId : undefined;
+      for (const stepId of [...skipping.keys()]) if (stepId !== sent) skipping.delete(stepId);
       report(undefined);
       again?.();
     },
@@ -347,7 +361,7 @@ export function createPredictRun(args: {
       reviewing = false;
       moneyMoved = false;
       buildFailure = undefined;
-      skipped.length = 0;
+      skipping.clear();
       planned = [];
       report(undefined);
     },

@@ -38,8 +38,8 @@ export interface PredictDeps {
   /** Hundredths of a percent a quote may move against the executor before the swap reverts. */
   slippageBps?: number;
   optionsPerBatch?: number;
-  /** Told about an option no route could be found for, which the batch leaves out. */
-  onSkip?: (option: PredictOption, reason: unknown) => void;
+  /** Told about an option no route could be found for, which the batch `stepId` leaves out. */
+  onSkip?: (option: PredictOption, reason: unknown, stepId: string) => void;
 }
 
 const outcomeToken = (option: PredictOption, side: OptionSide): Address =>
@@ -154,12 +154,13 @@ async function optionCalls(
 
 async function predictCalls(args: {
   ctx: PredictCtx;
+  stepId: string;
   options: PredictOption[];
   /** Collateral to split at the parent, which gives every option its underlying. */
   mint: bigint;
   deps: PredictDeps;
 }): Promise<ExecutorCall[]> {
-  const { ctx, options, mint, deps } = args;
+  const { ctx, stepId, options, mint, deps } = args;
   const states = await deps.reader.optionStates({ options, executor: ctx.executor });
 
   const calls: ExecutorCall[] =
@@ -177,7 +178,7 @@ async function predictCalls(args: {
       traded += 1;
     } catch (reason) {
       if (reason instanceof QuoteFailedError) throw reason;
-      deps.onSkip?.(option, reason);
+      deps.onSkip?.(option, reason, stepId);
     }
   }
 
@@ -241,9 +242,10 @@ export function planPredict(snapshot: PredictRequest, deps: PredictDeps): Step[]
   steps.push(
     ...batches.map((options, index): Step => {
       const optionIds = new Set(options.map((option) => option.childMarket));
+      const id = STEP_ID.predict(index + 1);
 
       return {
-        id: STEP_ID.predict(index + 1),
+        id,
         label:
           batches.length === 1 ? "Making your prediction" : `Making your prediction, ${index + 1} of ${batches.length}`,
         // Only the first batch splits collateral: it hands every option its underlying at once.
@@ -252,6 +254,7 @@ export function planPredict(snapshot: PredictRequest, deps: PredictDeps): Step[]
             ctx.executor,
             await predictCalls({
               ctx,
+              stepId: id,
               options: snap.options.filter((option) => optionIds.has(option.childMarket)),
               mint: index === 0 ? snap.collateralIn : 0n,
               deps,
@@ -270,14 +273,24 @@ export function planPredict(snapshot: PredictRequest, deps: PredictDeps): Step[]
  */
 export async function assertRoutes(ctx: PredictCtx, snapshot: PredictSnapshot, deps: PredictDeps): Promise<void> {
   const quiet = { ...deps, onSkip: undefined };
-  for (const options of batched(snapshot.options, deps.optionsPerBatch ?? PREDICT_BATCH_SIZE)) {
-    await predictCalls({ ctx, options, mint: snapshot.collateralIn, deps: quiet });
+  for (const [index, options] of batched(snapshot.options, deps.optionsPerBatch ?? PREDICT_BATCH_SIZE).entries()) {
+    await predictCalls({ ctx, stepId: STEP_ID.predict(index + 1), options, mint: snapshot.collateralIn, deps: quiet });
   }
 }
 
-export function createPredictHooks(deps: Pick<PredictDeps, "reader">): FlowHooks<PredictSnapshot, PredictCtx> {
+export function createPredictHooks(
+  deps: Pick<PredictDeps, "reader"> & {
+    /** The options a settled batch left out, handed over once so the snapshot keeps them. */
+    takeSkips?: (stepId: string) => Address[];
+  },
+): FlowHooks<PredictSnapshot, PredictCtx> {
   return {
     async afterStep({ ctx, snapshot, completed }) {
+      const left = deps.takeSkips?.(completed.stepId) ?? [];
+      if (left.length > 0) {
+        const before = snapshot.skipped ?? [];
+        return { snapshotPatch: { skipped: [...before, ...left.filter((market) => !before.includes(market))] } };
+      }
       if (completed.stepId !== STEP_ID.deposit || !snapshot.depositNative) return;
 
       // The adapter mints whatever the xDAI was worth, which is only knowable once it lands.

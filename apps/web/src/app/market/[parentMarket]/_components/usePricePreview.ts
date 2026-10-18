@@ -64,7 +64,7 @@ export function usePricePreview(args: {
       preview[option.childMarket.toLowerCase()] = {
         from: priceWadToEstimate(from, scale),
         to: priceWadToEstimate(to, scale),
-        plan,
+        plan: { ...plan, held: plan.split > 0n ? state.underlying : 0n },
       };
     }
   }

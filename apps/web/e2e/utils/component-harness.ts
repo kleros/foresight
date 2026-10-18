@@ -17,6 +17,8 @@ export async function startHarness(name: string): Promise<{ url: string; close: 
     logLevel: "error",
     plugins: [svgr({ include: "**/*.svg", exclude: "**/*.svg?url" })],
     esbuild: { jsx: "automatic" },
+    // next/link reads Next's build flags off process.env, which only Next defines in the browser
+    define: { "process.env": "{}" },
     resolve: {
       alias: { "@": path.join(WEB_ROOT, "src") },
       mainFields: ["module", "browser", "main"],

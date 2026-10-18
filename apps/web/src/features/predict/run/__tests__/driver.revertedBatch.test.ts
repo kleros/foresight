@@ -102,6 +102,7 @@ function setup(args: {
   script: Mined[];
   snap?: Partial<PredictSnapshot>;
   refuse?: (request: SwapQuoteRequest) => boolean;
+  optionsPerBatch?: number;
 }) {
   const gateway = scriptedGateway(args.script);
   // later batches mint nothing, so they trade the underlying the first batch's split left in the wallet
@@ -112,7 +113,7 @@ function setup(args: {
     reader,
     quoter,
     flowId: `predict-reverted-${drivers.length}`,
-    optionsPerBatch: 1,
+    optionsPerBatch: args.optionsPerBatch ?? 1,
     ctx: () => ctx(),
     snapshot: () => snapshot({ options: args.options, deposit: WAD, collateralIn: WAD, ...args.snap }),
   });
@@ -266,6 +267,78 @@ describe("createPredictRun when a later batch's outcome was not seen", () => {
     expect(gateway.signRequests.filter(isDeposit)).toHaveLength(1);
     expect(batchTxs(gateway.signRequests, first)).toHaveLength(1);
     expect(batchTxs(gateway.signRequests, second)).toHaveLength(1);
+  });
+});
+
+describe("createPredictRun when a batch leaves an option out", () => {
+  const first = option(1);
+  const unrouted = option(2);
+  const third = option(3);
+  const refuse = (request: SwapQuoteRequest) =>
+    [unrouted.upToken, unrouted.downToken].includes(request.tokenIn) ||
+    [unrouted.upToken, unrouted.downToken].includes(request.tokenOut);
+
+  it("still names it once a later batch reverts and is retried", async () => {
+    const { driver } = setup({
+      options: [first, unrouted, third],
+      optionsPerBatch: 2,
+      // deposit, batch 1 leaving `unrouted` out, batch 2 reverts, then batch 2 again
+      script: ["success", "success", "revert", "success"],
+      refuse,
+    });
+
+    driver.start();
+    const halted = await haltedOrComplete(driver);
+    expect(halted.failure?.reason).toBe("reverted");
+    expect(halted.skipped).toEqual([unrouted.childMarket]);
+
+    driver.retry();
+    const after = await haltedOrComplete(driver);
+
+    expect(after.stage).toBe("complete");
+    expect(after.skipped).toEqual([unrouted.childMarket]);
+  });
+
+  it("still names it when the batch's receipt was unseen and the retry finds it mined", async () => {
+    const { gateway, driver } = setup({
+      options: [first, unrouted],
+      optionsPerBatch: 2,
+      script: ["success", { lost: "success" }],
+      refuse,
+    });
+
+    driver.start();
+    const uncertain = await haltedOrComplete(driver);
+    expect(uncertain.pendingHash).toBeDefined();
+
+    driver.retry();
+    const after = await haltedOrComplete(driver);
+
+    expect(after.stage).toBe("complete");
+    expect(after.skipped).toEqual([unrouted.childMarket]);
+    expect(batchTxs(gateway.signRequests, first)).toHaveLength(1);
+  });
+
+  it("gives an option another go when the batch that left it out is rebuilt", async () => {
+    let closed = true;
+    const { driver } = setup({
+      options: [first, unrouted],
+      optionsPerBatch: 2,
+      // deposit, the batch reverts, then the rebuilt batch with `unrouted` routed
+      script: ["success", "revert", "success"],
+      refuse: (request) => closed && refuse(request),
+    });
+
+    driver.start();
+    const halted = await haltedOrComplete(driver);
+    expect(halted.skipped).toEqual([unrouted.childMarket]);
+
+    closed = false;
+    driver.retry();
+    const after = await haltedOrComplete(driver);
+
+    expect(after.stage).toBe("complete");
+    expect(after.skipped).toEqual([]);
   });
 });
 

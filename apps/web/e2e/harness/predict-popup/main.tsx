@@ -190,7 +190,11 @@ const preview = Object.fromEntries(
     const { from, to, ...plan } = trades;
     return [
       estimate.scale.market.toLowerCase(),
-      { from: priceWadToEstimate(from, estimate.scale), to: priceWadToEstimate(to, estimate.scale), plan },
+      {
+        from: priceWadToEstimate(from, estimate.scale),
+        to: priceWadToEstimate(to, estimate.scale),
+        plan: { ...plan, held: plan.split > 0n ? HELD_UNDERLYING : 0n },
+      },
     ];
   }),
 );
