@@ -38,10 +38,12 @@ vi.mock("../../../api/getExecutor", () => ({
   useExecutor: () => ({ isPending: false, data: { predicted: EXECUTOR, deployed: EXECUTOR } }),
 }));
 const CREDITS = token("5");
+const WXDAI = token("4");
 vi.mock("@/config/contracts", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/config/contracts")>()),
   gnosisRouterAddress: () => ROUTER,
   creditsContracts: () => ({ credits: CREDITS, manager: token("6") }),
+  creditsRoute: () => ({ token: CREDITS, manager: token("6"), wxdai: WXDAI, swaprRouter: token("3") }),
 }));
 
 /** What each action was asked to sign, as its mutation received it. */
@@ -125,5 +127,35 @@ describe("credits in the trade wallet's Withdraw", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: /sDAI/ }));
 
     expect(screen.queryByRole("option", { name: "credits" })).toBeNull();
+  });
+});
+
+describe("the credits swap's WXDAI in the trade wallet's Withdraw", () => {
+  it("offers the WXDAI left in the trade wallet and withdraws all of it to the owner", async () => {
+    held.set(EXECUTOR, new Map([[WXDAI, units("0.075212450551323781")]]));
+    renderWallet();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Withdraw" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: /sDAI/ }));
+    await userEvent.click(await screen.findByRole("option", { name: "WXDAI" }));
+    await within(dialog).findByText("Balance: 0.0752 WXDAI");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Max" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Withdraw" }));
+
+    expect(sent.withdraw).toEqual([
+      { executor: EXECUTOR, recipient: OWNER, assets: [{ token: WXDAI, amount: units("0.075212450551323781") }] },
+    ]);
+  });
+
+  it("offers no WXDAI when the trade wallet holds none", async () => {
+    renderWallet();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Withdraw" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: /sDAI/ }));
+
+    expect(await screen.findAllByRole("option")).not.toHaveLength(0);
+    expect(screen.queryByRole("option", { name: "WXDAI" })).toBeNull();
   });
 });
