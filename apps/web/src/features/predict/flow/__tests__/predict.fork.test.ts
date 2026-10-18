@@ -1723,6 +1723,9 @@ describe("money kept by every predict run, against a gnosis fork", () => {
     if (request.depositNative) {
       const off = sDaiSplit > shownSDai ? sDaiSplit - shownSDai : shownSDai - sDaiSplit;
       expect(off, `the sDAI split ${sDaiSplit} against the ${shownSDai} shown`).toBeLessThanOrEqual(DUST_WEI);
+      expect(sDaiSplit, "the sDAI split is what the deposit minted plus the trade wallet's share").toBe(
+        landed + app.tradeWalletShare(request),
+      );
     } else {
       expect(sDaiSplit, "the sDAI split is the sDAI shown").toBe(shownSDai);
     }
