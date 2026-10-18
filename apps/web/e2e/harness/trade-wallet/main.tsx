@@ -1,9 +1,11 @@
 import { createRoot } from "react-dom/client";
 
+import clsx from "clsx";
 import { parseUnits, type Address } from "viem";
 
 import { AmountDialog } from "@/features/trade-executor/components/TradeWallet/AmountDialog";
 import { OptionBalances } from "@/features/trade-executor/components/TradeWallet/OptionBalances";
+import { TRADE_WALLET_CARD } from "@/features/trade-executor/components/TradeWallet/tradeWalletCard";
 import type { TradeWalletOption } from "@/features/trade-executor/types";
 
 import "@/styles/global.css";
@@ -59,7 +61,7 @@ createRoot(document.getElementById("root")!).render(
     />
   ) : (
     <main className="mx-auto w-full max-w-294 px-4 py-6">
-      <section aria-label="Trade wallet" className="bg-fs-surface-sunken rounded-fs flex flex-col px-4 py-3 md:px-6">
+      <section aria-label="Trade wallet" className={clsx(TRADE_WALLET_CARD, "flex flex-col")}>
         <OptionBalances
           options={options}
           balances={options.map(() => parseUnits("123456789.12", 18))}

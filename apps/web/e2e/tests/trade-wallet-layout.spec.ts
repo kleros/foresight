@@ -98,3 +98,22 @@ test("a light button eases named properties, never every one", async ({ page }) 
   expect(properties.split(", ")).not.toContain("all");
   expect(properties).toContain("background-color");
 });
+
+for (const { width, inset } of [
+  { width: 1280, inset: "32px" },
+  { width: 375, inset: "16px" },
+]) {
+  test(`the trade wallet wears the Predict card's radius, hairline and ${inset} inset at ${width}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await open(page, { view: "balances" });
+    const wallet = page.getByRole("region", { name: "Trade wallet" });
+
+    await expect(wallet).toHaveCSS("border-top-left-radius", "12px");
+    await expect(wallet).toHaveCSS("padding-left", inset);
+    await expect(wallet).toHaveCSS("padding-top", "16px");
+    const hairline = await wallet.evaluate((element) => getComputedStyle(element, "::before").backgroundImage);
+    expect(hairline).toContain("linear-gradient");
+  });
+}
