@@ -2,31 +2,52 @@
 
 import type { ReactNode } from "react";
 
-import { Modal, TextField } from "@kleros/ui-components-library";
+import { Modal } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
 import { PredictButton } from "@/features/predict/components/PredictButton";
+import { shownAmount } from "@/features/predict/utils/funding";
 import { leftOutText } from "@/features/predict/utils/predictSteps";
 
-import InfoCard from "@/components/ui/InfoCard";
+import { paths } from "@/config/paths";
+
+/** What a finished run placed, for the line under the dialog's title. */
+export interface PlacedPrediction {
+  /** Estimates traded, not counting any the run left out. */
+  estimates: number;
+  /** What the visitor paid, in `symbol`; absent when nothing was paid. */
+  amount?: bigint;
+  symbol: string;
+  decimals: number;
+}
+
+/** "2 estimates · 10 sDAI". */
+export function placedText({ estimates, amount, symbol, decimals }: PlacedPrediction): string {
+  const count = `${estimates} ${estimates === 1 ? "estimate" : "estimates"}`;
+  return amount ? `${count} · ${shownAmount(amount, decimals)} ${symbol}` : count;
+}
 
 /** The success dialog as drawn, with the email sign-up passed in, so it renders without the wallet or Atlas. */
 export function PredictSuccessView({
   isOpen,
+  placed,
   leftOut,
   onClose,
   subscribed,
   email,
+  isEmailVerified,
   signUp,
 }: {
   isOpen: boolean;
+  placed?: PlacedPrediction;
   /** Names of the options the run could not trade and left out. */
   leftOut: string[];
   onClose: () => void;
   /** The visitor already gets resolution emails. */
   subscribed: boolean;
   email?: string;
-  /** Shown to a visitor not yet subscribed, as the dialog's action. */
+  isEmailVerified?: boolean;
+  /** Shown to a visitor not yet subscribed, as the panel's own control. */
   signUp: ReactNode;
 }) {
   return (
@@ -37,7 +58,7 @@ export function PredictSuccessView({
       onOpenChange={(open) => (open ? undefined : onClose())}
       className={clsx(
         "h-fit max-h-[calc(100dvh-32px)] w-[calc(100vw-2rem)] max-w-[440px] overflow-y-auto",
-        "flex flex-col gap-5 p-5 sm:p-6",
+        "flex flex-col p-5 sm:p-6",
         "fs-aurora rounded-fs-popup bg-fs-surface border border-(--fs-popup-edge) shadow-(--fs-popup-shadow)",
       )}
     >
@@ -54,6 +75,7 @@ export function PredictSuccessView({
           </svg>
         </span>
         <h1 className="text-fs-popup-text text-xl font-semibold tracking-[-0.01em] text-balance">Prediction placed</h1>
+        {placed ? <p className="text-fs-popup-text-2 -mt-1 text-sm tabular-nums">{placedText(placed)}</p> : null}
         {leftOut.length > 0 ? (
           <p className="text-fs-popup-text-2 text-[13px] leading-[18px] text-pretty">
             {leftOutText(leftOut.length)}: {leftOut.join(", ")}.
@@ -61,25 +83,33 @@ export function PredictSuccessView({
         ) : null}
       </div>
 
-      <section className="rounded-fs-panel bg-fs-popup-panel flex flex-col gap-3 p-4">
+      <section className="predict-success-panel rounded-fs-panel bg-fs-popup-panel mt-6 flex flex-col gap-3 p-4">
         {subscribed ? (
           <>
-            <p className="text-fs-popup-text text-sm font-medium">You&apos;ll get an email when the market resolves.</p>
-            {email ? (
-              <TextField
-                isDisabled
-                value={email}
-                className={clsx(
-                  "w-full [&>label]:hidden [&_input]:rounded-fs-control [&_input]:text-sm",
-                  "[&_input]:bg-fs-surface [&_input]:border-(--fs-popup-line)",
-                )}
-                label="Email"
-              />
+            <p className="text-fs-popup-text text-sm text-pretty">
+              {email ? (
+                <>
+                  You&apos;ll get an email at <b className="font-semibold wrap-anywhere">{email}</b> when the market
+                  resolves.
+                </>
+              ) : (
+                "You'll get an email when the market resolves."
+              )}
+            </p>
+            {isEmailVerified === false ? (
+              <p className="text-fs-tone-warning-text text-[13px] leading-[18px]">
+                Confirm your email first, or it will not arrive.
+              </p>
             ) : null}
-            <InfoCard
-              className="text-fs-popup-text-2 w-fit text-[13px] leading-[18px] wrap-break-word [&_svg_path]:fill-current"
-              msg="Change this in Settings. Make sure your email is confirmed."
-            />
+            <a
+              href={paths.settings.getHref("notifications")}
+              className={clsx(
+                "text-fs-popup-accent-text w-fit text-[13px] leading-[18px] font-medium",
+                "underline decoration-current/40 underline-offset-3",
+              )}
+            >
+              Change in Settings
+            </a>
           </>
         ) : (
           <>
@@ -89,8 +119,23 @@ export function PredictSuccessView({
         )}
       </section>
 
-      {/* a visitor not yet subscribed has signing up as the action, so Close steps back */}
-      <PredictButton text="Close" quiet={!subscribed} isDisabled={false} onPress={onClose} />
+      {subscribed ? (
+        <div className="mt-4">
+          {/* nothing is at stake here, so Close stays in the panel's tone */}
+          <PredictButton text="Close" quiet isDisabled={false} onPress={onClose} />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={onClose}
+          className={clsx(
+            "text-fs-popup-text-2 rounded-fs-control mt-4 h-11 cursor-pointer self-center px-4 text-sm font-semibold",
+            "transition-colors duration-(--fs-dur-echo) ease-(--fs-ease-enter) [@media(hover:hover)]:hover:bg-fs-popup-hover",
+          )}
+        >
+          Close
+        </button>
+      )}
     </Modal>
   );
 }

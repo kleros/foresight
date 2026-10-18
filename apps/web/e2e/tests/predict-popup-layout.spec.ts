@@ -1854,16 +1854,58 @@ function tokenValue(page: Page, property: "color" | "borderRadius", value: strin
 test.describe("the success dialog", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test("draws the email in a field of the panel's tones", async ({ page }) => {
+  test("names the email in one sentence, links to Settings in the accent, and rings its mark in the panel's tone", async ({
+    page,
+  }) => {
     await openHarness(page, `${harness.url}?options=2&state=success&dialog=success`);
-    const email = page.getByRole("dialog", { name: "Prediction placed" }).getByRole("textbox");
+    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const link = dialog.getByRole("link", { name: "Change in Settings" });
 
-    await expect(email).toHaveCSS("background-color", await tokenValue(page, "color", "var(--fs-surface)"));
-    await expect(email).toHaveCSS("border-top-color", await tokenValue(page, "color", "var(--fs-popup-line)"));
-    await expect(email).toHaveCSS(
+    await expect(dialog.getByText("2 estimates · 10 sDAI")).toBeVisible();
+    await expect(dialog.getByText(/^You'll get an email at/)).toHaveText(
+      "You'll get an email at visitor@example.com when the market resolves.",
+    );
+    await expect(dialog.getByRole("textbox")).toHaveCount(0);
+    await expect(link).toHaveAttribute("href", "/settings?tab=notifications");
+    await expect(link).toHaveCSS("color", await tokenValue(page, "color", "var(--fs-popup-accent-text)"));
+    await expect(dialog.getByText("Confirm your email first", { exact: false })).toHaveCount(0);
+    const ring = await page.getByTestId("success-mark").evaluate((mark) => getComputedStyle(mark).boxShadow);
+    expect(ring).toContain(await tokenValue(page, "color", "var(--fs-popup-panel)"));
+  });
+
+  test("groups the title, the panel and the action 24 and 16 apart", async ({ page }) => {
+    await openHarness(page, `${harness.url}?options=2&state=success&dialog=success`);
+    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const title = (await dialog.getByText("2 estimates · 10 sDAI").boundingBox())!;
+    const panel = (await dialog.locator("section").boundingBox())!;
+    const close = (await dialog.getByRole("button", { name: "Close" }).boundingBox())!;
+
+    expect(Math.round(panel.y - (title.y + title.height))).toBe(24);
+    expect(Math.round(close.y - (panel.y + panel.height))).toBe(16);
+  });
+
+  test("warns in the warning tone when the email is not confirmed", async ({ page }) => {
+    await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&verified=0`);
+    const warning = page.getByText("Confirm your email first, or it will not arrive.");
+
+    await expect(warning).toBeVisible();
+    await expect(warning).toHaveCSS("color", await tokenValue(page, "color", "var(--fs-tone-warning-text)"));
+  });
+
+  test("keeps the sign-in at 44px in the panel and Close as a 44px text action", async ({ page }) => {
+    await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&subscribed=0`);
+    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const signIn = dialog.locator("section").getByRole("button", { name: "Sign in to subscribe" });
+    const close = dialog.getByRole("button", { name: "Close" });
+
+    expect((await signIn.boundingBox())!.height).toBe(44);
+    await expect(signIn).toHaveCSS(
       "border-top-left-radius",
       await tokenValue(page, "borderRadius", "var(--fs-radius-control)"),
     );
+    expect((await close.boundingBox())!.height).toBe(44);
+    await expect(close).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(dialog.locator(".predict-cta")).toHaveCount(1);
   });
 
   for (const theme of ["light", "dark"]) {
@@ -1930,16 +1972,6 @@ test.describe("the success dialog", () => {
       });
       expect(look.visibility).toBe("visible");
       expect(contrast(look.label, look.fill)).toBeGreaterThanOrEqual(4.5);
-    });
-
-    test(`draws the settings note's icon in the note's own tone, in the ${theme} theme`, async ({ page }) => {
-      await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&theme=${theme}`);
-      const note = page.getByText("Change this in Settings.", { exact: false });
-      const [icon, text] = await note.evaluate((element) => [
-        getComputedStyle(element.querySelector("svg path")!).fill,
-        getComputedStyle(element).color,
-      ]);
-      expect(icon).toBe(text);
     });
   }
 

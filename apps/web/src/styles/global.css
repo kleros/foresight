@@ -710,8 +710,17 @@ button.predict-cta.predict-cta[data-busy]:has(> .button-text) > .button-text {
   border-radius: 999px;
   background: var(--fs-popup-axis);
   color: var(--fs-popup-on-axis);
-  box-shadow: 0 0 0 8px color-mix(in srgb, var(--fs-popup-axis-to) 12%, transparent);
+  /* the panel's tone, so the ring belongs to the panel below rather than to one end of the disc */
+  box-shadow: 0 0 0 8px var(--fs-popup-panel);
   animation: predict-success-pop var(--fs-dur-structural) var(--fs-ease-spring) both;
+}
+/* the sign-in is the panel's own control, a step below the popup's wide button */
+.predict-success-panel .predict-cta {
+  height: 44px;
+  border-radius: var(--fs-radius-control);
+}
+.predict-success-panel .predict-cta .button-text {
+  font-size: 15px;
 }
 @keyframes predict-success-pop {
   from {

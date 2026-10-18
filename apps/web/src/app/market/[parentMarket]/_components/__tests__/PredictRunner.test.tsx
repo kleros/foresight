@@ -367,6 +367,19 @@ describe("PredictRunner, the dialog's controls", () => {
     expect(driver.reset).toHaveBeenCalled();
   });
 
+  it("hands the success dialog what it placed, less what the run left out", () => {
+    const detail = session();
+    progress = { ...progressAt("complete"), skipped: [detail.options[0]!.market] };
+    const view = mount(detail);
+
+    expect(view.onSuccess).toHaveBeenCalledWith([detail.options[0]!.market], {
+      estimates: 0,
+      amount: undefined,
+      symbol: detail.collateralSymbol ?? "sDAI",
+      decimals: detail.collateralDecimals ?? 18,
+    });
+  });
+
   it("starts a run when predict is pressed", () => {
     mount();
     fireEvent.click(screen.getByText("predict"));

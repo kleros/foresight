@@ -493,6 +493,8 @@ describe("resuming", () => {
     await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
     expect(chain.asked.length).toBeGreaterThan(0);
     for (const targets of chain.asked) expect(targets).toEqual(targetsFor(SAVED.estimate));
+    // what the stored run placed, not the form's amount
+    expect(onSuccess.mock.calls[0]?.[1]).toMatchObject({ estimates: 1, amount: SAVED.deposit });
   });
 
   it("still waits for Resume after a deposit in flight mines during the review", async () => {

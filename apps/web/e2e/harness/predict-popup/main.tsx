@@ -45,6 +45,8 @@ const held = parseUnits(params.get("held") ?? "19", 18);
 if (params.get("theme") === "dark") document.documentElement.classList.add("dark");
 /** `?dialog=success` the dialog a finished run opens; `&subscribed=0` for a visitor without resolution emails. */
 const dialog = params.get("dialog");
+/** `&verified=0` a subscribed visitor whose email is not confirmed yet. */
+const isEmailVerified = params.get("verified") !== "0";
 /** `&signin=busy` the success dialog's sign-in while the wallet signs. */
 const signingIn = params.get("signin") === "busy";
 /** `?skipped=N` estimates the run left out, said on the status line; a `harness-skipped` event changes it after open. */
@@ -134,10 +136,12 @@ const steps = predictSteps({
 const success = (
   <PredictSuccessView
     isOpen
+    placed={{ estimates: Math.min(count, 2), amount: 10n * WAD, symbol: "sDAI", decimals: 18 }}
     leftOut={count > 2 ? CITIES.slice(2, count) : []}
     onClose={() => {}}
     subscribed={params.get("subscribed") !== "0"}
     email="visitor@example.com"
+    isEmailVerified={isEmailVerified}
     // the app's sign-in needs a wallet; this draws its button as PredictSuccessDialog does
     signUp={
       <PredictButton

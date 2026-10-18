@@ -16,6 +16,7 @@ import { useExecutor } from "@/features/trade-executor/api/getExecutor";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
+import type { PlacedPrediction } from "./PredictSuccessView";
 import { toSavedEstimates } from "./toPredictOptions";
 import { useHasPredicted } from "./useHasPredicted";
 import { usePredictExecution } from "./usePredictExecution";
@@ -26,8 +27,8 @@ interface PredictRunnerProps {
   session: SessionDetail;
   selected: SelectedEstimate[];
   onClose: () => void;
-  /** Options the run left out for lack of a route; the run is reset by the time this is called. */
-  onSuccess: (skipped: Address[]) => void;
+  /** Options the run left out for lack of a route, and what it placed; the run is reset by the time this is called. */
+  onSuccess: (skipped: Address[], placed: PlacedPrediction) => void;
 }
 
 const NATIVE: PayTokenChoice = { id: "native", symbol: "xDAI", decimals: 18 };
@@ -98,12 +99,23 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
     driver?.recover();
   }, [driver]);
 
+  // a recovered run placed its stored options and collateral, not what this popup's form holds
+  const placedCount = recovered ? recovered.options.length : kept.length;
+  const placedAmount = recovered ? recovered.collateralIn : amount;
+  const placedToken = recovered ? collateral : token;
+  const { symbol: placedSymbol, decimals: placedDecimals } = placedToken;
+
   useEffect(() => {
     if (stage !== "complete") return;
     const left = progress?.skipped ?? [];
     driver?.reset();
-    onSuccess(left);
-  }, [stage, driver, onSuccess, progress?.skipped]);
+    onSuccess(left, {
+      estimates: placedCount - left.length,
+      amount: placedAmount || undefined,
+      symbol: placedSymbol,
+      decimals: placedDecimals,
+    });
+  }, [stage, driver, onSuccess, progress?.skipped, placedCount, placedAmount, placedSymbol, placedDecimals]);
 
   // a transaction that may still mine stays stored, so the next popup recovers it instead of signing again
   const pendingHash = progress?.pendingHash;
