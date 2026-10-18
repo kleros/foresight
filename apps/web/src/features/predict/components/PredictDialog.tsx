@@ -69,10 +69,17 @@ function useHeldWhile<T>(value: T, locked: boolean): T {
   return locked && held ? held.value : value;
 }
 
+/** The busy button for a running step that is not waiting on the wallet. */
+const BUSY_COPY: Record<PredictSteps["rows"][number]["key"], string> = {
+  wallet: "Setting up…",
+  funds: "Adding funds…",
+  predict: "Predicting…",
+};
+
 /** What the running step is waiting on, for the busy button: `Confirm in your wallet`, without a batch count. */
 function busyLabel(steps: PredictSteps): string {
-  const detail = steps.rows.find((row) => row.view === "running")?.subtitle ?? "";
-  return detail.split(" · ").at(-1) || "Predicting…";
+  const running = steps.rows.find((row) => row.view === "running");
+  return running?.subtitle.split(" · ").at(-1) || BUSY_COPY[running?.key ?? "predict"];
 }
 
 /**
@@ -234,6 +241,7 @@ export function PredictDialog({
               isOpen={summaryOpen}
               onToggle={() => setSummaryOpen((open) => !open)}
               isPricing={isPricing}
+              isEstimated={(runToken ?? token).id === "native"}
             />
             <PredictStepsTimeline steps={steps} />
           </div>

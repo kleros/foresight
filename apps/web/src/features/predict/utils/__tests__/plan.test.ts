@@ -322,15 +322,37 @@ describe("previewTrades", () => {
     near(trades.sells[0]!.underlyingOut, WAD / 2n);
   });
 
-  it("sells what reaching the estimate takes plus headroom, and merges the pairs left, exactly", () => {
-    // reaching 0.25 takes 1 UP; the 2 split leave the rest paired with DOWN
-    const sold = (WAD * (10_000n + LEG_HEADROOM_BPS)) / 10_000n;
+  it("shows a sell the limit stops at the estimate as what reaching it takes, and merges what the run plans", () => {
+    // reaching 0.25 takes 1 UP; the run sells that plus headroom and merges the rest of the 2 split
+    const planned = (WAD * (10_000n + LEG_HEADROOM_BPS)) / 10_000n;
     const trades = previewTrades(option({ splitAmount: 2n * WAD }), SLIPPAGE_BPS)!;
 
-    expect(trades.sells[0]!.amountIn).toBe(sold);
-    expect(trades.merge).toBe(2n * WAD - sold);
-    // the limit stops the sell at the estimate, so the headroom pays nothing more
+    near(trades.sells[0]!.amountIn, WAD);
+    expect(trades.sells[0]!.toTarget).toBe(true);
+    expect(trades.merge).toBe(2n * WAD - planned);
     near(trades.sells[0]!.underlyingOut, WAD / 2n);
+  });
+
+  it("shows a sell the balance runs out on at its whole amount, not as reaching the estimate", () => {
+    const trades = previewTrades(option({ splitAmount: WAD / 2n }), SLIPPAGE_BPS)!;
+
+    expect(trades.sells[0]).toMatchObject({ amountIn: WAD / 2n, toTarget: false });
+  });
+
+  it("shows a buy the limit stops at the estimate as what reaching it takes", () => {
+    // the DOWN sale pays far more than lifting a 1-liquidity UP pool from 0.25 to 0.5 takes
+    const trades = previewTrades(
+      option({
+        pools: { up: pool(AT["0.25"]), down: pool(AT["1"], DEEP) },
+        targetPriceWad: WAD / 2n,
+        splitAmount: 50n * WAD,
+      }),
+      SLIPPAGE_BPS,
+    )!;
+    const buy = trades.buys.find((leg) => leg.side === "up")!;
+
+    expect(buy.toTarget).toBe(true);
+    near(trades.to, WAD / 2n);
   });
 
   it("buys with the expected proceeds and the merge, and expects what the pool returns for them", () => {

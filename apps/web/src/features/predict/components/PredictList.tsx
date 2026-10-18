@@ -22,7 +22,10 @@ export interface PriceMove {
   from: number;
   to: number;
   /** The trades that make the move, in the collateral's base units. */
-  plan?: Omit<PreviewTrades, "from" | "to">;
+  plan?: Omit<PreviewTrades, "from" | "to"> & {
+    /** Underlying the trade wallet already held, which `split` includes. */
+    held: bigint;
+  };
 }
 
 /** --fs-dur-echo in ms, the length of a row's exit; 0 where no stylesheet sets it. */

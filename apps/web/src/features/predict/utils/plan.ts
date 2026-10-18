@@ -168,18 +168,34 @@ export function planBuys(option: OptionTarget, sold: readonly SoldLeg[], slippag
   return { mergeAmount: legs.length > 0 || sold.length > 0 ? mergeAmount : 0n, legs };
 }
 
+/** A leg as the preview shows it. */
+interface PreviewLeg {
+  side: OptionSide;
+  /** What the swap spends: the leg's amount, or less where the pool reaches the target first. */
+  amountIn: bigint;
+  /** The pool reaches the target before the leg's amount is spent, so `amountIn` is the pool maths' figure. */
+  toTarget: boolean;
+}
+
 /** One option's trades as the pool maths plays them out against the pools as read. */
 export interface PreviewTrades {
   /** Underlying split into one of each outcome token. */
   split: bigint;
-  sells: { side: OptionSide; amountIn: bigint; underlyingOut: bigint }[];
+  sells: (PreviewLeg & { underlyingOut: bigint })[];
   /** Outcome sets merged back to underlying. */
   merge: bigint;
-  buys: { side: OptionSide; amountIn: bigint; outcomeOut: bigint }[];
+  buys: (PreviewLeg & { outcomeOut: bigint })[];
   /** The UP token's price before and after, as a wad. */
   from: bigint;
   to: bigint;
 }
+
+/** The leg's headroom stays in the trade wallet when the price limit stops the swap at the target. */
+const spent = (leg: SwapLeg): PreviewLeg => ({
+  side: leg.side,
+  amountIn: min(leg.amountIn, leg.amountInAtLimit),
+  toTarget: leg.amountInAtLimit < leg.amountIn,
+});
 
 /**
  * The trades `planSells` and `planBuys` make for one option, each filled by the pool maths alone, and where they
@@ -193,17 +209,23 @@ export function previewTrades(option: OptionTarget, slippageBps: number): Previe
   const from = priceFromSqrtPriceX96(up.sqrtPriceX96, up.outcomeIsToken0);
   let to = from;
 
-  const sells = planSells(option).map((leg) => {
+  const sold = planSells(option).map((leg) => {
     const swap = swapToward(option.pools[leg.side], target(leg.side), leg.amountIn);
     if (leg.side === "up") to = swap.priceWad;
-    return { side: leg.side, amountIn: leg.amountIn, underlyingOut: swap.amountOut };
+    return { leg, underlyingOut: swap.amountOut };
   });
-  const plan = planBuys(option, sells, slippageBps);
+  // the run sizes the merge and the buys from the legs as planned, headroom included
+  const plan = planBuys(
+    option,
+    sold.map(({ leg, underlyingOut }) => ({ side: leg.side, amountIn: leg.amountIn, underlyingOut })),
+    slippageBps,
+  );
   const buys = plan.legs.map((leg) => {
     const swap = swapToward(option.pools[leg.side], target(leg.side), leg.amountIn);
     if (leg.side === "up") to = swap.priceWad;
-    return { side: leg.side, amountIn: leg.amountIn, outcomeOut: swap.amountOut };
+    return { ...spent(leg), outcomeOut: swap.amountOut };
   });
+  const sells = sold.map(({ leg, underlyingOut }) => ({ ...spent(leg), underlyingOut }));
 
   // an option with no legs is left out of the run, so nothing of it is split either
   const trades = sells.length > 0 || buys.length > 0;

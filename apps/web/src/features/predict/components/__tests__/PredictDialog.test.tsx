@@ -108,6 +108,15 @@ describe("the estimates going in", () => {
     ).toEqual(["312 → 355 $M", "Now 296 $M"]);
   });
 
+  it("marks the mint as an estimate when paying in xDAI", async () => {
+    const xDai = { id: "native" as const, symbol: "xDAI", decimals: 18 };
+    render(<PredictDialog {...props()} tokens={[sDai, xDai]} token={xDai} />);
+
+    await userEvent.click(summaryHead());
+
+    expect(screen.getByTestId("trade-mint")).toHaveTextContent(/^Mint≈ 10 sDAI → ≈ 10 tokens of every director$/);
+  });
+
   it("says where the market stays, not a move too small to show", async () => {
     render(<PredictDialog {...props()} preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 312.0001 } }} />);
 
@@ -501,6 +510,29 @@ describe("the button while a run goes", () => {
     expect(button).toBeDisabled();
     expect(within(button).getByText("Confirm in your wallet")).not.toHaveClass("invisible");
     expect(within(button).getByTestId("predict-spinner")).toBeInTheDocument();
+  });
+
+  it("names the trade wallet's setup while that step reads the chain before the wallet opens", () => {
+    const settingUp = predictSteps({
+      wallet: { address: "0xdcee0000000000000000000000000000000c664f", deployed: false },
+      toAdd: 4n * WAD,
+      symbol: "sDAI",
+      decimals: 18,
+      progress: {
+        stage: "quoting",
+        steps: [
+          { id: "create-wallet", label: "", state: "running" },
+          { id: "deposit", label: "", state: "pending" },
+          { id: "predict-1", label: "", state: "pending" },
+        ],
+        skipped: [],
+        batchesDone: 0,
+        batches: 1,
+      },
+    });
+    render(<PredictDialog {...props()} isRunning steps={settingUp} />);
+
+    expect(screen.getByRole("button", { name: "Setting up…" })).toBeDisabled();
   });
 
   it("goes back to its own label, with no spinner, once the run stops", () => {
