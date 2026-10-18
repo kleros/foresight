@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { creditLines, creditsOffer, MIN_CREDITS, type CreditsHeld } from "../credits";
+import type { CreditsHeld } from "@/lib/trade-executor/credits";
+
+import { creditLines, creditsOffer, MIN_CREDITS } from "../credits";
 import { fundingSummary, planFunding } from "../funding";
 
 const WAD = 10n ** 18n;

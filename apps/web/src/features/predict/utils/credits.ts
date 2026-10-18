@@ -1,13 +1,7 @@
+import type { CreditsHeld } from "@/lib/trade-executor/credits";
+
 /** Credits at or below 0.01 are not offered; 18 decimals. */
 export const MIN_CREDITS = 10n ** 16n;
-
-/** A visitor's Foresight credits and what their manager holds to back them, all in credits. */
-export interface CreditsHeld {
-  wallet: bigint;
-  tradeWallet: bigint;
-  /** The manager's collateral, spent one for one per credit, first come first served. */
-  manager: bigint;
-}
 
 /**
  * What the popup offers: nothing at or below `MIN_CREDITS`; otherwise everything held when the
