@@ -1213,8 +1213,8 @@ interface Scenario {
   beforeBatch?: () => Promise<void>;
   /** Sends with this gas rather than an estimate, so a batch meant to revert reaches the chain. */
   gas?: bigint;
-  /** Closes the tab at the deposit before it is signed, or at the first batch: before it is signed, or once it landed with no hash stored. */
-  closeTab?: "before-deposit" | "before-batch" | "after-batch";
+  /** Closes the tab at the deposit or the first batch: before it is signed, or once it landed with no hash stored. */
+  closeTab?: "before-deposit" | "after-deposit" | "before-batch" | "after-batch";
 }
 
 interface ScenarioRun {
@@ -1579,7 +1579,7 @@ describe("money kept by every predict run, against a gnosis fork", () => {
           if (mined) sent.push({ stepId: "", tx, receipt: await client.getTransactionReceipt({ hash: mined.hash }) });
           throw error;
         }
-        if (isBatch && closeTab === "after-batch") {
+        if ((isBatch && closeTab === "after-batch") || (isDeposit && closeTab === "after-deposit")) {
           closeTab = undefined;
           leftBehind = copyStorage(storage);
           throw new TabClosedError();
@@ -2351,6 +2351,54 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       expect(split, `split ${split} against the ${shown} sDAI shown`).toBeLessThanOrEqual(shown + DUST_WEI);
       expect(await balance(session.collateralToken, executor), "the other sDAI stays in the trade wallet").toBe(
         parked + parseEther("40"),
+      );
+      reloaded.dispose();
+    },
+    900_000,
+  );
+
+  it.skipIf(!FORK_RPC_URL)(
+    "an xDAI run closed as its deposit landed is resumed without a second deposit, splitting what that deposit minted",
+    async () => {
+      const key = nextKey();
+      const owner = privateKeyToAccount(key);
+      const run = await runScenario({
+        key,
+        pay: "native",
+        amount: parseEther("10"),
+        walletCollateral: parseEther("60"),
+        options: nudged(1),
+        closeTab: "after-deposit",
+      });
+      expect(run.progress.stage).toBe("halted");
+      const executor = run.ctx.executor;
+      const deposits = () => run.sent.filter(({ tx }) => tx.to.toLowerCase() === run.ctx.sDaiAdapter!.toLowerCase());
+      expect(deposits(), "the deposit landed as the tab closed").toHaveLength(1);
+
+      // more sDAI reaches the trade wallet before the reload, as the Trade wallet panel's deposit does
+      await sendFrom(
+        owner,
+        session.collateralToken,
+        encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [executor, parseEther("40")] }),
+      );
+
+      const reloaded = await reloadAndResume(run);
+      expect(reloaded.getProgress().stage, JSON.stringify(reloaded.getProgress().failure)).toBe("review");
+      reloaded.resume();
+      await settledRun(reloaded);
+      expect(reloaded.getProgress().stage, JSON.stringify(reloaded.getProgress().failure)).toBe("complete");
+
+      expect(deposits(), "no second deposit signed").toHaveLength(1);
+      const minted = parseEventLogs({ abi: erc20Abi, eventName: "Transfer", logs: deposits()[0]!.receipt.logs })
+        .filter(
+          (log) =>
+            log.address.toLowerCase() === session.collateralToken.toLowerCase() &&
+            log.args.to.toLowerCase() === executor.toLowerCase(),
+        )
+        .reduce((sum, log) => sum + log.args.value, 0n);
+      const [batch] = landedBatches(run);
+      expect(parentSplitOf(batch!.tx.data!), "the split is what the deposit minted").toBe(
+        minted + run.request.collateralBefore,
       );
       reloaded.dispose();
     },
