@@ -3,18 +3,20 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { openHarness, startHarness } from "../utils/component-harness";
 
 /** `?credits=` in e2e/harness/predict-popup/main.tsx. */
-const CREDIT_STATES = ["enough", "partial", "off", "short", "empty"] as const;
+const CREDIT_STATES = ["enough", "partial", "short", "long", "empty"] as const;
 const NOTES: Record<(typeof CREDIT_STATES)[number], string> = {
   enough: "15 credits available",
   partial: "4 credits available",
-  off: "15 credits available",
-  short: "200 of your 500 credits usable right now",
-  empty: "None usable right now. Add your own sDAI.",
+  short: "200 of 500 usable now",
+  long: "1,321.7347 of 2,000 usable now",
+  empty: "None of your 120 usable now",
 };
+const TICK = "Use Foresight credits";
 const STEPS = ["Create a trade wallet", "Add funds", "Place prediction"];
 const VIEWPORTS = [
   { width: 1280, height: 800 },
   { width: 375, height: 667 },
+  { width: 320, height: 568 },
 ];
 
 let harness: Awaited<ReturnType<typeof startHarness>>;
@@ -55,6 +57,11 @@ async function footprint(dialog: Locator) {
     footer: await box(dialog.locator(".predict-cta")),
     body: round(await dialog.getByTestId("predict-body").evaluate((element) => element.scrollHeight)),
   };
+}
+
+/** The tick's label, the visitor's target; its words change with the panel's width. */
+function tickLabel(dialog: Locator): Locator {
+  return dialog.locator("label").filter({ has: dialog.page().getByRole("checkbox", { name: TICK }) });
 }
 
 /** True when the element's box sits inside its panel and none of its text is cut. */
@@ -99,16 +106,13 @@ for (const viewport of VIEWPORTS) {
             )
             .toBe(true);
 
-          const tick = dialog.getByRole("checkbox", { name: "Use your Foresight credits" });
-          const useMax = dialog.getByRole("button", { name: "Use max" });
-          if (credits === "enough" || credits === "partial" || credits === "short") {
-            await expect.soft(tick).toBeChecked();
-            await expect.soft(useMax).toBeVisible();
-          } else {
-            await expect.soft(tick).not.toBeChecked();
-            await expect.soft(useMax).toBeHidden();
-          }
-          if (credits === "empty") await expect.soft(tick).toBeDisabled();
+          // the tick starts off, so the popup opens with its own funds and Predict free
+          const tick = dialog.getByRole("checkbox", { name: TICK });
+          await expect.soft(tick).toHaveCount(credits === "empty" ? 0 : 1);
+          if (credits !== "empty") await expect.soft(tick).not.toBeChecked();
+          await expect.soft(dialog.getByRole("button", { name: "Max credits" })).toBeHidden();
+          await expect.soft(dialog.getByRole("status")).toBeEmpty();
+          await expect.soft(dialog.getByRole("button", { name: "Predict", exact: true })).toBeEnabled();
 
           for (const title of STEPS) {
             const step = dialog.getByText(title, { exact: true });
@@ -133,21 +137,42 @@ for (const viewport of VIEWPORTS) {
         expect.soft(pageErrors, "page errors").toEqual([]);
       });
 
-      test("unticking moves nothing and hides Use max; ticking brings it back", async ({ page }) => {
+      test("ticking shows Max credits and holds Predict with the reason, moving nothing; unticking frees it", async ({
+        page,
+      }, testInfo) => {
         const dialog = await openCredits(page, "enough", theme);
         const before = await footprint(dialog);
-        const tick = dialog.getByRole("checkbox", { name: "Use your Foresight credits" });
-        const useMax = dialog.getByRole("button", { name: "Use max" });
+        const tick = dialog.getByRole("checkbox", { name: TICK });
+        const useMax = dialog.getByRole("button", { name: "Max credits" });
+        const predict = dialog.getByRole("button", { name: "Predict", exact: true });
+        const status = dialog.getByRole("status");
 
-        await dialog.getByText("Use your Foresight credits").click();
-        await expect(tick).not.toBeChecked();
-        await expect(useMax).toBeHidden();
-        expect(await footprint(dialog)).toEqual(before);
-
-        await dialog.getByText("Use your Foresight credits").click();
+        await tickLabel(dialog).click();
         await expect(tick).toBeChecked();
         await expect(useMax).toBeVisible();
+        await expect(status).toHaveText("Credits can't be spent yet. Untick them to predict with your own funds.");
+        await expect(predict).toBeDisabled();
+        await expect(dialog.getByText("≈ 10 sDAI from your credits")).toBeVisible();
         expect(await footprint(dialog)).toEqual(before);
+        await testInfo.attach(`credits-${viewport.width}x${viewport.height}-${theme}-ticked.png`, {
+          body: await page.screenshot({ animations: "disabled" }),
+          contentType: "image/png",
+        });
+
+        await tickLabel(dialog).click();
+        await expect(tick).not.toBeChecked();
+        await expect(useMax).toBeHidden();
+        await expect(status).toBeEmpty();
+        await expect(predict).toBeEnabled();
+        expect(await footprint(dialog)).toEqual(before);
+      });
+
+      test("the tick's target is 44px tall on its 20px row", async ({ page }) => {
+        const dialog = await openCredits(page, "enough", theme);
+        const label = tickLabel(dialog);
+        const row = (await label.evaluate((element) => element.parentElement!.getBoundingClientRect().height))!;
+        expect((await label.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+        expect(row).toBe(20);
       });
     });
   }

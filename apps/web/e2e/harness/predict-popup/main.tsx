@@ -8,7 +8,7 @@ import { PredictDialog } from "@/features/predict/components/PredictDialog";
 import type { ListedEstimate } from "@/features/predict/components/PredictList";
 import { SLIPPAGE_BPS } from "@/features/predict/oracle/tolerances";
 import type { PredictFailureReason, PredictProgress } from "@/features/predict/run/types";
-import { creditLines, creditsOffer } from "@/features/predict/utils/credits";
+import { CREDITS_NOT_SPENDABLE, creditLines, creditsOffer } from "@/features/predict/utils/credits";
 import { planFunding } from "@/features/predict/utils/funding";
 import { previewTrades } from "@/features/predict/utils/plan";
 import { fundsToAdd, predictSteps } from "@/features/predict/utils/predictSteps";
@@ -61,14 +61,15 @@ const signingIn = params.get("signin") === "busy";
 /** `?skipped=N` estimates the run left out, said on the status line; a `harness-skipped` event changes it after open. */
 const initialSkipped = Number(params.get("skipped") ?? "0");
 
-/** `?credits=` the visitor's Foresight credits, as CREDITS names them; none by default. */
+/** `?credits=` the visitor's Foresight credits, as CREDITS names them; none by default. The tick starts off, as in the app. */
 const creditsState = params.get("credits") as keyof typeof CREDITS | null;
 const CREDITS = {
   enough: { wallet: 15n * WAD, tradeWallet: 0n, manager: 1000n * WAD },
   partial: { wallet: 3n * WAD, tradeWallet: 1n * WAD, manager: 1000n * WAD },
-  off: { wallet: 15n * WAD, tradeWallet: 0n, manager: 1000n * WAD },
   short: { wallet: 500n * WAD, tradeWallet: 0n, manager: 200n * WAD },
   empty: { wallet: 120n * WAD, tradeWallet: 0n, manager: 0n },
+  /** the live manager's figures: four decimals, short of a larger holding */
+  long: { wallet: 2000n * WAD, tradeWallet: 0n, manager: parseUnits("1321.7347", 18) },
 };
 const heldCredits = creditsState ? (CREDITS[creditsState] ?? null) : null;
 const offer = creditsOffer(heldCredits);
@@ -147,8 +148,6 @@ const amount =
         ? parseUnits("1234567.89", 18)
         : 10n * WAD
       : undefined;
-/** The tick, before the visitor changes it. */
-const initiallyUsing = creditsState !== "off";
 const fundingFor = (isUsing: boolean) =>
   state === "disconnected"
     ? null
@@ -158,7 +157,7 @@ const fundingFor = (isUsing: boolean) =>
         tradeWallet: 6n * WAD,
         credits: isUsing ? creditLines(heldCredits, offer) : [],
       });
-const funding = fundingFor(initiallyUsing);
+const funding = fundingFor(false);
 
 /** Each option's pools at the market's 250 of 500, deep enough that ten tokens move it visibly. */
 const pool = (scale: ListedEstimate["scale"], side: "up" | "down"): PoolLiquidity => {
@@ -230,7 +229,8 @@ const success = (
 function Harness() {
   const [skipped, setSkipped] = useState(initialSkipped);
   const [typed, setTyped] = useState(amount);
-  const [isUsing, setIsUsing] = useState(initiallyUsing);
+  const [isUsing, setIsUsing] = useState(false);
+  const shown = isUsing ? fundingFor(true) : funding;
   useEffect(() => {
     const onSkipped = (event: Event) => setSkipped((event as CustomEvent<number>).detail);
     window.addEventListener("harness-skipped", onSkipped);
@@ -251,7 +251,7 @@ function Harness() {
         tokens={tokens}
         token={sDai}
         onTokenChange={() => {}}
-        funding={isUsing === initiallyUsing ? funding : fundingFor(isUsing)}
+        funding={shown}
         collateral={collateral}
         credits={offer.state === "none" ? undefined : { offer, isUsing, onUsingChange: setIsUsing }}
         optionNoun="city"
@@ -263,7 +263,13 @@ function Harness() {
         canRetry={state === "failed" || state === "pending" || state === "recovered"}
         isPending={state === "pending"}
         recovered={state === "recovered" ? { deposit: 4n * WAD, token: sDai } : undefined}
-        notice={state === "disconnected" ? "Connect a wallet to predict." : undefined}
+        notice={
+          state === "disconnected"
+            ? "Connect a wallet to predict."
+            : (shown?.creditsIn ?? 0n) > 0n
+              ? CREDITS_NOT_SPENDABLE
+              : undefined
+        }
         onPredict={() => {}}
       />
     </>
