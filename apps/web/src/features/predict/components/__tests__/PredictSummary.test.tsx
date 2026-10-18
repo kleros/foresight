@@ -73,7 +73,7 @@ const NO_TRADES: Plan = { split: 0n, sells: [], merge: 0n, buys: [], held: 0n };
 const cents = (units: bigint) => (units * WAD) / 100n;
 
 describe("PredictSummary's headline", () => {
-  it("counts only the markets whose shown value moves", () => {
+  it("counts the markets whose shown value moves, not one a preview leaves where it is", () => {
     renderSummary({ [GERWIG]: { from: 312, to: 355 }, [COOGLER]: { from: 296, to: 296.0001 } });
 
     expect(head()).toHaveTextContent(/^1 market moves$/);
