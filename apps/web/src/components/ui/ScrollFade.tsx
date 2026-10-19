@@ -22,6 +22,18 @@ type ScrollFadeProps = {
 // measured before paint, so the cue's strip is laid out by the next frame, when a child may scroll the area
 const useMeasureEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
+const SCROLL_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "]);
+
+/** A field or widget that takes the scroll keys for itself, so pressing them there scrolls nothing. */
+function usesScrollKeys(target: EventTarget | null): boolean {
+  return (
+    target instanceof Element &&
+    target.closest(
+      "input, textarea, select, button, [contenteditable=true], [role=slider], [role=spinbutton], [role=listbox], [role=combobox], [role=menu], [role=radiogroup], [role=checkbox], [role=switch]",
+    ) !== null
+  );
+}
+
 /**
  * Self-contained scrollable wrapper with automatic top/bottom fades.
  * Manages its own overflow and shrink behavior; requires a bounded height.
@@ -40,7 +52,7 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
   const [showTop, setShowTop] = useState(false);
   const [showBottom, setShowBottom] = useState(false);
   const [hasOverflow, setHasOverflow] = useState(false);
-  // once the arrow's bursts end or the area scrolls, the arrow stays still; reduced motion skips them
+  // once the arrow's bursts end or the visitor scrolls the area, the arrow stays still; reduced motion skips them
   const [nudged, setNudged] = useState(
     () => typeof window !== "undefined" && Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches),
   );
@@ -72,8 +84,14 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
 
     el.addEventListener("scroll", update);
     window.addEventListener("resize", update);
+    // the visitor's own scroll settles the arrow; a scroll the page makes (focus, scrollIntoView) does not
     const settle = () => setNudged(true);
-    el.addEventListener("scroll", settle, { once: true });
+    const settleOnKey = (event: KeyboardEvent) => {
+      if (SCROLL_KEYS.has(event.key) && !usesScrollKeys(event.target)) settle();
+    };
+    el.addEventListener("wheel", settle, { passive: true });
+    el.addEventListener("touchmove", settle, { passive: true });
+    el.addEventListener("keydown", settleOnKey);
     // Content can grow without a scroll or a window resize.
     const observer = new ResizeObserver(update);
     observer.observe(el);
@@ -81,7 +99,9 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
 
     return () => {
       el.removeEventListener("scroll", update);
-      el.removeEventListener("scroll", settle);
+      el.removeEventListener("wheel", settle);
+      el.removeEventListener("touchmove", settle);
+      el.removeEventListener("keydown", settleOnKey);
       window.removeEventListener("resize", update);
       observer.disconnect();
     };
@@ -146,7 +166,7 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
         >
           <ArrowDown
             data-testid="more-below-arrow"
-            className={clsx("size-2.5 [&_path]:fill-current", showBottom && !nudged && "fs-nudge-down")}
+            className={clsx("size-3 [&_path]:fill-current", showBottom && !nudged && "fs-nudge-down")}
             onAnimationEnd={() => setNudged(true)}
           />
           {cue}

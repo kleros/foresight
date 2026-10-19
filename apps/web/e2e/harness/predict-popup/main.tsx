@@ -66,6 +66,8 @@ const pricesLoading = params.get("prices") === "loading";
 const pricesFailed = params.get("prices") === "failed";
 /** `&movedBy=slippage` with `state=moved`: the plans changed with the visitor's new slippage. */
 const movedBySlippage = params.get("movedBy") === "slippage";
+/** `?open=press` the popup starts closed and opens from a button, as the market page opens it. */
+const opensOnPress = params.get("open") === "press";
 /** `?leftOut=N` estimates the run left out, said on the status line; a `harness-left-out` event changes it after open. */
 const initialLeftOut = Number(params.get("leftOut") ?? "0");
 
@@ -265,6 +267,7 @@ const success = (
 
 function Harness() {
   const [leftOut, setLeftOut] = useState(initialLeftOut);
+  const [isOpen, setIsOpen] = useState(!opensOnPress);
   const slippage = useSlippageStore((store) => store.settings);
   const setSlippage = useSlippageStore((store) => store.setSlippage);
   useEffect(() => {
@@ -282,8 +285,13 @@ function Harness() {
     <>
       <header className="fs-header sticky top-0 z-30 flex h-16 w-full" />
       {dialog === "success" ? success : null}
+      {opensOnPress ? (
+        <button type="button" className="m-4 w-fit" onClick={() => setIsOpen(true)}>
+          Open predict
+        </button>
+      ) : null}
       <PredictDialog
-        isOpen={dialog !== "success"}
+        isOpen={dialog !== "success" && isOpen}
         onClose={() => {}}
         selected={selected}
         onRemove={() => {}}
