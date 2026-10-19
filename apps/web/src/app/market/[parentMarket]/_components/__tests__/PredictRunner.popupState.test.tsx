@@ -7,11 +7,15 @@ import type { Address } from "viem";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PredictRunInput } from "@/features/predict/hooks/usePredictRun";
-import { GAS_RESERVE_WEI } from "@/features/predict/oracle/tolerances";
+import { DEFAULT_SLIPPAGE, GAS_RESERVE_WEI } from "@/features/predict/oracle/tolerances";
 import type { PredictDriver, PredictProgress } from "@/features/predict/run/types";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
+import { useSlippageStore } from "@/features/predict/stores/slippageStore";
+import type { PreviewTrades } from "@/features/predict/utils/plan";
 import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 import { toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
+
+import { estimateToPriceWad } from "@/utils/optionPrice";
 
 import { SHOWN } from "@/test/queries";
 import { addresses, GATEWAY } from "@/testing/fixtures";
@@ -186,6 +190,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   window.localStorage.clear();
   useEstimateStore.setState({ estimates: {} });
+  useSlippageStore.setState({ settings: { tradeBps: null, creditsBps: null } });
   runInput.current = null;
   wallet.sDai = 0n;
   wallet.xDai = 0n;
@@ -357,5 +362,89 @@ describe("the funds step names what the visitor pays", () => {
 
     act(() => run.set(idle));
     await waitFor(() => expect(fundsSubtitle(popup)).toBe("3.75 xDAI (≈ 3 sDAI)"));
+  });
+});
+
+describe("prices that moved when Predict read the pools again", () => {
+  /** A plan that moves the option from the market's 250 to `to`, in the option's unit. */
+  const planTo = (scale: Parameters<typeof estimateToPriceWad>[1], to: number): PreviewTrades => ({
+    split: WAD,
+    sells: [],
+    merge: 0n,
+    buys: [{ side: "up", amountIn: WAD, toTarget: false, fee: 0n, outcomeOut: WAD }],
+    from: estimateToPriceWad(MARKET_ESTIMATE, scale),
+    to: estimateToPriceWad(to, scale),
+    feeValue: 0n,
+  });
+
+  async function pressPredict() {
+    wallet.sDai = 10n * WAD;
+    const detail = renderPage();
+    const popup = await openPopup();
+    await userEvent.type(amountField(popup), "5");
+    await userEvent.click(popup.getByRole("button", { name: "Predict" }));
+    return { detail, popup };
+  }
+
+  function move(detail: ReturnType<typeof session>, to: number) {
+    const scale = detail.options[0]!;
+    act(() =>
+      run.set({
+        ...idle,
+        stage: "moved",
+        moved: { markets: [scale.market], plans: { [scale.market.toLowerCase()]: planTo(scale, to) } },
+      }),
+    );
+  }
+
+  it("holds the run to the plans Details showed", async () => {
+    await pressPredict();
+
+    expect(driver.start).toHaveBeenCalledWith(expect.any(Object));
+  });
+
+  it("shows the new figures and confirms them rather than starting again", async () => {
+    const { detail, popup } = await pressPredict();
+    move(detail, 300);
+
+    await userEvent.click(within(popup.getByTestId("predict-summary")).getAllByRole("button")[0]!);
+    expect(popup.getAllByTestId("market-move")[0]).toHaveTextContent(/→ 300/);
+    await userEvent.click(popup.getByRole("button", { name: "Confirm new prices" }));
+
+    expect(driver.confirm).toHaveBeenCalledOnce();
+    expect(driver.start).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the confirmed figures on show while the run goes", async () => {
+    const { detail, popup } = await pressPredict();
+    move(detail, 300);
+    await userEvent.click(popup.getByRole("button", { name: "Confirm new prices" }));
+
+    act(() => run.set({ ...idle, stage: "signing" }));
+    await userEvent.click(within(popup.getByTestId("predict-summary")).getAllByRole("button")[0]!);
+
+    expect(popup.getAllByTestId("market-move")[0]).toHaveTextContent(/→ 300/);
+  });
+
+  it("throws the moved check away when the popup closes", async () => {
+    const { detail, popup } = await pressPredict();
+    move(detail, 300);
+
+    await userEvent.click(popup.getByRole("button", { name: "Close" }));
+
+    expect(driver.reset).toHaveBeenCalled();
+  });
+});
+
+describe("the slippage a run uses", () => {
+  it("is the visitor's setting as Predict is pressed, Auto where they set none", async () => {
+    wallet.sDai = 10n * WAD;
+    renderPage();
+    const popup = await openPopup();
+
+    await userEvent.click(popup.getByRole("button", { name: "Settings" }));
+    await userEvent.type(popup.getByRole("textbox", { name: "Max slippage on trades, custom percent" }), "3");
+
+    expect(runInput.current?.slippage()).toEqual({ tradeBps: 300, creditsBps: DEFAULT_SLIPPAGE.creditsBps });
   });
 });

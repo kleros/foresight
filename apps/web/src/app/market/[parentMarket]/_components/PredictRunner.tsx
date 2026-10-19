@@ -7,11 +7,14 @@ import { useAccount } from "wagmi";
 
 import type { PayTokenChoice } from "@/features/predict/components/PredictAmountSection";
 import { PredictDialog } from "@/features/predict/components/PredictDialog";
-import { DEFAULT_SLIPPAGE } from "@/features/predict/oracle/tolerances";
+import type { PriceMove } from "@/features/predict/components/PredictList";
+import type { ShownPlans } from "@/features/predict/run/types";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
+import { useSlippageStore } from "@/features/predict/stores/slippageStore";
 import type { PayToken, SelectedEstimate } from "@/features/predict/types";
 import { expectedSplit, roundToDisplay } from "@/features/predict/utils/funding";
 import { fundsToAdd, predictSteps, type FundsToAdd } from "@/features/predict/utils/predictSteps";
+import { resolveSlippage } from "@/features/predict/utils/slippage";
 import type { SessionDetail } from "@/features/sessions/types";
 import { optionNounSingular } from "@/features/sessions/utils/optionNoun";
 import { useExecutor } from "@/features/trade-executor/api/getExecutor";
@@ -20,10 +23,11 @@ import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
 import type { PlacedPrediction } from "./PredictSuccessView";
 import { toPredictOptions, toSavedEstimates } from "./toPredictOptions";
+import { useCreditsSwapPreview } from "./useCreditsSwapPreview";
 import { useHasPredicted } from "./useHasPredicted";
 import { usePredictExecution } from "./usePredictExecution";
 import { usePredictFunding } from "./usePredictFunding";
-import { usePricePreview } from "./usePricePreview";
+import { toPriceMove, usePricePreview } from "./usePricePreview";
 
 interface PredictRunnerProps {
   session: SessionDetail;
@@ -49,6 +53,9 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
   const [removed, setRemoved] = useState<string[]>([]);
   // what the steps say is being added, held from the press so a refreshed balance cannot rewrite it
   const [frozenToAdd, setFrozenToAdd] = useState<FundsToAdd>();
+  // the plans Details showed when Predict was pressed, and those the visitor then confirmed after the pools moved
+  const [pressedPlans, setPressedPlans] = useState<ShownPlans>();
+  const [confirmedPlans, setConfirmedPlans] = useState<ShownPlans>();
 
   const clearEstimate = useEstimateStore((state) => state.clearEstimate);
   const executor = useExecutor();
@@ -79,7 +86,17 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
   const token = tokens.find((choice) => choice.id === tokenId) ?? tokens[0]!;
   const kept = selected.filter((estimate) => !removed.includes(estimate.scale.market));
 
-  const slippage = DEFAULT_SLIPPAGE;
+  const slippageSettings = useSlippageStore((state) => state.settings);
+  const setSlippage = useSlippageStore((state) => state.setSlippage);
+  const slippage = resolveSlippage(slippageSettings);
+  const creditsIn = funding?.creditsIn ?? 0n;
+  const creditsQuote = useCreditsSwapPreview({
+    sessionId: session.id,
+    collateral: collateralToken,
+    tradeWallet: predicted,
+    credits: creditsIn,
+    creditsBps: slippage.creditsBps,
+  });
   const preview = usePricePreview({
     session,
     selected: kept,
@@ -102,6 +119,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
   const recovered = progress?.recovered;
   const isRunning = stage === "quoting" || stage === "signing" || stage === "confirming";
   const retryable = stage === "halted" && Boolean(progress?.failure?.retryable);
+  const moved = stage === "moved" ? progress?.moved : undefined;
 
   useEffect(() => {
     driver?.recover();
@@ -137,11 +155,41 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
     : retryable && (Boolean(pendingHash) || Boolean(progress?.moneyMoved));
 
   const close = () => {
-    if (stage === "halted" && !pendingHash) driver?.reset();
+    if ((stage === "halted" && !pendingHash) || stage === "moved") driver?.reset();
     onClose();
   };
 
+  /** Each option's move as `plans` give it; an option without a plan there keeps the live preview's. */
+  const movesFrom = (plans: ShownPlans, was?: ShownPlans, changed: readonly string[] = []) => {
+    const moves: Record<string, PriceMove> = { ...preview.moves };
+    for (const [key, trades] of Object.entries(plans)) {
+      const scale = session.options.find((option) => option.market.toLowerCase() === key);
+      if (!scale) continue;
+      const before = changed.includes(key) ? was?.[key] : undefined;
+      const beforeMove = before && toPriceMove(before, scale, 0n);
+      moves[key] = {
+        ...toPriceMove(trades, scale, preview.held[key] ?? 0n),
+        ...(beforeMove ? { was: { from: beforeMove.from, to: beforeMove.to } } : {}),
+      };
+    }
+    return moves;
+  };
+  const shownMoves = moved
+    ? movesFrom(
+        moved.plans,
+        pressedPlans,
+        moved.markets.map((market) => market.toLowerCase()),
+      )
+    : confirmedPlans && (isRunning || canRetry)
+      ? movesFrom(confirmedPlans)
+      : preview.moves;
+
   const predict = () => {
+    if (moved) {
+      setConfirmedPlans(moved.plans);
+      driver?.confirm();
+      return;
+    }
     if (stage === "review") {
       driver?.resume();
       return;
@@ -155,7 +203,9 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
     if (stage === "halted" && !pendingHash) driver?.reset();
     for (const market of removed) clearEstimate(session.parentMarket, market);
     setFrozenToAdd(fundsToAdd(funding, token, collateral));
-    driver?.start();
+    setPressedPlans(preview.plans);
+    setConfirmedPlans(undefined);
+    driver?.start(preview.plans);
   };
 
   // an amount over the balance cannot be predicted, so nothing is named as being added for it
@@ -181,7 +231,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
       onClose={close}
       selected={recovered ? toSavedEstimates(session, recovered.options) : kept}
       onRemove={(market) => setRemoved((markets) => [...markets, market])}
-      preview={recovered ? undefined : preview}
+      preview={recovered ? undefined : shownMoves}
       amount={amount}
       onAmountChange={setAmount}
       tokens={tokens}
@@ -211,6 +261,9 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
         // once a run is going its own state is the story, not what the wallet is doing now
         isRunning ? undefined : notice({ owner, onRightChain: chainId === DEFAULT_CHAIN_ID, ready })
       }
+      slippage={{ settings: slippageSettings, onChange: setSlippage }}
+      creditsSwap={creditsQuote && creditsIn > 0n ? { credits: creditsIn, preview: creditsQuote } : undefined}
+      moved={moved?.markets.length}
       onPredict={predict}
     />
   );

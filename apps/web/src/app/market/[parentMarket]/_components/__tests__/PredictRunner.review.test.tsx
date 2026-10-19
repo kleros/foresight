@@ -222,8 +222,14 @@ vi.mock("../usePredictFunding", () => ({
 vi.mock("../useHasPredicted", () => ({ useHasPredicted: () => true }));
 // a live preview for every estimate in the form, which a reopened run's summary must not show
 vi.mock("../usePricePreview", () => ({
-  usePricePreview: ({ selected }: { selected: SelectedEstimate[] }) =>
-    Object.fromEntries(selected.map((estimate) => [estimate.scale.market.toLowerCase(), { from: 300, to: 350 }])),
+  usePricePreview: ({ selected }: { selected: SelectedEstimate[] }) => ({
+    moves: Object.fromEntries(
+      selected.map((estimate) => [estimate.scale.market.toLowerCase(), { from: 300, to: 350 }]),
+    ),
+    plans: {},
+    held: {},
+  }),
+  toPriceMove: vi.fn(),
 }));
 
 afterAll(() => {
