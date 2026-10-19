@@ -302,7 +302,7 @@ function movedText({ markets, credits, only, bySlippage }: MovedStatus): string 
 export const CONFIRM_MOVED = "Confirm new prices";
 
 /** The button's label where the new figures come from the visitor's new slippage. */
-export const CONFIRM_SLIPPAGE = "Confirm new trades";
+export const CONFIRM_SLIPPAGE = "Confirm trades";
 
 /** "2 estimates could not be traded", with no full stop. */
 export function leftOutText(count: number): string {

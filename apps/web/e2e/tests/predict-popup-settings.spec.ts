@@ -322,6 +322,26 @@ test.describe("the settings, compact", () => {
   });
 });
 
+test.describe("plans moved by the visitor's new slippage at 320 x 568", () => {
+  test.use({ viewport: { width: 320, height: 568 } });
+
+  test("say so whole on the status line and confirm the new trades, keeping the popup's footprint", async ({
+    page,
+  }) => {
+    const before = await footprint(await openPopup(page, "theme=light&state=moved"));
+    const dialog = await openPopup(page, "theme=light&state=moved&movedBy=slippage");
+
+    // the button sizes to its own label beside Go back, so only its row is held
+    const after = await footprint(dialog);
+    expect(after.dialog).toEqual(before.dialog);
+    expect([after.footer[1], after.footer[3]]).toEqual([before.footer[1], before.footer[3]]);
+    const status = dialog.getByRole("status");
+    await expect(status).toHaveText("Your new slippage changes the trades. Check Details, then confirm.");
+    expect(await status.evaluate((element) => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
+    await expect(dialog.getByRole("button", { name: "Confirm trades" })).toBeEnabled();
+  });
+});
+
 test.describe("prices that could not be read", () => {
   test.use({ viewport: { width: 375, height: 667 } });
 

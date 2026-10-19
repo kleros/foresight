@@ -1154,7 +1154,7 @@ describe("prices that moved before signing", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       "Your new slippage changes the trades. Check Details, then confirm.",
     );
-    expect(screen.getByRole("button", { name: "Confirm new trades" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Confirm trades" })).toBeEnabled();
   });
 
   it("open Details on the new figures", () => {

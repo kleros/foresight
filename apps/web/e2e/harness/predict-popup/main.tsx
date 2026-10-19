@@ -64,6 +64,8 @@ const signingIn = params.get("signin") === "busy";
 const pricesLoading = params.get("prices") === "loading";
 /** `?prices=failed` the pools could not be read, so the button offers to read them again. */
 const pricesFailed = params.get("prices") === "failed";
+/** `&movedBy=slippage` with `state=moved`: the plans changed with the visitor's new slippage. */
+const movedBySlippage = params.get("movedBy") === "slippage";
 /** `?leftOut=N` estimates the run left out, said on the status line; a `harness-left-out` event changes it after open. */
 const initialLeftOut = Number(params.get("leftOut") ?? "0");
 
@@ -328,7 +330,11 @@ function Harness() {
               }
             : undefined
         }
-        moved={state === "moved" ? { markets: 1, credits: false } : undefined}
+        moved={
+          state === "moved"
+            ? { markets: 1, credits: false, ...(movedBySlippage ? { bySlippage: true as const } : {}) }
+            : undefined
+        }
         pricesReady={!pricesLoading && !pricesFailed}
         onBack={state === "moved" ? () => {} : undefined}
         onRetryPrices={pricesFailed ? () => {} : undefined}

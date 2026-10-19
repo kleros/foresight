@@ -220,4 +220,19 @@ describe("a retry's new slippage before the visitor confirms it", () => {
     expect(driver.getProgress().stage).toBe("complete");
     expect(sent).toHaveLength(signed + 2);
   });
+
+  it("stores a change that leaves every batch still to land as shown, and carries on without a stop", async () => {
+    const store = createFlowRunStore({ storage: createMemoryStorage() });
+    const { driver, sent, setSettings } = setup(sdaiRun, { store });
+    driver.start({ plans: { [KEY]: planOn(WAD, SLIPPAGE_BPS) } });
+    await stageIs(driver, "halted");
+    const signed = sent.length;
+
+    // a run without credits has no swap the credits setting reaches
+    setSettings({ ...AUTO, creditsBps: 100 });
+    driver.retry();
+    await stageIs(driver, "complete");
+
+    expect(sent).toHaveLength(signed + 1);
+  });
 });
