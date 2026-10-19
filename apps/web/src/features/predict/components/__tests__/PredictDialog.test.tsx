@@ -941,18 +941,110 @@ describe("the settings", () => {
     ).toHaveAccessibleDescription(/High slippage\. The swap may pay much less than its quote\.$/);
   });
 
-  it("name the Auto value on Auto", async () => {
+  it("show the slippage in use on Auto in each empty field, and name it", async () => {
+    render(<PredictDialog {...props()} {...withCredits} />);
+    await userEvent.click(gear());
+    const trades = screen.getByRole("textbox", { name: "Max slippage on trades, custom percent" });
+    const credits = screen.getByRole("textbox", { name: "Max slippage on the credits swap, custom percent" });
+
+    expect(trades).toHaveValue("");
+    expect(trades).toHaveAttribute("placeholder", "1");
+    expect(trades).toHaveAccessibleDescription(/Auto is 1%\./);
+    expect(credits).toHaveAttribute("placeholder", "0.2");
+  });
+
+  it("set every kind back to Auto from Reset, which has nothing to do on Auto", async () => {
+    const onChange = vi.fn();
+    const view = render(
+      <PredictDialog
+        {...props()}
+        {...withCredits}
+        slippage={{ settings: { tradeBps: null, creditsBps: null }, onChange }}
+      />,
+    );
+    await userEvent.click(gear());
+    expect(within(panel()).getByRole("button", { name: "Reset" })).toBeDisabled();
+
+    view.rerender(
+      <PredictDialog
+        {...props()}
+        {...withCredits}
+        slippage={{ settings: { tradeBps: 300, creditsBps: 50 }, onChange }}
+      />,
+    );
+    await userEvent.click(within(panel()).getByRole("button", { name: "Reset" }));
+
+    expect(onChange.mock.calls).toEqual([
+      ["tradeBps", null],
+      ["creditsBps", null],
+    ]);
+  });
+
+  it("drop a typed entry not yet saved on Reset", async () => {
+    render(
+      <PredictDialog {...props()} slippage={{ settings: { tradeBps: 300, creditsBps: null }, onChange: vi.fn() }} />,
+    );
+    await userEvent.click(gear());
+    const field = screen.getByRole("textbox", { name: "Max slippage on trades, custom percent" });
+    await userEvent.clear(field);
+    await userEvent.type(field, "70");
+    await userEvent.tab();
+
+    await userEvent.click(within(panel()).getByRole("button", { name: "Reset" }));
+
+    const after = screen.getByRole("textbox", { name: "Max slippage on trades, custom percent" });
+    expect(after).not.toHaveAttribute("aria-invalid");
+    expect(within(panel()).getAllByRole("button", { name: "Auto" })[0]).toHaveFocus();
+  });
+
+  it("close from the dimmed body around the panel", async () => {
     render(<PredictDialog {...props()} />);
     await userEvent.click(gear());
 
-    expect(screen.getByRole("textbox", { name: "Max slippage on trades, custom percent" })).toHaveAccessibleDescription(
-      /Auto is 1%\.$/,
+    await userEvent.click(panel());
+
+    expect(gear()).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("mark the gear while a custom value applies, so the slippage in use is known without opening them", () => {
+    const view = render(<PredictDialog {...props()} />);
+    expect(gear()).not.toHaveAccessibleDescription();
+    expect(screen.queryByTestId("settings-custom")).toBeNull();
+
+    view.rerender(
+      <PredictDialog {...props()} slippage={{ settings: { tradeBps: 300, creditsBps: null }, onChange: vi.fn() }} />,
     );
+    expect(gear()).toHaveAccessibleDescription("Custom slippage set");
+    expect(screen.getByTestId("settings-custom")).toBeInTheDocument();
+
+    // a credits setting applies only to a visitor with credits
+    view.rerender(
+      <PredictDialog {...props()} slippage={{ settings: { tradeBps: null, creditsBps: 50 }, onChange: vi.fn() }} />,
+    );
+    expect(screen.queryByTestId("settings-custom")).toBeNull();
+    view.rerender(
+      <PredictDialog
+        {...props()}
+        {...withCredits}
+        slippage={{ settings: { tradeBps: null, creditsBps: 50 }, onChange: vi.fn() }}
+      />,
+    );
+    expect(screen.getByTestId("settings-custom")).toBeInTheDocument();
+  });
+
+  it("open after a run stopped with money moved, while the form stays locked to the run", async () => {
+    render(<PredictDialog {...props()} canRetry />);
+
+    expect(gear()).toBeEnabled();
+    await userEvent.click(gear());
+    expect(gear()).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByLabelText("Amount")).toHaveAttribute("readonly");
   });
 
   it.each([
     ["while a run goes", { isRunning: true }],
-    ["after a run stopped with money moved", { canRetry: true }],
+    ["while a sent transaction is not confirmed", { canRetry: true, isPending: true }],
+    ["for a stored run", { canRetry: true, recovered: { deposit: WAD, token: sDai } }],
     ["while new prices wait to be confirmed", { moved: MOVED }],
   ])("cannot be opened %s", (_name, state) => {
     render(<PredictDialog {...props()} {...state} />);
@@ -1032,6 +1124,26 @@ describe("prices that moved before signing", () => {
   });
 });
 
+describe("prices that could not be read", () => {
+  const notice = "Prices could not be read. Try again in a moment.";
+
+  it("offer Try again in Predict's place, which reads them again", async () => {
+    const onRetryPrices = vi.fn();
+    render(<PredictDialog {...props()} notice={notice} onRetryPrices={onRetryPrices} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(onRetryPrices).toHaveBeenCalledOnce();
+    expect(screen.getByRole("status")).toHaveTextContent(notice);
+  });
+
+  it("check prices on the button while they are read again", () => {
+    render(<PredictDialog {...props()} notice={notice} onRetryPrices={vi.fn()} isRetryingPrices />);
+
+    expect(screen.getByRole("button", { name: "Checking prices…" })).toBeDisabled();
+  });
+});
+
 describe("Predict before its prices are read", () => {
   it("holds Predict until Details has a plan for each estimate to hold the run to", () => {
     render(<PredictDialog {...props()} pricesReady={false} />);
@@ -1045,7 +1157,8 @@ describe("a credits swap that loses much", () => {
   it("names the loss on the status line without the visitor opening Details", () => {
     render(<PredictDialog {...props()} {...withCredits} creditsSwap={lossySwap} />);
 
-    expect(screen.getByRole("status")).toHaveTextContent("The credits swap loses ≈ 38 xDAI. Details has the figures.");
+    expect(screen.getByRole("status")).toHaveTextContent(/^Credits swap loses ≈ 38 xDAI\.$/);
+    expect(within(screen.getByRole("status")).getByText(/loses/)).toHaveClass("text-xs");
     expect(screen.getByRole("button", { name: "Predict" })).toBeEnabled();
   });
 

@@ -77,6 +77,10 @@ interface PredictDialogProps {
   pricesReady: boolean;
   /** Declines the moved figures and gives the form back, where nothing has been signed. */
   onBack?: () => void;
+  /** Reads the prices again where they could not be read; the button then offers it. */
+  onRetryPrices?: () => void;
+  /** The prices are being read again. */
+  isRetryingPrices?: boolean;
   /** Starts a run, picks a stopped one up again, or confirms moved prices. */
   onPredict: () => void;
 }
@@ -155,6 +159,8 @@ export function PredictDialog({
   moved,
   pricesReady,
   onBack,
+  onRetryPrices,
+  isRetryingPrices = false,
   onPredict,
 }: PredictDialogProps) {
   const isMoved = moved !== undefined;
@@ -204,9 +210,14 @@ export function PredictDialog({
     return () => clearTimeout(timer);
   }, [isMoved]);
   const statusRef = useRef<HTMLParagraphElement>(null);
-  // the settings change what the next run signs, so they close while the form is locked to a run
+  // a stopped run's retry takes up new settings and stops at moved where they change its plan; a stored run
+  // has no plan shown to check against, and a sent transaction is settled before anything else
+  const settingsLocked = isRunning || isMoved || recovered !== undefined || isPending;
   const [settingsWanted, setSettingsWanted] = useState(false);
-  const settingsOpen = settingsWanted && !isLocked;
+  const settingsOpen = settingsWanted && !settingsLocked;
+  const isCustomSlippage =
+    slippage.settings.tradeBps !== null || (credits !== undefined && slippage.settings.creditsBps !== null);
+  const customId = useId();
   const settingsId = useId();
   const titleId = useId();
   const gearRef = useRef<HTMLButtonElement>(null);
@@ -278,7 +289,8 @@ export function PredictDialog({
               aria-label="Settings"
               aria-expanded={settingsOpen}
               aria-controls={settingsId}
-              disabled={isLocked}
+              aria-describedby={isCustomSlippage ? customId : undefined}
+              disabled={settingsLocked}
               onClick={() => setSettingsWanted((open) => !open)}
               onKeyDown={(event) => {
                 // the body under the panel is inert, so the dialog's own wrap finds nothing before the gear
@@ -299,6 +311,18 @@ export function PredictDialog({
               )}
             >
               <GearIcon className="text-fs-popup-text-2 size-4.5" />
+              <span id={customId} className="sr-only">
+                Custom slippage set
+              </span>
+              <span
+                aria-hidden
+                data-testid={isCustomSlippage ? "settings-custom" : undefined}
+                data-open={isCustomSlippage || undefined}
+                className={clsx(
+                  "predict-gear-dot bg-fs-popup-accent-text absolute top-1 right-1 size-1.5 rounded-full",
+                  "ring-fs-surface ring-2",
+                )}
+              />
             </button>
             <LightButton
               text=""
@@ -396,7 +420,7 @@ export function PredictDialog({
                 isEstimated={(runToken ?? token).id === "native"}
                 creditsSwap={recovered ? undefined : shownCreditsSwap}
                 slippage={recovered ? undefined : slippage.settings}
-                onOpenSettings={isLocked ? undefined : () => setSettingsWanted(true)}
+                onOpenSettings={settingsLocked ? undefined : () => setSettingsWanted(true)}
               />
               <PredictStepsTimeline steps={steps} />
             </div>
@@ -413,7 +437,10 @@ export function PredictDialog({
             )}
           >
             {status ? (
-              <span key={status.text} className={clsx(status.tone !== "neutral" && "fs-enter")}>
+              <span
+                key={status.text}
+                className={clsx(status.tone !== "neutral" && "fs-enter", status.small && "truncate text-xs leading-4")}
+              >
                 {status.text}
               </span>
             ) : null}
@@ -427,28 +454,40 @@ export function PredictDialog({
             ) : null}
             <PredictButton
               text={
-                recovered
-                  ? "Resume"
-                  : isPending
-                    ? "Check again"
-                    : canRetry
-                      ? "Try the rest"
-                      : isMoved
-                        ? CONFIRM_MOVED
-                        : "Predict"
+                onRetryPrices
+                  ? "Try again"
+                  : recovered
+                    ? "Resume"
+                    : isPending
+                      ? "Check again"
+                      : canRetry
+                        ? "Try the rest"
+                        : isMoved
+                          ? CONFIRM_MOVED
+                          : "Predict"
               }
-              busyText={isRunning ? (isPricing ? CHECKING_PRICES : busyLabel(steps)) : undefined}
-              onPress={onPredict}
+              busyText={
+                isRunning
+                  ? isPricing
+                    ? CHECKING_PRICES
+                    : busyLabel(steps)
+                  : isRetryingPrices
+                    ? CHECKING_PRICES
+                    : undefined
+              }
+              onPress={onRetryPrices ?? onPredict}
               isDisabled={
-                notice !== undefined ||
-                (!canRetry &&
-                  !isMoved &&
-                  (recovered !== undefined ||
-                    selected.length === 0 ||
-                    funding === null ||
-                    tooMuch ||
-                    nothingToTrade ||
-                    !pricesReady))
+                onRetryPrices
+                  ? false
+                  : notice !== undefined ||
+                    (!canRetry &&
+                      !isMoved &&
+                      (recovered !== undefined ||
+                        selected.length === 0 ||
+                        funding === null ||
+                        tooMuch ||
+                        nothingToTrade ||
+                        !pricesReady))
               }
             />
           </div>

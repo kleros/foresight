@@ -566,38 +566,66 @@
    Hidden once closed, so nothing in it is read or reached; visibility flips after the fade out. */
 .predict-settings {
   opacity: 0;
-  transform: translateY(8px);
-  filter: blur(2px);
   visibility: hidden;
   transition:
     opacity var(--fs-dur-echo) var(--fs-ease-exit),
-    transform var(--fs-dur-echo) var(--fs-ease-exit),
-    filter var(--fs-dur-echo) var(--fs-ease-exit),
     visibility 0s linear var(--fs-dur-echo);
 }
 .predict-settings[data-open] {
   opacity: 1;
-  transform: none;
-  filter: none;
   visibility: visible;
   transition:
     opacity var(--fs-dur-enter) var(--fs-ease-enter),
-    transform var(--fs-dur-enter) var(--fs-ease-enter),
-    filter var(--fs-dur-enter) var(--fs-ease-enter),
     visibility 0s;
 }
+/* the card rises into place under the gear as the body dims behind it */
+.predict-settings-card {
+  transform: translateY(8px);
+  filter: blur(2px);
+  transition:
+    transform var(--fs-dur-echo) var(--fs-ease-exit),
+    filter var(--fs-dur-echo) var(--fs-ease-exit);
+}
+.predict-settings[data-open] .predict-settings-card {
+  transform: none;
+  filter: none;
+  transition:
+    transform var(--fs-dur-enter) var(--fs-ease-enter),
+    filter var(--fs-dur-enter) var(--fs-ease-enter);
+}
 @media (prefers-reduced-motion: reduce) {
-  .predict-settings {
+  .predict-settings-card {
     transform: none;
     filter: none;
   }
 }
 /* the panel scrolls on a phone on its side, in the popup's own line colour */
+.predict-settings,
 .predict-settings * {
   scrollbar-color: var(--fs-popup-line-strong) var(--fs-surface);
 }
 .predict-settings ::-webkit-scrollbar-thumb {
   background: var(--fs-popup-line-strong);
+}
+/* the gear's custom-slippage dot pops on as a notification badge does (transitions.dev 03), and off quicker */
+.predict-gear-dot {
+  transform: scale(0);
+  opacity: 0;
+  transition:
+    transform var(--fs-dur-echo) var(--fs-ease-exit),
+    opacity var(--fs-dur-echo) var(--fs-ease-exit);
+}
+.predict-gear-dot[data-open] {
+  transform: none;
+  opacity: 1;
+  transition:
+    transform var(--fs-dur-enter) var(--fs-ease-spring),
+    opacity var(--fs-dur-enter) var(--fs-ease-enter);
+}
+@media (prefers-reduced-motion: reduce) {
+  .predict-gear-dot {
+    transform: none;
+  }
 }
 /* a swapped label enters as the settings panel does (transitions.dev 04's enter half), keyed so each text replays it */
 .predict-text-swap {
