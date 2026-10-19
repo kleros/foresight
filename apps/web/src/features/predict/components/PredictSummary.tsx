@@ -217,7 +217,7 @@ export function PredictSummary({
 }) {
   const body = useId();
   const fees = feesTotal(selected, preview);
-  // a button in the folded body is one the dialog's focus trap would Tab to and fail to focus
+  // the dialog's focus trap stops on a button in the folded, inert body
   const openSettings = isOpen ? onOpenSettings : undefined;
   const isPlanned = selected.some((estimate) => preview[estimate.scale.market.toLowerCase()]?.plan !== undefined);
 

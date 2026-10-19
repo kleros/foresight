@@ -17,14 +17,18 @@ vi.mock("@/lib/swap/lens", async () => {
   const { fakeCreditsQuoter } = await import("@/features/predict/flow/__tests__/support/fakes");
   return { createLensExactInputQuoter: () => fakeCreditsQuoter({ lossBps: 40n }) };
 });
+const routed = vi.hoisted(() => ({ yes: true }));
 vi.mock("@/config/contracts", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/config/contracts")>()),
-  creditsRoute: () => ({
-    token: addresses.credits,
-    manager: addresses.manager,
-    wxdai: addresses.wxdai,
-    swaprRouter: addresses.swapRouter,
-  }),
+  creditsRoute: () =>
+    routed.yes
+      ? {
+          token: addresses.credits,
+          manager: addresses.manager,
+          wxdai: addresses.wxdai,
+          swaprRouter: addresses.swapRouter,
+        }
+      : null,
 }));
 
 function mount(credits: bigint) {
@@ -53,6 +57,15 @@ describe("useCreditsSwapPreview", () => {
     await waitFor(() => expect(result.current.preview).toBeDefined());
     expect(result.current.preview?.loss).toBe(value - (value * (10_000n - 40n)) / 10_000n);
     expect(result.current.failed).toBe(false);
+  });
+
+  it("fails where no route swaps the credits, so Predict does not wait on a quote that never comes", () => {
+    routed.yes = false;
+    try {
+      expect(mount(2n * WAD).result.current).toEqual({ preview: undefined, failed: true });
+    } finally {
+      routed.yes = true;
+    }
   });
 
   it("names nothing while no credits are spent", () => {

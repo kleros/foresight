@@ -223,8 +223,9 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
           decimals: runToken.decimals,
           ...(recovered.creditsFromEoa > 0n ? { credits: recovered.creditsFromEoa } : {}),
         }
-      : // held only while the form is locked to the run; otherwise the form is what the next press signs
-        ((isRunning || canRetry) && frozenToAdd) || fundsToAdd(overBalance ? null : funding, token, collateral)),
+      : // held while the form is locked to the run, moved included; otherwise the form is what the next press signs
+        ((isRunning || canRetry || moved) && frozenToAdd) ||
+        fundsToAdd(overBalance ? null : funding, token, collateral)),
     progress,
   });
 

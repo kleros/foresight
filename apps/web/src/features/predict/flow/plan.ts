@@ -329,9 +329,8 @@ export async function previewCreditsSwap(
 }
 
 /**
- * The manager swaps `creditsToSpend` of its collateral for WXDAI paid to the executor, which unwraps
- * the floor and splits it at the parent as xDAI. The surplus over the floor stays as WXDAI.
- * A run held to a shown swap keeps its floor, so the split is the one shown.
+ * The manager swaps `creditsToSpend` of its collateral for WXDAI paid to the executor, which unwraps the floor,
+ * the shown one for a run held to it, and splits it at the parent as xDAI. The surplus stays as WXDAI.
  */
 async function creditsLeg(ctx: PredictCtx, amount: bigint, creditsBps: number, deps: PredictDeps): Promise<CreditsLeg> {
   const route = ctx.credits;

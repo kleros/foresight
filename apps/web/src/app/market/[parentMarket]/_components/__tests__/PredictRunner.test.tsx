@@ -63,6 +63,8 @@ vi.mock("@/features/trade-executor/api/getExecutor", async (importOriginal) => (
 vi.mock("../usePredictFunding", () => ({ usePredictFunding: vi.fn() }));
 
 vi.mock("../useHasPredicted", () => ({ useHasPredicted: () => false }));
+// the credits swap is quoted on a chain with a credits route, which this one lacks
+vi.mock("../useCreditsSwapPreview", () => ({ useCreditsSwapPreview: () => ({ failed: false }) }));
 
 type DialogProps = ComponentProps<typeof PredictDialog>;
 

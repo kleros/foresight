@@ -15,7 +15,7 @@ import { creditsRoute } from "@/config/contracts";
 
 /**
  * The credits swap a run spending `credits` would make now, for Details and for the run to be held to;
- * none while nothing is spent. `failed` once the quote could not be had.
+ * none while nothing is spent. `failed` once the quote could not be had, or no route swaps the credits.
  */
 export function useCreditsSwapPreview(args: {
   sessionId: string;
@@ -37,5 +37,7 @@ export function useCreditsSwapPreview(args: {
       }),
     enabled: collateral !== null && route !== null && tradeWallet !== undefined && credits > 0n,
   });
-  return credits > 0n ? { preview: query.data, failed: query.isError } : { failed: false };
+  if (credits === 0n) return { failed: false };
+  // credits with no route to swap them through are never quoted
+  return { preview: query.data, failed: route === null || query.isError };
 }

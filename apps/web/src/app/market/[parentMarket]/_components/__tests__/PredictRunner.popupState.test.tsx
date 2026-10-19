@@ -436,6 +436,23 @@ describe("prices that moved when Predict read the pools again", () => {
     expect(popup.getAllByTestId("market-move")[0]).toHaveTextContent(/→ 300/);
   });
 
+  it("keeps the funds step as pressed when a run stops at moved after its deposit landed", async () => {
+    const { detail, popup } = await pressPredict();
+    const pressed = fundsSubtitle(popup);
+    wallet.trade = 5n * WAD;
+    const scale = detail.options[0]!;
+    act(() =>
+      run.set({
+        ...idle,
+        stage: "moved",
+        moneyMoved: true,
+        moved: { markets: [scale.market], plans: { [scale.market.toLowerCase()]: planTo(scale, 300) } },
+      }),
+    );
+
+    expect(fundsSubtitle(popup)).toBe(pressed);
+  });
+
   it("gives the form back from Go back, keeping the popup open", async () => {
     const { detail, popup } = await pressPredict();
     move(detail, 300);
