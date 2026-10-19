@@ -35,6 +35,7 @@ swap router locally, so credits can be read here but only spent on the gnosis fo
 yarn start:gnosis-fork                  # compile + hardhat node forking gnosis on :8545
 yarn simulate:session:gnosis-fork       # sample session through the real Seer MarketFactory
 yarn simulate:liquidity:gnosis-fork     # seed real Swapr Algebra pools for the latest session
+yarn simulate:credits:gnosis-fork       # mint 100 Foresight credits to alice (--to bob|0x… --amount 25)
 ```
 
 The fork pins at the newest block in `deployments/gnosis/`, so it already carries the live

@@ -12,6 +12,7 @@ import "hardhat-deploy-ethers";
 
 import "./tasks/simulateSession";
 import "./tasks/simulateLiquidity";
+import "./tasks/grantCredits";
 import solidityConfig from "./solidity.config.json";
 
 dotenv.config({ path: path.join(__dirname, ".env.local") });
