@@ -2,6 +2,7 @@ import { connect, disconnect, mock, type MockParameters } from "@wagmi/core";
 
 import { isUndefined } from "@/utils/is-undefined";
 
+import { withLocalSendTimeout } from "./localSends";
 import { isMockWalletEnabled, MOCK_ACCOUNTS, resolveMockAccount, type MockAccountRef } from "./mock-account";
 import { wagmiConfig } from "./wagmi";
 
@@ -38,7 +39,9 @@ async function connectOnce(address: string, features?: MockParameters["features"
   }
   wagmiConfig._internal.connectors.setState((connectors) => connectors.filter((existing) => !isMock(existing)));
 
-  const connector = wagmiConfig._internal.connectors.setup(mock({ accounts: [address as `0x${string}`], features }));
+  const connector = wagmiConfig._internal.connectors.setup(
+    withLocalSendTimeout(mock({ accounts: [address as `0x${string}`], features })),
+  );
   wagmiConfig._internal.connectors.setState((connectors) => [...connectors, connector]);
 
   await connect(wagmiConfig, { connector });

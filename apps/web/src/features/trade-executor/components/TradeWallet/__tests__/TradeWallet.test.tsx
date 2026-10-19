@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { parseUnits, type Address } from "viem";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -26,6 +26,8 @@ let held: Map<Address, bigint>;
 let ownerHeld: Map<Address, bigint>;
 /** What a balanceOf of a position token does instead of answering; undefined answers it */
 let positionRead: "pending" | "fail" | undefined;
+/** The same for a balanceOf of the collateral, by the owner or the trade wallet */
+let fundsRead: "pending" | "fail" | undefined;
 
 const balanceOf = (holder: Address) => (holder === EXECUTOR ? held : holder === OWNER ? ownerHeld : new Map());
 
@@ -36,6 +38,8 @@ vi.mock("@/lib/web3/public-client", () => ({
       const isPosition = [LISBON.up, LISBON.down, BERLIN.up, BERLIN.down].includes(address);
       if (isPosition && positionRead === "pending") return new Promise(() => {});
       if (isPosition && positionRead === "fail") return Promise.reject(new Error("balanceOf reverted"));
+      if (address === COLLATERAL && fundsRead === "pending") return new Promise(() => {});
+      if (address === COLLATERAL && fundsRead === "fail") return Promise.reject(new Error("balanceOf reverted"));
       return Promise.resolve(balanceOf(holder).get(address) ?? 0n);
     },
   },
@@ -81,12 +85,16 @@ const market: TradeWalletMarket = {
 
 let queryClient: QueryClient;
 
-const renderWallet = (shown: TradeWalletMarket = market) =>
-  render(
+/** Renders the wallet with its Balances disclosure open, where the option balances live. */
+const renderWallet = (shown: TradeWalletMarket = market, { closed = false } = {}) => {
+  const rendered = render(
     <QueryClientProvider client={queryClient}>
       <TradeWallet market={shown} noun="city" />
     </QueryClientProvider>,
   );
+  if (!closed) fireEvent.click(screen.getByRole("button", { name: "Balances" }));
+  return rendered;
+};
 
 const units = (amount: string) => parseUnits(amount, 18);
 
@@ -100,7 +108,65 @@ beforeEach(() => {
   held = new Map();
   ownerHeld = new Map();
   positionRead = undefined;
+  fundsRead = undefined;
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+});
+
+describe("TradeWallet's row", () => {
+  it("is one line of the wallet, its address, its collateral balance, Deposit, Withdraw and Balances", async () => {
+    renderWallet(market, { closed: true });
+    const wallet = screen.getByRole("region", { name: "Trade wallet" });
+
+    expect(within(wallet).getByText("0x2222...2222")).toBeInTheDocument();
+    expect(await within(wallet).findByText("0 sDAI")).toBeInTheDocument();
+    for (const name of ["Deposit", "Withdraw", "Balances"]) {
+      expect(within(wallet).getByRole("button", { name })).toBeInTheDocument();
+    }
+  });
+
+  it("keeps the option balances and Mint and Merge behind Balances", async () => {
+    held = new Map([[LISBON.up, units("3")]]);
+    renderWallet(market, { closed: true });
+    const balances = screen.getByRole("button", { name: "Balances" });
+
+    expect(balances).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("list", { name: "Lisbon positions" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Mint" })).toBeNull();
+
+    await userEvent.click(balances);
+
+    expect(balances).toHaveAttribute("aria-expanded", "true");
+    await waitFor(() => expect(positionsOf("Lisbon")).toEqual(["UP 3", "DOWN 0"]));
+    expect(screen.getByRole("button", { name: "Mint" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Merge" })).toBeInTheDocument();
+  });
+});
+
+describe("a collateral balance that is not read yet, or could not be", () => {
+  it("does not show the wallet's row as empty when its balance could not be read", async () => {
+    fundsRead = "fail";
+    renderWallet(market, { closed: true });
+    const wallet = screen.getByRole("region", { name: "Trade wallet" });
+
+    expect(await within(wallet).findByText("Could not read balance")).toBeInTheDocument();
+    expect(within(wallet).queryByText("0 sDAI")).toBeNull();
+  });
+
+  it.each([
+    ["pending", "Reading balance…"],
+    ["fail", "Could not read balance"],
+  ] as const)("says so in Mint and Deposit when the read is %s", async (read, text) => {
+    fundsRead = read;
+    renderWallet();
+
+    await userEvent.click(screen.getByRole("button", { name: "Mint" }));
+    expect(await within(await screen.findByRole("dialog")).findByText(text)).toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    await userEvent.click(screen.getByRole("button", { name: "Deposit" }));
+    expect(await within(await screen.findByRole("dialog")).findByText(text)).toBeInTheDocument();
+  });
 });
 
 describe("TradeWallet positions", () => {
@@ -122,6 +188,32 @@ describe("TradeWallet positions", () => {
 
     await waitFor(() => expect(positionsOf("Lisbon")).toEqual(["UP 30.43", "DOWN 1.5"]));
     expect(positionsOf("Berlin")).toEqual(["UP 2.25", "DOWN 30.44"]);
+  });
+
+  it("shows holdings at the position row's 2 decimals, with the full amount in the title", async () => {
+    held = new Map([
+      [LISBON.underlying, units("160.9234")],
+      [LISBON.up, units("214.0912")],
+      [LISBON.down, units("1.4387")],
+    ]);
+
+    renderWallet();
+
+    await waitFor(() => expect(positionsOf("Lisbon")).toEqual(["UP 214.09", "DOWN 1.43"]));
+    expect(screen.getByText("214.09")).toHaveAttribute("title", "214.0912");
+    expect(screen.getByText("160.92")).toHaveAttribute("title", "160.9234");
+  });
+
+  it("groups large holdings in threes, in the grid and its titles", async () => {
+    held = new Map([
+      [LISBON.underlying, units("123456789.123")],
+      [LISBON.up, units("1234567.891")],
+    ]);
+
+    renderWallet();
+
+    await waitFor(() => expect(positionsOf("Lisbon")).toEqual(["UP 1,234,567.89", "DOWN 0"]));
+    expect(screen.getByText("123,456,789.12")).toHaveAttribute("title", "123,456,789.123");
   });
 
   it("shows a dash for each position while its balance is loading", async () => {
@@ -187,9 +279,124 @@ describe("TradeWallet positions", () => {
     renderWallet();
     await screen.findByTitle("5");
 
-    await userEvent.click(screen.getByRole("button", { name: /Advanced options/ }));
-    await userEvent.click(await screen.findByRole("option", { name: "Merge" }));
+    await userEvent.click(screen.getByRole("button", { name: "Merge" }));
 
-    expect(await screen.findByText("Available: 5 sDAI")).toBeInTheDocument();
+    expect(await screen.findByText("Full sets: 5")).toBeInTheDocument();
+  });
+
+  it("explains UP and DOWN once, beside the tokens heading, not once per option", async () => {
+    renderWallet();
+    const panel = document.getElementById(
+      screen.getByRole("button", { name: "Balances" }).getAttribute("aria-controls") ?? "",
+    );
+
+    expect(within(panel!).getAllByRole("button", { name: "About UP and DOWN" })).toHaveLength(1);
+    expect(within(panel!).queryAllByRole("button", { name: "" })).toHaveLength(0);
+  });
+});
+
+describe("TradeWallet's amount dialogs", () => {
+  it("shows a merge's balance at four decimals and names the cap when the amount is over it", async () => {
+    held = new Map([
+      [LISBON.underlying, units("5.123456789")],
+      [BERLIN.underlying, units("9")],
+      [INVALID, units("6")],
+    ]);
+    renderWallet();
+    await screen.findByTitle(/^5\.1234/);
+
+    await userEvent.click(screen.getByRole("button", { name: "Merge" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(await within(dialog).findByText("Full sets: 5.1234")).toBeInTheDocument();
+    await userEvent.type(within(dialog).getByRole("spinbutton"), "6");
+    expect(await within(dialog).findByText("Not enough sets. Max 5.1234.")).toBeInTheDocument();
+  });
+
+  it("opens Mint's amount without marking it invalid before anything is typed", async () => {
+    renderWallet();
+
+    await userEvent.click(screen.getByRole("button", { name: "Mint" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(within(dialog).getByRole("spinbutton")).not.toBeRequired();
+    expect(within(dialog).getByRole("spinbutton")).toBeValid();
+  });
+
+  it("words Mint's hint with the market's own collateral", async () => {
+    renderWallet({ ...market, collateral: { ...market.collateral, symbol: "wstETH" } });
+
+    await userEvent.click(screen.getByRole("button", { name: "Mint" }));
+
+    expect(await screen.findByText("Turns wstETH in your trade wallet into city tokens.")).toBeInTheDocument();
+  });
+
+  it("names a balance under the last shown decimal rather than showing it as 0", async () => {
+    ownerHeld = new Map([[COLLATERAL, units("0.00001")]]);
+    renderWallet(market, { closed: true });
+
+    await userEvent.click(screen.getByRole("button", { name: "Deposit" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(await within(dialog).findByText("Balance: less than 0.0001 sDAI")).toBeInTheDocument();
+  });
+
+  it("does not offer a Max of 0 over an empty balance", async () => {
+    renderWallet(market, { closed: true });
+
+    await userEvent.click(screen.getByRole("button", { name: "Deposit" }));
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText("Balance: 0 sDAI");
+    await userEvent.type(within(dialog).getByRole("spinbutton"), "1");
+
+    expect(await within(dialog).findByText("Not enough balance.")).toBeInTheDocument();
+  });
+
+  it("groups a large balance and its cap in threes, and Max fills the shown amount ungrouped", async () => {
+    ownerHeld = new Map([[COLLATERAL, units("98765432109.12345")]]);
+    renderWallet(market, { closed: true });
+
+    await userEvent.click(screen.getByRole("button", { name: "Deposit" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(await within(dialog).findByText("Balance: 98,765,432,109.1234 sDAI")).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Max" }));
+    expect(within(dialog).getByRole("spinbutton")).toHaveValue("98765432109.1234");
+  });
+
+  it("names no Max when a deposit is over a balance under the last shown decimal", async () => {
+    ownerHeld = new Map([[COLLATERAL, units("0.00001")]]);
+    renderWallet(market, { closed: true });
+
+    await userEvent.click(screen.getByRole("button", { name: "Deposit" }));
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText("Balance: less than 0.0001 sDAI");
+    await userEvent.type(within(dialog).getByRole("spinbutton"), "1");
+
+    expect(await within(dialog).findByText("Not enough balance.")).toBeInTheDocument();
+  });
+
+  it("names no Max when a mint is over a balance under the last shown decimal", async () => {
+    held = new Map([[COLLATERAL, units("0.00001")]]);
+    renderWallet();
+
+    await userEvent.click(screen.getByRole("button", { name: "Mint" }));
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText("Balance: less than 0.0001 sDAI");
+    await userEvent.type(within(dialog).getByRole("spinbutton"), "1");
+
+    expect(await within(dialog).findByText("Not enough balance.")).toBeInTheDocument();
+  });
+
+  it("shows a deposit's balance at four decimals with its token, and names the cap when the amount is over it", async () => {
+    ownerHeld = new Map([[COLLATERAL, units("2.56789")]]);
+    renderWallet(market, { closed: true });
+
+    await userEvent.click(screen.getByRole("button", { name: "Deposit" }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(await within(dialog).findByText("Balance: 2.5678 sDAI")).toBeInTheDocument();
+    await userEvent.type(within(dialog).getByRole("spinbutton"), "3");
+    expect(await within(dialog).findByText("Not enough balance. Max 2.5678 sDAI.")).toBeInTheDocument();
   });
 });

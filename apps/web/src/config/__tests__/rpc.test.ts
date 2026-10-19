@@ -31,15 +31,3 @@ describe("gnosisRpcUrls", () => {
     t.expect(gnosisRpcUrls(undefined)).toEqual(["https://rpc.gnosischain.com", "https://rpc.gnosis.gateway.fm"]);
   });
 });
-
-describe("rpcTimeoutMs", () => {
-  it("waits longer on a local node, whose forked state can take its time to fetch", async (t) => {
-    const { rpcTimeoutMs } = await import("../rpc");
-    for (const url of ["http://127.0.0.1:8545", "http://localhost:8545"]) t.expect(rpcTimeoutMs(url)).toBe(120_000);
-  });
-
-  it("keeps the client's own timeout on a public endpoint, so a fallback is reached quickly", async (t) => {
-    const { rpcTimeoutMs } = await import("../rpc");
-    t.expect(rpcTimeoutMs("https://rpc.gnosischain.com")).toBeUndefined();
-  });
-});

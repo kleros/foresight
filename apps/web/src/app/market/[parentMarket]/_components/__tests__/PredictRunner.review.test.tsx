@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, type RenderResult } from "@testing-library/react";
+import { render, screen, waitFor, within, type RenderResult } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   decodeFunctionData,
@@ -19,6 +19,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PredictOption } from "@/features/predict/flow/types";
 import type { SelectedEstimate } from "@/features/predict/types";
+import type { SessionDetail } from "@/features/sessions/types";
 import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 import { toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
 
@@ -173,6 +174,16 @@ vi.mock("@/features/predict/run/reader", async () => {
     createPredictReader: () => ({
       isExecutorDeployed: () => Promise.resolve(chain.deployed),
       collateralBalance: () => Promise.resolve(0n),
+      creditsBalance: () => Promise.resolve(0n),
+      managerCollateral: () => Promise.resolve(0n),
+      previewDeposit: (assets: bigint) => Promise.resolve(assets),
+      vaultValue: (shares: bigint) => Promise.resolve(shares),
+      latestBlock: () => Promise.resolve(1n),
+      blockGasLimit: () => Promise.resolve(17_000_000n),
+      landedSince: () => Promise.resolve([]),
+      hasPending: () => Promise.resolve(false),
+      nextNonce: () => Promise.resolve(0),
+      sentWithNonce: () => Promise.resolve({ status: "none" as const }),
       optionStates: ({ options }: { options: PredictOption[] }) => {
         chain.asked.push(options.map((option) => option.targetPriceWad));
         return Promise.resolve(options.map(() => chainState()));
@@ -182,8 +193,8 @@ vi.mock("@/features/predict/run/reader", async () => {
 });
 
 vi.mock("@/lib/swap/lens", async () => {
-  const { fakeQuoter } = await import("@/features/predict/flow/__tests__/support/fakes");
-  return { createLensQuoter: () => fakeQuoter() };
+  const { fakeCreditsQuoter, fakeQuoter } = await import("@/features/predict/flow/__tests__/support/fakes");
+  return { createLensQuoter: () => fakeQuoter(), createLensExactInputQuoter: () => fakeCreditsQuoter() };
 });
 
 vi.mock("@/features/trade-executor/api/getExecutor", async (importOriginal) => ({
@@ -193,8 +204,12 @@ vi.mock("@/features/trade-executor/api/getExecutor", async (importOriginal) => (
 
 vi.mock("../usePredictFunding", () => ({
   usePredictFunding: () => ({
+    credits: { state: "none" },
     funding: {
       available: 10n * 10n ** 18n,
+      creditsAvailable: 0n,
+      credits: [],
+      creditsIn: 0n,
       collateralIn: form.deposit,
       tradeWallet: 0n,
       fromTradeWallet: 0n,
@@ -206,6 +221,44 @@ vi.mock("../usePredictFunding", () => ({
   }),
 }));
 vi.mock("../useHasPredicted", () => ({ useHasPredicted: () => true }));
+// a live preview for every estimate in the form, which a reopened run's summary must not show; its plans are
+// the fake chain's pools for the form's split, which a new run is held to
+vi.mock("../usePricePreview", async (importOriginal) => {
+  const { chainState } = await import("@/features/predict/flow/__tests__/support/fakes");
+  const { previewTrades } = await import("@/features/predict/utils/plan");
+  const { toPredictOptions } = await import("../toPredictOptions");
+  const state = chainState();
+  return {
+    ...(await importOriginal<typeof import("../usePricePreview")>()),
+    usePricePreview: (args: {
+      session: SessionDetail;
+      selected: SelectedEstimate[];
+      collateralIn: bigint | undefined;
+      slippageBps: number;
+    }) => ({
+      moves: Object.fromEntries(
+        args.selected.map((estimate) => [estimate.scale.market.toLowerCase(), { from: 300, to: 350 }]),
+      ),
+      plans: Object.fromEntries(
+        toPredictOptions(args.session, args.selected).map((option) => [
+          option.childMarket.toLowerCase(),
+          previewTrades(
+            {
+              pools: state.pools,
+              targetPriceWad: option.targetPriceWad,
+              held: state.held,
+              splitAmount: state.underlying + (args.collateralIn ?? 0n),
+            },
+            args.slippageBps,
+          )!,
+        ]),
+      ),
+      held: {},
+      ready: true,
+      failed: false,
+    }),
+  };
+});
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -291,14 +344,14 @@ async function firstVisit(answers: Array<"accept" | "reject">, opts: { holdMinin
 /** A turns the deposit down and reloads. */
 async function leaveRejectedDeposit() {
   const view = await firstVisit(["reject"]);
-  await waitFor(() => expect(onScreen()).toContain("You turned the request down."));
+  await waitFor(() => expect(onScreen()).toContain("You declined in your wallet."));
   view.unmount();
 }
 
 /** A's deposit lands, A turns the prediction down and reloads. Returns the deposit's hash. */
 async function leaveRejectedPredictionAfterDeposit() {
   const view = await firstVisit(["accept", "reject"]);
-  await waitFor(() => expect(onScreen()).toContain("You turned the request down."));
+  await waitFor(() => expect(onScreen()).toContain("You declined in your wallet."));
   view.unmount();
   const deposit = chain.prompts.find(isDeposit)!;
   expect(chain.receipts.get(deposit.hash)).toBe("success");
@@ -403,6 +456,20 @@ describe("the recovery screen", () => {
     await waitFor(() => expect(onScreen()).toContain("410 $M"));
   });
 
+  it("lists the markets as they stand, not the form's preview, whose deposit differs from the saved one", async () => {
+    await leaveRejectedDeposit();
+
+    await reopen();
+    await waitFor(() => expect(onScreen()).toContain("7.25"));
+    await userEvent.click(within(screen.getByTestId("predict-summary")).getByRole("button"));
+
+    const moves = within(screen.getByTestId("predict-summary"))
+      .getAllByTestId("market-move")
+      .map((move) => move.textContent);
+    expect(moves.length).toBeGreaterThan(0);
+    for (const move of moves) expect(move).toMatch(/^(Now |No preview)/);
+  });
+
   it("shows the saved deposit and estimate after a submitted transaction", async () => {
     await leaveSubmittedDeposit();
     mine();
@@ -474,6 +541,8 @@ describe("resuming", () => {
     await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
     expect(chain.asked.length).toBeGreaterThan(0);
     for (const targets of chain.asked) expect(targets).toEqual(targetsFor(SAVED.estimate));
+    // what the stored run placed, not the form's amount
+    expect(onSuccess.mock.calls[0]?.[1]).toMatchObject({ estimates: 1, amount: SAVED.deposit });
   });
 
   it("still waits for Resume after a deposit in flight mines during the review", async () => {

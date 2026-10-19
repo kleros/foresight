@@ -68,6 +68,10 @@ export interface PoolVolumes {
 
 const FEE_DENOMINATOR = 1_000_000n;
 
+/** The pool's fee on `amountIn` going in, in that token, rounded up as Algebra takes it. */
+export const feeOf = (pool: Pick<PoolLiquidity, "fee">, amountIn: bigint): bigint =>
+  (amountIn * pool.fee + FEE_DENOMINATOR - 1n) / FEE_DENOMINATOR;
+
 /**
  * What it takes to move the pool to `targetPriceWad`, as magnitudes — the caller knows from the
  * prices whether that is a buy or a sell. Walks the initialised ticks in between, and the side

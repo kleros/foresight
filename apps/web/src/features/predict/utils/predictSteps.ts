@@ -1,15 +1,14 @@
-import { formatUnits, type Address } from "viem";
+import type { Address } from "viem";
 
 import { shortenAddress } from "@/utils/address";
-import { formatAmount } from "@/utils/amount";
+import { OUT_OF_FUNDS_COPY } from "@/utils/txErrorText";
 
-import { STEP_ID } from "../flow/plan";
-import { AMOUNT_DISPLAY_DECIMALS } from "../oracle/tolerances";
+import { shownAmount, type Funding } from "./funding";
+import { STEP_ID } from "../flow/stepIds";
 import type { PredictProgress } from "../run/types";
 import type { PayToken } from "../types";
-import type { Funding } from "./funding";
 
-export type StepView = "idle" | "running" | "done" | "inactive";
+export type StepView = "idle" | "running" | "done" | "inactive" | "failed";
 
 export interface PredictStepRow {
   key: "wallet" | "funds" | "predict";
@@ -20,39 +19,58 @@ export interface PredictStepRow {
 
 export interface PredictSteps {
   rows: PredictStepRow[];
-  /** Set once a run has stopped short, in words the visitor can act on. */
+  /** Set once a run has stopped short, in words the visitor can act on; the row that stopped reads `failed`. */
   failure?: string;
+  /** The stopped run's transaction was sent and may still confirm, so `failure` is a warning. */
+  pending?: true;
+  /** What the run is doing while it checks a sent transaction before going on. */
+  note?: string;
+  /** A run exists, so the line shown before one no longer applies. */
+  started?: true;
+  /** The routes are being priced before the run's first step, which no step row shows. */
+  pricing?: true;
 }
+
+/** The credits swap has no quote or route, so a run spending credits cannot be planned. */
+export const CREDITS_UNAVAILABLE = "Credits can't be spent right now. Untick them to predict with your own funds.";
 
 /** The chain's own errors name gas and contracts, which the popup never shows. */
 const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], string> = {
-  rejected: "You turned the request down.",
-  cancelled: "Your wallet replaced the request with something else.",
-  reverted: "The trade could not go through at these prices.",
-  rpc: "The network did not answer in time.",
+  rejected: "You declined in your wallet.",
+  cancelled: "Cancelled or replaced in your wallet.",
+  reverted: "The trade failed at these prices. Raise slippage in Settings and retry.",
+  rpc: "The network did not answer.",
   unknown: "Something went wrong.",
-  "no-route": "No trade moves these markets toward your estimates. Try a larger amount or a different estimate.",
-  quote: "Prices could not be fetched. Try again in a moment.",
-  funds:
-    "Your wallet does not have enough to cover this and the network fee. Lower the amount or add funds, then try again.",
-  balance: "Your trade wallet balance is lower than shown. Check the amount and try again.",
-  "deposit-unconfirmed": "Your last deposit may still be confirming. Check your wallet's activity, then try again.",
-  "wrong-wallet": "This prediction was started from another wallet. Connect that wallet to finish it.",
-  "wrong-chain": "This prediction was started on another network. Switch to that network to finish it.",
+  "no-route": "No trade found for these estimates. Try a larger amount.",
+  "at-estimates": "Prices are already at your estimates. Nothing to trade.",
+  quote: "Could not get prices. Try again shortly.",
+  funds: OUT_OF_FUNDS_COPY,
+  balance: "Trade wallet balance is lower than shown. Check the amount.",
+  credits: CREDITS_UNAVAILABLE,
+  "deposit-unconfirmed": "Your last transaction may still be confirming. Check your wallet.",
+  pending: "A transaction from your wallet is still confirming. Try again once it lands.",
+  "wrong-wallet": "Started from another wallet. Connect it to finish.",
+  "wrong-chain": "Started on another network. Switch to it to finish.",
 };
 
 /** Once the deposit is in the amount is fixed, so the only thing short is the fee in the wallet. */
-const FEE_SHORT_COPY = "Your wallet does not have enough xDAI for the network fee. Add some, then try the rest.";
+const FEE_SHORT_COPY = "Not enough xDAI for the fee. Add some, then try the rest.";
+
+/** Once the credits are in the trade wallet the run is locked to them, so only waiting helps. */
+const CREDITS_LOCKED_COPY = "Credits can't be spent right now. Try again shortly.";
 
 /** A transaction is out there and nothing has said how it ended, so it is neither a success nor a failure. */
-const PENDING_COPY =
-  "Your transaction was sent but has not confirmed yet. It may still go through, so it is checked before anything else is sent.";
+const PENDING_COPY = "Sent, not confirmed yet.";
+
+const RECONCILING_COPY = "Checking your last transaction…";
+
+/** Said by the summary row and the button while the routes are priced, and by a step quoting mid-run. */
+export const CHECKING_PRICES = "Checking prices…";
 
 const STAGE_COPY: Partial<Record<PredictProgress["stage"], string>> = {
-  quoting: "Finding the best prices…",
-  signing: "Waiting for your signature…",
+  quoting: CHECKING_PRICES,
+  signing: "Confirm in your wallet",
   confirming: "Confirming…",
-  complete: "Prediction successful!",
 };
 
 interface TokenAmount {
@@ -69,6 +87,8 @@ export interface FundsToAdd {
   decimals: number;
   /** The collateral `toAdd` becomes, when the visitor pays in another token. */
   collateral?: TokenAmount;
+  /** Credits moved from the visitor's wallet to the trade wallet; absent when none move. */
+  credits?: bigint;
 }
 
 /** An xDAI payment adds its deposit, which becomes `toAdd` collateral; a collateral payment adds `toAdd` itself. */
@@ -78,22 +98,16 @@ export function fundsToAdd(
   collateral: { symbol: string; decimals: number },
 ): FundsToAdd {
   const toAdd = funding?.toAdd ?? 0n;
-  if (pay.id === "collateral") return { toAdd, ...collateral };
+  const moved = (funding?.credits ?? []).reduce((sum, use) => sum + use.fromWallet, 0n);
+  const credits = moved > 0n ? { credits: moved } : {};
+  if (pay.id === "collateral") return { toAdd, ...collateral, ...credits };
   return {
     toAdd: funding?.deposit ?? 0n,
     symbol: pay.symbol,
     decimals: pay.decimals,
     collateral: { amount: toAdd, ...collateral },
+    ...credits,
   };
-}
-
-const LEAST_SHOWN = formatUnits(1n, AMOUNT_DISPLAY_DECIMALS);
-
-/** Rounded to the nearest shown decimal, so a deposit a wei short of a typed amount reads as typed. */
-function shownAmount(value: bigint, decimals: number): string {
-  const step = 10n ** BigInt(Math.max(decimals - AMOUNT_DISPLAY_DECIMALS, 0));
-  const shown = formatAmount(((value + step / 2n) / step) * step, decimals);
-  return shown === "0" && value > 0n ? `less than ${LEAST_SHOWN}` : shown;
 }
 
 /**
@@ -106,25 +120,61 @@ export function predictSteps(
     progress: PredictProgress | null;
   },
 ): PredictSteps {
-  const { wallet, toAdd, symbol, decimals, collateral, progress } = args;
-  const runSteps = progress?.steps ?? [];
+  const { wallet, toAdd, symbol, decimals, collateral, credits = 0n, progress } = args;
+  // the driver reads a sent transaction's receipt under "confirming" with no step of its own running
+  const reconciling =
+    progress?.stage === "confirming" &&
+    Boolean(progress.pendingHash) &&
+    !progress.steps.some((step) => step.state === "running");
+  const sentId = reconciling ? progress.steps.find((step) => step.state !== "success")?.id : undefined;
+  const runSteps = (progress?.steps ?? []).map((step) =>
+    step.id === sentId ? { ...step, state: "running" as const } : step,
+  );
   const row = (id: string) => runSteps.find((step) => step.id === id);
   const halted = progress?.stage === "halted";
 
   const walletRow = row(STEP_ID.createExecutor);
   const walletReady = Boolean(wallet?.deployed) || walletRow?.state === "success";
 
-  const fundsRow = row(STEP_ID.deposit);
+  // the credits transfer and the deposit share the one funds row
+  const fundsSteps = [row(STEP_ID.addCredits), row(STEP_ID.deposit)].filter((step) => step !== undefined);
+  const fundsState =
+    fundsSteps.length === 0
+      ? undefined
+      : fundsSteps.some((step) => step.state === "error")
+        ? "error"
+        : fundsSteps.some((step) => step.state === "running")
+          ? "running"
+          : fundsSteps.every((step) => step.state === "success")
+            ? "success"
+            : "pending";
 
   const batches = runSteps.filter((step) => step.id.startsWith("predict-"));
   const runningBatch = batches.findIndex((step) => step.state === "running");
   // the routes are priced before anything is signed, while no step of the run is going yet
   const checking = progress?.stage === "quoting" && !runSteps.some((step) => step.state === "running");
-  const predictRunning = runningBatch >= 0 || checking;
+  const predictRunning = runningBatch >= 0;
   const stageCopy = progress ? (STAGE_COPY[progress.stage] ?? "") : "";
-  const becomes = collateral && ` (~${shownAmount(collateral.amount, collateral.decimals)} ${collateral.symbol})`;
-  const adding = toAdd === 0n ? "" : `Adding ${shownAmount(toAdd, decimals)} ${symbol}${becomes ?? ""}`;
-  const fundsWait = progress?.stage === "signing" || progress?.stage === "confirming" ? stageCopy : "";
+  const becomes = collateral && ` (≈ ${shownAmount(collateral.amount, collateral.decimals)} ${collateral.symbol})`;
+  const adding = [
+    ...(credits > 0n ? [`${shownAmount(credits, 18)} credits`] : []),
+    ...(toAdd > 0n ? [`${shownAmount(toAdd, decimals)} ${symbol}${becomes ?? ""}`] : []),
+  ].join(" + ");
+  // only a batch quotes, so the steps before one say only what the wallet is waiting on
+  const txWait = progress?.stage === "signing" || progress?.stage === "confirming" ? stageCopy : "";
+
+  // the row whose step errored stopped the run; with none, nothing got past pricing.
+  // A sent, unconfirmed transaction may still land, so its row is not crossed.
+  const failedKey: PredictStepRow["key"] | undefined =
+    halted && !progress.pendingHash
+      ? walletRow?.state === "error"
+        ? "wallet"
+        : fundsState === "error"
+          ? "funds"
+          : "predict"
+      : undefined;
+  const partial =
+    halted && progress.batchesDone > 0 ? `${progress.batchesDone} of ${progress.batches} went through` : "";
 
   const rows: PredictStepRow[] = [
     walletReady && wallet
@@ -132,48 +182,129 @@ export function predictSteps(
       : {
           key: "wallet",
           title: "Create a trade wallet",
-          subtitle: walletRow?.state === "running" ? stageCopy : "",
+          subtitle: walletRow?.state === "running" ? txWait : "",
           view: walletRow?.state === "running" ? "running" : "idle",
         },
     {
       key: "funds",
-      title: "Add funds to your trade wallet",
-      subtitle: fundsRow?.state === "running" && fundsWait ? `${adding}. ${fundsWait}` : adding,
+      title: "Add funds",
+      // while it runs the amount is in the locked field above, so the row shows only the wait
+      subtitle: fundsState === "running" ? txWait : adding,
       view:
-        fundsRow?.state === "running"
+        fundsState === "running"
           ? "running"
-          : fundsRow?.state === "success"
+          : fundsState === "success"
             ? "done"
-            : halted || toAdd === 0n
+            : halted || adding === ""
               ? "inactive"
               : "idle",
     },
     {
       key: "predict",
-      title: "Make prediction",
-      subtitle: checking
-        ? stageCopy
-        : predictRunning
-          ? batches.length > 1
-            ? `Prediction ${runningBatch + 1} of ${batches.length}. ${stageCopy}`
-            : stageCopy
-          : progress?.stage === "complete"
-            ? stageCopy
-            : "",
+      title: "Place prediction",
+      subtitle: predictRunning
+        ? batches.length > 1
+          ? `${runningBatch + 1} of ${batches.length}${stageCopy ? ` · ${stageCopy}` : ""}`
+          : stageCopy
+        : "",
       view: predictRunning ? "running" : progress?.stage === "complete" ? "done" : halted ? "inactive" : "idle",
     },
   ];
 
-  if (!halted) return { rows };
+  const started = progress && progress.stage !== "idle" ? { started: true as const } : {};
+  if (!halted)
+    return {
+      rows,
+      ...started,
+      ...(reconciling ? { note: RECONCILING_COPY } : {}),
+      ...(checking ? { pricing: true as const } : {}),
+    };
 
-  const partial =
-    progress.batchesDone > 0 ? `${progress.batchesDone} of ${progress.batches} predictions went through. ` : "";
+  const marked = rows.map((stepRow) =>
+    stepRow.key === failedKey
+      ? { ...stepRow, view: "failed" as const, subtitle: stepRow.key === "predict" ? partial : stepRow.subtitle }
+      : stepRow,
+  );
   const reason = progress.pendingHash
     ? PENDING_COPY
     : progress.failure?.reason === "funds" && progress.moneyMoved
       ? FEE_SHORT_COPY
-      : progress.failure
-        ? FAILURE_COPY[progress.failure.reason]
-        : FAILURE_COPY.unknown;
-  return { rows, failure: `${partial}${reason}` };
+      : progress.failure?.reason === "credits" && progress.moneyMoved
+        ? CREDITS_LOCKED_COPY
+        : progress.failure
+          ? FAILURE_COPY[progress.failure.reason]
+          : FAILURE_COPY.unknown;
+  return { rows: marked, failure: reason, ...started, ...(progress.pendingHash ? { pending: true as const } : {}) };
+}
+
+export interface StatusLine {
+  text: string;
+  tone: "neutral" | "warning" | "error";
+  /** Said for the visitor's information only, in the popup's small type on one line. */
+  small?: true;
+}
+
+/**
+ * The popup's one status line under the steps, most pressing first: what the visitor has to do,
+ * why a run stopped, what a run is checking, or what it left out. Empty while things go normally.
+ */
+export function statusLine(args: {
+  steps: PredictSteps;
+  notice?: string;
+  leftOut: number;
+  /** What changed when the pools were read again before signing, waiting for the visitor to confirm. */
+  moved?: MovedStatus;
+  /** The credits swap's loss as Details shows it, when it is large enough to say before a run. */
+  creditsLoss?: string;
+}): StatusLine | null {
+  const { steps, notice, leftOut, moved, creditsLoss } = args;
+  if (notice) return { text: notice, tone: "warning" };
+  if (steps.failure) return { text: steps.failure, tone: steps.pending ? "warning" : "error" };
+  if (moved !== undefined) return { text: movedText(moved), tone: "warning" };
+  if (steps.note) return { text: steps.note, tone: "neutral" };
+  if (creditsLoss !== undefined && !steps.started) {
+    return { text: `Credits swap loses ${creditsLoss}.`, tone: "warning", small: true };
+  }
+  if (leftOut > 0) return { text: `${leftOutText(leftOut)}.`, tone: "neutral" };
+  return null;
+}
+
+export interface MovedStatus {
+  /** Markets whose plan changed. */
+  markets: number;
+  /** The credits swap now pays less than its shown floor. */
+  credits: boolean;
+  /** The one market that moved, where it now goes and where it went before. */
+  only?: { name: string; to: string; was: string };
+  /** The plans changed with the visitor's new slippage, not with the pools. */
+  bySlippage?: true;
+}
+
+/** A market name longer than this is not quoted on the two-line status line. */
+const NAMED_MAX = 24;
+
+/** Said when the pools moved since Details was read, before anything more is signed. */
+function movedText({ markets, credits, only, bySlippage }: MovedStatus): string {
+  if (bySlippage) return "Your new slippage changes the trades. Check Details, then confirm.";
+  if (!credits && markets === 1 && only && only.name.length <= NAMED_MAX) {
+    return `${only.name} now goes to ${only.to}, not ${only.was}. Confirm to go on.`;
+  }
+  const count = `${markets} ${markets === 1 ? "market" : "markets"}`;
+  const what = credits
+    ? markets > 0
+      ? `Prices moved on ${count} and the credits swap`
+      : "The credits swap now pays less"
+    : `Prices moved on ${count}`;
+  return `${what}. Check Details, then confirm.`;
+}
+
+/** The button's label while the visitor is asked to confirm the new figures. */
+export const CONFIRM_MOVED = "Confirm new prices";
+
+/** The button's label where the new figures come from the visitor's new slippage. */
+export const CONFIRM_SLIPPAGE = "Confirm trades";
+
+/** "2 estimates could not be traded", with no full stop. */
+export function leftOutText(count: number): string {
+  return `${count} ${count === 1 ? "estimate" : "estimates"} could not be traded`;
 }

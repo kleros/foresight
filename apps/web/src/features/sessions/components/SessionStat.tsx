@@ -18,7 +18,7 @@ export function SessionStat({
       {pending ? (
         <span className="fs-skeleton inline-block h-4 w-12" />
       ) : (
-        <span className="text-fs-text-primary text-sm font-semibold">{children}</span>
+        <span className="text-fs-text-primary text-sm font-semibold tabular-nums">{children}</span>
       )}
     </div>
   );

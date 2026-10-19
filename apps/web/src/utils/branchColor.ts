@@ -28,32 +28,29 @@ function hexLuminance(hex: string): number {
   return luminance([0, 2, 4].map((i) => parseInt(hex.slice(1 + i, 3 + i), 16)));
 }
 
-function contrastRatio(a: number, b: number): number {
+function luminanceRatio(a: number, b: number): number {
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+/** WCAG contrast between two `#rrggbb` colours. */
+export function contrastRatio(a: string, b: string): number {
+  return luminanceRatio(hexLuminance(a), hexLuminance(b));
 }
 
 export function isLegibleBranchColor(color: string): boolean {
   if (!HEX_RE.test(color)) return false;
   const lit = hexLuminance(color);
   return (
-    contrastRatio(lit, hexLuminance(LIGHT_SURFACE)) >= CONTRAST_FLOOR &&
-    contrastRatio(lit, hexLuminance(DARK_SURFACE)) >= CONTRAST_FLOOR
+    luminanceRatio(lit, hexLuminance(LIGHT_SURFACE)) >= CONTRAST_FLOOR &&
+    luminanceRatio(lit, hexLuminance(DARK_SURFACE)) >= CONTRAST_FLOOR
   );
 }
 
-/**
- * Black or white for text on a colour. BT.601 perceived luma.
- */
+/** White for text on a colour where white reaches AA (4.5:1), otherwise whichever of black and white reads better. */
 export function getReadableTextColor(bgColor: string) {
-  const hex = bgColor.replace("#", "");
-
-  const r = parseInt(hex.substring(0, 2), 16);
-  const g = parseInt(hex.substring(2, 4), 16);
-  const b = parseInt(hex.substring(4, 6), 16);
-
-  const luma = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-
-  return luma > 0.6 ? "#000000" : "#FFFFFF";
+  if (!HEX_RE.test(bgColor)) return "#FFFFFF";
+  const white = contrastRatio(bgColor, "#ffffff");
+  return white >= 4.5 || white >= contrastRatio(bgColor, "#000000") ? "#FFFFFF" : "#000000";
 }
 
 function hslToRgb(hue: number, saturation: number, lightness: number): number[] {

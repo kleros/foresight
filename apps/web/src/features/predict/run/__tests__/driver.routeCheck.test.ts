@@ -2,8 +2,20 @@ import { createFlowRunStore, createMemoryStorage, type FlowTx, type TxGateway } 
 import type { Hash, TransactionReceipt } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { addresses, ctx, fakeQuoter, fakeReader, snapshot } from "../../flow/__tests__/support/fakes";
+import {
+  addresses,
+  chainState,
+  ctx,
+  fakeQuoter,
+  fakeReader,
+  option,
+  snapshot,
+  WAD,
+} from "../../flow/__tests__/support/fakes";
 import type { FakeQuoter } from "../../flow/__tests__/support/fakes";
+import type { OptionChainState, PredictOption } from "../../flow/types";
+import { sqrtPriceX96FromPrice } from "../../utils/poolMath";
+import { predictSteps } from "../../utils/predictSteps";
 import { createPredictRun } from "../driver";
 import type { PredictDriver } from "../types";
 
@@ -34,15 +46,29 @@ afterEach(() => {
   for (const driver of drivers.splice(0)) driver.dispose();
 });
 
-function setup(quoter: FakeQuoter) {
+/** Both of `each`'s pools at its estimate. */
+const atEstimate = (each: PredictOption): OptionChainState => {
+  const base = chainState();
+  return chainState({
+    pools: {
+      up: { ...base.pools.up, sqrtPriceX96: sqrtPriceX96FromPrice(each.targetPriceWad, true) },
+      down: { ...base.pools.down, sqrtPriceX96: sqrtPriceX96FromPrice(WAD - each.targetPriceWad, true) },
+    },
+  });
+};
+
+function setup(
+  quoter: FakeQuoter,
+  opts: { state?: (each: PredictOption) => OptionChainState; options?: PredictOption[] } = {},
+) {
   const gateway = fakeGateway();
   const driver = createPredictRun({
     gateway,
-    reader: fakeReader({ deployed: true }),
+    reader: fakeReader({ deployed: true, state: opts.state }),
     quoter,
     flowId: `predict-route-check-${drivers.length}`,
     ctx: () => ctx(),
-    snapshot: () => snapshot(),
+    snapshot: () => snapshot(opts.options ? { options: opts.options } : {}),
   });
   drivers.push(driver);
   return { gateway, driver };
@@ -103,6 +129,40 @@ describe("createPredictRun route check", () => {
 
     expect(gateway.signRequests.filter(isDeposit)).toHaveLength(1);
     expect(driver.getProgress().stage).toBe("halted");
+    expect(driver.getProgress().failure).toEqual({ reason: "no-route", retryable: false });
+  });
+
+  it("says the prices already sit at the estimates, signing nothing, when every pool is at its estimate", async () => {
+    const { gateway, driver } = setup(fakeQuoter(), { state: atEstimate });
+
+    driver.start();
+    await settled(driver);
+
+    expect(gateway.signRequests).toEqual([]);
+    expect(driver.getProgress().failure).toEqual({ reason: "at-estimates", retryable: false });
+    const { failure } = predictSteps({
+      wallet: null,
+      toAdd: 0n,
+      symbol: "sDAI",
+      decimals: 18,
+      progress: driver.getProgress(),
+    });
+    expect(failure).toBe("Prices are already at your estimates. Nothing to trade.");
+  });
+
+  it("still says no trade was found when one option is at its estimate and the other has no route", async () => {
+    const [atTarget, unroutable] = [option(1), option(2)];
+    const quoter = fakeQuoter({
+      refuse: (request) => [request.tokenIn, request.tokenOut].includes(unroutable.underlying),
+    });
+    const { driver } = setup(quoter, {
+      options: [atTarget, unroutable],
+      state: (each) => (each === atTarget ? atEstimate(each) : chainState()),
+    });
+
+    driver.start();
+    await settled(driver);
+
     expect(driver.getProgress().failure).toEqual({ reason: "no-route", retryable: false });
   });
 

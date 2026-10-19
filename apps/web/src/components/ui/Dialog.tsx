@@ -28,7 +28,9 @@ export function Dialog({ isOpen, onClose, title, hint, children, className, isDi
       isOpen={isOpen}
       onOpenChange={(open) => (open || !isDismissable ? undefined : onClose())}
       className={cn(
-        "relative h-fit w-max max-w-[calc(100vw-2rem)] overflow-x-hidden p-6 py-8",
+        "relative flex h-fit w-max max-w-[calc(100vw-2rem)] flex-col overflow-hidden",
+        // centred, so 4.5rem clear above and below keeps the title out from under the sticky header
+        "max-h-[calc(100dvh-9rem)]",
         "shadow-default rounded-fs border-fs-border bg-fs-surface border",
         className,
       )}
@@ -43,7 +45,8 @@ export function Dialog({ isOpen, onClose, title, hint, children, className, isDi
         />
       ) : null}
 
-      <div className="flex size-full flex-col gap-6">
+      {/* the body scrolls, not the dialog, so the close button stays put */}
+      <div className="flex min-h-0 w-full flex-col gap-6 overflow-x-hidden overflow-y-auto p-6 py-8">
         <div className="flex w-full flex-col items-center gap-2 text-center">
           <h2 className="text-fs-text-primary text-2xl font-semibold">{title}</h2>
           <p className="text-fs-text-secondary text-sm">{hint}</p>

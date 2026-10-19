@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { AMOUNT_DISPLAY_DECIMALS, GAS_RESERVE_WEI } from "../../oracle/tolerances";
-import { percentOf, planFunding, roundToDisplay, shareOf } from "../funding";
+import { OWNED_DECIMALS } from "@/utils/amount";
+
+import { GAS_RESERVE_WEI } from "../../oracle/tolerances";
+import { fundingSummary, percentOf, planFunding, roundToDisplay, shareOf } from "../funding";
 
 const WAD = 10n ** 18n;
 
@@ -9,7 +11,10 @@ describe("planFunding, paying in the collateral", () => {
   it("adds only what the trade wallet is short of", () => {
     expect(planFunding({ amount: 10n * WAD, ownWallet: 20n * WAD, tradeWallet: 6n * WAD })).toEqual({
       available: 26n * WAD,
+      creditsAvailable: 0n,
       collateralIn: 10n * WAD,
+      credits: [],
+      creditsIn: 0n,
       tradeWallet: 6n * WAD,
       fromTradeWallet: 6n * WAD,
       toAdd: 4n * WAD,
@@ -94,7 +99,7 @@ describe("planFunding, the xDAI gas reserve", () => {
   const rate = (5n * WAD) / 4n;
   const own = 10n * WAD;
   const spendable = own - GAS_RESERVE_WEI;
-  const STEP = 10n ** BigInt(18 - AMOUNT_DISPLAY_DECIMALS);
+  const STEP = 10n ** BigInt(18 - OWNED_DECIMALS);
 
   it("Max leaves the reserve: available and the deposit stop short of the native balance by it", () => {
     const { available } = planFunding({ amount: 0n, ownWallet: own, tradeWallet: 0n, tokenPerCollateralWad: rate });
@@ -231,5 +236,89 @@ describe("the balance slider", () => {
     expect(percentOf(250n, 1000n)).toBe(25);
     expect(percentOf(2000n, 1000n)).toBe(100);
     expect(percentOf(5n, 0n)).toBe(0);
+  });
+});
+
+describe("fundingSummary", () => {
+  const sDai = { id: "collateral" as const, symbol: "sDAI", decimals: 18 };
+  const xDai = { id: "native" as const, symbol: "xDAI", decimals: 18 };
+  const collateral = { symbol: "sDAI", decimals: 18 };
+
+  it("states the total once, split between the trade wallet and the visitor's wallet", () => {
+    const funding = planFunding({ amount: 10n * WAD, ownWallet: 20n * WAD, tradeWallet: 6n * WAD });
+
+    expect(fundingSummary({ funding, amount: 10n * WAD, token: sDai, collateral })).toEqual({
+      text: "10 sDAI = 6 in your trade wallet + 4 from your wallet",
+      tone: "neutral",
+    });
+  });
+
+  it("names the one source when the other gives nothing", () => {
+    const funding = planFunding({ amount: 10n * WAD, ownWallet: 20n * WAD, tradeWallet: 0n });
+
+    expect(fundingSummary({ funding, amount: 10n * WAD, token: sDai, collateral })?.text).toBe(
+      "10 sDAI from your wallet",
+    );
+  });
+
+  it("names a part too small to show rather than saying 0", () => {
+    const funding = planFunding({ amount: 4n * WAD + 1n, ownWallet: 10n * WAD, tradeWallet: 4n * WAD });
+
+    expect(fundingSummary({ funding, amount: 4n * WAD + 1n, token: sDai, collateral })?.text).toBe(
+      `4 sDAI = 4 in your trade wallet + less than ${1 / 10 ** OWNED_DECIMALS} from your wallet`,
+    );
+  });
+
+  it("gives an xDAI payment as the sDAI it becomes", () => {
+    // 1.25 xDAI per sDAI: 10 xDAI is 8 sDAI
+    const funding = planFunding({
+      amount: 10n * WAD,
+      ownWallet: 20n * WAD,
+      tradeWallet: 0n,
+      tokenPerCollateralWad: (5n * WAD) / 4n,
+    });
+
+    expect(fundingSummary({ funding, amount: 10n * WAD, token: xDai, collateral })?.text).toBe(
+      "≈ 8 sDAI from your wallet",
+    );
+  });
+
+  it("over the balance, says only how much can be added", () => {
+    const funding = planFunding({ amount: 999n * WAD, ownWallet: 20n * WAD, tradeWallet: 5n * WAD });
+
+    expect(fundingSummary({ funding, amount: 999n * WAD, token: sDai, collateral })).toEqual({
+      text: "Not enough balance. Max 25 sDAI.",
+      tone: "error",
+    });
+  });
+
+  it.each([
+    ["empty", 0n],
+    ["under the last shown decimal", WAD / 100_000n],
+  ])("over a balance that is %s, names no Max", (_name, ownWallet) => {
+    const funding = planFunding({ amount: WAD, ownWallet, tradeWallet: 0n });
+
+    expect(fundingSummary({ funding, amount: WAD, token: sDai, collateral })).toEqual({
+      text: "Not enough balance.",
+      tone: "error",
+    });
+  });
+
+  it("groups a large cap and total in threes", () => {
+    const over = planFunding({ amount: 2_000_000n * WAD, ownWallet: 1_234_567n * WAD, tradeWallet: 0n });
+    expect(fundingSummary({ funding: over, amount: 2_000_000n * WAD, token: sDai, collateral })?.text).toBe(
+      "Not enough balance. Max 1,234,567 sDAI.",
+    );
+
+    const under = planFunding({ amount: 1_500n * WAD, ownWallet: 1_234_567n * WAD, tradeWallet: 0n });
+    expect(fundingSummary({ funding: under, amount: 1_500n * WAD, token: sDai, collateral })?.text).toBe(
+      "1,500 sDAI from your wallet",
+    );
+  });
+
+  it("says nothing before an amount is typed", () => {
+    const funding = planFunding({ amount: 0n, ownWallet: 20n * WAD, tradeWallet: 0n });
+
+    expect(fundingSummary({ funding, amount: undefined, token: sDai, collateral })).toBeNull();
   });
 });

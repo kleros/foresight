@@ -12,6 +12,7 @@ import { usePredictRun, type PredictRunInput } from "@/features/predict/hooks/us
 import type { PredictDriver, PredictProgress, PredictStage } from "@/features/predict/run/types";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import type { PayToken, SelectedEstimate } from "@/features/predict/types";
+import { creditLines, creditsOffer } from "@/features/predict/utils/credits";
 import { planFunding } from "@/features/predict/utils/funding";
 import { sessionChartKey } from "@/features/sessions/api/getSessionChart";
 import { sessionStatsKey } from "@/features/sessions/api/getSessionStats";
@@ -62,6 +63,8 @@ vi.mock("@/features/trade-executor/api/getExecutor", async (importOriginal) => (
 vi.mock("../usePredictFunding", () => ({ usePredictFunding: vi.fn() }));
 
 vi.mock("../useHasPredicted", () => ({ useHasPredicted: () => false }));
+// the credits swap is quoted on a chain with a credits route, which this one lacks
+vi.mock("../useCreditsSwapPreview", () => ({ useCreditsSwapPreview: () => ({ failed: false }) }));
 
 type DialogProps = ComponentProps<typeof PredictDialog>;
 
@@ -81,6 +84,9 @@ vi.mock("@/features/predict/components/PredictDialog", () => ({
       <button onClick={() => props.onTokenChange("native")}>pay in xDAI</button>
       <button onClick={props.onClose}>close</button>
       <button onClick={props.onPredict}>predict</button>
+      <p data-testid="credits">{props.credits ? String(props.credits.isUsing) : "absent"}</p>
+      <button onClick={() => props.credits?.onUsingChange(true)}>tick credits</button>
+      <button onClick={() => props.credits?.onUsingChange(false)}>untick credits</button>
     </div>
   ),
 }));
@@ -96,7 +102,7 @@ let nativeAvailable: bigint | undefined;
 const progressAt = (stage: PredictStage, retryable = false, steps: PredictProgress["steps"] = []): PredictProgress => ({
   stage,
   steps,
-  skipped: [],
+  leftOut: [],
   batchesDone: 0,
   batches: 0,
   ...(stage === "halted" ? { failure: { reason: retryable ? "rpc" : "reverted", retryable } } : {}),
@@ -106,6 +112,7 @@ const driver = {
   start: vi.fn<PredictDriver["start"]>(),
   recover: vi.fn<PredictDriver["recover"]>(),
   resume: vi.fn<PredictDriver["resume"]>(),
+  confirm: vi.fn<PredictDriver["confirm"]>(),
   retry: vi.fn<PredictDriver["retry"]>(),
   reset: vi.fn<PredictDriver["reset"]>(),
   dispose: vi.fn<PredictDriver["dispose"]>(),
@@ -153,6 +160,7 @@ beforeEach(() => {
   nativeAvailable = undefined;
   fundingMock.mockImplementation(({ token }) => ({
     funding: null,
+    credits: { state: "none" },
     token: token ?? heldMore,
     available: (choice) => (choice === "native" ? nativeAvailable : undefined),
     canPayNative: true,
@@ -168,14 +176,14 @@ describe("PredictRunner, what the visitor is told", () => {
     account(undefined, undefined);
     mount();
 
-    expect(screen.getByTestId("notice")).toHaveTextContent("Connect a wallet to make this prediction.");
+    expect(screen.getByTestId("notice")).toHaveTextContent("Connect a wallet to predict.");
   });
 
   it("asks for Gnosis when the wallet is on another chain", () => {
     connected(DEFAULT_CHAIN_ID + 1);
     mount();
 
-    expect(screen.getByTestId("notice")).toHaveTextContent("Switch to Gnosis to make this prediction.");
+    expect(screen.getByTestId("notice")).toHaveTextContent("Switch to Gnosis to predict.");
   });
 
   it("says the session cannot be traded when its collateral did not read", () => {
@@ -188,6 +196,52 @@ describe("PredictRunner, what the visitor is told", () => {
     mount();
 
     expect(screen.getByTestId("notice")).toBeEmptyDOMElement();
+  });
+
+  const withCredits = (spendsAnyway = false) => {
+    const held = { wallet: 5n * 10n ** 18n, tradeWallet: 0n, manager: 1000n * 10n ** 18n };
+    fundingMock.mockImplementation(({ amount, useCredits }) => ({
+      funding: planFunding({
+        amount,
+        ownWallet: 20n * 10n ** 18n,
+        tradeWallet: 0n,
+        credits: useCredits || spendsAnyway ? creditLines(held, creditsOffer(held)) : [],
+      }),
+      credits: creditsOffer(held),
+      token: "collateral",
+      available: () => undefined,
+      canPayNative: false,
+    }));
+  };
+
+  it("ticks the credits line by default and lets a prediction spend them, ticked or not", () => {
+    withCredits();
+    mount();
+    fireEvent.click(screen.getByText("pay ten"));
+
+    expect(screen.getByTestId("credits")).toHaveTextContent("true");
+    expect(screen.getByTestId("notice")).toBeEmptyDOMElement();
+
+    fireEvent.click(screen.getByText("untick credits"));
+
+    expect(screen.getByTestId("credits")).toHaveTextContent("false");
+    expect(screen.getByTestId("notice")).toBeEmptyDOMElement();
+  });
+
+  it("plans the funding with the credits while the line is ticked, and without once it is not", () => {
+    withCredits();
+    mount();
+    fireEvent.click(screen.getByText("pay ten"));
+
+    expect(fundingMock).toHaveBeenLastCalledWith(expect.objectContaining({ useCredits: true }));
+    fireEvent.click(screen.getByText("untick credits"));
+    expect(fundingMock).toHaveBeenLastCalledWith(expect.objectContaining({ useCredits: false }));
+  });
+
+  it("shows no credits line where the visitor holds none", () => {
+    mount();
+
+    expect(screen.getByTestId("credits")).toHaveTextContent("absent");
   });
 
   it("drops the notice while a run is going", () => {
@@ -367,6 +421,58 @@ describe("PredictRunner, the dialog's controls", () => {
     expect(driver.reset).toHaveBeenCalled();
   });
 
+  it("hands the success dialog what it placed, less what the run left out", () => {
+    const detail = session();
+    progress = { ...progressAt("complete"), leftOut: [detail.options[0]!.market] };
+    const view = mount(detail);
+
+    expect(view.onSuccess).toHaveBeenCalledWith([detail.options[0]!.market], {
+      estimates: 0,
+      amount: undefined,
+      symbol: detail.collateralSymbol ?? "sDAI",
+      decimals: detail.collateralDecimals ?? 18,
+    });
+  });
+
+  it("hands the success dialog the amount typed and the token paid in", () => {
+    const view = mount();
+    fireEvent.click(screen.getByText("pay ten"));
+    fireEvent.click(screen.getByText("pay in xDAI"));
+
+    progress = progressAt("complete");
+    view.rerenderAt();
+
+    expect(view.onSuccess).toHaveBeenCalledWith([], {
+      estimates: 1,
+      amount: 10n * 10n ** 18n,
+      symbol: "xDAI",
+      decimals: 18,
+    });
+  });
+
+  it("does not count an estimate whose option has no tokens to trade as placed", () => {
+    const detail = toSessionDetail({ ...sessionDetailColumns, children: [sessionChildRow({ upToken: "" })] }, GATEWAY);
+    progress = progressAt("complete");
+    const view = mount(detail);
+
+    expect(view.onSuccess).toHaveBeenCalledWith([], expect.objectContaining({ estimates: 0 }));
+  });
+
+  it("hands the success dialog a recovered run's own options and collateral, less what it left out", () => {
+    const detail = session();
+    const recovered = snapshot({ deposit: 3n * 10n ** 18n, collateralIn: 5n * 10n ** 18n });
+    const left = recovered.options[0]!.childMarket;
+    progress = { ...progressAt("complete"), recovered, leftOut: [left] };
+    const view = mount(detail);
+
+    expect(view.onSuccess).toHaveBeenCalledWith([left], {
+      estimates: recovered.options.length - 1,
+      amount: 5n * 10n ** 18n,
+      symbol: detail.collateralSymbol ?? "sDAI",
+      decimals: detail.collateralDecimals ?? 18,
+    });
+  });
+
   it("starts a run when predict is pressed", () => {
     mount();
     fireEvent.click(screen.getByText("predict"));
@@ -398,6 +504,7 @@ describe("PredictRunner, the dialog's controls", () => {
   it("shows the amount now typed, not the one pressed, once a run stops before money moved", () => {
     fundingMock.mockImplementation(({ amount }) => ({
       funding: planFunding({ amount, ownWallet: 100n * 10n ** 18n, tradeWallet: 0n }),
+      credits: { state: "none" },
       token: "collateral",
       available: () => undefined,
       canPayNative: false,
@@ -407,17 +514,18 @@ describe("PredictRunner, the dialog's controls", () => {
     fireEvent.click(screen.getByText("predict"));
     progress = progressAt("halted", true);
     view.rerenderAt();
-    expect(screen.getByTestId("funds")).toHaveTextContent("Adding 10 sDAI");
+    expect(screen.getByTestId("funds")).toHaveTextContent(/^10 sDAI$/);
 
     fundingMock.mockImplementation(() => ({
       funding: planFunding({ amount: 4n * 10n ** 18n, ownWallet: 100n * 10n ** 18n, tradeWallet: 0n }),
+      credits: { state: "none" },
       token: "collateral",
       available: () => undefined,
       canPayNative: false,
     }));
     view.rerenderAt();
 
-    expect(screen.getByTestId("funds")).toHaveTextContent("Adding 4 sDAI");
+    expect(screen.getByTestId("funds")).toHaveTextContent(/^4 sDAI$/);
   });
 
   it("starts over from the form when a retryable run stopped before anything reached the chain", () => {
@@ -463,7 +571,7 @@ describe("PredictRunner, the dialog's controls", () => {
     progress = { ...progressAt("review"), recovered: { ...snapshot(), deposit: 7_250_000_000_000_000_000n } };
     mount();
 
-    expect(screen.getByTestId("funds")).toHaveTextContent("Adding 7.25");
+    expect(screen.getByTestId("funds")).toHaveTextContent(/^7\.25 /);
   });
 
   it("resumes a stored run under review instead of starting one from the form", () => {

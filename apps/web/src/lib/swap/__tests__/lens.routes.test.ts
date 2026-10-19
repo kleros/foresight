@@ -13,6 +13,7 @@ const request: SwapQuoteRequest = {
   limitSqrtPrice: 2n ** 95n,
   amountInAtLimit: 1000n,
   amountOutAtLimit: 400n,
+  poolFee: 0n,
 };
 
 const quoteFrom = (answer: NodeAnswer) =>

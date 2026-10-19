@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { sqrtPriceX96FromPrice } from "../../utils/poolMath";
-import { assertRoutes, NoRouteError } from "../plan";
+import { assertRoutes, AtEstimatesError, NoRouteError } from "../plan";
 import type { OptionChainState, PredictOption } from "../types";
 import { chainState, ctx, fakeQuoter, fakeReader, option, snapshot, WAD } from "./support/fakes";
 
@@ -35,18 +35,26 @@ const state = (each: PredictOption) => (each.childMarket === stuck.childMarket ?
 
 describe("assertRoutes", () => {
   it("refuses when any one batch has nothing to trade", async () => {
-    const deps = { reader: fakeReader({ state }), quoter: fakeQuoter(), optionsPerBatch: 1 };
+    const deps = { reader: fakeReader({ state }), quoter: fakeQuoter() };
 
-    await expect(assertRoutes(ctx(), snapshot({ options: [routable, stuck] }), deps)).rejects.toBeInstanceOf(
-      NoRouteError,
-    );
+    await expect(
+      assertRoutes(ctx(), snapshot({ options: [routable, stuck], optionsPerBatch: 1 }), deps),
+    ).rejects.toBeInstanceOf(NoRouteError);
   });
 
-  it("passes a batch where one option routes, without reporting the other as skipped", async () => {
-    const onSkip = vi.fn();
-    const deps = { reader: fakeReader({ state }), quoter: fakeQuoter(), onSkip };
+  it("says the prices already sit at the estimates only when every batch has nothing to trade", async () => {
+    const deps = { reader: fakeReader({ state: () => atTarget }), quoter: fakeQuoter() };
+
+    await expect(
+      assertRoutes(ctx(), snapshot({ options: [option(3, TARGET), stuck], optionsPerBatch: 1 }), deps),
+    ).rejects.toBeInstanceOf(AtEstimatesError);
+  });
+
+  it("passes a batch where one option routes, without reporting the other as left out", async () => {
+    const onLeftOut = vi.fn();
+    const deps = { reader: fakeReader({ state }), quoter: fakeQuoter(), onLeftOut };
 
     await expect(assertRoutes(ctx(), snapshot({ options: [routable, stuck] }), deps)).resolves.toBeUndefined();
-    expect(onSkip).not.toHaveBeenCalled();
+    expect(onLeftOut).not.toHaveBeenCalled();
   });
 });

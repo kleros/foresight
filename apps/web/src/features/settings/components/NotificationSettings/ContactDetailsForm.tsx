@@ -103,7 +103,7 @@ const ContactDetailsForm: React.FC = () => {
         value={emailInput}
         onChange={setEmailInput}
         isDisabled={!isEmailUpdateable}
-        validate={(val) => (val.trim() === "" || EMAIL_REGEX.test(val) ? undefined : "Invalid email")}
+        validate={(val) => (val.trim() === "" || EMAIL_REGEX.test(val) ? undefined : "Enter a valid email")}
         fieldErrorProps={{
           children: ({ validationErrors }) => (
             <ul className="w-full">

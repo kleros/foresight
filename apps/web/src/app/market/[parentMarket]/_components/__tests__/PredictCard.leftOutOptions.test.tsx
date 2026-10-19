@@ -47,7 +47,7 @@ vi.mock("@/features/trade-executor/api/getExecutor", async (importOriginal) => (
   useExecutor: () => ({ data: { predicted: "0x8888888888888888888888888888888888888888", deployed: true } }),
 }));
 vi.mock("../usePredictFunding", () => ({
-  usePredictFunding: () => ({ funding: null, canPayNative: false, isPending: false }),
+  usePredictFunding: () => ({ funding: null, credits: { state: "none" }, canPayNative: false, isPending: false }),
 }));
 vi.mock("../useHasPredicted", () => ({ useHasPredicted: () => true }));
 vi.mock("@/components/wallet/EnsureChain", () => ({ default: ({ children }: { children: ReactNode }) => children }));
@@ -85,10 +85,10 @@ vi.mock("@/features/predict/hooks/usePredictRun", async () => {
   };
 });
 
-const progressAt = (stage: PredictProgress["stage"], skipped: Address[] = []): PredictProgress => ({
+const progressAt = (stage: PredictProgress["stage"], leftOut: Address[] = []): PredictProgress => ({
   stage,
   steps: [],
-  skipped,
+  leftOut,
   batchesDone: stage === "complete" ? 1 : 0,
   batches: 1,
 });
@@ -98,6 +98,7 @@ const driver = {
   start: vi.fn<PredictDriver["start"]>(),
   recover: vi.fn<PredictDriver["recover"]>(),
   resume: vi.fn<PredictDriver["resume"]>(),
+  confirm: vi.fn<PredictDriver["confirm"]>(),
   retry: vi.fn<PredictDriver["retry"]>(),
   reset: vi.fn<PredictDriver["reset"]>(() => run.set(progressAt("idle"))),
   dispose: vi.fn<PredictDriver["dispose"]>(),
@@ -118,7 +119,7 @@ const session = () =>
 
 const MARKET_ESTIMATE = 250;
 
-async function predictAndComplete(skipped: Address[]) {
+async function predictAndComplete(leftOut: Address[]) {
   const detail = session();
   for (const option of OPTIONS) useEstimateStore.getState().setEstimate(detail.parentMarket, option.market, 312);
   const marketEstimates = Object.fromEntries(OPTIONS.map((option) => [option.market, MARKET_ESTIMATE]));
@@ -129,10 +130,10 @@ async function predictAndComplete(skipped: Address[]) {
       <PredictCard session={detail} status="trading" marketEstimates={marketEstimates} />
     </QueryClientProvider>,
   );
-  await userEvent.click(screen.getByRole("button", { name: "Predict selected" }));
+  await userEvent.click(screen.getByRole("button", { name: /^Predict (\d+ )?estimates?$/ }));
   await screen.findByRole("dialog");
   act(() => run.set(progressAt("signing")));
-  act(() => run.set(progressAt("complete", skipped)));
+  act(() => run.set(progressAt("complete", leftOut)));
 
   await screen.findByText(/Prediction placed/);
   expect(driver.reset).toHaveBeenCalled();

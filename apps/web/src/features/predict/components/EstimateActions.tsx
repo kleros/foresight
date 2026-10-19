@@ -1,4 +1,3 @@
-import { Button } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
 import LightButton from "@/components/ui/LightButton";
@@ -21,7 +20,7 @@ interface EstimateActionsProps {
   isDisabled?: boolean;
 }
 
-/** Reset and export, for the estimates that would become predictions. Nothing until one is set. */
+/** Export and reset, as text actions, for the estimates that would become predictions. Nothing until one is set. */
 export function EstimateActions({ parentMarket, scales, marketEstimates, isDisabled }: EstimateActionsProps) {
   const estimates = useSessionEstimates(parentMarket);
   const resetEstimates = useEstimateStore((state) => state.resetEstimates);
@@ -37,30 +36,28 @@ export function EstimateActions({ parentMarket, scales, marketEstimates, isDisab
     );
 
   return (
-    <div
-      className={clsx(
-        "flex w-full flex-wrap justify-between gap-4",
-        "flex-col-reverse items-start sm:flex-row sm:items-center",
-      )}
-    >
-      <Button
-        variant="secondary"
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+      <LightButton
         small
-        text="Reset predictions"
-        isDisabled={isDisabled}
-        onPress={() => resetEstimates(parentMarket)}
+        text="Export estimates"
+        onPress={exportCsv}
+        className={clsx(LINK, "flex-row-reverse")}
+        icon={<DownloadIcon className="[&_path]:fill-fs-text-accent! ml-2" />}
       />
       <LightButton
         small
-        text="Export predictions"
-        onPress={exportCsv}
-        className={clsx(
-          "flex-row-reverse p-0",
-          "[&_.button-text]:text-fs-accent [&_.button-text]:text-sm [&_.button-text]:font-normal",
-          "hover:bg-transparent",
-        )}
-        icon={<DownloadIcon className="[&_path]:fill-fs-accent! ml-2" />}
+        text="Reset estimates"
+        isDisabled={isDisabled}
+        onPress={() => resetEstimates(parentMarket)}
+        className={LINK}
       />
     </div>
   );
 }
+
+/** Text actions beside the option cards: no fill, accent text, an underline on hover. */
+export const LINK = clsx(
+  "p-0 hover:bg-transparent",
+  "[&_.button-text]:text-fs-text-accent [&_.button-text]:text-sm [&_.button-text]:font-normal",
+  "hover:[&_.button-text]:underline",
+);

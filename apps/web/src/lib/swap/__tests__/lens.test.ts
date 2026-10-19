@@ -53,6 +53,7 @@ const request = (overrides: Partial<SwapQuoteRequest> = {}): SwapQuoteRequest =>
   limitSqrtPrice: 2n ** 95n,
   amountInAtLimit: 1000n,
   amountOutAtLimit: 400n,
+  poolFee: 0n,
   ...overrides,
 });
 
@@ -128,6 +129,33 @@ const TOKEN1 = TOKEN_OUT;
 
 describe("createLensQuoter's min-out floor at the limit price", () => {
   beforeEach(() => quote.mockReset());
+
+  it("takes the pool's fee off what goes in before pricing the floor at the limit", async () => {
+    // a 2% fee and 1% slippage: an input that fills at the limit returns 98% of its limit value, under a fee-blind floor
+    quote.mockResolvedValue({
+      amountIn: 1000n,
+      amountOut: 3920n,
+      target: ROUTER,
+      data: singleCall(1n, TOKEN1, TOKEN0, 1000n),
+      msgValue: 0n,
+    });
+    const result = await quoter().quote(
+      request({
+        tokenIn: TOKEN1,
+        tokenOut: TOKEN0,
+        amount: 1000n,
+        limitSqrtPrice: 2n ** 95n,
+        amountInAtLimit: 1000n,
+        amountOutAtLimit: 3920n,
+        poolFee: 20_000n,
+        slippageBps: 100,
+      }),
+    );
+
+    // 1000 in, 980 after the fee, 4 per unit at the limit, less 1%
+    expect(params(result.data).amountOutMinimum).toBe((980n * 4n * 9_900n) / 10_000n);
+    expect(params(result.data).amountOutMinimum).toBeLessThanOrEqual(3920n);
+  });
 
   /** Lens's quote for the whole amount, with a tick walk that put the limit's output far too low. */
   function understated(args: {

@@ -5,7 +5,7 @@ SessionFactory contracts, deploy scripts, and the generated viem/wagmi artifacts
 ## Local development
 
 ```bash
-yarn start             # compile + hardhat node on :8545 (deploys SessionFactory + mocks)
+yarn start             # compile + hardhat node on :8545 (deploys SessionFactory, credits + mocks)
 yarn deploy:local      # redeploy to a running node + wagmi codegen
 yarn test              # hardhat test suite
 yarn simulate:session  # deploy a sample session through the running local factory
@@ -22,12 +22,20 @@ included), so the indexer has something to index. Flags:
 | `--metadata-uri <uri>` | `@foresight/session-metadata` example | `metadataUri` emitted with the session                     |
 | `--liquidity`          | off                                   | run `simulate-liquidity` on the session (gnosis-fork only) |
 
+### Credits on the local chain
+
+The `Credits` tag deploys Seer's trading-credits contracts (vendored in `contracts/vendor/trading-credits`)
+as `ForesightCredits` and `CreditsManager`, backed by a mintable `SavingsXDai`. A fresh manager seeds
+alice and bob with 100 credits each and itself with 1000 sDAI. Its whitelist is empty and there is no
+swap router locally, so credits can be read here but only spent on the gnosis fork.
+
 ## Gnosis fork
 
 ```bash
 yarn start:gnosis-fork                  # compile + hardhat node forking gnosis on :8545
 yarn simulate:session:gnosis-fork       # sample session through the real Seer MarketFactory
 yarn simulate:liquidity:gnosis-fork     # seed real Swapr Algebra pools for the latest session
+yarn simulate:credits:gnosis-fork       # mint 100 Foresight credits to alice (--to bob|0x… --amount 25)
 ```
 
 The fork pins at the newest block in `deployments/gnosis/`, so it already carries the live

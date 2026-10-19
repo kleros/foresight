@@ -113,8 +113,8 @@ const sellsEverything = (): OptionChainState =>
 async function buildWorstCase(args: { slippageBps: number; options: PredictOption[]; state: () => OptionChainState }) {
   const quoter = recordingQuoter();
   const states = args.options.map(() => args.state());
-  const snap = snapshot({ options: args.options });
-  const deps = { reader: fakeReader({ state: args.state }), quoter, slippageBps: args.slippageBps };
+  const snap = snapshot({ options: args.options, slippage: { tradeBps: args.slippageBps, creditsBps: 0 } });
+  const deps = { reader: fakeReader({ state: args.state }), quoter };
 
   const step = planPredict(snap, deps).find((each) => each.id === STEP_ID.predict(1))!;
   const tx = await step.build(ctx(), snap);

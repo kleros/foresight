@@ -1,15 +1,19 @@
 import { useState } from "react";
 
 import { Button, FileUploader } from "@kleros/ui-components-library";
+import clsx from "clsx";
 
 import { Dialog } from "@/components/ui/Dialog";
 import LightButton from "@/components/ui/LightButton";
+
+import UploadIcon from "@/assets/svg/upload.svg";
 
 import { downloadTextFile } from "@/utils/download";
 import { successToast } from "@/utils/toast";
 
 import type { OptionScale } from "@/types/optionScale";
 
+import { LINK } from "./EstimateActions";
 import { useEstimateStore, useSessionEstimates } from "../stores/estimateStore";
 import { CSV_COLUMNS, parseEstimateCsv, serializeEstimateCsv } from "../utils/estimateCsv";
 
@@ -61,17 +65,19 @@ export function EstimateCsvDialog({ parentMarket, scales, marketEstimates, noun,
 
   return (
     <>
-      <Button
-        text="Upload CSV predictions"
-        variant="secondary"
+      <LightButton
+        small
+        text="Upload estimates (CSV)"
         isDisabled={isDisabled}
         onPress={() => setIsOpen(true)}
+        className={clsx(LINK, "flex-row-reverse")}
+        icon={<UploadIcon className="[&_path]:fill-fs-text-accent! ml-2" />}
       />
       <Dialog
         isOpen={isOpen}
         onClose={close}
-        title="Upload CSV predictions"
-        hint="One row per option, each with your estimate for it."
+        title="Upload estimates (CSV)"
+        hint="Each row is a name and your estimate for it."
         className="w-full md:w-162"
       >
         <div className="bg-fs-surface-tint rounded-fs flex flex-col gap-2 px-4 pt-3 pb-4">
@@ -82,7 +88,7 @@ export function EstimateCsvDialog({ parentMarket, scales, marketEstimates, noun,
             {templateRows.length > 2 ? <span className="text-fs-text-secondary">{"\n…"}</span> : null}
           </pre>
           <p className="text-fs-text-primary text-sm">
-            Names must match the {noun} on this page. An estimate outside its scale is refused.
+            Names must match the {noun} on this page. An estimate outside its range is refused.
           </p>
         </div>
 

@@ -9,8 +9,14 @@ export const isLocalChainEnabled =
 
 const gnosisRpc = process.env.NEXT_PUBLIC_GNOSIS_RPC || "";
 
+const LOCAL_NODE = /^https?:\/\/(127\.0\.0\.1|localhost)([:/]|$)/;
+
 /** Hardhat unlocks its accounts, so the dev wallet works wherever the chain is a local node. */
-export const isDevWalletEnabled = isLocalChainEnabled || /^https?:\/\/(127\.0\.0\.1|localhost)([:/]|$)/.test(gnosisRpc);
+export const isDevWalletEnabled = isLocalChainEnabled || LOCAL_NODE.test(gnosisRpc);
+
+// a send on a fork can take longer than viem's default while the node fetches remote state,
+// and a send that times out client-side may still mine
+export const rpcTimeoutMs = (url: string): number | undefined => (LOCAL_NODE.test(url) ? 120_000 : undefined);
 
 export const DEFAULT_CHAIN = isLocalChainEnabled ? hardhat : gnosis;
 

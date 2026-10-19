@@ -29,7 +29,7 @@ async function openDialog() {
   render(
     <EstimateCsvDialog parentMarket={PARENT} scales={scales} marketEstimates={marketEstimates} noun="directors" />,
   );
-  await userEvent.click(screen.getByRole("button", { name: "Upload CSV predictions" }));
+  await userEvent.click(screen.getByRole("button", { name: "Upload estimates (CSV)" }));
 }
 
 /** react-aria's file trigger hides its input; the upload goes straight to it. */

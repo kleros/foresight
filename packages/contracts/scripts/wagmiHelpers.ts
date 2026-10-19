@@ -94,7 +94,8 @@ export async function readAbiOnlyArtifacts() {
 /**
  * Seer's contracts the app calls on gnosis, by the name each is deployed under. The adapter is a
  * constant on `GnosisRouter` with no deployment file of its own, so its address sits in
- * `deployments/external/gnosis`. sDAI ships without an ABI, so viem's ERC-20 one stands in.
+ * `deployments/external/gnosis`, as do the Foresight credits token and its manager, which Seer
+ * deployed outside the package. sDAI ships without an ABI, so viem's ERC-20 one stands in.
  */
 export async function readSeerArtifacts(chainName: DeploymentChainName): Promise<WagmiCodegenContract[]> {
   if (chainName !== "gnosis") {
@@ -107,12 +108,17 @@ export async function readSeerArtifacts(chainName: DeploymentChainName): Promise
   if (!router || !sDai) {
     throw new Error("GnosisRouter and SavingsXDai must both be deployed under @seer-pm/contracts for gnosis");
   }
-  const adapter = (await readArtifactJson("deployments/external/gnosis/SavingsXDaiAdapter.json")) as HardhatDeployment;
+  const external = async (name: string) => {
+    const { address, abi } = (await readArtifactJson(`deployments/external/gnosis/${name}.json`)) as HardhatDeployment;
+    return { name, address: { [chainId]: address }, abi };
+  };
 
   return [
     { name: "GnosisRouter", address: { [chainId]: router.address }, abi: router.abi as Abi },
     { name: "SavingsXDai", address: { [chainId]: sDai.address }, abi: erc20Abi },
-    { name: "SavingsXDaiAdapter", address: { [chainId]: adapter.address }, abi: adapter.abi },
+    await external("SavingsXDaiAdapter"),
+    await external("ForesightCredits"),
+    await external("CreditsManager"),
   ];
 }
 

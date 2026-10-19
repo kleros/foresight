@@ -11,9 +11,9 @@ export function Select({
   value,
   onChange,
   placeholder,
-  variant = "field",
   isDisabled,
   className,
+  menuClassName,
 }: {
   label: string;
   /** Keeps the label as the accessible name where the field is titled beside it. */
@@ -22,9 +22,10 @@ export function Select({
   value: string;
   onChange: (id: string) => void;
   placeholder?: string;
-  variant?: "field" | "menu";
   isDisabled?: boolean;
   className?: string;
+  /** Classes for the open menu's popover; its list is `#listbox` and each row `[role=option]`. */
+  menuClassName?: string;
 }) {
   return (
     <DropdownSelect
@@ -33,10 +34,9 @@ export function Select({
       selectedKey={value}
       callback={(item) => onChange(String(item.id))}
       placeholder={placeholder}
-      simpleButton={variant === "menu"}
-      smallButton={variant === "menu"}
       isDisabled={isDisabled}
       className={clsx(hideLabel && "*:first:sr-only", className)}
+      dropdownClassName={menuClassName}
     />
   );
 }

@@ -88,17 +88,19 @@ describe("parseEstimateCsv", () => {
 
   it("refuses a header without both columns", () => {
     expect(() => parseEstimateCsv("option,score\nVilleneuve,250", scales)).toThrow(
-      "exactly two columns: name,estimate",
+      "The first row must be: name,estimate",
     );
   });
 
   it("refuses a header with a third column", () => {
-    expect(() => parseEstimateCsv("name,estimate,note\nVilleneuve,250,x", scales)).toThrow("exactly two columns");
+    expect(() => parseEstimateCsv("name,estimate,note\nVilleneuve,250,x", scales)).toThrow(
+      "The first row must be: name,estimate",
+    );
   });
 
   it("refuses an estimate finer than the scale's step rather than rounding it", () => {
     expect(() => parseEstimateCsv("name,estimate\nVilleneuve,312.37", scales)).toThrow(
-      "Row 2: Villeneuve moves in steps of 1, so 312.37 is not a value it can take.",
+      "Row 2: Villeneuve moves in steps of 1, so 312.37 is not allowed.",
     );
   });
 
@@ -112,7 +114,7 @@ describe("parseEstimateCsv", () => {
   });
 
   it("refuses a file with only a header", () => {
-    expect(() => parseEstimateCsv("name,estimate\n", scales)).toThrow("no rows");
+    expect(() => parseEstimateCsv("name,estimate\n", scales)).toThrow("No rows under the header.");
   });
 
   it("names the row that has no option by that name", () => {

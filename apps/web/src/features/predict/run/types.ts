@@ -1,17 +1,30 @@
 import type { TxErrorCause } from "@foresight/tx-orchestrator";
 import type { Address, Hash } from "viem";
 
-import type { PredictSnapshot } from "../flow/types";
+import type { HeldTo, MovedPlans, PredictSnapshot } from "../flow/types";
 
 /**
  * `no-route`: no option can be moved toward its estimate with what the run has to spend.
+ * `at-estimates`: every option's pools already sit at its estimate.
  * `quote`: the quoter gave no answer, so whether a route exists is unknown.
- * `balance`: the trade wallet holds less than the popup counted on.
+ * `balance`: the trade wallet, or the wallet's credits, hold less than the popup counted on.
+ * `credits`: the credits manager cannot cover the credits, or no route swaps them as it requires.
  * `deposit-unconfirmed`: a recovered run's deposit may have been signed with no hash kept.
+ * `pending`: the wallet has a transaction not yet mined, which may be the step about to be signed again.
  * `wrong-wallet`, `wrong-chain`: a saved run belongs to another wallet or network than the connected one.
  */
 export type PredictFailureReason =
-  TxErrorCause | "no-route" | "quote" | "funds" | "balance" | "deposit-unconfirmed" | "wrong-wallet" | "wrong-chain";
+  | TxErrorCause
+  | "no-route"
+  | "at-estimates"
+  | "quote"
+  | "funds"
+  | "balance"
+  | "credits"
+  | "deposit-unconfirmed"
+  | "pending"
+  | "wrong-wallet"
+  | "wrong-chain";
 
 /** What the popup shows while a prediction runs. */
 export type PredictStage =
@@ -25,6 +38,8 @@ export type PredictStage =
   | "confirming"
   /** A stored run, reconciled with the chain, waiting for the visitor to resume it. */
   | "review"
+  /** A read of the pools before a batch gives another plan than the run is held to; nothing more is signed until `confirm`. */
+  | "moved"
   /** Stopped with something the visitor can act on. */
   | "halted"
   | "complete";
@@ -41,7 +56,7 @@ export interface PredictProgress {
   stage: PredictStage;
   steps: PredictStepRow[];
   /** Options no route could be found for, which the run left out. */
-  skipped: Address[];
+  leftOut: Address[];
   /** How many of the planned batches have landed, for "3 of 5 went through". */
   batchesDone: number;
   batches: number;
@@ -53,11 +68,22 @@ export interface PredictProgress {
   moneyMoved?: true;
   /** The snapshot of a run restored from storage. It, not the popup's form, is what the run signs. */
   recovered?: PredictSnapshot;
+  /** At the `moved` stage: what changed since the run was held to `held`. */
+  moved?: MovedPlans;
+  /** What the run was started or confirmed against; absent for a recovered run, which nothing was shown for. */
+  held?: HeldTo;
 }
 
+export type { HeldTo, MovedPlans, ShownPlans } from "../flow/types";
+
 export interface PredictDriver {
-  /** Starts a run from the form, or loads a stored one for review instead. */
-  start(): void;
+  /**
+   * Starts a run from the form, or loads a stored one for review instead. With `held`, every batch
+   * reads the pools again before it is signed, and a plan that changed stops the run at `moved`.
+   */
+  start(held?: HeldTo): void;
+  /** Goes on from `moved`, held to what it named; pools that moved again stop it there again. */
+  confirm(): void;
   /** Loads a stored run for review, reconciled with the chain. Signs nothing. */
   recover(): void;
   /** Continues a run under review. */

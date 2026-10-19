@@ -12,6 +12,7 @@ import "hardhat-deploy-ethers";
 
 import "./tasks/simulateSession";
 import "./tasks/simulateLiquidity";
+import "./tasks/grantCredits";
 import solidityConfig from "./solidity.config.json";
 
 dotenv.config({ path: path.join(__dirname, ".env.local") });
@@ -52,6 +53,13 @@ const config: HardhatUserConfig = {
   namedAccounts: {
     deployer: {
       default: 0,
+    },
+    // the app's mock accounts; credits are seeded to them on a local chain
+    alice: {
+      default: 0,
+    },
+    bob: {
+      default: 1,
     },
   },
   networks: {

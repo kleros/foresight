@@ -70,10 +70,32 @@ vi.mock("@/features/trade-executor/api/getExecutor", async (importOriginal) => (
 }));
 
 vi.mock("../usePredictFunding", () => ({
-  usePredictFunding: () => ({ funding: null, canPayNative: false, isPending: false }),
+  usePredictFunding: () => ({ funding: null, credits: { state: "none" }, canPayNative: false, isPending: false }),
 }));
 
 vi.mock("../useHasPredicted", () => ({ useHasPredicted: () => false }));
+// Details as the scripted chain's pools give it for the stored run's option, which Predict holds the run to
+vi.mock("../usePricePreview", async (importOriginal) => {
+  const { chainState, option, WAD: ONE } = await import("@/features/predict/flow/__tests__/support/fakes");
+  const { previewTrades } = await import("@/features/predict/utils/plan");
+  const { SLIPPAGE_BPS } = await import("@/features/predict/oracle/tolerances");
+  const state = chainState();
+  const shown = option(1);
+  const plan = previewTrades(
+    { pools: state.pools, targetPriceWad: shown.targetPriceWad, held: state.held, splitAmount: ONE * 5n },
+    SLIPPAGE_BPS,
+  )!;
+  return {
+    ...(await importOriginal<typeof import("../usePricePreview")>()),
+    usePricePreview: () => ({
+      moves: {},
+      plans: { [shown.childMarket.toLowerCase()]: plan },
+      held: {},
+      ready: true,
+      failed: false,
+    }),
+  };
+});
 
 type DialogProps = ComponentProps<typeof PredictDialog>;
 

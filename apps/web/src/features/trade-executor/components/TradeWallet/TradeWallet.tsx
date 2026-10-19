@@ -1,24 +1,21 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { Button } from "@kleros/ui-components-library";
 import clsx from "clsx";
 import { useAccount } from "wagmi";
 
-import { SectionCard } from "@/components/ui/SectionCard";
-import { Select } from "@/components/ui/Select";
 import WithHelpTooltip from "@/components/ui/WithHelpTooltip";
 
-import WalletIcon from "@/assets/svg/wallet.svg";
-
 import { shortenAddress } from "@/utils/address";
-import { formatAmount } from "@/utils/amount";
+import { ownedAmount } from "@/utils/amount";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
-import { gnosisRouterAddress, sDaiDepositRoute } from "@/config/contracts";
+import { creditsContracts, creditsRoute, gnosisRouterAddress, sDaiDepositRoute } from "@/config/contracts";
 import { explorerAddressUrl } from "@/config/site";
 
 import { AmountDialog } from "./AmountDialog";
 import { OptionBalances } from "./OptionBalances";
+import { TRADE_WALLET_CARD } from "./tradeWalletCard";
 import { TradeWalletSkeleton } from "./TradeWalletSkeleton";
 import { TransferDialog } from "./TransferDialog";
 import { useDepositToExecutor } from "../../api/depositToExecutor";
@@ -32,17 +29,21 @@ import type { TradeWalletMarket } from "../../types";
 
 type OpenDialog = "deposit" | "withdraw" | "mint" | "merge" | null;
 
-const ADVANCED = [
-  { id: "mint", text: "Mint" },
-  { id: "merge", text: "Merge" },
-];
-
 /**
- * The connected account's executor, shown once it exists on chain: its collateral and outcome
- * balances for this parent market, and the actions that move value in, out, and between them.
+ * The connected account's executor, shown once it exists on chain, as one row: its collateral
+ * balance, Deposit and Withdraw, and behind Balances its outcome balances with Mint and Merge.
  */
-export function TradeWallet({ market, noun }: { market: TradeWalletMarket; noun: string }) {
+export function TradeWallet({
+  market,
+  noun,
+}: {
+  market: TradeWalletMarket;
+  /** Singular, as in "movie tokens". */
+  noun: string;
+}) {
   const [dialog, setDialog] = useState<OpenDialog>(null);
+  const [showBalances, setShowBalances] = useState(false);
+  const balancesId = useId();
   const close = () => setDialog(null);
 
   const { address: owner, chain, chainId } = useAccount();
@@ -58,6 +59,18 @@ export function TradeWallet({ market, noun }: { market: TradeWalletMarket; noun:
   const positionBalances = useTokenBalances(deployed ?? undefined, positionTokens);
   const held = positionBalances.data;
   const heldByToken = held && new Map(positionTokens.map((token, index) => [token, held[index]]));
+
+  const creditsToken = creditsContracts(DEFAULT_CHAIN_ID)?.credits;
+  // the credits swap pays WXDAI and splits only its floor, so the rest waits here to be withdrawn
+  const wxdai = creditsRoute(collateral.address, DEFAULT_CHAIN_ID)?.wxdai;
+  const withdrawable = [
+    ...(creditsToken ? [{ address: creditsToken, symbol: "credits" }] : []),
+    ...(wxdai ? [{ address: wxdai, symbol: "WXDAI" }] : []),
+  ];
+  const withdrawableHeld = useTokenBalances(
+    deployed ?? undefined,
+    withdrawable.map((token) => token.address),
+  ).data;
 
   const deposit = useDepositToExecutor(close);
   const withdraw = useWithdrawFromExecutor(close);
@@ -82,82 +95,85 @@ export function TradeWallet({ market, noun }: { market: TradeWalletMarket; noun:
 
   return (
     <>
-      <SectionCard className="flex flex-col gap-4 px-4 py-6 md:px-8">
-        <div className="flex flex-col max-md:gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-1 flex-col gap-4">
-            <div className="flex flex-col items-start gap-1.5">
-              <div className="flex items-center gap-2">
-                <WalletIcon className="text-fs-accent size-4" />
-                <WithHelpTooltip tooltipMsg="Holds the money behind your predictions and places them all in one transaction.">
-                  <h3 className="text-fs-text-primary text-base font-semibold">Trade wallet</h3>
-                </WithHelpTooltip>
-              </div>
-              {explorer ? (
-                <a
-                  href={explorer}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-fs-text-secondary hover:text-fs-accent text-sm break-all"
-                >
-                  {shortenAddress(deployed)}
-                </a>
-              ) : (
-                <span className="text-fs-text-secondary text-sm break-all">{shortenAddress(deployed)}</span>
-              )}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <Button variant="secondary" small text="Deposit" onPress={() => setDialog("deposit")} />
-              <Button variant="secondary" small text="Withdraw" onPress={() => setDialog("withdraw")} />
-              {canConvert ? (
-                <Select
-                  label="Advanced options"
-                  hideLabel
-                  placeholder="Advanced options"
-                  variant="menu"
-                  options={ADVANCED}
-                  value=""
-                  onChange={(id) => setDialog(id as OpenDialog)}
-                />
-              ) : null}
-            </div>
-          </div>
-
-          <div
-            className={clsx(
-              "flex h-full flex-col items-start p-6 max-md:pl-0",
-              "border-fs-border border-t md:border-t-0 md:border-l",
+      <section aria-label="Trade wallet" className={clsx(TRADE_WALLET_CARD, "flex flex-col")}>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 max-sm:w-full">
+            <WithHelpTooltip
+              label="About the trade wallet"
+              tooltipMsg="Holds the money behind your predictions and places them all in one transaction."
+            >
+              <h3 className="text-fs-text-primary text-sm font-semibold">Trade wallet</h3>
+            </WithHelpTooltip>
+            {explorer ? (
+              <a
+                href={explorer}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-fs-text-secondary hover:text-fs-accent text-sm"
+              >
+                {shortenAddress(deployed)}
+              </a>
+            ) : (
+              <span className="text-fs-text-secondary text-sm">{shortenAddress(deployed)}</span>
             )}
-          >
-            <h4 className="text-fs-text-secondary text-sm">{collateral.symbol} balance</h4>
-            <p className="text-fs-text-primary text-2xl font-semibold">
+            <span className="text-fs-text-primary text-sm font-semibold tabular-nums">
               {funds.isPending ? (
-                <span className="fs-skeleton inline-block h-7 w-20 align-middle" />
+                <span className="fs-skeleton inline-block h-5 w-16 align-middle" />
               ) : funds.data ? (
-                formatAmount(funds.data.token ?? 0n, collateral.decimals)
+                `${ownedAmount(funds.data.token ?? 0n, collateral.decimals)} ${collateral.symbol}`
               ) : (
                 // a balance we could not read must not read as an empty wallet
-                <span className="text-fs-text-secondary text-base font-normal">Could not read</span>
+                <span className="text-fs-text-secondary font-normal">Could not read balance</span>
               )}
-            </p>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 sm:ml-auto">
+            <Button variant="secondary" small text="Deposit" onPress={() => setDialog("deposit")} />
+            <Button variant="secondary" small text="Withdraw" onPress={() => setDialog("withdraw")} />
+            <button
+              type="button"
+              aria-expanded={showBalances}
+              aria-controls={balancesId}
+              onClick={() => setShowBalances((open) => !open)}
+              className="text-fs-text-secondary hover:text-fs-text-primary fs-echo flex min-h-11 cursor-pointer items-center gap-1 px-2 text-sm"
+            >
+              Balances
+              {/* Disclosure's plus and minus, so every collapsible on the page reads alike */}
+              <svg viewBox="0 0 16 16" aria-hidden className="size-3 shrink-0 fill-current">
+                {showBalances ? (
+                  <path d="M0 7.2h16v1.6H0z" />
+                ) : (
+                  <path d="M7.2 0h1.6v7.2H16v1.6H8.8V16H7.2V8.8H0V7.2h7.2z" />
+                )}
+              </svg>
+            </button>
           </div>
         </div>
 
-        <OptionBalances
-          options={options}
-          balances={balances.data?.slice(0, options.length)}
-          positions={heldByToken}
-          noun={noun}
-          decimals={collateral.decimals}
-        />
-      </SectionCard>
+        <div id={balancesId} hidden={!showBalances} className="flex flex-col gap-4 pt-4">
+          <OptionBalances
+            options={options}
+            balances={balances.data?.slice(0, options.length)}
+            positions={heldByToken}
+            noun={noun}
+            decimals={collateral.decimals}
+          />
+          {canConvert ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="secondary" small text="Mint" onPress={() => setDialog("mint")} />
+              <Button variant="secondary" small text="Merge" onPress={() => setDialog("merge")} />
+            </div>
+          ) : null}
+        </div>
+      </section>
 
       {dialog === "deposit" ? (
         <TransferDialog
           isOpen
           onClose={close}
           title="Deposit"
-          hint="Deposit from your account to trade wallet"
+          hint="From your wallet to your trade wallet"
           actionText="Deposit"
           source={owner}
           collateral={collateral}
@@ -172,13 +188,20 @@ export function TradeWallet({ market, noun }: { market: TradeWalletMarket; noun:
           isOpen
           onClose={close}
           title="Withdraw"
-          hint="Withdraw from trade wallet to your account"
+          hint="From your trade wallet to your wallet"
           actionText="Withdraw"
           source={deployed}
           collateral={collateral}
           native={chain && { symbol: chain.nativeCurrency.symbol, decimals: chain.nativeCurrency.decimals }}
+          held={withdrawable.map((token, index) => ({
+            ...token,
+            decimals: 18,
+            balance: withdrawableHeld?.[index] ?? 0n,
+          }))}
           onSubmit={(asset) => withdraw.mutate({ executor: deployed, recipient: owner, assets: [asset] })}
           isPending={withdraw.isPending}
+          // what is shown is cut to four decimals, and a cut Max would leave dust behind
+          maxIsExact
         />
       ) : null}
 
@@ -187,7 +210,7 @@ export function TradeWallet({ market, noun }: { market: TradeWalletMarket; noun:
           isOpen
           onClose={close}
           title={`Mint ${noun} tokens`}
-          hint={`Mint ${noun} tokens to your trade wallet`}
+          hint={`Turns ${collateral.symbol} in your trade wallet into ${noun} tokens.`}
           actionText="Mint"
           available={funds.data?.token ?? undefined}
           isLoadingBalance={funds.isPending}
@@ -205,12 +228,13 @@ export function TradeWallet({ market, noun }: { market: TradeWalletMarket; noun:
           isOpen
           onClose={close}
           title={`Merge ${noun} tokens`}
-          hint={`Merge ${noun} tokens to your account`}
+          hint={`Turns a full set of ${noun} tokens back into ${collateral.symbol} in your trade wallet.`}
           actionText="Merge"
           available={mergeable}
           isLoadingBalance={balances.isPending}
           decimals={collateral.decimals}
-          symbol={collateral.symbol}
+          availableLabel="Full sets"
+          overText="Not enough sets."
           onSubmit={(amount) =>
             merge.mutate({
               executor: deployed,

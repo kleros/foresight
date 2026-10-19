@@ -1,6 +1,14 @@
 import type { PoolLiquidity } from "@/types/pool";
 
-import { limitSqrtPriceX96, priceFromSqrtPriceX96, swapToward, volumeUntilPrice, type PoolVolumes } from "./poolMath";
+import {
+  feeOf,
+  limitSqrtPriceX96,
+  priceFromSqrtPriceX96,
+  swapToward,
+  volumeUntilPrice,
+  type PoolVolumes,
+} from "./poolMath";
+import { PRICE_TOLERANCE_TICKS } from "../oracle/tolerances";
 
 /**
  * Turning one option's estimate into trades. Splitting the underlying gives an equal amount of
@@ -100,6 +108,22 @@ function sideState(option: OptionTarget, side: OptionSide): SideState | null {
   };
 }
 
+/** Every priced side of `option` sits within `PRICE_TOLERANCE_TICKS` of its estimate. */
+export function atEstimate(option: Pick<OptionTarget, "pools" | "targetPriceWad">): boolean {
+  const ticks = BigInt(PRICE_TOLERANCE_TICKS);
+  const [above, below] = [10_001n ** ticks, 10_000n ** ticks];
+  const priced = SIDES.filter((side) => option.pools[side].sqrtPriceX96 > 0n);
+  return (
+    priced.length > 0 &&
+    priced.every((side) => {
+      const pool = option.pools[side];
+      const target = side === "up" ? option.targetPriceWad : WAD - option.targetPriceWad;
+      const price = priceFromSqrtPriceX96(pool.sqrtPriceX96, pool.outcomeIsToken0);
+      return price * below <= target * above && price * above >= target * below;
+    })
+  );
+}
+
 /** The sides the market holds above the estimate, each sold as far as the balance reaches. */
 export function planSells(option: OptionTarget): SwapLeg[] {
   const legs: SwapLeg[] = [];
@@ -126,7 +150,8 @@ export function planSells(option: OptionTarget): SwapLeg[] {
 /**
  * What the sells paid for, once they are quoted: the pairs left over merge back to underlying,
  * and the total buys the sides the market holds below the estimate, each weighted by how far it
- * has to travel. `slippageBps` is how far, in hundredths of a percent, a sell may pay under its quote.
+ * has to travel, with what one side does not need going to the other. `slippageBps` is how far,
+ * in hundredths of a percent, a sell may pay under its quote.
  */
 export function planBuys(option: OptionTarget, sold: readonly SoldLeg[], slippageBps: number): BuyPlan {
   let proceeds = 0n;
@@ -146,12 +171,14 @@ export function planBuys(option: OptionTarget, sold: readonly SoldLeg[], slippag
   const buying = SIDES.map((side) => ({ side, state: sideState(option, side) })).filter(
     (entry): entry is { side: OptionSide; state: SideState } => entry.state !== null && entry.state.gap > 0n,
   );
-  const totalGap = buying.reduce((sum, { state }) => sum + state.gap, 0n);
+  const amounts = allot(
+    budget,
+    buying.map(({ state }) => ({ weight: state.gap, cap: withHeadroom(state.volumes.underlying) })),
+  );
 
   const legs: SwapLeg[] = [];
-  for (const { side, state } of buying) {
-    const share = (budget * state.gap) / totalGap;
-    const amountIn = min(withHeadroom(state.volumes.underlying), share);
+  for (const [index, { side, state }] of buying.entries()) {
+    const amountIn = amounts[index]!;
     if (amountIn >= MIN_LEG_WEI) {
       legs.push({
         side,
@@ -169,25 +196,124 @@ export function planBuys(option: OptionTarget, sold: readonly SoldLeg[], slippag
 }
 
 /**
- * The UP token's price now and once the option's sells and buys have run, from the pool maths alone. The
- * run quotes against the pools as they are when it signs, so it can land elsewhere.
+ * Shares `budget` by weight, none above its cap; what a capped share leaves goes to the others
+ * by weight, until the budget is spent or every share is at its cap.
  */
-export function previewUpPrice(option: OptionTarget, slippageBps: number): { from: bigint; to: bigint } | null {
+function allot(budget: bigint, shares: readonly { weight: bigint; cap: bigint }[]): bigint[] {
+  const amounts = shares.map(() => 0n);
+  let left = budget;
+  let open = shares.map((_, index) => index);
+  while (left > 0n && open.length > 0) {
+    const weight = open.reduce((sum, index) => sum + shares[index]!.weight, 0n);
+    const uncapped: number[] = [];
+    let given = 0n;
+    for (const index of open) {
+      const share = (left * shares[index]!.weight) / weight;
+      const room = shares[index]!.cap - amounts[index]!;
+      const take = min(share, room);
+      amounts[index]! += take;
+      given += take;
+      if (take === share) uncapped.push(index);
+    }
+    left -= given;
+    if (uncapped.length === open.length) break;
+    open = uncapped;
+  }
+  return amounts;
+}
+
+/** A leg as the preview shows it. */
+interface PreviewLeg {
+  side: OptionSide;
+  /** What the swap spends: the leg's amount, or less where the pool reaches the target first. */
+  amountIn: bigint;
+  /** The pool reaches the target before the leg's amount is spent, so `amountIn` is the pool maths' figure. */
+  toTarget: boolean;
+  /** The pool's fee on `amountIn`: outcome tokens for a sell, underlying for a buy. */
+  fee: bigint;
+}
+
+/** One option's trades as the pool maths plays them out against the pools as read. */
+export interface PreviewTrades {
+  /** Underlying split into one of each outcome token. */
+  split: bigint;
+  sells: (PreviewLeg & { underlyingOut: bigint })[];
+  /** Outcome sets merged back to underlying. */
+  merge: bigint;
+  buys: (PreviewLeg & { outcomeOut: bigint })[];
+  /** The UP token's price before and after, as a wad. */
+  from: bigint;
+  to: bigint;
+  /** Every leg's fee in underlying, a sell's valued at what that sell pays per outcome token. */
+  feeValue: bigint;
+}
+
+/** The leg's headroom stays in the trade wallet when the price limit stops the swap at the target. */
+function spent(leg: SwapLeg, pool: PoolLiquidity): PreviewLeg {
+  const amountIn = min(leg.amountIn, leg.amountInAtLimit);
+  return { side: leg.side, amountIn, toTarget: leg.amountInAtLimit < leg.amountIn, fee: feeOf(pool, amountIn) };
+}
+
+/**
+ * The trades `planSells` and `planBuys` make for one option, each filled by the pool maths alone, and where they
+ * leave the UP price; null where the UP pool never priced. The run quotes the pools as they are when it signs.
+ */
+export function previewTrades(option: OptionTarget, slippageBps: number): PreviewTrades | null {
   const up = option.pools.up;
   if (up.sqrtPriceX96 <= 0n) return null;
 
   const target = (side: OptionSide) => (side === "up" ? option.targetPriceWad : WAD - option.targetPriceWad);
   const from = priceFromSqrtPriceX96(up.sqrtPriceX96, up.outcomeIsToken0);
-  let price = from;
+  let to = from;
 
-  const sold = planSells(option).map((leg): SoldLeg => {
+  const sold = planSells(option).map((leg) => {
     const swap = swapToward(option.pools[leg.side], target(leg.side), leg.amountIn);
-    if (leg.side === "up") price = swap.priceWad;
-    return { side: leg.side, amountIn: leg.amountIn, underlyingOut: swap.amountOut };
+    if (leg.side === "up") to = swap.priceWad;
+    return { leg, underlyingOut: swap.amountOut };
   });
-  for (const leg of planBuys(option, sold, slippageBps).legs) {
-    if (leg.side === "up") price = swapToward(up, option.targetPriceWad, leg.amountIn).priceWad;
-  }
+  // the run sizes the merge and the buys from the legs as planned, headroom included
+  const plan = planBuys(
+    option,
+    sold.map(({ leg, underlyingOut }) => ({ side: leg.side, amountIn: leg.amountIn, underlyingOut })),
+    slippageBps,
+  );
+  const buys = plan.legs.map((leg) => {
+    const swap = swapToward(option.pools[leg.side], target(leg.side), leg.amountIn);
+    if (leg.side === "up") to = swap.priceWad;
+    return { ...spent(leg, option.pools[leg.side]), outcomeOut: swap.amountOut };
+  });
+  const sells = sold.map(({ leg, underlyingOut }) => ({ ...spent(leg, option.pools[leg.side]), underlyingOut }));
+  const feeValue =
+    sells.reduce((sum, leg) => sum + (leg.amountIn > 0n ? (leg.fee * leg.underlyingOut) / leg.amountIn : 0n), 0n) +
+    buys.reduce((sum, leg) => sum + leg.fee, 0n);
 
-  return { from, to: price };
+  // an option with no legs is left out of the run, so nothing of it is split either
+  const trades = sells.length > 0 || buys.length > 0;
+  return { split: trades ? option.splitAmount : 0n, sells, merge: plan.mergeAmount, buys, from, to, feeValue };
+}
+
+/** `now` is within `toleranceBps` of `shown`, as a share of `shown`. */
+function near(shown: bigint, now: bigint, toleranceBps: number): boolean {
+  const off = shown < now ? now - shown : shown - now;
+  return off * 10_000n <= shown * BigInt(toleranceBps);
+}
+
+const sameShape = (shown: readonly PreviewLeg[], now: readonly PreviewLeg[]) =>
+  shown.length === now.length &&
+  shown.every((leg, index) => leg.side === now[index]!.side && leg.toTarget === now[index]!.toTarget);
+
+/**
+ * Whether the pools as read now give another plan than the one shown: another leg, another side,
+ * an estimate reached or missed, or a figure moved by more than `toleranceBps`.
+ */
+export function planChanged(shown: PreviewTrades, now: PreviewTrades, toleranceBps: number): boolean {
+  if (!sameShape(shown.sells, now.sells) || !sameShape(shown.buys, now.buys)) return true;
+  const figures = (trades: PreviewTrades) => [
+    trades.merge,
+    trades.to,
+    ...trades.sells.flatMap((leg) => [leg.amountIn, leg.underlyingOut]),
+    ...trades.buys.flatMap((leg) => [leg.amountIn, leg.outcomeOut]),
+  ];
+  const before = figures(shown);
+  return figures(now).some((figure, index) => !near(before[index]!, figure, toleranceBps));
 }

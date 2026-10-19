@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 
 import { ctx, snapshot, WAD } from "@/features/predict/flow/__tests__/support/fakes";
+import type { PredictSnapshot } from "@/features/predict/flow/types";
 import { predictFlowId } from "@/features/predict/run/interrupted";
 import { sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 import { toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
@@ -38,11 +39,18 @@ const halted: PersistedPhase = {
   error: { stepId: "deposit", message: "RPC unavailable", cause: "rpc", hash: HASH },
 };
 
-function saveRun(deposit: StepOutcome, phase: PersistedPhase, flowId = predictFlowId("7", OWNER)) {
+function saveRun(
+  deposit: StepOutcome,
+  phase: PersistedPhase,
+  flowId = predictFlowId("7", OWNER),
+  amount = WAD * 3n,
+  depositNative = false,
+  extra: Partial<PredictSnapshot> = {},
+) {
   createRunStore().save({
     flowId,
     adapterId: "predict-flow",
-    snapshot: snapshot({ deposit: WAD * 3n }),
+    snapshot: snapshot({ deposit: amount, depositNative, ...extra }),
     ctx: ctx({ owner: OWNER, chainId: DEFAULT_CHAIN_ID }),
     steps: [
       { stepId: "deposit", label: "Add funds", outcome: deposit },
@@ -98,6 +106,42 @@ it("says a transaction may still be pending while the run's transaction awaits i
   render(<PredictCard session={session()} status="trading" marketEstimates={{}} />);
 
   expect(
-    await screen.findByText(/A transaction from it may still be pending; resume to check it\./),
+    await screen.findByText(
+      "A prediction with a deposit of 3 sDAI did not finish. A transaction from it may still be pending.",
+    ),
   ).toBeInTheDocument();
+});
+
+it("shows the interrupted deposit cut to four decimals, as the trade wallet shows it", async () => {
+  saveRun({ status: "pending" }, { status: "running" }, undefined, 4_123456789012345678n);
+  render(<PredictCard session={session()} status="trading" marketEstimates={{}} />);
+
+  expect(await screen.findByText("A prediction with a deposit of 4.1234 sDAI did not finish.")).toBeInTheDocument();
+});
+
+it("shows an interrupted xDAI deposit at four decimals in xDAI", async () => {
+  saveRun({ status: "pending" }, { status: "running" }, undefined, 8_123456789012345678n, true);
+  render(<PredictCard session={session()} status="trading" marketEstimates={{}} />);
+
+  expect(await screen.findByText("A prediction with a deposit of 8.1234 xDAI did not finish.")).toBeInTheDocument();
+});
+
+it.each([
+  ["credits alone", 0n, "A prediction with 2.5 in credits did not finish."],
+  ["a deposit and credits", WAD * 3n, "A prediction with a deposit of 3 sDAI and 2.5 in credits did not finish."],
+] as const)("names the credits an interrupted run spends, with %s", async (_name, deposit, text) => {
+  saveRun({ status: "pending" }, { status: "running" }, undefined, deposit, false, {
+    creditsFromEoa: WAD * 2n,
+    creditsToSpend: (WAD * 5n) / 2n,
+  });
+  render(<PredictCard session={session()} status="trading" marketEstimates={{}} />);
+
+  expect(await screen.findByText(text)).toBeInTheDocument();
+});
+
+it("names no deposit for an interrupted run the trade wallet funded alone", async () => {
+  saveRun({ status: "pending" }, { status: "running" }, undefined, 0n);
+  render(<PredictCard session={session()} status="trading" marketEstimates={{}} />);
+
+  expect(await screen.findByText("A prediction did not finish.")).toBeInTheDocument();
 });

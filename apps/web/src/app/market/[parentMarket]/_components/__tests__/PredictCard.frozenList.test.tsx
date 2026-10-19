@@ -11,6 +11,7 @@ import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 import { toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
 
+import { SHOWN } from "@/test/queries";
 import { addresses, GATEWAY } from "@/testing/fixtures";
 
 import { PredictCard } from "../PredictCard";
@@ -47,7 +48,7 @@ vi.mock("@/features/trade-executor/api/getExecutor", async (importOriginal) => (
   useExecutor: () => ({ data: { predicted: "0x8888888888888888888888888888888888888888", deployed: true } }),
 }));
 vi.mock("../usePredictFunding", () => ({
-  usePredictFunding: () => ({ funding: null, canPayNative: false, isPending: false }),
+  usePredictFunding: () => ({ funding: null, credits: { state: "none" }, canPayNative: false, isPending: false }),
 }));
 vi.mock("../useHasPredicted", () => ({ useHasPredicted: () => true }));
 vi.mock("@/components/wallet/EnsureChain", () => ({ default: ({ children }: { children: ReactNode }) => children }));
@@ -79,10 +80,10 @@ vi.mock("@/features/predict/hooks/usePredictRun", async () => {
   };
 });
 
-const progressAt = (stage: PredictProgress["stage"], skipped: Address[] = []): PredictProgress => ({
+const progressAt = (stage: PredictProgress["stage"], leftOut: Address[] = []): PredictProgress => ({
   stage,
   steps: [],
-  skipped,
+  leftOut,
   batchesDone: stage === "complete" ? 1 : 0,
   batches: 1,
 });
@@ -92,6 +93,7 @@ const driver = {
   start: vi.fn<PredictDriver["start"]>(),
   recover: vi.fn<PredictDriver["recover"]>(),
   resume: vi.fn<PredictDriver["resume"]>(),
+  confirm: vi.fn<PredictDriver["confirm"]>(),
   retry: vi.fn<PredictDriver["retry"]>(),
   reset: vi.fn<PredictDriver["reset"]>(() => run.set(progressAt("idle"))),
   dispose: vi.fn<PredictDriver["dispose"]>(),
@@ -137,10 +139,10 @@ describe("the popup's estimates", () => {
     );
 
     const view = render(card(at(MARKET_ESTIMATE)));
-    await userEvent.click(screen.getByRole("button", { name: "Predict selected" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Predict (\d+ )?estimates?$/ }));
     const popup = within(await screen.findByRole("dialog"));
     view.rerender(card(at(ESTIMATE)));
 
-    for (const option of OPTIONS) expect(popup.getByText(option.name)).toBeInTheDocument();
+    for (const option of OPTIONS) expect(popup.getByText(option.name, SHOWN)).toBeInTheDocument();
   });
 });

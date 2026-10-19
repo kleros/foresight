@@ -4,19 +4,18 @@ import {
   ContractFunctionRevertedError,
   decodeFunctionData,
   encodeFunctionData,
-  parseAbi,
   toFunctionSelector,
   type Address,
   type Hex,
   type PublicClient,
 } from "viem";
 
-import { NoSwapRouteError, type SwapQuoter } from "./types";
+import { ALGEBRA_ROUTER_ABI } from "./algebraRouter";
+import { NoSwapRouteError, type ExactInputQuoter, type SwapQuoter } from "./types";
 
 /**
- * Seer's on-chain LensQuoter picks the route and returns the router call to make. It simulates
- * against a gas cap first, so a pool thin enough to quote but not to execute throws rather than
- * reverting later from inside a batch.
+ * Seer's on-chain LensQuoter picks the route and returns the router call to make. Its execution
+ * check overrides balances at ERC-20 slot 0 only, so for Wrapped1155 legs it checks nothing.
  */
 /**
  * Seconds. The SDK's own default is five minutes from the moment each leg is quoted, and a batch
@@ -25,10 +24,6 @@ import { NoSwapRouteError, type SwapQuoter } from "./types";
  */
 const QUOTE_DEADLINE_SECONDS = 30n * 60n;
 
-/** Swapr's Algebra router, which Lens returns for a single-pool route. Lens leaves the limit at zero. */
-const ALGEBRA_ROUTER_ABI = parseAbi([
-  "function exactInputSingle((address tokenIn, address tokenOut, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 limitSqrtPrice) params) payable returns (uint256 amountOut)",
-]);
 const EXACT_INPUT_SINGLE = toFunctionSelector(ALGEBRA_ROUTER_ABI[0]);
 
 const Q192 = 2n ** 192n;
@@ -46,22 +41,27 @@ function answeredNoRoute(error: unknown): boolean {
   return reverted instanceof ContractFunctionRevertedError && NO_ROUTE_ERRORS.has(reverted.data?.errorName ?? "");
 }
 
+/** Algebra's fee unit: millionths of the input. */
+const FEE_DENOMINATOR = 1_000_000n;
+
 /**
- * What `amountIn` returns at no worse than the limit price, before the pool fee, less `slippageBps`.
- * Algebra's token0 is the lower address, and the squared sqrt price is token1 per token0.
+ * What `amountIn` returns at no worse than the limit price once the pool's fee is taken from it,
+ * less `slippageBps`. Algebra's token0 is the lower address, and the squared sqrt price is token1 per token0.
  */
 function minOutAtLimit(
   tokenIn: Address,
   tokenOut: Address,
   amountIn: bigint,
   limitSqrtPrice: bigint,
+  poolFee: bigint,
   slippageBps: number,
 ) {
   const priceX192 = limitSqrtPrice * limitSqrtPrice;
   const kept = 10_000n - BigInt(slippageBps);
+  const net = (amountIn * (FEE_DENOMINATOR - poolFee)) / FEE_DENOMINATOR;
   return BigInt(tokenIn) < BigInt(tokenOut)
-    ? (amountIn * priceX192 * kept) / (Q192 * 10_000n)
-    : (amountIn * Q192 * kept) / (priceX192 * 10_000n);
+    ? (net * priceX192 * kept) / (Q192 * 10_000n)
+    : (net * Q192 * kept) / (priceX192 * 10_000n);
 }
 
 /** The latest block's time, in seconds: what the router checks a deadline against, whatever the visitor's clock says. */
@@ -109,6 +109,7 @@ export function createLensQuoter(
         params.tokenOut,
         swapped,
         request.limitSqrtPrice,
+        request.poolFee,
         request.slippageBps,
       );
       const amountOutMinimum = scaled > floor ? scaled : floor;
@@ -124,6 +125,31 @@ export function createLensQuoter(
         }),
         value: result.msgValue,
       };
+    },
+  };
+}
+
+/** Lens' route for an exact-input swap with no price limit, held to Swapr's single-pool call. */
+export function createLensExactInputQuoter(
+  client: PublicClient,
+  chainId: ChainId,
+  chainNow: () => Promise<bigint> = latestBlockTime(client),
+): ExactInputQuoter {
+  const lens = new Lens(client, chainId);
+
+  return {
+    async quote(request) {
+      const deadline = (await chainNow()) + QUOTE_DEADLINE_SECONDS;
+      const result = await lens.quote({ ...request, slippageBps: 0, deadline }).catch((error: unknown) => {
+        if (!answeredNoRoute(error)) throw error;
+        throw new NoSwapRouteError(`Lens found no route from ${request.tokenIn} to ${request.tokenOut}.`, {
+          cause: error,
+        });
+      });
+      if (!result.data.startsWith(EXACT_INPUT_SINGLE)) {
+        throw new NoSwapRouteError(`Lens routed ${request.tokenIn} to ${request.tokenOut} through more than one pool.`);
+      }
+      return { amountOut: result.amountOut, router: result.target as Address, data: result.data as Hex };
     },
   };
 }

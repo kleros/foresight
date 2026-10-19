@@ -12,6 +12,7 @@ import type { Funding } from "@/features/predict/utils/funding";
 import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 import { toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
 
+import { SHOWN } from "@/test/queries";
 import { addresses, GATEWAY } from "@/testing/fixtures";
 
 import { PredictCard } from "../PredictCard";
@@ -53,6 +54,7 @@ vi.mock("@/features/trade-executor/api/getExecutor", async (importOriginal) => (
 const balances = vi.hoisted(() => ({ funding: null as Funding | null }));
 vi.mock("../usePredictFunding", () => ({
   usePredictFunding: () => ({
+    credits: { state: "none" },
     funding: balances.funding,
     token: "collateral",
     available: () => balances.funding?.available,
@@ -99,7 +101,7 @@ vi.mock("@/features/predict/hooks/usePredictRun", async () => {
 const progressAt = (stage: PredictProgress["stage"]): PredictProgress => ({
   stage,
   steps: [],
-  skipped: [],
+  leftOut: [],
   batchesDone: stage === "complete" ? 1 : 0,
   batches: 1,
 });
@@ -109,6 +111,7 @@ const driver = {
   start: vi.fn<PredictDriver["start"]>(),
   recover: vi.fn<PredictDriver["recover"]>(),
   resume: vi.fn<PredictDriver["resume"]>(),
+  confirm: vi.fn<PredictDriver["confirm"]>(),
   retry: vi.fn<PredictDriver["retry"]>(),
   reset: vi.fn<PredictDriver["reset"]>(() => run.set(progressAt("idle"))),
   dispose: vi.fn<PredictDriver["dispose"]>(),
@@ -137,6 +140,9 @@ const marketAt = (value: number) => Object.fromEntries(OPTIONS.map((option) => [
 const fundingCoveredByTradeWallet = (): Funding => ({
   available: 20n * WAD,
   collateralIn: 0n,
+  creditsAvailable: 0n,
+  credits: [],
+  creditsIn: 0n,
   tradeWallet: 5n * WAD,
   fromTradeWallet: 0n,
   toAdd: 0n,
@@ -156,9 +162,9 @@ async function openSecondPrediction(changed: (typeof OPTIONS)[number]) {
   );
 
   const view = render(card(marketAt(MARKET_BEFORE)));
-  await userEvent.click(screen.getByRole("button", { name: "Predict selected" }));
+  await userEvent.click(screen.getByRole("button", { name: /^Predict (\d+ )?estimates?$/ }));
   const first = within(await screen.findByRole("dialog"));
-  for (const option of OPTIONS) expect(first.getByText(option.name)).toBeInTheDocument();
+  for (const option of OPTIONS) expect(first.getByText(option.name, SHOWN)).toBeInTheDocument();
   act(() => run.set(progressAt("signing")));
   act(() => run.set(progressAt("complete")));
 
@@ -169,7 +175,7 @@ async function openSecondPrediction(changed: (typeof OPTIONS)[number]) {
   view.rerender(card(marketAt(MARKET_AFTER)));
   act(() => useEstimateStore.getState().setEstimate(detail.parentMarket, changed.market, 420));
 
-  await userEvent.click(screen.getByRole("button", { name: "Predict selected" }));
+  await userEvent.click(screen.getByRole("button", { name: /^Predict (\d+ )?estimates?$/ }));
   return within(await screen.findByRole("dialog"));
 }
 
@@ -193,16 +199,16 @@ describe("PredictDialog on a second prediction with one changed option", () => {
     async (_name, changed) => {
       const popup = await openSecondPrediction(changed);
 
-      expect(popup.getByText(changed.name)).toBeInTheDocument();
+      expect(popup.getByText(changed.name, SHOWN)).toBeInTheDocument();
       for (const option of OPTIONS.filter((candidate) => candidate !== changed))
-        expect(popup.queryByText(option.name)).toBeNull();
+        expect(popup.queryByText(option.name, SHOWN)).toBeNull();
     },
   );
 
-  it("shows no 'Adding 0 sDAI' step when the trade wallet covers it", async () => {
+  it("leaves the funds step without an amount when the trade wallet covers it", async () => {
     const popup = await openSecondPrediction(OPTIONS[1]);
+    const funds = popup.getByRole("listitem", { name: "Timeline item: Add funds" });
 
-    expect(popup.queryByText(/Adding 0 sDAI/)).toBeNull();
-    expect(popup.queryByText(/Adding 0\b/)).toBeNull();
+    expect(funds.querySelector("h2 + p")?.textContent ?? "").toBe("");
   });
 });

@@ -172,6 +172,16 @@ vi.mock("@/features/predict/run/reader", async () => {
     createPredictReader: () => ({
       isExecutorDeployed: () => Promise.resolve(chain.deployed),
       collateralBalance: () => Promise.resolve(0n),
+      creditsBalance: () => Promise.resolve(0n),
+      managerCollateral: () => Promise.resolve(0n),
+      previewDeposit: (assets: bigint) => Promise.resolve(assets),
+      vaultValue: (shares: bigint) => Promise.resolve(shares),
+      latestBlock: () => Promise.resolve(1n),
+      blockGasLimit: () => Promise.resolve(17_000_000n),
+      landedSince: () => Promise.resolve([]),
+      hasPending: () => Promise.resolve(false),
+      nextNonce: () => Promise.resolve(0),
+      sentWithNonce: () => Promise.resolve({ status: "none" as const }),
       optionStates: ({ options }: { options: PredictOption[] }) => {
         chain.asked.push(options.map((option) => option.targetPriceWad));
         return Promise.resolve(options.map(() => chainState()));
@@ -181,8 +191,8 @@ vi.mock("@/features/predict/run/reader", async () => {
 });
 
 vi.mock("@/lib/swap/lens", async () => {
-  const { fakeQuoter } = await import("@/features/predict/flow/__tests__/support/fakes");
-  return { createLensQuoter: () => fakeQuoter() };
+  const { fakeCreditsQuoter, fakeQuoter } = await import("@/features/predict/flow/__tests__/support/fakes");
+  return { createLensQuoter: () => fakeQuoter(), createLensExactInputQuoter: () => fakeCreditsQuoter() };
 });
 
 vi.mock("@/features/trade-executor/api/getExecutor", async (importOriginal) => ({
@@ -192,8 +202,12 @@ vi.mock("@/features/trade-executor/api/getExecutor", async (importOriginal) => (
 
 vi.mock("../usePredictFunding", () => ({
   usePredictFunding: () => ({
+    credits: { state: "none" },
     funding: {
       available: 10n * 10n ** 18n,
+      creditsAvailable: 0n,
+      credits: [],
+      creditsIn: 0n,
       collateralIn: form.deposit,
       tradeWallet: 0n,
       fromTradeWallet: 0n,
@@ -283,7 +297,7 @@ async function firstVisit(answers: Array<"accept" | "reject">, opts: { holdMinin
 /** A's deposit lands in the trade wallet, A turns the prediction down and reloads. */
 async function leaveDepositLandedPredictionRejected() {
   const view = await firstVisit(["accept", "reject"]);
-  await waitFor(() => expect(document.body.textContent).toContain("You turned the request down."));
+  await waitFor(() => expect(document.body.textContent).toContain("You declined in your wallet."));
   view.unmount();
   const deposit = chain.prompts.find(isDeposit)!;
   expect(transferOf(deposit)).toEqual({ to: A_EXECUTOR, amount: SAVED.deposit });

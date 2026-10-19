@@ -35,8 +35,8 @@ vi.mock("../../run/reader", async () => {
 });
 
 vi.mock("@/lib/swap/lens", async () => {
-  const { fakeQuoter } = await import("../../flow/__tests__/support/fakes");
-  return { createLensQuoter: () => fakeQuoter() };
+  const { fakeCreditsQuoter, fakeQuoter } = await import("../../flow/__tests__/support/fakes");
+  return { createLensQuoter: () => fakeQuoter(), createLensExactInputQuoter: () => fakeCreditsQuoter() };
 });
 
 const sendMock = vi.mocked(sendTransaction);
@@ -54,11 +54,17 @@ const input = (owner: Address, executor: Address): PredictRunInput => ({
   owner,
   executor,
   sDaiAdapter: addresses.sDaiAdapter,
+  credits: null,
   options: () => [option(1)],
-  deposit: () => WAD,
-  depositNative: () => false,
-  collateralIn: () => WAD,
-  collateralBefore: () => 0n,
+  funding: () => ({
+    deposit: WAD,
+    depositNative: false,
+    collateralIn: WAD,
+    collateralBefore: 0n,
+    creditsFromEoa: 0n,
+    creditsToSpend: 0n,
+  }),
+  slippage: () => ({ tradeBps: 100, creditsBps: 20 }),
 });
 
 type SendArgs = Parameters<typeof sendTransaction>[1] & { account?: unknown; chainId?: number };

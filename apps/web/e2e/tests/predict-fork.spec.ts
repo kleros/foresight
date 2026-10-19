@@ -65,7 +65,7 @@ test.describe("a session seeded on the gnosis fork", () => {
       await expect(page.getByText("Countdown")).toBeVisible({ timeout: 30_000 });
       await expect(page.getByText("Closed", { exact: true })).toHaveCount(0);
 
-      const predict = page.getByRole("button", { name: "Predict selected" });
+      const predict = page.getByRole("button", { name: /^Predict (\d+ )?estimates?$/ });
       await expect(predict).toBeVisible();
       await expect(predict).toBeDisabled();
 
@@ -81,6 +81,9 @@ test.describe("a session seeded on the gnosis fork", () => {
       await page.keyboard.press("ArrowRight");
       await page.keyboard.press("ArrowRight");
 
+      // Predict is off without a wallet or outside trading; each is named apart from the button
+      await expect(page.getByText("Connect a wallet to predict.")).toHaveCount(0);
+      await expect(page.getByText("Countdown")).toBeVisible();
       await expect(predict).toBeEnabled();
     });
   }
@@ -102,7 +105,7 @@ test.describe("a session seeded on the gnosis fork", () => {
     await page.keyboard.press("ArrowRight");
     await page.keyboard.press("ArrowRight");
 
-    await page.getByRole("button", { name: "Predict selected" }).click();
+    await page.getByRole("button", { name: /^Predict (\d+ )?estimates?$/ }).click();
     const popup = page.getByRole("dialog");
     const amount = popup.getByRole("spinbutton", { name: "Amount" });
     await amount.fill("5");

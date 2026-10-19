@@ -4,10 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import type { Address } from "viem";
 
 import type { PriceMove } from "@/features/predict/components/PredictList";
-import { SLIPPAGE_BPS } from "@/features/predict/oracle/tolerances";
 import { createPredictReader } from "@/features/predict/run/reader";
+import type { ShownPlans } from "@/features/predict/run/types";
 import type { SelectedEstimate } from "@/features/predict/types";
-import { previewUpPrice } from "@/features/predict/utils/plan";
+import { previewTrades, type PreviewTrades } from "@/features/predict/utils/plan";
 import type { SessionDetail } from "@/features/sessions/types";
 
 import { priceWadToEstimate } from "@/utils/optionPrice";
@@ -16,16 +16,47 @@ import { publicClient } from "@/lib/web3/public-client";
 
 import { toPredictOptions } from "./toPredictOptions";
 
-/** Where each selected option's market sits now and where this prediction would move it, keyed by lower-case market. */
+export interface PricePreview {
+  /** Where each option's market would move and with which trades, keyed by lower-case market. */
+  moves: Record<string, PriceMove>;
+  /** Each option's plan as the pool maths gives it, which Predict holds the run to. */
+  plans: ShownPlans;
+  /** Underlying each option's trade wallet already holds, keyed as `plans`. */
+  held: Record<string, bigint>;
+  /** Every option's pools are read and the split is known, so `plans` holds a plan for each option that has one. */
+  ready: boolean;
+  /** The pools could not be read. */
+  failed: boolean;
+  /** The pools could not be read on a read after a failed one either. */
+  failedAgain: boolean;
+  /** The pools are being read again after `failed`. */
+  retrying: boolean;
+  /** Reads the pools again. */
+  retry: () => void;
+}
+
+/** An option's plan as the summary shows it, in the option's unit; `held` counts only where the plan splits. */
+export function toPriceMove(trades: PreviewTrades, scale: SessionDetail["options"][number], held: bigint): PriceMove {
+  const { from, to, ...plan } = trades;
+  return {
+    from: priceWadToEstimate(from, scale),
+    to: priceWadToEstimate(to, scale),
+    plan: { ...plan, held: plan.split > 0n ? held : 0n },
+  };
+}
+
+/** Where each selected option's market sits now, where this prediction would move it and with which trades. */
 export function usePricePreview(args: {
   session: SessionDetail;
   selected: SelectedEstimate[];
   /** The owner's trade wallet, whose held tokens the trades start from. */
   tradeWallet: Address | undefined;
-  /** Collateral the prediction splits. */
-  collateralIn: bigint;
-}): Record<string, PriceMove> {
-  const { session, selected, tradeWallet, collateralIn } = args;
+  /** Collateral each option splits; undefined while it is not known, which plans nothing. */
+  collateralIn: bigint | undefined;
+  /** The trades' slippage setting, which sizes the buys. */
+  slippageBps: number;
+}): PricePreview {
+  const { session, selected, tradeWallet, collateralIn, slippageBps } = args;
   const { collateralToken } = session;
   const options = toPredictOptions(session, selected);
 
@@ -44,27 +75,38 @@ export function usePricePreview(args: {
     enabled: tradeWallet !== undefined && collateralToken !== null && options.length > 0,
   });
 
-  const preview: Record<string, PriceMove> = {};
+  const ready = collateralIn !== undefined && (options.length === 0 || states.isSuccess);
+  const preview: PricePreview = {
+    moves: {},
+    plans: {},
+    held: {},
+    ready,
+    failed: states.isError,
+    failedAgain: states.isError && states.errorUpdateCount > 1,
+    retrying: states.isError && states.isFetching,
+    retry: () => void states.refetch(),
+  };
+  const plans: Record<string, PreviewTrades> = {};
   for (const [index, option] of options.entries()) {
     const state = states.data?.[index];
     const scale = session.options.find((each) => each.market === option.childMarket);
-    if (!state || !scale) continue;
+    if (!state || !scale || collateralIn === undefined) continue;
 
-    const move = previewUpPrice(
+    const trades = previewTrades(
       {
         pools: state.pools,
         targetPriceWad: option.targetPriceWad,
         held: state.held,
         splitAmount: state.underlying + collateralIn,
       },
-      SLIPPAGE_BPS,
+      slippageBps,
     );
-    if (move) {
-      preview[option.childMarket.toLowerCase()] = {
-        from: priceWadToEstimate(move.from, scale),
-        to: priceWadToEstimate(move.to, scale),
-      };
+    if (trades) {
+      const key = option.childMarket.toLowerCase();
+      plans[key] = trades;
+      preview.held[key] = state.underlying;
+      preview.moves[key] = toPriceMove(trades, scale, state.underlying);
     }
   }
-  return preview;
+  return { ...preview, plans };
 }

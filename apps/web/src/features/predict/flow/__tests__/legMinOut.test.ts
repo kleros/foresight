@@ -111,11 +111,14 @@ async function buildUpLeg(args: { pool: PoolLiquidity; targetPriceWad: bigint })
   const option: PredictOption = { ...OPTION, targetPriceWad: args.targetPriceWad };
   const quoter = recordingLensQuoter();
   const reader = fakeReader({ state: () => chainState({ pools: { up: args.pool, down: UNPRICED } }) });
-  const snap = snapshot({ options: [option], collateralIn: WAD, deposit: WAD });
+  const snap = snapshot({
+    options: [option],
+    collateralIn: WAD,
+    deposit: WAD,
+    slippage: { tradeBps: SLIPPAGE_BPS, creditsBps: 0 },
+  });
 
-  const step = planPredict(snap, { reader, quoter, slippageBps: SLIPPAGE_BPS }).find(
-    (each) => each.id === STEP_ID.predict(1),
-  )!;
+  const step = planPredict(snap, { reader, quoter }).find((each) => each.id === STEP_ID.predict(1))!;
   const tx = await step.build(ctx(), snap);
 
   const batch = decodeFunctionData({ abi: tradeExecutorAbi, data: tx.data! });
@@ -130,6 +133,15 @@ async function buildUpLeg(args: { pool: PoolLiquidity; targetPriceWad: bigint })
 // a leg is offered 1% over what reaching the target takes
 const withHeadroom = (amount: bigint) => (amount * 101n) / 100n;
 const kept = BigInt(10_000 - SLIPPAGE_BPS);
+/** One leg's min-out, at or above `floor` and at or below what the pool pays at the limit. */
+function expectBetween(minOuts: bigint[], floor: bigint, atLimit: bigint) {
+  expect(minOuts).toHaveLength(1);
+  expect(minOuts[0]!).toBeGreaterThanOrEqual(floor);
+  expect(minOuts[0]!).toBeLessThanOrEqual(atLimit);
+}
+
+/** What goes in once the pool's fee is taken. */
+const net = (gross: bigint, fee: bigint) => (gross * (1_000_000n - fee)) / 1_000_000n;
 
 describe("the min-out each predict leg is signed with", () => {
   beforeEach(() => {
@@ -156,8 +168,8 @@ describe("the min-out each predict leg is signed with", () => {
         amountOutAtLimit: (2n * LIQUIDITY) / 129n,
       }),
     ]);
-    // the limit prices UP at 16641/65536 underlying
-    expect(minOuts).toEqual([(grossIn * 65_536n * kept) / (16_641n * 10_000n)]);
+    // at least the limit price on what the fee leaves, and no more than the pool pays at the limit
+    expectBetween(minOuts, (net(grossIn, FEE["1%"]) * 65_536n * kept) / (16_641n * 10_000n), (2n * LIQUIDITY) / 129n);
   });
 
   it("prices a sell's min-out at its limit on what reaching the target spends, not on the headroom", async () => {
@@ -180,8 +192,8 @@ describe("the min-out each predict leg is signed with", () => {
         amountOutAtLimit: LIQUIDITY / 256n,
       }),
     ]);
-    // the limit prices UP at a quarter of an underlying
-    expect(minOuts).toEqual([(grossIn * kept) / (4n * 10_000n)]);
+    // at least a quarter of an underlying per UP the fee leaves, and no more than the pool pays at the limit
+    expectBetween(minOuts, (net(grossIn, FEE["1%"]) * kept) / (4n * 10_000n), LIQUIDITY / 256n);
   });
 
   it("signs a buy whose fee is just above its move with a min-out the pool still pays at the limit", async () => {
@@ -192,13 +204,12 @@ describe("the min-out each predict leg is signed with", () => {
       targetPriceWad: PRICE["16641/65536"],
     });
 
-    // a 1.6% move under a 1.7% fee stays inside the slippage plus half the move
+    // a 1.6% move under a 1.7% fee
     const grossIn = ((LIQUIDITY / 256n) * 1_000n + 982n) / 983n;
-    expect(minOuts).toEqual([(grossIn * 65_536n * kept) / (16_641n * 10_000n)]);
-    expect(minOuts[0]!).toBeLessThanOrEqual((2n * LIQUIDITY) / 129n);
+    expectBetween(minOuts, (net(grossIn, FEE["1.7%"]) * 65_536n * kept) / (16_641n * 10_000n), (2n * LIQUIDITY) / 129n);
   });
 
-  it("signs a buy whose fee outweighs its move with a min-out above what the pool pays at the limit", async () => {
+  it("signs a buy whose fee outweighs its move with a min-out the pool still pays at the limit", async () => {
     lensQuotesAt(PRICE["0.25"]);
 
     const { minOuts } = await buildUpLeg({
@@ -206,10 +217,8 @@ describe("the min-out each predict leg is signed with", () => {
       targetPriceWad: PRICE["16641/65536"],
     });
 
-    // a 1.6% move under a 3% fee: the floor prices the fee-inclusive input at the limit, so the
-    // router reverts this leg with "Too little received" rather than fill it
+    // a 1.6% move under a 3% fee: the floor takes the fee off the input before pricing it at the limit
     const grossIn = ((LIQUIDITY / 256n) * 100n + 96n) / 97n;
-    expect(minOuts).toEqual([(grossIn * 65_536n * kept) / (16_641n * 10_000n)]);
-    expect(minOuts[0]!).toBeGreaterThan((2n * LIQUIDITY) / 129n);
+    expectBetween(minOuts, (net(grossIn, FEE["3%"]) * 65_536n * kept) / (16_641n * 10_000n), (2n * LIQUIDITY) / 129n);
   });
 });

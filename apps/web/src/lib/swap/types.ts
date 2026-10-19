@@ -21,6 +21,8 @@ export interface SwapQuoteRequest {
   amountInAtLimit: bigint;
   /** What the swap returns if it stops at the limit, which caps the quoted output. */
   amountOutAtLimit: bigint;
+  /** The pool's fee in millionths of the input, as read with its price. */
+  poolFee: bigint;
 }
 
 export interface SwapQuote {
@@ -44,4 +46,25 @@ export class NoSwapRouteError extends Error {
 export interface SwapQuoter {
   /** Rejects with `NoSwapRouteError` when no route takes the swap. */
   quote(request: SwapQuoteRequest): Promise<SwapQuote>;
+}
+
+/** A swap of exactly `amount` with no price limit, whose calldata a caller re-encodes with its own minimum. */
+export interface ExactInputRequest {
+  tokenIn: Address;
+  tokenOut: Address;
+  amount: bigint;
+  recipient: Address;
+}
+
+export interface ExactInputQuote {
+  amountOut: bigint;
+  /** The contract the calldata is for. */
+  router: Address;
+  /** Swapr's `exactInputSingle`; the quoter refuses any other route. */
+  data: Hex;
+}
+
+export interface ExactInputQuoter {
+  /** Rejects with `NoSwapRouteError` when no single-pool route takes the swap. */
+  quote(request: ExactInputRequest): Promise<ExactInputQuote>;
 }

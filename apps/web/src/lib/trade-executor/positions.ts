@@ -4,6 +4,7 @@ import { encodeFunctionData, erc20Abi, type Address } from "viem";
 import { gnosisRouterAbi } from "@/config/contracts";
 
 import { batchExecuteTx, type ExecutorCall } from "./executor";
+import { PreflightError } from "./preflightError";
 
 interface RouterArgs {
   executor: Address;
@@ -70,7 +71,7 @@ export function mergeCalls({
   amount,
 }: MergeCallArgs): ExecutorCall[] {
   if (outcomeTokens.length === 0) {
-    throw new Error("Nothing to merge.");
+    throw new PreflightError("Nothing to merge.");
   }
 
   return [

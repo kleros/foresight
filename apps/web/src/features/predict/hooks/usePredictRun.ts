@@ -7,14 +7,14 @@ import { sendTransaction } from "@wagmi/core";
 import type { Address } from "viem";
 
 import { createRunStore } from "@/lib/flowRunStore";
-import { createLensQuoter } from "@/lib/swap/lens";
+import { createLensExactInputQuoter, createLensQuoter } from "@/lib/swap/lens";
 import { publicClient } from "@/lib/web3/public-client";
 import { wagmiConfig } from "@/lib/web3/wagmi";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
+import type { CreditsRoute } from "@/config/contracts";
 
-import type { PredictCtx, PredictOption, PredictRequest } from "../flow/types";
-import { SLIPPAGE_BPS } from "../oracle/tolerances";
+import type { PredictCtx, PredictOption, PredictRequest, PredictSlippage } from "../flow/types";
 import { createPredictRun } from "../run/driver";
 import { predictFlowId } from "../run/interrupted";
 import { createPredictReader } from "../run/reader";
@@ -31,15 +31,17 @@ export interface PredictRunInput {
   executor: Address;
   /** Null where the chain cannot turn xDAI into the session's collateral. */
   sDaiAdapter: Address | null;
+  /** Null where credits cannot fund the session's collateral. */
+  credits: CreditsRoute | null;
   /** What the visitor set, already turned into target prices. */
   options: () => PredictOption[];
-  /** What has to be added to the trade wallet, in the token the visitor chose. */
-  deposit: () => bigint;
-  depositNative: () => boolean;
-  /** Collateral the prediction splits: what the trade wallet holds plus what is added. */
-  collateralIn: () => bigint;
-  /** What the trade wallet held when the visitor pressed predict. */
-  collateralBefore: () => bigint;
+  /**
+   * The money the popup shows, read when Predict is pressed. An xDAI deposit's collateral is read
+   * back once it lands; `collateralIn` is the estimate until then.
+   */
+  funding: () => Omit<PredictRequest, "options" | "startedAt" | "slippage">;
+  /** The popup's slippage settings, read when Predict is pressed. */
+  slippage: () => PredictSlippage;
   onComplete?: () => void;
 }
 
@@ -85,10 +87,11 @@ export function usePredictRun(input: PredictRunInput | null): {
         client: publicClient,
         sessionId: input.sessionId,
         collateral: input.collateral,
+        credits: input.credits,
       }),
       quoter: createLensQuoter(publicClient, DEFAULT_CHAIN_ID as 100),
+      creditsQuoter: createLensExactInputQuoter(publicClient, DEFAULT_CHAIN_ID as 100),
       store,
-      slippageBps: SLIPPAGE_BPS,
       flowId,
       ctx: (): PredictCtx => {
         const now = latest.current;
@@ -102,6 +105,7 @@ export function usePredictRun(input: PredictRunInput | null): {
           collateral: now.collateral,
           parentMarket: now.parentMarket,
           sDaiAdapter: now.sDaiAdapter,
+          credits: now.credits,
         };
       },
       snapshot: (): PredictRequest => {
@@ -109,14 +113,12 @@ export function usePredictRun(input: PredictRunInput | null): {
         if (!now) throw new Error("This session is no longer open for predictions.");
         return {
           options: now.options(),
-          deposit: now.deposit(),
-          depositNative: now.depositNative(),
-          // An xDAI deposit's collateral is read back once it lands; this is the estimate until then.
-          collateralIn: now.collateralIn(),
-          collateralBefore: now.collateralBefore(),
+          ...now.funding(),
+          slippage: now.slippage(),
           startedAt: Math.floor(Date.now() / 1000),
         };
       },
+      slippage: () => latest.current?.slippage(),
       onComplete: () => latest.current?.onComplete?.(),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuilt on identity, read through the ref otherwise

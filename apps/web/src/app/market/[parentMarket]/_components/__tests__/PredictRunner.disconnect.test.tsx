@@ -94,6 +94,7 @@ const driver = {
   start: vi.fn<PredictDriver["start"]>(),
   recover: vi.fn<PredictDriver["recover"]>(),
   resume: vi.fn<PredictDriver["resume"]>(),
+  confirm: vi.fn<PredictDriver["confirm"]>(),
   retry: vi.fn<PredictDriver["retry"]>(),
   reset: vi.fn<PredictDriver["reset"]>(),
   dispose: vi.fn<PredictDriver["dispose"]>(),
@@ -101,7 +102,7 @@ const driver = {
   getProgress: vi.fn<PredictDriver["getProgress"]>(),
 } satisfies PredictDriver;
 
-const idle: PredictProgress = { stage: "idle", steps: [], skipped: [], batchesDone: 0, batches: 0 };
+const idle: PredictProgress = { stage: "idle", steps: [], leftOut: [], batchesDone: 0, batches: 0 };
 
 vi.mock("@/features/predict/hooks/usePredictRun", () => ({
   usePredictRun: (input: unknown) => ({ driver: input ? driver : null, progress: idle }),
@@ -129,7 +130,7 @@ function renderPage() {
 }
 
 async function openPopup() {
-  await userEvent.click(screen.getByRole("button", { name: "Predict selected" }));
+  await userEvent.click(screen.getByRole("button", { name: /^Predict (\d+ )?estimates?$/ }));
   return within(await screen.findByRole("dialog"));
 }
 
@@ -150,25 +151,25 @@ describe("the balance line when the wallet disconnects with the popup open", () 
   it("asks for a wallet instead of checking the balance forever", async () => {
     renderPage();
     const popup = await openPopup();
-    expect(await popup.findByText("Balance: 10 sDAI")).toBeInTheDocument();
+    expect(await popup.findByTitle("Balance: 10 sDAI")).toBeInTheDocument();
 
     act(() => account.set(undefined));
 
-    expect(await popup.findByText("Connect a wallet to see your balance")).toBeInTheDocument();
-    expect(popup.queryByText("Checking your balance…")).toBeNull();
-    expect(popup.queryByText(/^Balance: /)).toBeNull();
+    expect(await popup.findByText("No wallet connected")).toBeInTheDocument();
+    expect(popup.queryByText("Reading balance…")).toBeNull();
+    expect(popup.queryByTitle(/^Balance: /)).toBeNull();
   });
 
   it("shows the balance again once a wallet reconnects", async () => {
     renderPage();
     const popup = await openPopup();
-    await popup.findByText("Balance: 10 sDAI");
+    await popup.findByTitle("Balance: 10 sDAI");
 
     act(() => account.set(undefined));
-    await popup.findByText("Connect a wallet to see your balance");
+    await popup.findByText("No wallet connected");
     act(() => account.set(OWNER));
 
-    expect(await popup.findByText("Balance: 10 sDAI")).toBeInTheDocument();
-    expect(popup.queryByText("Connect a wallet to see your balance")).toBeNull();
+    expect(await popup.findByTitle("Balance: 10 sDAI")).toBeInTheDocument();
+    expect(popup.queryByText("No wallet connected")).toBeNull();
   });
 });

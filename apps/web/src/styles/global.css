@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @import "../../../../node_modules/@kleros/ui-components-library/dist/assets/theme.css";
-@source "../../../../node_modules/@kleros/ui-components-library";
 
 /* Foresight's extension layer over the Kleros foundation. */
 @import "./tokens/typography.css";
@@ -8,8 +7,14 @@
 @import "./tokens/foresight-motion.css";
 @import "./tokens/foresight-gradients.css";
 @import "./tokens/foresight-components.css";
+@import "./tokens/foresight-popup.css";
+@source "../../../../node_modules/@kleros/ui-components-library";
 
 @custom-variant dark (&:where(.dark, .dark *));
+/* a phone too short for the predict popup's steps at rest, such as 375 x 667 or 360 x 740 */
+@custom-variant short (@media (max-height: 760px) and (max-width: 639px));
+/* a phone on its side, such as 844 x 390: too short for the popup's body to scroll on its own */
+@custom-variant landscape-phone (@media (max-height: 480px));
 
 /* Foresight semantic tokens as Tailwind colours: bg-fs-surface, text-fs-text-secondary… */
 @theme inline {
@@ -33,24 +38,57 @@
   --color-fs-tone-error: var(--fs-tone-error);
   --color-fs-tone-error-bg: var(--fs-tone-error-bg);
   --color-fs-tone-neutral: var(--fs-tone-neutral);
+  --color-fs-tone-success-text: var(--fs-tone-success-text);
+  --color-fs-tone-warning-text: var(--fs-tone-warning-text);
+  --color-fs-tone-error-text: var(--fs-tone-error-text);
+  --color-fs-estimate-up: var(--fs-estimate-up);
+  --color-fs-estimate-down: var(--fs-estimate-down);
   --radius-fs: var(--fs-radius);
+  --color-fs-popup-panel: var(--fs-popup-panel);
+  --color-fs-popup-chip: var(--fs-popup-chip);
+  --color-fs-popup-hover: var(--fs-popup-hover);
+  --color-fs-popup-line: var(--fs-popup-line);
+  --color-fs-popup-line-strong: var(--fs-popup-line-strong);
+  --color-fs-popup-text: var(--fs-popup-text);
+  --color-fs-popup-text-2: var(--fs-popup-text-2);
+  --color-fs-popup-text-3: var(--fs-popup-text-3);
+  --color-fs-popup-accent-text: var(--fs-popup-accent-text);
+  --color-fs-focus-ring: var(--fs-focus-ring);
+  --color-fs-popup-on-axis: var(--fs-popup-on-axis);
+  --color-fs-popup-cta-disabled: var(--fs-popup-cta-disabled);
+  --color-fs-popup-cta-disabled-text: var(--fs-popup-cta-disabled-text);
+  --color-fs-popup-track: var(--fs-popup-track);
+  --radius-fs-popup: var(--fs-radius-popup);
+  --radius-fs-panel: var(--fs-radius-panel);
+  --radius-fs-control: var(--fs-radius-control);
 }
 
-/* Semantic type roles as single utilities */
+/* Semantic type roles as single utilities. `font` resets font-variant-numeric, so each role re-reads
+   Tailwind's numeric variables: `tabular-nums` beside a role still applies, and without one it inherits. */
 @utility type-h1 {
   font: var(--type-h1);
+  font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,)
+    var(--tw-numeric-fraction,);
 }
 @utility type-h2 {
   font: var(--type-h2);
+  font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,)
+    var(--tw-numeric-fraction,);
 }
 @utility type-body {
   font: var(--type-body);
+  font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,)
+    var(--tw-numeric-fraction,);
 }
 @utility type-label {
   font: var(--type-label);
+  font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,)
+    var(--tw-numeric-fraction,);
 }
 @utility type-caption {
   font: var(--type-caption);
+  font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,)
+    var(--tw-numeric-fraction,);
 }
 
 /** The one content gutter: the header, the page and the footer all sit on it. */
@@ -161,14 +199,7 @@
     color: var(--foreground);
     background: var(--background);
     overflow-x: clip;
-    font-family:
-      Inter,
-      ui-sans-serif,
-      system-ui,
-      -apple-system,
-      BlinkMacSystemFont,
-      "Segoe UI",
-      sans-serif;
+    font-family: var(--font-sans);
 
     /* ================================
    Custom scrollbar styles
@@ -180,7 +211,7 @@
     }
 
     ::-webkit-scrollbar-track {
-      background: #fff;
+      background: var(--fs-surface);
     }
 
     ::-webkit-scrollbar-thumb {
@@ -195,7 +226,7 @@
     /* Firefox */
     * {
       scrollbar-width: thin;
-      scrollbar-color: var(--color-klerosUIComponentsSecondaryBlue) #fff;
+      scrollbar-color: var(--color-klerosUIComponentsSecondaryBlue) var(--fs-surface);
     }
   }
 }
@@ -275,7 +306,567 @@
     }
   }
 
+  /* also the library's own hover class: its fields, selects and buttons carry it */
   .hover-short-transition {
-    transition: 0.1s;
+    transition-property: background-color, border-color, color, fill, outline-color, box-shadow, transform, opacity;
+    transition-duration: var(--fs-dur-echo);
+    transition-timing-function: var(--fs-ease-enter);
+  }
+}
+
+/* The predict popup's steps: the library timeline's rows at 40px, numbered bullets on a dotted connector
+   that fills with the axis as a step finishes. Unlayered, so it wins over the library's own margins. */
+.step-bullet {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--fs-surface);
+  color: var(--fs-popup-text-2);
+  font: 600 12px/1 var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+/* the axis disc and the ring cross-fade by opacity, so no colour is animated */
+.step-bullet::before,
+.step-bullet::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  transition: opacity var(--fs-dur-enter) var(--fs-ease-enter);
+}
+.step-bullet::before {
+  z-index: -1;
+  background: var(--fs-popup-axis);
+  opacity: 0;
+}
+.step-bullet::after {
+  border: 1.5px solid var(--fs-popup-line-strong);
+}
+.step-bullet:is([data-bullet="running"], [data-bullet="done"]) {
+  color: var(--fs-popup-on-axis);
+}
+.step-bullet:is([data-bullet="running"], [data-bullet="done"])::before {
+  opacity: 1;
+}
+.step-bullet:is([data-bullet="running"], [data-bullet="done"])::after {
+  opacity: 0;
+}
+.step-bullet[data-bullet="failed"] {
+  color: var(--fs-tone-error-text);
+}
+.step-bullet[data-bullet="inactive"] {
+  color: var(--fs-popup-text-3);
+}
+.step-bullet[data-bullet="inactive"]::after {
+  opacity: 0.5;
+}
+.step-bullet[data-bullet="failed"]::after {
+  border-color: var(--fs-tone-error);
+}
+.step-bullet > [data-glyph] {
+  grid-area: 1 / 1;
+  transition:
+    opacity var(--fs-dur-enter) var(--fs-ease-enter),
+    transform var(--fs-dur-enter) var(--fs-ease-spring);
+}
+.step-bullet > svg {
+  width: 14px;
+  height: 14px;
+  opacity: 0;
+  transform: scale(0.8);
+}
+.step-bullet:is([data-bullet="done"], [data-bullet="failed"]) > [data-glyph="digit"] {
+  opacity: 0;
+  transition: opacity var(--fs-dur-echo) var(--fs-ease-exit);
+}
+.step-bullet[data-bullet="done"] > [data-glyph="check"],
+.step-bullet[data-bullet="failed"] > [data-glyph="cross"] {
+  opacity: 1;
+  transform: none;
+}
+/* the credits tick: the fill fades in on a layer, as a gradient cannot interpolate, while the check draws; 15 is the path's length, rounded up */
+.predict-check {
+  position: relative;
+  transition: border-color var(--fs-dur-echo) var(--fs-ease-enter);
+}
+.predict-check::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: var(--fs-popup-axis);
+  opacity: 0;
+  transition: opacity var(--fs-dur-echo) var(--fs-ease-exit);
+}
+:checked + .predict-check::before {
+  opacity: 1;
+  transition: opacity var(--fs-dur-echo) var(--fs-ease-enter);
+}
+.predict-check svg {
+  position: relative;
+}
+.predict-check path {
+  stroke-dasharray: 15;
+  stroke-dashoffset: 15;
+  transition: stroke-dashoffset var(--fs-dur-echo) var(--fs-ease-exit);
+}
+:checked + .predict-check path {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset var(--fs-dur-enter) var(--fs-ease-enter);
+}
+.predict-steps > li > div:first-child {
+  padding-top: 8px;
+}
+/* the library draws a line above the bullet down to the title's offset; the connector below replaces it */
+.predict-steps > li > div:first-child > div[style] {
+  display: none;
+}
+.predict-steps > li > div:first-child > div:last-child:not([style]) {
+  position: relative;
+  flex: 1 1 0;
+  width: 0;
+  /* through the next row's 8px top padding to its bullet */
+  margin: 0 0 -8px;
+  border-left: 2px dotted var(--fs-popup-line-strong);
+}
+.predict-steps > li > div:first-child > div:last-child:not([style])::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -2px;
+  width: 2px;
+  background: var(--fs-popup-axis-v);
+  transform: scaleY(0);
+  transform-origin: top;
+  transition: transform var(--fs-dur-structural) var(--fs-ease-structural);
+}
+.predict-steps > li:has([data-bullet="done"]) > div:first-child > div:last-child:not([style])::after {
+  transform: scaleY(1);
+}
+.predict-steps > li > div:nth-child(2) {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 40px;
+  margin: 0 0 0 12px;
+  justify-content: center;
+  gap: 0;
+}
+.predict-steps > li > div:nth-child(2) > div {
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  gap: 2px 12px;
+}
+.predict-steps h2 {
+  min-width: 0;
+  overflow: hidden;
+  font: 600 14px/20px var(--font-sans);
+  color: var(--fs-popup-text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.predict-steps h2 + p {
+  flex: none;
+  min-width: 0;
+  max-width: 60%;
+  overflow: hidden;
+  font: 400 13px/18px var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--fs-popup-text-2);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.predict-steps li:has([data-bullet="running"]) h2 + p {
+  color: var(--fs-popup-text);
+}
+.predict-steps li:has([data-bullet="failed"]) h2 + p {
+  color: var(--fs-tone-error-text);
+}
+.predict-steps li:has([data-bullet="inactive"]) h2 {
+  color: var(--fs-popup-text-2);
+}
+.predict-steps li:has([data-bullet="inactive"]) h2 + p {
+  color: var(--fs-popup-text-3);
+}
+/* the step's detail sits under its title where the two do not fit one line; both columns then
+   start at the row's top, so the 24px bullet and the title 2px down share a centre */
+@container (max-width: 22rem) {
+  .predict-steps > li > div:first-child {
+    padding-top: 0;
+  }
+  .predict-steps > li > div:first-child > div:last-child:not([style]) {
+    margin-bottom: 0;
+  }
+  .predict-steps > li > div:nth-child(2) {
+    justify-content: flex-start;
+    padding-top: 2px;
+  }
+  .predict-steps > li > div:nth-child(2) > div {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .predict-steps h2 + p {
+    max-width: 100%;
+    line-height: 16px;
+  }
+}
+.predict-steps small {
+  display: none;
+}
+/* the token select's caret: the summary's 1.5px chevron in place of the library's filled triangle */
+.predict-token-select > button > svg:last-child {
+  display: none;
+}
+.predict-token-select > button::after {
+  content: "";
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-left: 4px;
+  background: var(--fs-popup-text-2);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6l4 4 4-4' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+/* one token has no menu to open */
+.predict-token-select-single > button::after {
+  display: none;
+}
+/* the landscape-phone variant's query: content scrolling under the sticky header fades in under its edge */
+@media (max-height: 480px) {
+  .predict-header::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 100%;
+    height: 12px;
+    background: linear-gradient(var(--fs-surface), transparent);
+    pointer-events: none;
+  }
+  /* shown only once the body has scrolled, so at rest it lays nothing over the estimates */
+  @supports (animation-timeline: scroll()) {
+    .predict-header::after {
+      animation: predict-header-fade linear both;
+      animation-timeline: scroll(nearest);
+      animation-range: 0 12px;
+    }
+  }
+}
+@keyframes predict-header-fade {
+  from {
+    opacity: 0;
+  }
+}
+/* The predict popup's settings: the dim fades as the card grows from the gear (transitions.dev 05, origin top
+   right). The scale has three durations, so the close runs on the enter one with a settling curve. */
+.predict-settings {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--fs-dur-enter) var(--fs-ease-structural),
+    visibility 0s linear var(--fs-dur-enter);
+}
+.predict-settings[data-open] {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity var(--fs-dur-enter) var(--fs-ease-enter),
+    visibility 0s;
+}
+.predict-settings-card {
+  transform-origin: top right;
+  transform: translateY(-4px) scale(0.97);
+  filter: blur(2px);
+  transition:
+    transform var(--fs-dur-enter) var(--fs-ease-structural),
+    filter var(--fs-dur-enter) var(--fs-ease-structural);
+}
+.predict-settings[data-open] .predict-settings-card {
+  transform: none;
+  filter: none;
+  transition:
+    transform var(--fs-dur-enter) var(--fs-ease-enter),
+    filter var(--fs-dur-enter) var(--fs-ease-enter);
+}
+@media (prefers-reduced-motion: reduce) {
+  .predict-settings-card {
+    transform: none;
+    filter: none;
+  }
+}
+/* a field's warning folds open under it (transitions.dev 21), so the card's height eases rather than jumps */
+.predict-settings-message {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--fs-dur-enter) var(--fs-ease-structural),
+    opacity var(--fs-dur-enter) var(--fs-ease-structural);
+}
+.predict-settings-message[data-open] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.predict-settings-message > * {
+  overflow: hidden;
+}
+/* the panel scrolls on a phone on its side, in the popup's own line colour */
+.predict-settings,
+.predict-settings * {
+  scrollbar-color: var(--fs-popup-line-strong) var(--fs-surface);
+}
+.predict-settings ::-webkit-scrollbar-thumb {
+  background: var(--fs-popup-line-strong);
+}
+/* the gear's custom-slippage dot pops on as a notification badge does (transitions.dev 03), and off quicker */
+.predict-gear-dot {
+  transform: scale(0);
+  opacity: 0;
+  transition:
+    transform var(--fs-dur-echo) var(--fs-ease-exit),
+    opacity var(--fs-dur-echo) var(--fs-ease-exit);
+}
+.predict-gear-dot[data-open] {
+  transform: none;
+  opacity: 1;
+  transition:
+    transform var(--fs-dur-enter) var(--fs-ease-spring),
+    opacity var(--fs-dur-enter) var(--fs-ease-enter);
+}
+@media (prefers-reduced-motion: reduce) {
+  .predict-gear-dot {
+    transform: none;
+  }
+}
+/* a swapped label enters as the settings panel does (transitions.dev 04's enter half), keyed so each text replays it */
+.predict-text-swap {
+  animation: predict-text-swap var(--fs-dur-enter) var(--fs-ease-enter) both;
+}
+@keyframes predict-text-swap {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+    filter: blur(2px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .predict-text-swap {
+    animation-name: predict-text-fade;
+  }
+}
+@keyframes predict-text-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* an indeterminate line under the summary while a run prices its routes */
+.predict-sweep {
+  position: absolute;
+  right: 4px;
+  bottom: 0;
+  left: 4px;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 1px;
+}
+/* an indeterminate linear progress bar: the track-wide wrapper travels while its child scales about
+   its centre, so the bar is widest mid-track; transform only. A quote quicker than the delay draws nothing */
+.predict-sweep > i {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  transform: translateX(-60%);
+  animation: predict-sweep-travel 1.6s linear 250ms infinite;
+}
+.predict-sweep > i::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--fs-popup-axis);
+  transform: scaleX(0.08);
+  animation: predict-sweep-stretch 1.6s linear 250ms infinite;
+}
+/* at 8% wide the bar is off the line at ±60%, so the loop's seam and the delay show nothing */
+@keyframes predict-sweep-travel {
+  from {
+    transform: translateX(-60%);
+  }
+  to {
+    transform: translateX(60%);
+  }
+}
+@keyframes predict-sweep-stretch {
+  0%,
+  15% {
+    transform: scaleX(0.08);
+  }
+  50% {
+    transform: scaleX(0.6);
+  }
+  85%,
+  100% {
+    transform: scaleX(0.08);
+  }
+}
+/* still, a full-width line would read as a divider, so it pulses instead */
+@media (prefers-reduced-motion: reduce) {
+  .predict-sweep > i,
+  .predict-sweep > i::before {
+    transform: none;
+    animation: none;
+  }
+  .predict-sweep > i {
+    opacity: 0.35;
+    animation: predict-sweep-pulse 1.6s linear infinite alternate;
+  }
+}
+@keyframes predict-sweep-pulse {
+  to {
+    opacity: 0.8;
+  }
+}
+/* the popup's button: the screen's one full-strength gradient, over the library Button's own fills */
+.predict-cta {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  height: 52px;
+  padding: 0 16px;
+  border-radius: var(--fs-radius-panel);
+  background: var(--fs-popup-axis);
+  transition: transform var(--fs-dur-echo) var(--fs-ease-enter);
+}
+.predict-cta[data-pressed] {
+  transform: scale(0.985);
+}
+/* the short-window variant, as `short` above */
+@media (max-height: 760px) and (max-width: 639px) {
+  .predict-cta {
+    height: 44px;
+  }
+}
+.predict-cta::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: #ffffff;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--fs-dur-echo) var(--fs-ease-enter);
+}
+@media (hover: hover) and (pointer: fine) {
+  .predict-cta:not([data-disabled]):hover::after {
+    opacity: 0.1;
+  }
+}
+.predict-cta .button-text {
+  overflow: hidden;
+  font: 600 16px/22px var(--font-sans);
+  color: var(--fs-popup-on-axis);
+  text-overflow: ellipsis;
+}
+/* doubled class: outranks foresight-components.css's greyed-blue disabled primary */
+button.predict-cta.predict-cta[data-disabled]:has(> .button-text) {
+  background: var(--fs-popup-cta-disabled);
+}
+button.predict-cta.predict-cta[data-disabled]:has(> .button-text) > .button-text {
+  color: var(--fs-popup-cta-disabled-text);
+}
+button.predict-cta.predict-cta[data-quiet] {
+  background: var(--fs-popup-chip);
+}
+button.predict-cta.predict-cta[data-quiet] > .button-text {
+  color: var(--fs-popup-text);
+}
+/* busy, it keeps the panel's tone and wears the axis as a hairline */
+button.predict-cta.predict-cta[data-busy]:has(> .button-text) {
+  background: var(--fs-popup-panel);
+}
+button.predict-cta.predict-cta[data-busy]:has(> .button-text) > .button-text {
+  color: var(--fs-popup-text);
+}
+.predict-cta[data-busy]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--fs-popup-axis);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.7;
+  pointer-events: none;
+}
+.predict-spinner {
+  display: block;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-right: 10px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  color: var(--fs-popup-text-2);
+  animation: predict-spin 1s linear infinite;
+}
+@keyframes predict-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .predict-cta[data-pressed] {
+    transform: none;
+  }
+  /* a ring that cannot turn reads as a stray glyph; the busy label says the state */
+  .predict-spinner {
+    display: none;
+    animation: none;
+  }
+}
+/* the success dialog's mark: the axis disc, popped in once as the dialog opens */
+.predict-success-mark {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  background: var(--fs-popup-axis);
+  color: var(--fs-popup-on-axis);
+  /* the panel's tone, so the ring reads as part of the panel below */
+  box-shadow: 0 0 0 8px var(--fs-popup-panel);
+  animation: predict-success-pop var(--fs-dur-structural) var(--fs-ease-spring) both;
+}
+/* the sign-in is the panel's own control, a step below the popup's wide button */
+.predict-success-panel .predict-cta {
+  height: 44px;
+  border-radius: var(--fs-radius-control);
+}
+.predict-success-panel .predict-cta .button-text {
+  font-size: 15px;
+}
+@keyframes predict-success-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .predict-success-mark {
+    animation: fsFadeIn 150ms linear both;
   }
 }

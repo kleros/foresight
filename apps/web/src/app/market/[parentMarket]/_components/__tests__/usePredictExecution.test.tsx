@@ -63,6 +63,9 @@ const session = (overrides: Partial<SessionDetailRow> = {}): SessionDetail =>
 const FUNDING: Funding = {
   available: 11n * WAD,
   collateralIn: 7n * WAD,
+  creditsAvailable: 0n,
+  credits: [],
+  creditsIn: 0n,
   tradeWallet: 5n * WAD,
   fromTradeWallet: 4n * WAD,
   toAdd: 3n * WAD,
@@ -88,6 +91,7 @@ function mount(overrides: Partial<Args> = {}) {
     tradeWallet: TRADE_WALLET,
     funding: FUNDING,
     native: false,
+    slippage: { tradeBps: 100, creditsBps: 20 },
     ...overrides,
   };
   const view = renderHook((props: Args) => usePredictExecution(props), { wrapper, initialProps: args });
@@ -109,31 +113,38 @@ describe("usePredictExecution, how the visitor pays", () => {
   it("sends an xDAI payment as a native deposit", () => {
     mount({ native: true });
 
-    expect(lastInput()?.depositNative()).toBe(true);
+    expect(lastInput()?.funding().depositNative).toBe(true);
   });
 
   it("sends a collateral payment as a token deposit", () => {
     mount({ native: false });
 
-    expect(lastInput()?.depositNative()).toBe(false);
+    expect(lastInput()?.funding().depositNative).toBe(false);
+  });
+
+  it("hands the run the slippage the popup holds when Predict is pressed, not when the run was built", () => {
+    const view = mount();
+    view.rerender({ ...view.args, slippage: { tradeBps: 250, creditsBps: 60 } });
+
+    expect(inputs[0]?.slippage()).toEqual({ tradeBps: 250, creditsBps: 60 });
   });
 
   it("hands the run the deposit from the funding", () => {
     mount();
 
-    expect(lastInput()?.deposit()).toBe(FUNDING.deposit);
+    expect(lastInput()?.funding().deposit).toBe(FUNDING.deposit);
   });
 
   it("hands the run the collateral going into the trade from the funding", () => {
     mount();
 
-    expect(lastInput()?.collateralIn()).toBe(FUNDING.collateralIn);
+    expect(lastInput()?.funding().collateralIn).toBe(FUNDING.collateralIn);
   });
 
   it("hands the run the trade wallet's balance from the funding", () => {
     mount();
 
-    expect(lastInput()?.collateralBefore()).toBe(FUNDING.tradeWallet);
+    expect(lastInput()?.funding().collateralBefore).toBe(FUNDING.tradeWallet);
   });
 
   it("hands the run zero for every amount while the funding is unknown", () => {
@@ -141,9 +152,9 @@ describe("usePredictExecution, how the visitor pays", () => {
     const input = lastInput();
 
     expect({
-      deposit: input?.deposit(),
-      collateralIn: input?.collateralIn(),
-      collateralBefore: input?.collateralBefore(),
+      deposit: input?.funding().deposit,
+      collateralIn: input?.funding().collateralIn,
+      collateralBefore: input?.funding().collateralBefore,
     }).toEqual({ deposit: 0n, collateralIn: 0n, collateralBefore: 0n });
   });
 
@@ -155,10 +166,25 @@ describe("usePredictExecution, how the visitor pays", () => {
     view.rerender({ ...view.args, funding: later });
 
     expect({
-      deposit: built?.deposit(),
-      collateralIn: built?.collateralIn(),
-      collateralBefore: built?.collateralBefore(),
+      deposit: built?.funding().deposit,
+      collateralIn: built?.funding().collateralIn,
+      collateralBefore: built?.funding().collateralBefore,
     }).toEqual({ deposit: 9n * WAD, collateralIn: 13n * WAD, collateralBefore: 6n * WAD });
+  });
+
+  it("hands the run the sDAI split apart from the credits, and the credits by source", () => {
+    const withCredits: Funding = {
+      ...FUNDING,
+      credits: [{ kind: "foresight", fromTradeWallet: WAD, fromWallet: 2n * WAD }],
+      creditsIn: 3n * WAD,
+    };
+    mount({ funding: withCredits });
+
+    expect(lastInput()?.funding()).toMatchObject({
+      collateralIn: withCredits.collateralIn - 3n * WAD,
+      creditsFromEoa: 2n * WAD,
+      creditsToSpend: 3n * WAD,
+    });
   });
 
   it("reads the pay token as it stands when the run asks, not when it was built", () => {
@@ -167,7 +193,7 @@ describe("usePredictExecution, how the visitor pays", () => {
 
     view.rerender({ ...view.args, native: true });
 
-    expect(built?.depositNative()).toBe(true);
+    expect(built?.funding().depositNative).toBe(true);
   });
 });
 

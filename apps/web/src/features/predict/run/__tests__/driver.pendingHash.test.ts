@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { addresses, ctx, fakeQuoter, fakeReader, snapshot, WAD } from "../../flow/__tests__/support/fakes";
 import { STEP_ID } from "../../flow/plan";
 import type { PredictCtx, PredictSnapshot } from "../../flow/types";
-import { predictSteps } from "../../utils/predictSteps";
+import { predictSteps, statusLine } from "../../utils/predictSteps";
 import { createPredictRun } from "../driver";
 import type { PredictDriver, PredictProgress } from "../types";
 
@@ -75,5 +75,51 @@ describe("createPredictRun when a receipt wait fails with an unclassified error"
 
     expect(gateway.signRequests.filter(isDeposit)).toHaveLength(1);
     expect(driver.getProgress().pendingHash).toBeUndefined();
+  });
+});
+
+describe("createPredictRun while it checks a sent transaction again", () => {
+  it("says it is checking that transaction, on the row that sent it, and not the line shown before a run", async () => {
+    const gateway = flakyWaitGateway();
+    let answer: () => void = () => undefined;
+    const answered = new Promise<void>((resolve) => (answer = resolve));
+    const getReceipt = gateway.getReceipt;
+    gateway.getReceipt = async (hash) => {
+      await answered;
+      return getReceipt(hash);
+    };
+    let collateral = WAD * 2n;
+    const reader = { ...fakeReader({ deployed: true }), collateralBalance: async () => collateral };
+    driver = createPredictRun({
+      gateway,
+      reader,
+      quoter: fakeQuoter(),
+      store: createFlowRunStore({ storage: createMemoryStorage() }),
+      flowId: `${FLOW_ID}-checking`,
+      ctx: () => ctx(),
+      snapshot: () => snapshot({ deposit: WAD * 3n, collateralIn: WAD * 5n, collateralBefore: WAD * 2n }),
+    });
+
+    driver.start();
+    await vi.waitFor(() => expect(driver!.getProgress().stage).toBe("halted"));
+    collateral += WAD * 3n;
+    driver.retry();
+    await vi.waitFor(() => expect(driver!.getProgress().stage).toBe("confirming"));
+
+    const steps = predictSteps({
+      wallet: null,
+      toAdd: WAD * 3n,
+      symbol: "sDAI",
+      decimals: 18,
+      progress: driver.getProgress(),
+    });
+    expect(steps.rows.find((row) => row.key === "funds")?.view).toBe("running");
+    expect(statusLine({ steps, leftOut: 0 })).toEqual({
+      text: "Checking your last transaction…",
+      tone: "neutral",
+    });
+
+    answer();
+    await vi.waitFor(() => expect(driver!.getProgress().stage).toBe("complete"));
   });
 });

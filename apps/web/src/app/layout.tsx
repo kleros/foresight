@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
-import { Open_Sans } from "next/font/google";
-
-import clsx from "clsx";
+import localFont from "next/font/local";
 
 import { AppProviders } from "@/components/providers/AppProviders";
 
@@ -17,23 +15,25 @@ export const metadata: Metadata = {
   metadataBase: env.SITE_URL ? new URL(env.SITE_URL) : null,
 };
 
-const openSans = Open_Sans({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+// the same files the component harnesses load (e2e/harness/inter.css)
+const inter = localFont({
+  variable: "--font-inter",
+  display: "swap",
+  src: [
+    { path: "../../../../node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2", weight: "400" },
+    { path: "../../../../node_modules/@fontsource/inter/files/inter-latin-500-normal.woff2", weight: "500" },
+    { path: "../../../../node_modules/@fontsource/inter/files/inter-latin-600-normal.woff2", weight: "600" },
+    { path: "../../../../node_modules/@fontsource/inter/files/inter-latin-700-normal.woff2", weight: "700" },
+  ],
 });
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
       <head>
         <meta name="apple-mobile-web-app-title" content="Foresight | Kleros" />
       </head>
-      <body
-        className={clsx(
-          `${openSans.variable} bg-klerosUIComponentsLightBackground antialiased`,
-          "flex min-h-screen flex-col",
-        )}
-      >
+      <body className="bg-klerosUIComponentsLightBackground flex min-h-screen flex-col antialiased">
         <AppProviders>{children}</AppProviders>
       </body>
     </html>

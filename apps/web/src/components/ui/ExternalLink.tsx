@@ -10,10 +10,14 @@ export function ExternalLink({ href, children, className }: { href: string; chil
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className={clsx("text-fs-accent inline-flex items-center gap-1 text-sm", className)}
+      className={clsx("text-fs-text-accent text-sm hover:underline", className)}
     >
       {children}
-      <ExternalArrow className="size-4 shrink-0 [&_path]:fill-current" />
+      {/* U+2060 keeps the arrow on the line of the last word when the text wraps */}
+      <span className="whitespace-nowrap" aria-hidden>
+        {"\u2060"}
+        <ExternalArrow className="ml-1 inline size-4 shrink-0 align-text-bottom [&_path]:fill-current" />
+      </span>
     </a>
   );
 }

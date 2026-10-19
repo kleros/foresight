@@ -1,20 +1,27 @@
-import { decodeFunctionData, erc20Abi, type Address, type Hex } from "viem";
+import { decodeFunctionData, erc20Abi, type Address, type Hex, type TransactionReceipt } from "viem";
 import { describe, expect, it } from "vitest";
 
 import { lensQuoterOn, nodeAnswers } from "@/lib/swap/__tests__/support/lensNode";
 
 import { gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
 
+import { MAX_SLIPPAGE_BPS } from "../../oracle/tolerances";
 import { LEG_HEADROOM_BPS } from "../../utils/plan";
 import {
+  AtEstimatesError,
   createPredictHooks,
-  PREDICT_BATCH_SIZE,
+  batchGas,
+  BATCH_GAS_SHARE_BPS,
+  MAX_TX_GAS,
+  optionsPerBatch,
   planPredict,
+  PredictConfigError,
   QuoteFailedError,
   STEP_ID,
+  TxPendingError,
   type PredictDeps,
 } from "../plan";
-import type { PredictOption } from "../types";
+import type { LandedTx, PredictOption, PredictSnapshot } from "../types";
 import {
   addresses,
   AT,
@@ -23,6 +30,8 @@ import {
   DEEP,
   fakeQuoter,
   fakeReader,
+  landedTx,
+  mintLog,
   option,
   quoterFor,
   snapshot,
@@ -79,7 +88,7 @@ describe("planPredict", () => {
   it("gives each batch of options its own transaction", () => {
     const options = Array.from({ length: 5 }, (_, index) => option(index + 1));
 
-    const steps = planPredict(snapshot({ options }), deps({ optionsPerBatch: 2 }));
+    const steps = planPredict(snapshot({ options, optionsPerBatch: 2 }), deps());
 
     expect(steps.map((step) => step.id)).toEqual([
       STEP_ID.createExecutor,
@@ -91,11 +100,46 @@ describe("planPredict", () => {
   });
 
   it("puts every option in one transaction up to the batch size", () => {
-    const options = Array.from({ length: PREDICT_BATCH_SIZE }, (_, index) => option(index + 1));
+    const options = Array.from({ length: 4 }, (_, index) => option(index + 1));
 
-    const steps = planPredict(snapshot({ options }), deps());
+    const steps = planPredict(snapshot({ options, optionsPerBatch: 4 }), deps());
 
     expect(steps.filter((step) => step.id.startsWith("predict-"))).toHaveLength(1);
+  });
+
+  it("refuses a batch size below one option", () => {
+    for (const size of [0, -1, 1.5]) {
+      expect(() => planPredict(snapshot({ optionsPerBatch: size }), deps())).toThrow(PredictConfigError);
+    }
+  });
+});
+
+describe("optionsPerBatch", () => {
+  const budget = (gasLimit: bigint) => (gasLimit * BATCH_GAS_SHARE_BPS) / 10_000n;
+
+  it("fits as many options as the block-gas budget holds, the credits leg counted", () => {
+    const gnosis = 17_000_000n;
+    for (const credits of [false, true]) {
+      const size = optionsPerBatch(gnosis, credits);
+      expect(batchGas(size, credits)).toBeLessThanOrEqual(budget(gnosis));
+      expect(batchGas(size + 1, credits)).toBeGreaterThan(budget(gnosis));
+    }
+  });
+
+  it("grows with the block gas limit", () => {
+    expect(optionsPerBatch(60_000_000n, false)).toBeGreaterThan(optionsPerBatch(17_000_000n, false));
+  });
+
+  it("never sizes a batch past one transaction's gas cap, however large the block", () => {
+    for (const credits of [false, true]) {
+      const size = optionsPerBatch(120_000_000n, credits);
+      expect(batchGas(size, credits)).toBeLessThanOrEqual(MAX_TX_GAS);
+      expect(batchGas(size + 1, credits)).toBeGreaterThan(MAX_TX_GAS);
+    }
+  });
+
+  it("still sends one option at a time where the budget holds none", () => {
+    expect(optionsPerBatch(1_000_000n, true)).toBe(1);
   });
 });
 
@@ -106,8 +150,8 @@ describe("the predict step", () => {
     batch = 1,
     optionsPerBatch?: number,
   ) => {
-    const resolved = deps({ ...overrides, ...(optionsPerBatch === undefined ? {} : { optionsPerBatch }) });
-    const steps = planPredict(snap, resolved);
+    const resolved = deps(overrides);
+    const steps = planPredict(optionsPerBatch === undefined ? snap : { ...snap, optionsPerBatch }, resolved);
     const step = steps.find((each) => each.id === STEP_ID.predict(batch))!;
     return { tx: await step.build(ctx(), snap), deps: resolved };
   };
@@ -186,28 +230,28 @@ describe("the predict step", () => {
 
   it("leaves out an option nothing will route, and says which", async () => {
     const options = [option(1), option(2)];
-    const skipped: PredictOption[] = [];
+    const leftOut: PredictOption[] = [];
     const refuse = (request: { tokenIn: Address }) =>
       request.tokenIn === options[0]!.upToken || request.tokenIn === options[0]!.underlying;
 
     const { tx } = await buildPredict(snapshot({ options }), {
       quoter: fakeQuoter({ refuse }),
-      onSkip: (each) => skipped.push(each),
+      onLeftOut: (each) => leftOut.push(each),
     });
 
-    expect(skipped.map((each) => each.childMarket)).toEqual([options[0]!.childMarket]);
+    expect(leftOut.map((each) => each.childMarket)).toEqual([options[0]!.childMarket]);
     expect(batchShape(tx.data!).some((call) => call.startsWith(options[1]!.underlying))).toBe(true);
   });
 
   it("refuses the batch, leaving no option out, when one option's quote cannot be had", async () => {
     const options = [option(1), option(2)];
-    const skipped: PredictOption[] = [];
+    const leftOut: PredictOption[] = [];
     const quoter = quoterFor(options[0]!, lensQuoterOn(nodeAnswers.unreachable), fakeQuoter());
 
     await expect(
-      buildPredict(snapshot({ options }), { quoter, onSkip: (each) => skipped.push(each) }),
+      buildPredict(snapshot({ options }), { quoter, onLeftOut: (each) => leftOut.push(each) }),
     ).rejects.toBeInstanceOf(QuoteFailedError);
-    expect(skipped).toEqual([]);
+    expect(leftOut).toEqual([]);
   });
 
   it("sizes the buy from what the sell was quoted to pay, not from the merge alone", async () => {
@@ -221,7 +265,7 @@ describe("the predict step", () => {
   });
 
   it("quotes and sizes the buy with the same slippage setting", async () => {
-    const { deps: used } = await buildPredict(snapshot(), { slippageBps: 300 });
+    const { deps: used } = await buildPredict(snapshot({ slippage: { tradeBps: 300, creditsBps: 20 } }));
     const quoter = used.quoter as ReturnType<typeof fakeQuoter>;
 
     const sold = ((WAD / 2n) * (10_000n + LEG_HEADROOM_BPS)) / 10_000n;
@@ -229,8 +273,24 @@ describe("the predict step", () => {
     expect(quoter.requests.map((request) => request.slippageBps)).toEqual([300, 300]);
   });
 
-  it("leaves out an option the market already agrees with", async () => {
-    const skipped: PredictOption[] = [];
+  it("refuses a slippage setting that leaves the buys nothing to spend, or none at all", () => {
+    for (const tradeBps of [-1, MAX_SLIPPAGE_BPS + 1, Number.NaN]) {
+      expect(() => planPredict(snapshot({ slippage: { tradeBps, creditsBps: 20 } }), deps())).toThrow(
+        PredictConfigError,
+      );
+    }
+    for (const creditsBps of [-1, MAX_SLIPPAGE_BPS + 1]) {
+      expect(() => planPredict(snapshot({ slippage: { tradeBps: 100, creditsBps } }), deps())).toThrow(
+        PredictConfigError,
+      );
+    }
+    expect(() =>
+      planPredict(snapshot({ slippage: { tradeBps: MAX_SLIPPAGE_BPS, creditsBps: 0 } }), deps()),
+    ).not.toThrow();
+  });
+
+  it("says a batch whose only option the market already agrees with has nothing to trade", async () => {
+    const leftOut: PredictOption[] = [];
     // UP sits exactly where the estimate puts it, and DOWN's pool never priced
     const reader = fakeReader({
       state: () =>
@@ -242,10 +302,10 @@ describe("the predict step", () => {
         }),
     });
 
-    await expect(buildPredict(snapshot(), { reader, onSkip: (each) => skipped.push(each) })).rejects.toThrow(
-      /no route/i,
+    await expect(buildPredict(snapshot(), { reader, onLeftOut: (each) => leftOut.push(each) })).rejects.toBeInstanceOf(
+      AtEstimatesError,
     );
-    expect(skipped).toHaveLength(1);
+    expect(leftOut).toHaveLength(1);
   });
 
   it("refuses the batch when nothing in it will route", async () => {
@@ -294,40 +354,31 @@ describe("the deposit step", () => {
   });
 });
 
-describe("skipping a deposit that has already landed", () => {
-  const canSkip = (collateral: bigint, snap: Parameters<typeof snapshot>[0]) => {
-    const step = planPredict(snapshot(snap), deps({ reader: fakeReader({ collateral }) })).find(
-      (each) => each.id === STEP_ID.deposit,
-    )!;
-    return step.canSkip!(ctx(), snapshot(snap));
-  };
+describe("skipping a step that has already landed", () => {
+  const step = (id: string, snap: PredictSnapshot, landed: LandedTx[], pending = false) =>
+    planPredict(snap, deps({ reader: fakeReader({ landed, pending: () => pending }) })).find((each) => each.id === id)!;
 
-  it("does not mistake funds already in the trade wallet for the deposit", async () => {
-    await expect(canSkip(WAD * 6n, { deposit: WAD * 4n, collateralAtStart: WAD * 6n })).resolves.toBe(false);
+  it.each([
+    ["an sDAI deposit", snapshot({ deposit: WAD * 4n, collateralAtStart: WAD * 6n })],
+    ["an xDAI deposit", snapshot({ deposit: WAD * 5n, depositNative: true, collateralAtStart: WAD * 6n })],
+  ])("skips %s once its own transaction has landed, and not on money that arrived some other way", async (_, snap) => {
+    const deposit = await step(STEP_ID.deposit, snap, []).build(ctx(), snap);
+    const another = { ...deposit, value: (deposit.value ?? 0n) + 1n };
+
+    await expect(step(STEP_ID.deposit, snap, [landedTx(deposit)]).canSkip!(ctx(), snap)).resolves.toBe(true);
+    await expect(step(STEP_ID.deposit, snap, [landedTx(another)]).canSkip!(ctx(), snap)).resolves.toBe(false);
+    await expect(step(STEP_ID.deposit, snap, []).canSkip!(ctx(), snap)).resolves.toBe(false);
+    await expect(step(STEP_ID.deposit, snap, [], true).canSkip!(ctx(), snap)).rejects.toBeInstanceOf(TxPendingError);
   });
 
-  it("skips once the trade wallet holds what it had plus the deposit", async () => {
-    await expect(canSkip(WAD * 10n, { deposit: WAD * 4n, collateralAtStart: WAD * 6n })).resolves.toBe(true);
-  });
+  it("skips an sDAI run's first batch once a batch splitting its amount at its parent landed", async () => {
+    const snap = snapshot({ deposit: 0n, collateralIn: WAD * 2n, collateralBefore: WAD * 10n });
+    const batch = await step(STEP_ID.predict(1), snap, []).build(ctx(), snap);
+    const other = await step(STEP_ID.predict(1), snap, []).build(ctx(), { ...snap, collateralIn: WAD });
 
-  it("takes any rise over the starting balance as an xDAI deposit landing", async () => {
-    const snap = { deposit: WAD * 5n, depositNative: true, collateralAtStart: WAD * 6n };
-
-    await expect(canSkip(WAD * 6n, snap)).resolves.toBe(false);
-    await expect(canSkip(WAD * 6n + 1n, snap)).resolves.toBe(true);
-  });
-
-  it("witnesses the deposit against the balance read on chain, not the one the popup cached", async () => {
-    const snap = { deposit: WAD * 4n, collateralBefore: WAD * 3n, collateralAtStart: WAD * 5n };
-
-    await expect(canSkip(WAD * 8n, snap)).resolves.toBe(false);
-    await expect(canSkip(WAD * 9n, snap)).resolves.toBe(true);
-  });
-
-  it("does not take a stale low cache for an xDAI deposit that landed", async () => {
-    const snap = { deposit: WAD * 5n, depositNative: true, collateralBefore: WAD * 3n, collateralAtStart: WAD * 5n };
-
-    await expect(canSkip(WAD * 5n, snap)).resolves.toBe(false);
+    await expect(step(STEP_ID.predict(1), snap, [landedTx(batch)]).canSkip!(ctx(), snap)).resolves.toBe(true);
+    await expect(step(STEP_ID.predict(1), snap, [landedTx(other)]).canSkip!(ctx(), snap)).resolves.toBe(false);
+    await expect(step(STEP_ID.predict(1), snap, [], true).canSkip!(ctx(), snap)).rejects.toBeInstanceOf(TxPendingError);
   });
 });
 
@@ -337,15 +388,16 @@ describe("createPredictHooks", () => {
     label: "Add money",
     outcome: { status: "confirmed" as const, hash: "0x1" as const, blockNumber: 1n },
   };
+  const receipt = (minted: bigint) => ({ logs: [mintLog(minted)] }) as unknown as TransactionReceipt;
 
-  it("reads back what an xDAI deposit actually minted", async () => {
-    const hooks = createPredictHooks({ reader: fakeReader({ collateral: WAD * 7n }) });
+  it("splits what an xDAI deposit's receipt shows it minted, not the trade wallet's balance", async () => {
+    const hooks = createPredictHooks({ reader: fakeReader({ collateral: WAD * 70n }) });
 
     const result = await hooks.afterStep!({
       ctx: ctx(),
       snapshot: snapshot({ depositNative: true }),
       completed: deposited,
-      receipt: null,
+      receipt: receipt(WAD * 7n),
       pending: [],
     });
 
@@ -353,29 +405,42 @@ describe("createPredictHooks", () => {
   });
 
   it.each([
-    ["the cache 2 below the chain", WAD * 3n, WAD * 5n, WAD * 9n, WAD * 6n, WAD * 9n],
-    ["the cache at 0", 0n, WAD * 15n, WAD * 10n, WAD * 10n, WAD * 10n],
+    ["the cache 2 below the chain", WAD * 3n, WAD * 9n, WAD * 6n, WAD * 9n],
+    ["the cache at 0", 0n, WAD * 10n, WAD * 10n, WAD * 10n],
   ])(
     "splits what an xDAI deposit minted plus the trade-wallet share shown (%s)",
-    async (_, shown, atStart, estimate, minted, expected) => {
-      const hooks = createPredictHooks({ reader: fakeReader({ collateral: atStart + minted }) });
+    async (_, shown, estimate, minted, expected) => {
+      const hooks = createPredictHooks({ reader: fakeReader() });
 
       const result = await hooks.afterStep!({
         ctx: ctx(),
-        snapshot: snapshot({
-          depositNative: true,
-          collateralIn: estimate,
-          collateralBefore: shown,
-          collateralAtStart: atStart,
-        }),
+        snapshot: snapshot({ depositNative: true, collateralIn: estimate, collateralBefore: shown }),
         completed: deposited,
-        receipt: null,
+        receipt: receipt(minted),
         pending: [],
       });
 
       expect(result).toEqual({ snapshotPatch: { collateralIn: expected } });
     },
   );
+
+  it("reads a skipped xDAI deposit's mint from its own landed transaction", async () => {
+    const snap = snapshot({ depositNative: true, deposit: WAD * 5n });
+    const deposit = await planPredict(snap, deps())
+      .find((each) => each.id === STEP_ID.deposit)!
+      .build(ctx(), snap);
+    const hooks = createPredictHooks({ reader: fakeReader({ landed: [landedTx(deposit, WAD * 4n)] }) });
+
+    const result = await hooks.afterStep!({
+      ctx: ctx(),
+      snapshot: snap,
+      completed: { stepId: STEP_ID.deposit, label: "Add money", outcome: { status: "skipped" } },
+      receipt: null,
+      pending: [],
+    });
+
+    expect(result).toEqual({ snapshotPatch: { collateralIn: WAD * 4n } });
+  });
 
   it("takes a collateral deposit at the amount that was asked for", async () => {
     const hooks = createPredictHooks({ reader: fakeReader({ collateral: WAD * 7n }) });

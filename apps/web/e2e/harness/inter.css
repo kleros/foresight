@@ -1,0 +1,25 @@
+/* The files src/app/layout.tsx loads through next/font, which Vite does not run. */
+@font-face {
+  font-family: "Inter";
+  font-weight: 400;
+  font-display: swap;
+  src: url("../../../../node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-weight: 500;
+  font-display: swap;
+  src: url("../../../../node_modules/@fontsource/inter/files/inter-latin-500-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-weight: 600;
+  font-display: swap;
+  src: url("../../../../node_modules/@fontsource/inter/files/inter-latin-600-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-weight: 700;
+  font-display: swap;
+  src: url("../../../../node_modules/@fontsource/inter/files/inter-latin-700-normal.woff2") format("woff2");
+}

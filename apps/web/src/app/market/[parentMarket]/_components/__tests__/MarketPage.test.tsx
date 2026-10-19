@@ -19,8 +19,9 @@ vi.mock("@/lib/graphql/batcher", () => ({ fetchGraphql: vi.fn() }));
 vi.mock("@/config/ipfs", () => ({ IPFS_GATEWAY: "https://cdn.example.link/ipfs" }));
 /* The wallet reaches wagmi and the RPC config, neither of which this page's tests supply. */
 vi.mock("@/features/trade-executor/components/TradeWallet/TradeWallet", () => ({
-  TradeWallet: () => null,
+  TradeWallet: ({ noun }: { noun: string }) => <p data-testid="trade-wallet-noun">{noun}</p>,
 }));
+vi.mock("../useOptionPositions", () => ({ useOptionPositions: () => ({}) }));
 vi.mock("@/components/wallet/EnsureChain", () => ({ default: ({ children }: { children: ReactNode }) => children }));
 vi.mock("wagmi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("wagmi")>()),
@@ -145,8 +146,37 @@ describe("MarketPage", () => {
   });
 });
 
+describe("MarketPage's trade wallet", () => {
+  function answerItemName(itemName: string) {
+    fetchMock.mockImplementation(async (document) => {
+      if (queryName(document) === "SessionDetail") {
+        return { Session: [{ ...sessionDetailColumns, itemName, children: [sessionChildRow()] }] };
+      }
+      return { Prediction: [], Pool: [], SessionChart: [] };
+    });
+  }
+
+  it.each([
+    ["Director", "director"],
+    ["US State", "US state"],
+    ["NBA Team", "NBA team"],
+  ])("names the options in the singular, %s in a sentence as %s", async (itemName, noun) => {
+    answerItemName(itemName);
+    renderPage();
+
+    expect(await screen.findByTestId("trade-wallet-noun")).toHaveTextContent(new RegExp(`^${noun}$`));
+  });
+
+  it("falls back to branch when the session names no item", async () => {
+    answerItemName("");
+    renderPage();
+
+    expect(await screen.findByTestId("trade-wallet-noun")).toHaveTextContent(/^branch$/);
+  });
+});
+
 describe("MarketPage on a trading session", () => {
-  const NO_LIQUIDITY = "This option has no liquidity yet, so it can't be predicted.";
+  const NO_LIQUIDITY = "None of the directors can be traded yet.";
 
   /** Closes on 1 January 2100, so the session is trading whatever the wall clock reads. */
   function answerTrading(chart: () => unknown) {
@@ -163,7 +193,7 @@ describe("MarketPage on a trading session", () => {
     answerTrading(() => new Promise(() => {}));
 
     renderPage();
-    await screen.findByRole("button", { name: "Predict selected" });
+    await screen.findByRole("button", { name: /^Predict (\d+ )?estimates?$/ });
 
     expect(screen.queryByText(NO_LIQUIDITY)).toBeNull();
   });
