@@ -109,7 +109,15 @@ const withCredits = {
 /** A credits swap of 100 credits paying 87 xDAI against 125 of vault value. */
 const lossySwap = {
   credits: 100n * WAD,
-  preview: { quoted: 87n * WAD, vaultValue: 125n * WAD, floor: 86n * WAD, loss: 38n * WAD, minted: 69n * WAD },
+  preview: {
+    amount: 87n * WAD,
+    creditsBps: 20,
+    quoted: 87n * WAD,
+    vaultValue: 125n * WAD,
+    floor: 86n * WAD,
+    loss: 38n * WAD,
+    minted: 69n * WAD,
+  },
 };
 
 const MOVED = { markets: 1, credits: false };

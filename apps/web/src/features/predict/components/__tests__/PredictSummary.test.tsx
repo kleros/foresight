@@ -465,7 +465,15 @@ function renderWith(extra: {
 describe("PredictSummary's credits swap", () => {
   const swap = (loss: bigint): CreditsSwapShown => ({
     credits: 15n * WAD,
-    preview: { quoted: cents(1620n), vaultValue: cents(1620n) + loss, floor: cents(1610n), loss, minted: cents(1290n) },
+    preview: {
+      amount: cents(1620n),
+      creditsBps: 20,
+      quoted: cents(1620n),
+      vaultValue: cents(1620n) + loss,
+      floor: cents(1610n),
+      loss,
+      minted: cents(1290n),
+    },
   });
 
   it("names the credits it swaps and the xDAI the quote pays", () => {
@@ -498,7 +506,7 @@ describe("PredictSummary's slippage", () => {
   const slippageRows = () => screen.getAllByTestId("slippage-row").map((row) => row.textContent);
   const creditsSwap: CreditsSwapShown = {
     credits: WAD,
-    preview: { quoted: WAD, vaultValue: WAD, floor: WAD, loss: 0n, minted: WAD },
+    preview: { amount: WAD, creditsBps: 20, quoted: WAD, vaultValue: WAD, floor: WAD, loss: 0n, minted: WAD },
   };
 
   it("names the trades' slippage on Auto with its value", () => {

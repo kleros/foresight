@@ -303,6 +303,8 @@ async function quoteCreditsSwap(
   const vaultValue = await deps.reader.vaultValue(amount);
   const floor = (quote.amountOut * (10_000n - BigInt(creditsBps))) / 10_000n;
   const preview: CreditsSwapPreview = {
+    amount,
+    creditsBps,
     quoted: quote.amountOut,
     vaultValue,
     floor,
@@ -341,8 +343,11 @@ async function creditsLeg(ctx: PredictCtx, amount: bigint, creditsBps: number, d
 
   const { params, preview: swapped } = await quoteCreditsSwap(ctx, amount, creditsBps, deps);
   const held = deps.heldTo?.();
-  const moved = held !== undefined && (held.credits === undefined || swapped.quoted < held.credits.floor);
-  const floor = !moved && held?.credits ? held.credits.floor : swapped.floor;
+  const shown = held?.credits;
+  const sameSwap = shown !== undefined && shown.amount === amount && shown.creditsBps === creditsBps;
+  const moved = held !== undefined && (!sameSwap || swapped.quoted < shown.floor);
+  // the shown floor binds only the swap it was quoted for, and never sits under the live quote's own
+  const floor = !moved && sameSwap && shown.floor > swapped.floor ? shown.floor : swapped.floor;
   const swap = encodeFunctionData({
     abi: ALGEBRA_ROUTER_ABI,
     functionName: "exactInputSingle",

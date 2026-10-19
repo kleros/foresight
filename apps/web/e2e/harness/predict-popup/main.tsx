@@ -6,7 +6,7 @@ import { parseUnits } from "viem";
 import { PredictButton } from "@/features/predict/components/PredictButton";
 import { PredictDialog } from "@/features/predict/components/PredictDialog";
 import type { ListedEstimate } from "@/features/predict/components/PredictList";
-import { SLIPPAGE_BPS } from "@/features/predict/oracle/tolerances";
+import { DEFAULT_SLIPPAGE, SLIPPAGE_BPS } from "@/features/predict/oracle/tolerances";
 import type { PredictFailureReason, PredictProgress } from "@/features/predict/run/types";
 import { useSlippageStore } from "@/features/predict/stores/slippageStore";
 import { creditLines, creditsOffer } from "@/features/predict/utils/credits";
@@ -308,6 +308,8 @@ function Harness() {
             ? {
                 credits: shown.creditsIn,
                 preview: {
+                  amount: shown.creditsIn,
+                  creditsBps: DEFAULT_SLIPPAGE.creditsBps,
                   quoted: shown.creditsIn,
                   vaultValue: shown.creditsIn + parseUnits(swapLoss, 18),
                   floor: shown.creditsIn,

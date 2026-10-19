@@ -149,6 +149,9 @@ export interface PredictCtx {
 
 /** The credits swap as quoted: what it pays, what the credits redeem for at the vault, and the floor. */
 export interface CreditsSwapPreview {
+  /** The credits the swap was quoted for, and the slippage its floor was taken at. */
+  amount: bigint;
+  creditsBps: number;
   /** WXDAI the quote pays the executor. */
   quoted: bigint;
   /** xDAI the credits' collateral redeems for at the vault's rate. */

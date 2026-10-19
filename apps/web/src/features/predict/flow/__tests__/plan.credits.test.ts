@@ -11,6 +11,7 @@ import {
   CreditsUnavailableError,
   MINT_RATE_MARGIN_BPS,
   planPredict,
+  PlansMovedError,
   PredictConfigError,
   previewCreditsSwap,
   STEP_ID,
@@ -299,6 +300,52 @@ describe("the first batch of a credits run", () => {
   });
 });
 
+describe("a credits batch held to the swap Details showed", () => {
+  /** Every option's plan as the pools give it now, so only the credits swap can differ from what was shown. */
+  const plansNow = async () => {
+    const error = await build(creditsRun(), deps({ heldTo: () => ({ plans: {} }) })).catch((caught: unknown) => caught);
+    return (error as PlansMovedError).moved.plans;
+  };
+  const minimumOf = async (tx: { data?: Hex }) => {
+    const [, swap] = decodeFunctionData({ abi: EXECUTE_ABI, data: valueCalls(tx.data!)[0]!.data }).args;
+    return decodeFunctionData({ abi: ALGEBRA_ROUTER_ABI, data: swap }).args[0].amountOutMinimum;
+  };
+
+  it("stops at moved when the shown swap was for other credits than the run spends", async () => {
+    const shown = await previewCreditsSwap(ctx(), WAD, CREDITS_SLIPPAGE_BPS, deps());
+    const plans = await plansNow();
+    const used = deps({ heldTo: () => ({ plans, credits: shown }) });
+
+    const error = await build(creditsRun(), used).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(PlansMovedError);
+    expect((error as PlansMovedError).moved).toMatchObject({ markets: [], credits: { quoted: quoted(2n * WAD) } });
+  });
+
+  it("stops at moved when the shown swap had another slippage than the run signs with", async () => {
+    const shown = await previewCreditsSwap(ctx(), 2n * WAD, 500, deps());
+    const plans = await plansNow();
+    const used = deps({ heldTo: () => ({ plans, credits: shown }) });
+
+    const error = await build(creditsRun(), used).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(PlansMovedError);
+    expect((error as PlansMovedError).moved).toMatchObject({ markets: [], credits: { quoted: quoted(2n * WAD) } });
+  });
+
+  it("never signs a minimum below the live quote's floor when the pool now pays more than shown", async () => {
+    const shown = await previewCreditsSwap(
+      ctx(),
+      2n * WAD,
+      CREDITS_SLIPPAGE_BPS,
+      deps({ creditsQuoter: fakeCreditsQuoter({ lossBps: 40n }) }),
+    );
+    const plans = await plansNow();
+    const used = deps({ heldTo: () => ({ plans, credits: shown }) });
+
+    expect(shown.floor).toBeLessThan(floorOf(2n * WAD));
+    expect(await minimumOf(await build(creditsRun(), used))).toBe(floorOf(2n * WAD));
+  });
+});
+
 describe("assertRoutes with credits", () => {
   it("checks the credits leg and the options against what both sources will mint", async () => {
     const used = deps();
@@ -323,6 +370,8 @@ describe("previewCreditsSwap", () => {
     const minted = mintedFrom(floor);
 
     await expect(previewCreditsSwap(ctx(), 2n * WAD, 20, used)).resolves.toEqual({
+      amount: 2n * WAD,
+      creditsBps: 20,
       quoted: paid,
       vaultValue: value,
       floor,
