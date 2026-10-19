@@ -94,12 +94,12 @@ const driver = {
   getProgress: vi.fn<PredictDriver["getProgress"]>(),
 } satisfies PredictDriver;
 
-const idle: PredictProgress = { stage: "idle", steps: [], skipped: [], batchesDone: 0, batches: 0 };
+const idle: PredictProgress = { stage: "idle", steps: [], leftOut: [], batchesDone: 0, batches: 0 };
 
 /** The run's progress as the page reads it; `set` re-renders the popup. */
 const run = vi.hoisted(() => {
   const listeners = new Set<() => void>();
-  let progress: PredictProgress = { stage: "idle", steps: [], skipped: [], batchesDone: 0, batches: 0 };
+  let progress: PredictProgress = { stage: "idle", steps: [], leftOut: [], batchesDone: 0, batches: 0 };
   return {
     get: () => progress,
     subscribe: (listener: () => void) => {

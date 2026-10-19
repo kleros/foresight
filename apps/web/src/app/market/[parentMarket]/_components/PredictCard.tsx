@@ -159,9 +159,9 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
           session={session}
           selected={opened}
           onClose={() => setOpened(undefined)}
-          onSuccess={(skipped: Address[], run: PlacedPrediction) => {
+          onSuccess={(leftOut: Address[], run: PlacedPrediction) => {
             if (address) {
-              const traded = opened.filter((estimate) => !skipped.includes(estimate.scale.market));
+              const traded = opened.filter((estimate) => !leftOut.includes(estimate.scale.market));
               setPlaced({
                 owner: address,
                 values: {
@@ -173,7 +173,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
               });
             }
             setLeftOut(
-              session.options.filter((option) => skipped.includes(option.market)).map((option) => option.name),
+              session.options.filter((option) => leftOut.includes(option.market)).map((option) => option.name),
             );
             setPlacedRun(run);
             setOpened(undefined);

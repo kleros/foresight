@@ -80,10 +80,10 @@ vi.mock("@/features/predict/hooks/usePredictRun", async () => {
   };
 });
 
-const progressAt = (stage: PredictProgress["stage"], skipped: Address[] = []): PredictProgress => ({
+const progressAt = (stage: PredictProgress["stage"], leftOut: Address[] = []): PredictProgress => ({
   stage,
   steps: [],
-  skipped,
+  leftOut,
   batchesDone: stage === "complete" ? 1 : 0,
   batches: 1,
 });

@@ -243,12 +243,12 @@ export interface StatusLine {
  * The popup's one status line under the steps, most pressing first: what the visitor has to do,
  * why a run stopped, what a run is checking, or what it left out. Empty while things go normally.
  */
-export function statusLine(args: { steps: PredictSteps; notice?: string; skipped: number }): StatusLine | null {
-  const { steps, notice, skipped } = args;
+export function statusLine(args: { steps: PredictSteps; notice?: string; leftOut: number }): StatusLine | null {
+  const { steps, notice, leftOut } = args;
   if (notice) return { text: notice, tone: "warning" };
   if (steps.failure) return { text: steps.failure, tone: steps.pending ? "warning" : "error" };
   if (steps.note) return { text: steps.note, tone: "neutral" };
-  if (skipped > 0) return { text: `${leftOutText(skipped)}.`, tone: "neutral" };
+  if (leftOut > 0) return { text: `${leftOutText(leftOut)}.`, tone: "neutral" };
   return null;
 }
 

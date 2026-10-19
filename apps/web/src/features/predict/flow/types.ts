@@ -104,7 +104,7 @@ export interface PredictSnapshot {
   fromBlock: bigint;
   startedAt: number;
   /** Options that settled batches left out for lack of a route; absent until one does. */
-  skipped?: Address[];
+  leftOut?: Address[];
 }
 
 /** What the visitor asked for; the run adds the chain-read starting balances and block when it starts. */

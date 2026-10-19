@@ -43,7 +43,7 @@ interface PredictDialogProps {
   isDisconnected?: boolean;
   steps: PredictSteps;
   /** Estimates the run could not find a route for and left out. */
-  skipped: number;
+  leftOut: number;
   /** A run is between its first signature and its end. */
   isRunning: boolean;
   /** A stopped run can pick up where it stopped, with the amount and estimates it was started with. */
@@ -108,7 +108,7 @@ export function PredictDialog({
   isFirstPrediction,
   isDisconnected,
   steps,
-  skipped,
+  leftOut,
   isRunning,
   canRetry,
   isPending = false,
@@ -120,7 +120,7 @@ export function PredictDialog({
   const tooMuch = funding !== null && amount !== undefined && amount > funding.available;
   // with nothing held, an empty amount has nothing to trade with
   const nothingToTrade = isFirstPrediction && (funding?.collateralIn ?? 0n) === 0n;
-  const status = statusLine({ steps, notice, skipped });
+  const status = statusLine({ steps, notice, leftOut });
   const isPricing = steps.pricing === true;
   const runToken = recovered?.token;
   // a refreshed balance or re-priced preview would change what the visitor is reading mid-run

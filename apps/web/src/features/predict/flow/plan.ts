@@ -65,7 +65,7 @@ export interface PredictDeps {
   slippageBps?: number;
   optionsPerBatch?: number;
   /** Told about an option no route could be found for, which the batch `stepId` leaves out. */
-  onSkip?: (option: PredictOption, reason: unknown, stepId: string) => void;
+  onLeftOut?: (option: PredictOption, reason: unknown, stepId: string) => void;
 }
 
 const outcomeToken = (option: PredictOption, side: OptionSide): Address =>
@@ -330,7 +330,7 @@ async function predictCalls(args: {
     } catch (reason) {
       if (reason instanceof QuoteFailedError) throw reason;
       reasons.push(reason);
-      deps.onSkip?.(option, reason, stepId);
+      deps.onLeftOut?.(option, reason, stepId);
     }
   }
 
@@ -535,7 +535,7 @@ export function planPredict(snapshot: PredictRequest, deps: PredictDeps): Step[]
  * Each batch is priced as if the split had already handed every option its underlying.
  */
 export async function assertRoutes(ctx: PredictCtx, snapshot: PredictSnapshot, deps: PredictDeps): Promise<void> {
-  const quiet = { ...deps, onSkip: undefined };
+  const quiet = { ...deps, onLeftOut: undefined };
   const credits = snapshot.creditsToSpend > 0n ? await creditsLeg(ctx, snapshot.creditsToSpend, deps) : undefined;
   const mint = snapshot.collateralIn + (credits?.minted ?? 0n);
   const batches = batched(snapshot.options, deps.optionsPerBatch ?? PREDICT_BATCH_SIZE);
@@ -559,15 +559,15 @@ export async function assertRoutes(ctx: PredictCtx, snapshot: PredictSnapshot, d
 export function createPredictHooks(
   deps: Pick<PredictDeps, "reader"> & {
     /** The options a settled batch left out, handed over once so the snapshot keeps them. */
-    takeSkips?: (stepId: string) => Address[];
+    takeLeftOut?: (stepId: string) => Address[];
   },
 ): FlowHooks<PredictSnapshot, PredictCtx> {
   return {
     async afterStep({ ctx, snapshot, completed, receipt }) {
-      const left = deps.takeSkips?.(completed.stepId) ?? [];
+      const left = deps.takeLeftOut?.(completed.stepId) ?? [];
       if (left.length > 0) {
-        const before = snapshot.skipped ?? [];
-        return { snapshotPatch: { skipped: [...before, ...left.filter((market) => !before.includes(market))] } };
+        const before = snapshot.leftOut ?? [];
+        return { snapshotPatch: { leftOut: [...before, ...left.filter((market) => !before.includes(market))] } };
       }
       if (completed.stepId !== STEP_ID.deposit || !snapshot.depositNative) return;
 

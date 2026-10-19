@@ -51,10 +51,10 @@ describe("assertRoutes", () => {
   });
 
   it("passes a batch where one option routes, without reporting the other as skipped", async () => {
-    const onSkip = vi.fn();
-    const deps = { reader: fakeReader({ state }), quoter: fakeQuoter(), onSkip };
+    const onLeftOut = vi.fn();
+    const deps = { reader: fakeReader({ state }), quoter: fakeQuoter(), onLeftOut };
 
     await expect(assertRoutes(ctx(), snapshot({ options: [routable, stuck] }), deps)).resolves.toBeUndefined();
-    expect(onSkip).not.toHaveBeenCalled();
+    expect(onLeftOut).not.toHaveBeenCalled();
   });
 });

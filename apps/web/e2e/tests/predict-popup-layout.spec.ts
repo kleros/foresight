@@ -705,7 +705,7 @@ for (const viewport of [
         await page.emulateMedia({ reducedMotion: "reduce" });
         for (const options of [2, 10]) {
           const dialog = await openPopup(page, options, state, undefined, extra);
-          await page.evaluate(() => window.dispatchEvent(new CustomEvent("harness-skipped", { detail: 2 })));
+          await page.evaluate(() => window.dispatchEvent(new CustomEvent("harness-left-out", { detail: 2 })));
           await expect(dialog.getByRole("status")).toHaveText("2 estimates could not be traded.");
           // a scroll waits a frame after the render
           await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));

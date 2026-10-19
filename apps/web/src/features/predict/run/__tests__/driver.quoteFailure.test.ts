@@ -140,7 +140,7 @@ describe("createPredictRun when the quoter cannot be asked", () => {
     const progress = await settled(driver);
 
     expect(progress.failure).toEqual({ reason: "quote", retryable: true });
-    expect(progress.skipped).toEqual([]);
+    expect(progress.leftOut).toEqual([]);
     expect(gateway.signRequests.filter(isDeposit)).toEqual([]);
   });
 
@@ -238,6 +238,6 @@ describe("createPredictRun when the quoter answers that no route exists", () => 
     const progress = await settled(driver);
 
     expect(progress.stage).toBe("complete");
-    expect(progress.skipped).toEqual([stuck.childMarket]);
+    expect(progress.leftOut).toEqual([stuck.childMarket]);
   });
 });

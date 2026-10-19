@@ -93,15 +93,15 @@ describe("createPredictRun with a stored run", () => {
 
   it("names the options its settled batches left out, from review through to the end", async () => {
     const leftOut = option(9).childMarket;
-    const { driver } = setup({ store: storedRejectedDeposit(undefined, { ...SAVED, skipped: [leftOut] }) });
+    const { driver } = setup({ store: storedRejectedDeposit(undefined, { ...SAVED, leftOut: [leftOut] }) });
     driver.recover();
     await vi.waitFor(() => expect(driver.getProgress().stage).toBe("review"));
-    expect(driver.getProgress().skipped).toEqual([leftOut]);
+    expect(driver.getProgress().leftOut).toEqual([leftOut]);
 
     driver.resume();
     await vi.waitFor(() => expect(driver.getProgress().stage).toBe("complete"));
 
-    expect(driver.getProgress().skipped).toEqual([leftOut]);
+    expect(driver.getProgress().leftOut).toEqual([leftOut]);
   });
 
   it("ignores start and retry while under review", async () => {

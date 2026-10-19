@@ -15,7 +15,7 @@ const depositing = (stage: PredictProgress["stage"]): PredictProgress => ({
     { id: "deposit", label: "", state: "running" },
     { id: "predict-1", label: "", state: "pending" },
   ],
-  skipped: [],
+  leftOut: [],
   batchesDone: 0,
   batches: 1,
 });
@@ -51,7 +51,7 @@ const halted: PredictProgress = {
     { id: "deposit", label: "", state: "success" },
     { id: "predict-1", label: "", state: "error" },
   ],
-  skipped: [],
+  leftOut: [],
   batchesDone: 0,
   batches: 1,
   failure: { reason: "rejected", retryable: true },

@@ -58,8 +58,8 @@ const dialog = params.get("dialog");
 const isEmailVerified = params.get("verified") !== "0";
 /** `&signin=busy` the success dialog's sign-in while the wallet signs. */
 const signingIn = params.get("signin") === "busy";
-/** `?skipped=N` estimates the run left out, said on the status line; a `harness-skipped` event changes it after open. */
-const initialSkipped = Number(params.get("skipped") ?? "0");
+/** `?leftOut=N` estimates the run left out, said on the status line; a `harness-left-out` event changes it after open. */
+const initialLeftOut = Number(params.get("leftOut") ?? "0");
 
 /** `?credits=` the visitor's Foresight credits, as CREDITS names them; none by default. The tick starts on, as in the app. */
 const creditsState = params.get("credits") as keyof typeof CREDITS | null;
@@ -104,7 +104,7 @@ const run = (
     label: "",
     state: (states[index] ?? "pending") as PredictProgress["steps"][number]["state"],
   })),
-  skipped: [],
+  leftOut: [],
   batchesDone: 0,
   batches: 2,
   ...extra,
@@ -227,14 +227,14 @@ const success = (
 );
 
 function Harness() {
-  const [skipped, setSkipped] = useState(initialSkipped);
+  const [leftOut, setLeftOut] = useState(initialLeftOut);
   const [typed, setTyped] = useState(amount);
   const [isUsing, setIsUsing] = useState(true);
   const shown = isUsing ? fundingFor(true) : funding;
   useEffect(() => {
-    const onSkipped = (event: Event) => setSkipped((event as CustomEvent<number>).detail);
-    window.addEventListener("harness-skipped", onSkipped);
-    return () => window.removeEventListener("harness-skipped", onSkipped);
+    const onLeftOut = (event: Event) => setLeftOut((event as CustomEvent<number>).detail);
+    window.addEventListener("harness-left-out", onLeftOut);
+    return () => window.removeEventListener("harness-left-out", onLeftOut);
   }, []);
   return (
     <>
@@ -258,7 +258,7 @@ function Harness() {
         isFirstPrediction={isFirstPrediction}
         isDisconnected={state === "disconnected"}
         steps={steps}
-        skipped={skipped}
+        leftOut={leftOut}
         isRunning={isRunning}
         canRetry={state === "failed" || state === "pending" || state === "recovered"}
         isPending={state === "pending"}

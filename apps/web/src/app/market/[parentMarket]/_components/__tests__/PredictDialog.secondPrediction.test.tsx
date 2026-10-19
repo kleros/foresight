@@ -101,7 +101,7 @@ vi.mock("@/features/predict/hooks/usePredictRun", async () => {
 const progressAt = (stage: PredictProgress["stage"]): PredictProgress => ({
   stage,
   steps: [],
-  skipped: [],
+  leftOut: [],
   batchesDone: stage === "complete" ? 1 : 0,
   batches: 1,
 });

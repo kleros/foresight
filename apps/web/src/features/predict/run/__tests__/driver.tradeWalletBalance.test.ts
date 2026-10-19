@@ -68,7 +68,7 @@ const message = (progress: PredictProgress) =>
 const PRICES_MESSAGE = message({
   stage: "halted",
   steps: [],
-  skipped: [],
+  leftOut: [],
   batchesDone: 0,
   batches: 1,
   failure: { reason: "reverted", retryable: false },

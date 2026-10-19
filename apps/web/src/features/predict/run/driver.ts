@@ -99,7 +99,7 @@ export function createPredictRun(args: {
 }): PredictDriver {
   const listeners = new Set<() => void>();
   /** Options left out by each batch not yet settled, by step id; a settled batch's are kept in the run's snapshot. */
-  const skipping = new Map<string, Address[]>();
+  const leavingOut = new Map<string, Address[]>();
   let failure: PredictProgress["failure"];
   let retryFailed: (() => void) | undefined;
   let planned: PredictStepRow[] = [];
@@ -127,9 +127,9 @@ export function createPredictRun(args: {
     creditsQuoter: args.creditsQuoter,
     slippageBps: args.slippageBps,
     optionsPerBatch: args.optionsPerBatch,
-    onSkip: (option, _reason, stepId) => {
-      const left = skipping.get(stepId) ?? [];
-      if (!left.includes(option.childMarket)) skipping.set(stepId, [...left, option.childMarket]);
+    onLeftOut: (option, _reason, stepId) => {
+      const left = leavingOut.get(stepId) ?? [];
+      if (!left.includes(option.childMarket)) leavingOut.set(stepId, [...left, option.childMarket]);
     },
   };
 
@@ -199,9 +199,9 @@ export function createPredictRun(args: {
     gateway,
     hooks: createPredictHooks({
       reader: args.reader,
-      takeSkips: (stepId) => {
-        const left = skipping.get(stepId) ?? [];
-        skipping.delete(stepId);
+      takeLeftOut: (stepId) => {
+        const left = leavingOut.get(stepId) ?? [];
+        leavingOut.delete(stepId);
         return left;
       },
     }),
@@ -297,13 +297,13 @@ export function createPredictRun(args: {
     const rows = steps.length > 0 ? steps : planned;
     const batchRows = rows.filter((row) => row.id.startsWith("predict-"));
 
-    const settledSkips = run?.snapshot.skipped ?? [];
-    const skipped = [...settledSkips, ...[...skipping.values()].flat()];
+    const settledLeftOut = run?.snapshot.leftOut ?? [];
+    const leftOut = [...settledLeftOut, ...[...leavingOut.values()].flat()];
 
     return {
       stage: stage(),
       steps: rows,
-      skipped: skipped.filter((market, index) => skipped.indexOf(market) === index),
+      leftOut: leftOut.filter((market, index) => leftOut.indexOf(market) === index),
       batchesDone: batchRows.filter((row) => row.state === "success").length,
       batches: batchRows.length,
       failure,
@@ -439,7 +439,7 @@ export function createPredictRun(args: {
 
   const startRun = detached(async () => {
     report(undefined);
-    skipping.clear();
+    leavingOut.clear();
     moneyMoved = false;
 
     const requested = args.snapshot();
@@ -487,10 +487,10 @@ export function createPredictRun(args: {
 
     retry() {
       const again = retryFailed;
-      // A batch that is rebuilt gives its options another go; a sent one's skips stand until its receipt is read.
+      // A batch that is rebuilt gives its options another go; a sent one's left-out options stand until its receipt is read.
       const run = orchestrator.getRun();
       const sent = run && pendingHashOf(run) ? currentEntry(run.steps)?.stepId : undefined;
-      for (const stepId of [...skipping.keys()]) if (stepId !== sent) skipping.delete(stepId);
+      for (const stepId of [...leavingOut.keys()]) if (stepId !== sent) leavingOut.delete(stepId);
       report(undefined);
       again?.();
     },
@@ -503,7 +503,7 @@ export function createPredictRun(args: {
       reviewing = false;
       moneyMoved = false;
       buildFailure = undefined;
-      skipping.clear();
+      leavingOut.clear();
       unansweredSends.clear();
       planned = [];
       report(undefined);

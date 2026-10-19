@@ -290,13 +290,13 @@ describe("createPredictRun when a batch leaves an option out", () => {
     driver.start();
     const halted = await haltedOrComplete(driver);
     expect(halted.failure?.reason).toBe("reverted");
-    expect(halted.skipped).toEqual([unrouted.childMarket]);
+    expect(halted.leftOut).toEqual([unrouted.childMarket]);
 
     driver.retry();
     const after = await haltedOrComplete(driver);
 
     expect(after.stage).toBe("complete");
-    expect(after.skipped).toEqual([unrouted.childMarket]);
+    expect(after.leftOut).toEqual([unrouted.childMarket]);
   });
 
   it("still names it when the batch's receipt was unseen and the retry finds it mined", async () => {
@@ -315,7 +315,7 @@ describe("createPredictRun when a batch leaves an option out", () => {
     const after = await haltedOrComplete(driver);
 
     expect(after.stage).toBe("complete");
-    expect(after.skipped).toEqual([unrouted.childMarket]);
+    expect(after.leftOut).toEqual([unrouted.childMarket]);
     expect(batchTxs(gateway.signRequests, first)).toHaveLength(1);
   });
 
@@ -331,14 +331,14 @@ describe("createPredictRun when a batch leaves an option out", () => {
 
     driver.start();
     const halted = await haltedOrComplete(driver);
-    expect(halted.skipped).toEqual([unrouted.childMarket]);
+    expect(halted.leftOut).toEqual([unrouted.childMarket]);
 
     closed = false;
     driver.retry();
     const after = await haltedOrComplete(driver);
 
     expect(after.stage).toBe("complete");
-    expect(after.skipped).toEqual([]);
+    expect(after.leftOut).toEqual([]);
   });
 });
 

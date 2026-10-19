@@ -101,7 +101,7 @@ const driver = {
   getProgress: vi.fn<PredictDriver["getProgress"]>(),
 } satisfies PredictDriver;
 
-const idle: PredictProgress = { stage: "idle", steps: [], skipped: [], batchesDone: 0, batches: 0 };
+const idle: PredictProgress = { stage: "idle", steps: [], leftOut: [], batchesDone: 0, batches: 0 };
 
 vi.mock("@/features/predict/hooks/usePredictRun", () => ({
   usePredictRun: (input: unknown) => ({ driver: input ? driver : null, progress: idle }),

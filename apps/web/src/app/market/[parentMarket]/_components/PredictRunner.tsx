@@ -29,7 +29,7 @@ interface PredictRunnerProps {
   selected: SelectedEstimate[];
   onClose: () => void;
   /** Options the run left out for lack of a route, and what it placed; the run is reset by the time this is called. */
-  onSuccess: (skipped: Address[], placed: PlacedPrediction) => void;
+  onSuccess: (leftOut: Address[], placed: PlacedPrediction) => void;
 }
 
 const NATIVE: PayTokenChoice = { id: "native", symbol: "xDAI", decimals: 18 };
@@ -115,7 +115,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
 
   useEffect(() => {
     if (stage !== "complete") return;
-    const left = progress?.skipped ?? [];
+    const left = progress?.leftOut ?? [];
     driver?.reset();
     onSuccess(left, {
       estimates: placedCount - left.length,
@@ -123,7 +123,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
       symbol: placedSymbol,
       decimals: placedDecimals,
     });
-  }, [stage, driver, onSuccess, progress?.skipped, placedCount, placedAmount, placedSymbol, placedDecimals]);
+  }, [stage, driver, onSuccess, progress?.leftOut, placedCount, placedAmount, placedSymbol, placedDecimals]);
 
   // a transaction that may still mine stays stored, so the next popup recovers it instead of signing again
   const pendingHash = progress?.pendingHash;
@@ -198,7 +198,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
       isFirstPrediction={isFirstPrediction}
       isDisconnected={owner === undefined}
       steps={steps}
-      skipped={progress?.skipped.length ?? 0}
+      leftOut={progress?.leftOut.length ?? 0}
       isRunning={isRunning}
       canRetry={canRetry}
       isPending={Boolean(pendingHash)}

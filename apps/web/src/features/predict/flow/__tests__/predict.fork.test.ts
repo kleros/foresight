@@ -235,12 +235,12 @@ describe("the predict flow, against a gnosis fork", () => {
       };
 
       const reader = createPredictReader({ client, sessionId: session.id, collateral });
-      const skipped: string[] = [];
+      const leftOut: string[] = [];
       const deps = {
         reader,
         quoter: createLensQuoter(client, CHAIN_ID),
         slippageBps: 300,
-        onSkip: (each: PredictOption, reason: unknown) => skipped.push(`${each.childMarket}: ${String(reason)}`),
+        onLeftOut: (each: PredictOption, reason: unknown) => leftOut.push(`${each.childMarket}: ${String(reason)}`),
       };
       const steps = planPredict(snapshot, deps);
 
@@ -272,7 +272,7 @@ describe("the predict flow, against a gnosis fork", () => {
           // `build` may answer synchronously, so this cannot be a rejection handler
           tx = await step.build(ctx, snapshot);
         } catch (reason) {
-          throw new Error(`${step.id} could not be built: ${String(reason)}\n${skipped.join("\n")}`);
+          throw new Error(`${step.id} could not be built: ${String(reason)}\n${leftOut.join("\n")}`);
         }
         const hash = await wallet.sendTransaction({
           account,
@@ -1818,14 +1818,14 @@ describe("money kept by every predict run, against a gnosis fork", () => {
     // M3: every option split what both sources minted, received at least its minimums, and landed
     const calls = batches.flatMap((batch) => batchCalls(batch.tx.data!));
     const signed = signedOptions(calls, run.options, { gnosisRouter: ctx.router, swaprRouter: route.swaprRouter });
-    const skipped = run.progress.skipped.map((market) => market.toLowerCase());
+    const leftOut = run.progress.leftOut.map((market) => market.toLowerCase());
     for (const child of run.children) {
       const option = run.options.find((each) => each.childMarket === child.childMarket);
       const legs = signed.get(child.childMarket);
       const held = before.tokens.get(executor)!.get(child.underlying)!;
       if (!option || !legs || legs.legInputs.length === 0) {
         if (option)
-          expect(skipped, `${option.childMarket} was left out without saying so`).toContain(
+          expect(leftOut, `${option.childMarket} was left out without saying so`).toContain(
             option.childMarket.toLowerCase(),
           );
         // an option the run did not trade keeps what the parent split gave it
@@ -2481,7 +2481,7 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       });
       const stays = run.options.filter((_, index) => index % 2 === 1).map((each) => each.childMarket.toLowerCase());
       // an estimate at the UP price can still leave the DOWN pool to move, so only those may be left out
-      for (const market of run.progress.skipped) expect(stays).toContain(market.toLowerCase());
+      for (const market of run.progress.leftOut) expect(stays).toContain(market.toLowerCase());
       await expectMoneyKept(run);
     },
     900_000,

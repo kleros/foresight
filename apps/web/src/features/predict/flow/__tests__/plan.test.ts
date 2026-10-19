@@ -190,28 +190,28 @@ describe("the predict step", () => {
 
   it("leaves out an option nothing will route, and says which", async () => {
     const options = [option(1), option(2)];
-    const skipped: PredictOption[] = [];
+    const leftOut: PredictOption[] = [];
     const refuse = (request: { tokenIn: Address }) =>
       request.tokenIn === options[0]!.upToken || request.tokenIn === options[0]!.underlying;
 
     const { tx } = await buildPredict(snapshot({ options }), {
       quoter: fakeQuoter({ refuse }),
-      onSkip: (each) => skipped.push(each),
+      onLeftOut: (each) => leftOut.push(each),
     });
 
-    expect(skipped.map((each) => each.childMarket)).toEqual([options[0]!.childMarket]);
+    expect(leftOut.map((each) => each.childMarket)).toEqual([options[0]!.childMarket]);
     expect(batchShape(tx.data!).some((call) => call.startsWith(options[1]!.underlying))).toBe(true);
   });
 
   it("refuses the batch, leaving no option out, when one option's quote cannot be had", async () => {
     const options = [option(1), option(2)];
-    const skipped: PredictOption[] = [];
+    const leftOut: PredictOption[] = [];
     const quoter = quoterFor(options[0]!, lensQuoterOn(nodeAnswers.unreachable), fakeQuoter());
 
     await expect(
-      buildPredict(snapshot({ options }), { quoter, onSkip: (each) => skipped.push(each) }),
+      buildPredict(snapshot({ options }), { quoter, onLeftOut: (each) => leftOut.push(each) }),
     ).rejects.toBeInstanceOf(QuoteFailedError);
-    expect(skipped).toEqual([]);
+    expect(leftOut).toEqual([]);
   });
 
   it("sizes the buy from what the sell was quoted to pay, not from the merge alone", async () => {
@@ -234,7 +234,7 @@ describe("the predict step", () => {
   });
 
   it("says a batch whose only option the market already agrees with has nothing to trade", async () => {
-    const skipped: PredictOption[] = [];
+    const leftOut: PredictOption[] = [];
     // UP sits exactly where the estimate puts it, and DOWN's pool never priced
     const reader = fakeReader({
       state: () =>
@@ -246,10 +246,10 @@ describe("the predict step", () => {
         }),
     });
 
-    await expect(buildPredict(snapshot(), { reader, onSkip: (each) => skipped.push(each) })).rejects.toBeInstanceOf(
+    await expect(buildPredict(snapshot(), { reader, onLeftOut: (each) => leftOut.push(each) })).rejects.toBeInstanceOf(
       AtEstimatesError,
     );
-    expect(skipped).toHaveLength(1);
+    expect(leftOut).toHaveLength(1);
   });
 
   it("refuses the batch when nothing in it will route", async () => {

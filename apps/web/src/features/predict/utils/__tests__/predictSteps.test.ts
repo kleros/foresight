@@ -14,7 +14,7 @@ const progress = (overrides: Partial<PredictProgress> = {}): PredictProgress => 
     { id: "deposit", label: "Add money to your trade wallet", state: "success" },
     { id: "predict-1", label: "Making your prediction", state: "running" },
   ],
-  skipped: [],
+  leftOut: [],
   batchesDone: 0,
   batches: 1,
   ...overrides,
@@ -293,17 +293,17 @@ describe("statusLine", () => {
       }),
     });
 
-    expect(statusLine({ steps: idle, skipped: 0 })).toBeNull();
+    expect(statusLine({ steps: idle, leftOut: 0 })).toBeNull();
     expect(placed.rows.find((row) => row.key === "predict")?.view).toBe("done");
-    expect(statusLine({ steps: placed, skipped: 0 })).toBeNull();
+    expect(statusLine({ steps: placed, leftOut: 0 })).toBeNull();
   });
 
   it("names the estimates a run left out, since they were not signed", () => {
-    expect(statusLine({ steps: idle, skipped: 2 })).toEqual({
+    expect(statusLine({ steps: idle, leftOut: 2 })).toEqual({
       text: "2 estimates could not be traded.",
       tone: "neutral",
     });
-    expect(statusLine({ steps: idle, skipped: 1 })?.text).toBe("1 estimate could not be traded.");
+    expect(statusLine({ steps: idle, leftOut: 1 })?.text).toBe("1 estimate could not be traded.");
   });
 
   it("says in a few words that a sent transaction is not confirmed yet", () => {
@@ -315,7 +315,7 @@ describe("statusLine", () => {
       }),
     });
 
-    expect(statusLine({ steps: pending, skipped: 0 })).toEqual({
+    expect(statusLine({ steps: pending, leftOut: 0 })).toEqual({
       text: "Sent, not confirmed yet.",
       tone: "warning",
     });
@@ -337,7 +337,7 @@ describe("statusLine", () => {
   ] as const)("names a %s stop in words with a referent", (reason, text) => {
     const stopped = steps({ progress: progress({ stage: "halted", failure: { reason, retryable: true } }) });
 
-    expect(statusLine({ steps: stopped, skipped: 0 })?.text).toBe(text);
+    expect(statusLine({ steps: stopped, leftOut: 0 })?.text).toBe(text);
   });
 
   it("names a funds stop after money moved as the fee alone", () => {
@@ -345,17 +345,17 @@ describe("statusLine", () => {
       progress: progress({ stage: "halted", failure: { reason: "funds", retryable: true }, moneyMoved: true }),
     });
 
-    expect(statusLine({ steps: stopped, skipped: 0 })?.text).toBe(
+    expect(statusLine({ steps: stopped, leftOut: 0 })?.text).toBe(
       "Not enough xDAI for the fee. Add some, then try the rest.",
     );
   });
 
   it("says nothing while a step is running", () => {
-    expect(statusLine({ steps: steps({ progress: progress() }), skipped: 0 })).toBeNull();
+    expect(statusLine({ steps: steps({ progress: progress() }), leftOut: 0 })).toBeNull();
   });
 
   it("puts what the visitor has to do ahead of why the run stopped", () => {
-    expect(statusLine({ steps: halted, notice: "Switch your wallet to Gnosis.", skipped: 0 })).toEqual({
+    expect(statusLine({ steps: halted, notice: "Switch your wallet to Gnosis.", leftOut: 0 })).toEqual({
       text: "Switch your wallet to Gnosis.",
       tone: "warning",
     });
@@ -374,7 +374,7 @@ describe("statusLine", () => {
       statusLine({
         steps: pending,
         notice: "Connect a wallet to predict.",
-        skipped: 0,
+        leftOut: 0,
       }),
     ).toEqual({ text: "Connect a wallet to predict.", tone: "warning" });
   });
@@ -388,7 +388,7 @@ describe("statusLine", () => {
       }),
     });
 
-    expect(statusLine({ steps: pending, skipped: 0 })?.tone).toBe("warning");
+    expect(statusLine({ steps: pending, leftOut: 0 })?.tone).toBe("warning");
   });
 
   it("says nothing between steps of a run that is going normally", () => {
@@ -399,11 +399,11 @@ describe("statusLine", () => {
       }),
     });
 
-    expect(statusLine({ steps: between, skipped: 0 })).toBeNull();
+    expect(statusLine({ steps: between, leftOut: 0 })).toBeNull();
   });
 
   it("says why a run stopped when nothing else is asked of the visitor", () => {
-    expect(statusLine({ steps: halted, skipped: 0 })?.tone).toBe("error");
+    expect(statusLine({ steps: halted, leftOut: 0 })?.tone).toBe("error");
   });
 });
 

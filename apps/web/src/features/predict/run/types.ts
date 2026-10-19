@@ -54,7 +54,7 @@ export interface PredictProgress {
   stage: PredictStage;
   steps: PredictStepRow[];
   /** Options no route could be found for, which the run left out. */
-  skipped: Address[];
+  leftOut: Address[];
   /** How many of the planned batches have landed, for "3 of 5 went through". */
   batchesDone: number;
   batches: number;

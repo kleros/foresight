@@ -64,7 +64,7 @@ const pricing = predictSteps({
       { id: "deposit", label: "", state: "pending" },
       { id: "predict-1", label: "", state: "pending" },
     ],
-    skipped: [],
+    leftOut: [],
     batchesDone: 0,
     batches: 1,
   },
@@ -88,7 +88,7 @@ const props = () => ({
   optionNoun: "director",
   isFirstPrediction: true,
   steps,
-  skipped: 0,
+  leftOut: 0,
   isRunning: false,
   canRetry: false,
   onPredict: vi.fn(),
@@ -388,7 +388,7 @@ describe("predicting", () => {
   });
 
   it("says which estimates were left out", () => {
-    render(<PredictDialog {...props()} skipped={1} />);
+    render(<PredictDialog {...props()} leftOut={1} />);
 
     expect(screen.getByRole("status")).toHaveTextContent("1 estimate could not be traded.");
   });
@@ -528,7 +528,7 @@ describe("the button while a run goes", () => {
           { id: "deposit", label: "", state: "pending" },
           { id: "predict-1", label: "", state: "pending" },
         ],
-        skipped: [],
+        leftOut: [],
         batchesDone: 0,
         batches: 1,
       },
@@ -583,7 +583,7 @@ describe("the summary under the amount", () => {
           { id: "predict-1", label: "", state: "success" },
           { id: "predict-2", label: "", state: "running" },
         ],
-        skipped: [],
+        leftOut: [],
         batchesDone: 1,
         batches: 2,
       },

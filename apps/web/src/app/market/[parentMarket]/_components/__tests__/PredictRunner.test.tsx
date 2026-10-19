@@ -100,7 +100,7 @@ let nativeAvailable: bigint | undefined;
 const progressAt = (stage: PredictStage, retryable = false, steps: PredictProgress["steps"] = []): PredictProgress => ({
   stage,
   steps,
-  skipped: [],
+  leftOut: [],
   batchesDone: 0,
   batches: 0,
   ...(stage === "halted" ? { failure: { reason: retryable ? "rpc" : "reverted", retryable } } : {}),
@@ -420,7 +420,7 @@ describe("PredictRunner, the dialog's controls", () => {
 
   it("hands the success dialog what it placed, less what the run left out", () => {
     const detail = session();
-    progress = { ...progressAt("complete"), skipped: [detail.options[0]!.market] };
+    progress = { ...progressAt("complete"), leftOut: [detail.options[0]!.market] };
     const view = mount(detail);
 
     expect(view.onSuccess).toHaveBeenCalledWith([detail.options[0]!.market], {
@@ -459,7 +459,7 @@ describe("PredictRunner, the dialog's controls", () => {
     const detail = session();
     const recovered = snapshot({ deposit: 3n * 10n ** 18n, collateralIn: 5n * 10n ** 18n });
     const left = recovered.options[0]!.childMarket;
-    progress = { ...progressAt("complete"), recovered, skipped: [left] };
+    progress = { ...progressAt("complete"), recovered, leftOut: [left] };
     const view = mount(detail);
 
     expect(view.onSuccess).toHaveBeenCalledWith([left], {

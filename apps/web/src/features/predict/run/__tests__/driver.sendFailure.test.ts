@@ -57,7 +57,7 @@ const message = (progress: PredictProgress) =>
 const NETWORK = message({
   stage: "halted",
   steps: [],
-  skipped: [],
+  leftOut: [],
   batchesDone: 0,
   batches: 0,
   failure: { reason: "rpc", retryable: true },
