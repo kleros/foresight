@@ -1377,6 +1377,46 @@ for (const viewport of [
   });
 }
 
+for (const viewport of [
+  { width: 1280, height: 800 },
+  { width: 375, height: 812 },
+]) {
+  for (const theme of ["light", "dark"]) {
+    test(`the share slider at 0% paints only its track along its line, ${viewport.width} x ${viewport.height} ${theme}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      const dialog = await openPopup(page, 2, "idle", undefined, `&first=0&theme=${theme}`);
+      const slider = dialog.getByTestId("amount-slider");
+      await expect(dialog.getByTestId("amount-share")).toHaveText("0%");
+
+      const strays = await slider.locator("#slider-track").evaluate((track) => {
+        const row = track.closest("[data-testid=amount-slider]")!;
+        const line = track.getBoundingClientRect();
+        // past the thumb at 0%, anything drawn over or beside the track's line
+        const from = line.left + line.width * 0.2;
+        // react-aria's range input is visually hidden
+        return [...row.querySelectorAll(":not(input)")]
+          .filter((element) => !element.contains(track) && !track.contains(element))
+          .filter((element) => getComputedStyle(element).visibility === "visible")
+          .filter((element) => {
+            const box = element.getBoundingClientRect();
+            return (
+              box.width > 0 &&
+              box.height > 0 &&
+              box.right > from &&
+              box.left < line.right + 4 &&
+              box.bottom > line.top - 4 &&
+              box.top < line.bottom + 4
+            );
+          })
+          .map((element) => element.outerHTML.slice(0, 80));
+      });
+      expect(strays, "only the track paints along its line").toEqual([]);
+    });
+  }
+}
+
 test.describe("the header's close button", () => {
   test.use({ viewport: { width: 375, height: 667 } });
 

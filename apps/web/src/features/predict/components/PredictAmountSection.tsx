@@ -282,7 +282,7 @@ function toUnits(entered: string, decimals: number): bigint | undefined {
   }
 }
 
-/** A share of the balance, said beside the track, with a dot at each quarter the fill has not reached yet. Dimmed whenever it cannot move. */
+/** A share of the balance, said beside the track. Dimmed whenever it cannot move. */
 function AmountSlider({
   percent,
   isDisabled,
@@ -303,10 +303,10 @@ function AmountSlider({
         isDisabled && "opacity-50",
       )}
     >
-      <div className="relative mx-2 h-4 min-w-0 flex-1">
+      <div className="mx-2 h-4 min-w-0 flex-1">
         <Slider
           className={clsx(
-            "relative z-1 mt-0 w-full",
+            "relative mt-0 w-full",
             "[&>div:last-child]:hidden [&_#slider-label]:hidden",
             "[&_div:has(>#slider-track)]:-my-3.5 [&_div:has(>#slider-track)]:h-11",
             "[&_#slider-fill]:h-1 [&_#slider-track]:h-1 [&_#slider-track]:bg-fs-popup-track",
@@ -329,20 +329,6 @@ function AmountSlider({
           // without one the library renders a live <output> in the thumb
           formatter={(value) => `${value}%`}
         />
-        <div
-          className="pointer-events-none absolute top-1/2 -left-[3px] z-0 flex w-[calc(100%+6px)] -translate-y-1/2 justify-between"
-          aria-hidden
-        >
-          {[0, 25, 50, 75, 100].map((mark) => (
-            <span
-              key={mark}
-              className={clsx(
-                "block size-1.5 rounded-full",
-                mark < percent || mark === 0 ? "invisible" : "bg-fs-popup-track-dot",
-              )}
-            />
-          ))}
-        </div>
       </div>
       <span
         data-testid="amount-share"
