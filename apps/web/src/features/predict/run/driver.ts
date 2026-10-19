@@ -43,6 +43,7 @@ import type {
   PredictCtx,
   PredictReader,
   PredictRequest,
+  PredictSlippage,
   PredictSnapshot,
 } from "../flow/types";
 
@@ -82,6 +83,9 @@ const sleep = (ms: number, signal?: AbortSignal) =>
     signal?.addEventListener("abort", () => (clearTimeout(timer), resolve()), { once: true });
   });
 
+const sameSlippage = (a: PredictSlippage, b: PredictSlippage) =>
+  a.tradeBps === b.tradeBps && a.creditsBps === b.creditsBps;
+
 /** Why a saved run cannot be continued from the connected wallet, if it cannot. */
 function foreign(saved: PredictCtx, current: PredictCtx): "wrong-wallet" | "wrong-chain" | undefined {
   if (String(saved.owner).toLowerCase() !== current.owner.toLowerCase()) return "wrong-wallet";
@@ -99,6 +103,8 @@ export function createPredictRun(args: {
   flowId: string;
   ctx: () => PredictCtx;
   snapshot: () => PredictRequest;
+  /** The visitor's slippage settings now; a held run's retry takes them up. */
+  slippage?: () => PredictSlippage | undefined;
   store?: FlowRunStore;
   onComplete?: () => void;
   now?: () => number;
@@ -552,6 +558,11 @@ export function createPredictRun(args: {
       const run = orchestrator.getRun();
       const sent = run && pendingHashOf(run) ? currentEntry(run.steps)?.stepId : undefined;
       for (const stepId of [...leavingOut.keys()]) if (stepId !== sent) leavingOut.delete(stepId);
+      const settings = args.slippage?.();
+      // a held run's rebuilt batch is checked against what Details showed, so new settings stop it at moved
+      if (run && held && settings && !sameSlippage(run.snapshot.slippage, settings)) {
+        orchestrator.updateSnapshot({ slippage: settings }, { source: "requote" });
+      }
       report(undefined);
       again?.();
     },

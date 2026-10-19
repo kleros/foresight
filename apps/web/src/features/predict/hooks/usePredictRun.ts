@@ -118,6 +118,7 @@ export function usePredictRun(input: PredictRunInput | null): {
           startedAt: Math.floor(Date.now() / 1000),
         };
       },
+      slippage: () => latest.current?.slippage(),
       onComplete: () => latest.current?.onComplete?.(),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuilt on identity, read through the ref otherwise
