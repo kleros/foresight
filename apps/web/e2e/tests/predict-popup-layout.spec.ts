@@ -653,7 +653,7 @@ for (const viewport of [
             const { scrollPaddingTop, scrollPaddingBottom } = getComputedStyle(scroller);
             return [
               [parseFloat(scrollPaddingTop), parseFloat(scrollPaddingBottom)],
-              [element.parentElement!.offsetHeight, footer.offsetHeight],
+              [element.closest<HTMLElement>(".predict-header")!.offsetHeight, footer.offsetHeight],
             ];
           });
           expect

@@ -8,10 +8,12 @@ import { PredictDialog } from "@/features/predict/components/PredictDialog";
 import type { ListedEstimate } from "@/features/predict/components/PredictList";
 import { SLIPPAGE_BPS } from "@/features/predict/oracle/tolerances";
 import type { PredictFailureReason, PredictProgress } from "@/features/predict/run/types";
+import { useSlippageStore } from "@/features/predict/stores/slippageStore";
 import { creditLines, creditsOffer } from "@/features/predict/utils/credits";
 import { planFunding } from "@/features/predict/utils/funding";
 import { previewTrades } from "@/features/predict/utils/plan";
 import { fundsToAdd, predictSteps } from "@/features/predict/utils/predictSteps";
+import { normalizeSlippageSettings, type SlippageSettings } from "@/features/predict/utils/slippage";
 
 import { estimateToPriceWad, priceWadToEstimate } from "@/utils/optionPrice";
 
@@ -60,6 +62,29 @@ const isEmailVerified = params.get("verified") !== "0";
 const signingIn = params.get("signin") === "busy";
 /** `?leftOut=N` estimates the run left out, said on the status line; a `harness-left-out` event changes it after open. */
 const initialLeftOut = Number(params.get("leftOut") ?? "0");
+
+/** `?slippage=trade:300,credits:50` custom settings in basis points, saved as the app saves them; without it, what was saved. */
+const slippageParam = params.get("slippage");
+const initialSlippage: SlippageSettings = normalizeSlippageSettings(
+  Object.fromEntries(
+    (params.get("slippage") ?? "")
+      .split(",")
+      .filter(Boolean)
+      .map((pair) => {
+        const [kind, bps] = pair.split(":");
+        return [`${kind}Bps`, Number(bps)];
+      }),
+  ),
+);
+if (slippageParam !== null) useSlippageStore.setState({ settings: initialSlippage });
+/** `?settings=open` opens the settings panel from its gear, as a click would. */
+const settingsOpen = params.get("settings") === "open";
+/** `?fee=` every pool's fee in millionths, as Algebra keeps it; none by default. */
+const poolFee = BigInt(params.get("fee") ?? "0");
+/** `?short=1` pools deep enough that the amount moves no option all the way to its estimate. */
+const isShort = params.get("short") === "1";
+/** `?swapLoss=` with `credits`, what the credits swap loses against the vault's rate, in xDAI. */
+const swapLoss = params.get("swapLoss");
 
 /** `?credits=` the visitor's Foresight credits, as CREDITS names them; none by default. The tick starts on, as in the app. */
 const creditsState = params.get("credits") as keyof typeof CREDITS | null;
@@ -120,7 +145,8 @@ type State =
   | "success"
   | "recovered"
   | "over"
-  | "disconnected";
+  | "disconnected"
+  | "moved";
 
 const PROGRESS: Partial<Record<State, PredictProgress>> = {
   quoting: run("quoting", []),
@@ -138,6 +164,8 @@ const PROGRESS: Partial<Record<State, PredictProgress>> = {
   }),
   success: run("complete", ["success", "success", "success", "success"], { batchesDone: 2 }),
   recovered: run("review", ["success", "success"]),
+  // the pools moved after Predict; nothing is signed and the steps wait
+  moved: run("moved", []),
 };
 
 const amount =
@@ -166,8 +194,8 @@ const pool = (scale: ListedEstimate["scale"], side: "up" | "down"): PoolLiquidit
   return {
     sqrtPriceX96: BigInt(Math.round(Math.sqrt(price) * 2 ** 48)) * 2n ** 48n,
     tick: 0,
-    liquidity: (isWorst ? 4_000_000n : 20n) * WAD,
-    fee: 0n,
+    liquidity: (isWorst ? 4_000_000n : isShort ? 4_000n : 20n) * WAD,
+    fee: poolFee,
     ticks: [],
     outcomeIsToken0: true,
   };
@@ -176,7 +204,7 @@ const pool = (scale: ListedEstimate["scale"], side: "up" | "down"): PoolLiquidit
 const HELD_UNDERLYING = 2n * WAD;
 
 const preview = Object.fromEntries(
-  selected.map((estimate) => {
+  selected.map((estimate, index) => {
     const trades = previewTrades(
       {
         pools: { up: pool(estimate.scale, "up"), down: pool(estimate.scale, "down") },
@@ -187,12 +215,15 @@ const preview = Object.fromEntries(
       SLIPPAGE_BPS,
     )!;
     const { from, to, ...plan } = trades;
+    const shownTo = priceWadToEstimate(to, estimate.scale);
     return [
       estimate.scale.market.toLowerCase(),
       {
         from: priceWadToEstimate(from, estimate.scale),
-        to: priceWadToEstimate(to, estimate.scale),
+        to: shownTo,
         plan: { ...plan, held: plan.split > 0n ? HELD_UNDERLYING : 0n },
+        // the first option's plan changed: it was shown going 20 further
+        ...(state === "moved" && index === 0 ? { was: { from: 250, to: shownTo + 20 } } : {}),
       },
     ];
   }),
@@ -228,6 +259,11 @@ const success = (
 
 function Harness() {
   const [leftOut, setLeftOut] = useState(initialLeftOut);
+  const slippage = useSlippageStore((store) => store.settings);
+  const setSlippage = useSlippageStore((store) => store.setSlippage);
+  useEffect(() => {
+    if (settingsOpen) document.querySelector<HTMLButtonElement>('button[aria-label="Settings"]')?.click();
+  }, []);
   const [typed, setTyped] = useState(amount);
   const [isUsing, setIsUsing] = useState(true);
   const shown = isUsing ? fundingFor(true) : funding;
@@ -264,6 +300,21 @@ function Harness() {
         isPending={state === "pending"}
         recovered={state === "recovered" ? { deposit: 4n * WAD, token: sDai } : undefined}
         notice={state === "disconnected" ? "Connect a wallet to predict." : undefined}
+        slippage={{ settings: slippage, onChange: setSlippage }}
+        creditsSwap={
+          swapLoss !== null && shown && shown.creditsIn > 0n
+            ? {
+                credits: shown.creditsIn,
+                preview: {
+                  quoted: shown.creditsIn,
+                  vaultValue: shown.creditsIn + parseUnits(swapLoss, 18),
+                  floor: shown.creditsIn,
+                  loss: parseUnits(swapLoss, 18),
+                },
+              }
+            : undefined
+        }
+        moved={state === "moved" ? 1 : undefined}
         onPredict={() => {}}
       />
     </>
