@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { OptionScale } from "@/types/optionScale";
 
 import type { ListedEstimate, PriceMove } from "../PredictList";
-import { PredictSummary } from "../PredictSummary";
+import { PredictSummary, type CreditsSwapShown } from "../PredictSummary";
 
 const scale = (market: string, name: string): OptionScale => ({
   market: market as `0x${string}`,
@@ -87,7 +87,7 @@ describe("PredictSummary's headline", () => {
     };
     renderSummary({ [GERWIG]: { from: 312, to: 312.0001, plan } });
 
-    expect(head()).toHaveTextContent(/^1 market moves$/);
+    expect(head()).toHaveTextContent(/^1 market moves · 1 stops short$/);
   });
 
   it("says market prices when none of them moves", () => {
@@ -99,7 +99,9 @@ describe("PredictSummary's headline", () => {
   it("says nothing else beside the count", () => {
     renderSummary({ [GERWIG]: { from: 312, to: 355 }, [COOGLER]: { from: 296, to: 280 } });
 
-    expect(head().textContent).toMatch(/^(\d+ markets move|1 market moves|Market prices|Checking prices…)$/);
+    expect(head().textContent).toMatch(
+      /^(\d+ markets move|1 market moves|Market prices|Checking prices…)( · \d+ stops? short)?$/,
+    );
   });
 });
 
@@ -372,5 +374,141 @@ describe("PredictSummary closed", () => {
     expect(list).not.toHaveAttribute("aria-hidden");
     expect(list).not.toHaveAttribute("inert");
     expect(rows()).toHaveLength(3);
+  });
+});
+
+/** A sell that spends all it was sized to, so the pool stops short of the estimate. */
+const shortOf = (toTarget: boolean): Plan => ({
+  ...NO_TRADES,
+  split: WAD,
+  sells: [{ side: "down", amountIn: WAD, underlyingOut: cents(40n), toTarget, fee: 0n }],
+});
+
+describe("PredictSummary on an option its amount cannot move all the way", () => {
+  it("says it stops short of the estimate under the option's row", () => {
+    // value 400, the move ends at 355
+    renderSummary({ [GERWIG]: { from: 312, to: 355, plan: shortOf(false) } }, true);
+
+    expect(within(rows()[0]!).getByTestId("stops-short")).toHaveTextContent(/^Stops short of your estimate$/);
+  });
+
+  it("counts it in the headline beside the markets that move", () => {
+    renderSummary({
+      [GERWIG]: { from: 312, to: 355, plan: shortOf(false) },
+      [COOGLER]: { from: 296, to: 400, plan: shortOf(true) },
+    });
+
+    expect(head()).toHaveTextContent(/^2 markets move · 1 stops short$/);
+  });
+
+  it("says nothing where a leg reaches the estimate", () => {
+    renderSummary({ [GERWIG]: { from: 312, to: 400, plan: shortOf(true) } }, true);
+
+    expect(screen.queryByTestId("stops-short")).toBeNull();
+    expect(head()).toHaveTextContent(/^1 market moves$/);
+  });
+
+  it("says nothing where a leg reaches the estimate, though the shown end rounds off it", () => {
+    renderSummary({ [GERWIG]: { from: 312, to: 399, plan: shortOf(true) } }, true);
+
+    expect(screen.queryByTestId("stops-short")).toBeNull();
+  });
+
+  it("says nothing where the move ends on the estimate as shown", () => {
+    renderSummary({ [GERWIG]: { from: 312, to: 400.0001, plan: shortOf(false) } }, true);
+
+    expect(screen.queryByTestId("stops-short")).toBeNull();
+  });
+});
+
+describe("PredictSummary's pool fees", () => {
+  it("closes an option's legs with its pool fees in its tokens, as the pool maths simulates them", () => {
+    renderSummary({ [GERWIG]: { from: 312, to: 355, plan: { ...shortOf(false), feeValue: cents(3n) } } }, true);
+
+    expect(legs("Greta Gerwig").at(-1)).toBe("Pool fees≈ 0.03 tokens");
+  });
+
+  it("names no fees for pools that charge none", () => {
+    renderSummary({ [GERWIG]: { from: 312, to: 355, plan: shortOf(false) } }, true);
+
+    expect(legs("Greta Gerwig").some((leg) => leg.startsWith("Pool fees"))).toBe(false);
+  });
+});
+
+function renderWith(extra: { creditsSwap?: CreditsSwapShown; slippage?: { tradeBps: number | null; creditsBps: number | null } }) {
+  return render(
+    <PredictSummary
+      selected={selected}
+      preview={{}}
+      collateral={sDai}
+      isOpen
+      onToggle={vi.fn()}
+      {...extra}
+    />,
+  );
+}
+
+describe("PredictSummary's credits swap", () => {
+  const swap = (loss: bigint): CreditsSwapShown => ({
+    credits: 15n * WAD,
+    preview: { quoted: cents(1620n), vaultValue: cents(1620n) + loss, floor: cents(1610n), loss },
+  });
+
+  it("names the credits it swaps and the xDAI the quote pays", () => {
+    renderWith({ creditsSwap: swap(0n) });
+
+    expect(screen.getByTestId("credits-swap")).toHaveTextContent(/^Credits swap15 credits → ≈ 16.2 xDAI$/);
+  });
+
+  it("names what the swap loses against the vault's rate", () => {
+    renderWith({ creditsSwap: swap(cents(3n)) });
+
+    expect(screen.getByTestId("credits-loss")).toHaveTextContent(/^Lost in the swap≈ 0.03 xDAI$/);
+  });
+
+  it("names no loss where the pool pays the vault's rate or more", () => {
+    renderWith({ creditsSwap: swap(0n) });
+
+    expect(screen.queryByTestId("credits-loss")).toBeNull();
+  });
+});
+
+describe("PredictSummary's slippage", () => {
+  it("names a custom trade slippage", () => {
+    renderWith({ slippage: { tradeBps: 300, creditsBps: null } });
+
+    expect(screen.getAllByTestId("custom-slippage").map((row) => row.textContent)).toEqual(["Max slippage3%"]);
+  });
+
+  it("names a custom credits slippage only where credits are swapped", () => {
+    renderWith({ slippage: { tradeBps: null, creditsBps: 50 } });
+    expect(screen.queryByTestId("custom-slippage")).toBeNull();
+  });
+
+  it("names both where credits are swapped", () => {
+    renderWith({
+      slippage: { tradeBps: 300, creditsBps: 50 },
+      creditsSwap: { credits: WAD, preview: { quoted: WAD, vaultValue: WAD, floor: WAD, loss: 0n } },
+    });
+
+    expect(screen.getAllByTestId("custom-slippage").map((row) => row.textContent)).toEqual([
+      "Max slippage3%",
+      "Credits swap slippage0.5%",
+    ]);
+  });
+
+  it("names nothing on Auto", () => {
+    renderWith({ slippage: { tradeBps: null, creditsBps: null } });
+
+    expect(screen.queryByTestId("custom-slippage")).toBeNull();
+  });
+});
+
+describe("PredictSummary after the pools moved", () => {
+  it("names where a changed market's move was before, under its new one", () => {
+    renderSummary({ [GERWIG]: { from: 312, to: 340, was: { from: 312, to: 355 } } }, true);
+
+    expect(within(rows()[0]!).getByTestId("market-move")).toHaveTextContent(/^312 → 340 \$M$/);
+    expect(within(rows()[0]!).getByTestId("market-was")).toHaveTextContent(/^Before: 312 → 355 \$M$/);
   });
 });

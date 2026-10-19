@@ -26,6 +26,8 @@ export interface PriceMove {
     /** Underlying the trade wallet already held, which `split` includes. */
     held: bigint;
   };
+  /** Where the move went as shown before Predict, for a market whose plan changed when the pools were read again. */
+  was?: { from: number; to: number };
 }
 
 /** --fs-dur-echo in ms, the length of a row's exit; 0 where no stylesheet sets it. */

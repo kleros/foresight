@@ -8,9 +8,20 @@ import { formatEstimate } from "@/utils/formatEstimate";
 import { INERT } from "@/utils/inert";
 
 import type { ListedEstimate, PriceMove } from "./PredictList";
+import type { CreditsSwapPreview } from "../flow/plan";
 import { shownAmount } from "../utils/funding";
 import type { OptionSide } from "../utils/plan";
 import { CHECKING_PRICES } from "../utils/predictSteps";
+import { slippagePercent, type SlippageSettings } from "../utils/slippage";
+
+/** The credits a run spends and their swap into xDAI as quoted now. */
+export interface CreditsSwapShown {
+  credits: bigint;
+  preview: CreditsSwapPreview;
+}
+
+/** WXDAI and xDAI, which the credits swap pays, have 18 decimals. */
+const XDAI_DECIMALS = 18;
 
 /** Where an estimate's market goes: `250 → 280 $M`, `Stays at 250 $M`, or `Now 250 $M` before a preview is read. */
 export function marketMove(estimate: ListedEstimate, move: PriceMove | undefined): string {
@@ -24,14 +35,24 @@ export function marketMove(estimate: ListedEstimate, move: PriceMove | undefined
 const isTraded = (move: PriceMove | undefined): boolean =>
   move?.plan !== undefined && (move.plan.sells.length > 0 || move.plan.buys.length > 0);
 
+/** The trades spend all they are sized to with no leg reaching the estimate, and the move ends short of it as shown. */
+function stopsShort(estimate: ListedEstimate, move: PriceMove | undefined): boolean {
+  if (!move?.plan || !isTraded(move)) return false;
+  if ([...move.plan.sells, ...move.plan.buys].some((leg) => leg.toTarget)) return false;
+  return formatEstimate(move.to, estimate.scale.unit) !== formatEstimate(estimate.value, estimate.scale.unit);
+}
+
 function headline(selected: ListedEstimate[], preview: Record<string, PriceMove>): string {
+  const moveOf = (estimate: ListedEstimate) => preview[estimate.scale.market.toLowerCase()];
   const moving = selected.filter((estimate) => {
-    const move = preview[estimate.scale.market.toLowerCase()];
+    const move = moveOf(estimate);
     const format = (value: number) => formatEstimate(value, estimate.scale.unit);
     return move !== undefined && (format(move.from) !== format(move.to) || isTraded(move));
   }).length;
   if (moving === 0) return "Market prices";
-  return `${moving} ${moving === 1 ? "market moves" : "markets move"}`;
+  const short = selected.filter((estimate) => stopsShort(estimate, moveOf(estimate))).length;
+  const count = `${moving} ${moving === 1 ? "market moves" : "markets move"}`;
+  return short > 0 ? `${count} · ${short} ${short === 1 ? "stops" : "stop"} short` : count;
 }
 
 type Plan = NonNullable<PriceMove["plan"]>;
@@ -149,6 +170,7 @@ function TradeLegs({
           <Side side={buy.side} amount={show(buy.outcomeOut, true)} />
         </Leg>
       ))}
+      {plan.feeValue > 0n ? <Leg label="Pool fees">{show(plan.feeValue, true, TOKENS)}</Leg> : null}
     </ul>
   );
 }
@@ -166,6 +188,8 @@ export function PredictSummary({
   onToggle,
   isPricing = false,
   isEstimated = false,
+  creditsSwap,
+  slippage,
 }: {
   selected: ListedEstimate[];
   /** Keyed by lower-case market. */
@@ -180,6 +204,10 @@ export function PredictSummary({
   isPricing?: boolean;
   /** The collateral going in is an estimate, as an xDAI payment's is, so every figure from it is too. */
   isEstimated?: boolean;
+  /** Credits the run swaps into xDAI, absent where it spends none. */
+  creditsSwap?: CreditsSwapShown;
+  /** The visitor's settings; a kind set off Auto is named. */
+  slippage?: SlippageSettings;
 }) {
   const body = useId();
   const isPlanned = selected.some((estimate) => preview[estimate.scale.market.toLowerCase()]?.plan !== undefined);
@@ -230,6 +258,26 @@ export function PredictSummary({
                 </span>
               </p>
             ) : null}
+            {creditsSwap ? (
+              <>
+                <p data-testid="credits-swap" className={clsx(ROW, "py-1.5")}>
+                  <span className="text-fs-popup-text-2 shrink-0">Credits swap</span>
+                  <span className={clsx(VALUE, "font-medium")}>
+                    {figure(creditsSwap.credits, collateral.decimals, false, ["credit", "credits"])}
+                    <Arrow />
+                    {figure(creditsSwap.preview.quoted, XDAI_DECIMALS, true, ["xDAI", "xDAI"])}
+                  </span>
+                </p>
+                {creditsSwap.preview.loss > 0n ? (
+                  <p data-testid="credits-loss" className={clsx(ROW, "pb-1.5")}>
+                    <span className="text-fs-popup-text-2 shrink-0">Lost in the swap</span>
+                    <span className={VALUE}>
+                      {figure(creditsSwap.preview.loss, XDAI_DECIMALS, true, ["xDAI", "xDAI"])}
+                    </span>
+                  </p>
+                ) : null}
+              </>
+            ) : null}
             <ul aria-label="Markets" className="flex flex-col">
               {selected.map((estimate) => {
                 const move = preview[estimate.scale.market.toLowerCase()];
@@ -249,6 +297,16 @@ export function PredictSummary({
                         {marketMove(estimate, move)}
                       </span>
                     </div>
+                    {move?.was ? (
+                      <p data-testid="market-was" className="text-fs-popup-text-3 -mt-1 mb-1 pl-4 text-right">
+                        {`Before: ${marketMove(estimate, move.was)}`}
+                      </p>
+                    ) : null}
+                    {stopsShort(estimate, move) ? (
+                      <p data-testid="stops-short" className="text-fs-tone-warning-text -mt-1 mb-1 pl-4">
+                        Stops short of your estimate
+                      </p>
+                    ) : null}
                     {move?.plan ? (
                       <TradeLegs
                         plan={move.plan}
@@ -265,6 +323,18 @@ export function PredictSummary({
                 );
               })}
             </ul>
+            {slippage?.tradeBps != null ? (
+              <p data-testid="custom-slippage" className={clsx(ROW, "py-1")}>
+                <span className="text-fs-popup-text-2 shrink-0">Max slippage</span>
+                <span className={VALUE}>{`${slippagePercent(slippage.tradeBps)}%`}</span>
+              </p>
+            ) : null}
+            {creditsSwap && slippage?.creditsBps != null ? (
+              <p data-testid="custom-slippage" className={clsx(ROW, "py-1")}>
+                <span className="text-fs-popup-text-2 shrink-0">Credits swap slippage</span>
+                <span className={VALUE}>{`${slippagePercent(slippage.creditsBps)}%`}</span>
+              </p>
+            ) : null}
             {isPlanned ? (
               <p data-testid="trades-note" className="text-fs-popup-text-3 mt-1 text-xs leading-4 text-pretty">
                 Planned from today&apos;s pools. Prices are checked again when you confirm.
