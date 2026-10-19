@@ -40,6 +40,10 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
   const [showTop, setShowTop] = useState(false);
   const [showBottom, setShowBottom] = useState(false);
   const [hasOverflow, setHasOverflow] = useState(false);
+  // once the arrow's bursts end or the area scrolls, the arrow stays still; reduced motion skips them
+  const [nudged, setNudged] = useState(
+    () => typeof window !== "undefined" && Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches),
+  );
 
   useMeasureEffect(() => {
     const el = ref.current;
@@ -68,6 +72,8 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
 
     el.addEventListener("scroll", update);
     window.addEventListener("resize", update);
+    const settle = () => setNudged(true);
+    el.addEventListener("scroll", settle, { once: true });
     // Content can grow without a scroll or a window resize.
     const observer = new ResizeObserver(update);
     observer.observe(el);
@@ -75,6 +81,7 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
 
     return () => {
       el.removeEventListener("scroll", update);
+      el.removeEventListener("scroll", settle);
       window.removeEventListener("resize", update);
       observer.disconnect();
     };
@@ -129,7 +136,7 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
           data-testid="more-below"
           aria-hidden
           className={clsx(
-            "pointer-events-none h-4 shrink-0 items-center justify-center gap-1",
+            "pointer-events-none h-5.5 shrink-0 items-center justify-center gap-1 pt-1.5",
             "bg-fs-surface type-caption border-t",
             cueTone,
             "transition-opacity duration-(--fs-dur-enter) ease-(--fs-ease-enter)",
@@ -137,7 +144,11 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
             showBottom ? "opacity-100" : "opacity-0",
           )}
         >
-          <ArrowDown className="size-2.5 [&_path]:fill-current" />
+          <ArrowDown
+            data-testid="more-below-arrow"
+            className={clsx("size-2.5 [&_path]:fill-current", showBottom && !nudged && "fs-nudge-down")}
+            onAnimationEnd={() => setNudged(true)}
+          />
           {cue}
         </span>
       ) : null}

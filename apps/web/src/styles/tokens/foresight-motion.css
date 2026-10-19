@@ -208,6 +208,29 @@
   animation: fsSpinDash 1s linear infinite;
   transform-origin: 50% 50%;
 }
+/* A cue's arrow, three bursts of lift, drop and settle, each followed by a hold.
+   Literal curves: Chromium ignores var() in a keyframe's timing function; they are --fs-ease-enter and --fs-ease-exit. */
+@keyframes fsNudgeDown {
+  0% {
+    transform: none;
+    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  }
+  12.5% {
+    transform: translateY(-2px);
+    animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
+  }
+  25% {
+    transform: translateY(2px);
+    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  }
+  40%,
+  100% {
+    transform: none;
+  }
+}
+.fs-nudge-down {
+  animation: fsNudgeDown 2s linear var(--fs-dur-enter) 3;
+}
 @media (prefers-reduced-motion: reduce) {
   :root {
     --fs-dur-echo: 1ms;
@@ -235,6 +258,9 @@
   .fs-icon-pending {
     animation: none;
     opacity: 0.6;
+  }
+  .fs-nudge-down {
+    animation: none;
   }
   .fs-skeleton {
     animation: none;
