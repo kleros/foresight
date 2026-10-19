@@ -93,10 +93,28 @@ const props = () => ({
   isRunning: false,
   canRetry: false,
   slippage: { settings: { tradeBps: null, creditsBps: null } as SlippageSettings, onChange: vi.fn() },
+  pricesReady: true,
   onPredict: vi.fn(),
 });
 
-const summaryHead = () => within(screen.getByTestId("predict-summary")).getByRole("button");
+/** A visitor holding credits they are spending. */
+const withCredits = {
+  credits: {
+    offer: { state: "usable" as const, held: 4n * WAD, usable: 4n * WAD },
+    isUsing: true,
+    onUsingChange: vi.fn(),
+  },
+};
+
+/** A credits swap of 100 credits paying 87 xDAI against 125 of vault value. */
+const lossySwap = {
+  credits: 100n * WAD,
+  preview: { quoted: 87n * WAD, vaultValue: 125n * WAD, floor: 86n * WAD, loss: 38n * WAD, minted: 69n * WAD },
+};
+
+const MOVED = { markets: 1, credits: false };
+
+const summaryHead = () => within(screen.getByTestId("predict-summary")).getAllByRole("button")[0]!;
 
 describe("the estimates going in", () => {
   it("says where each market would move, once the summary is opened", async () => {
@@ -570,8 +588,8 @@ describe("the summary under the amount", () => {
 
     expect(summaryHead()).toHaveTextContent("Checking prices…");
     expect(screen.getByTestId("pricing-sweep")).toBeInTheDocument();
-    expect(document.querySelector(".predict-cta")).toHaveTextContent("Checking prices…");
-    expect(document.querySelector(".predict-cta")).toHaveAttribute("data-busy", "true");
+    expect(document.querySelector(".predict-footer > .predict-cta")).toHaveTextContent("Checking prices…");
+    expect(document.querySelector(".predict-footer > .predict-cta")).toHaveAttribute("data-busy", "true");
     expect(subtitleOf("Place prediction")).toBe("");
   });
 
@@ -772,19 +790,37 @@ describe("the settings", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("set a custom trade slippage from a typed percent", async () => {
+  it("save a custom trade slippage once the field is left, not while it is typed", async () => {
     const onChange = vi.fn();
     render(<PredictDialog {...props()} slippage={{ settings: { tradeBps: null, creditsBps: null }, onChange }} />);
     await userEvent.click(gear());
 
     await userEvent.type(screen.getByRole("textbox", { name: "Max slippage on trades, custom percent" }), "2.5");
+    expect(onChange).not.toHaveBeenCalled();
+    await userEvent.tab();
 
-    expect(onChange).toHaveBeenLastCalledWith("tradeBps", 250);
+    expect(onChange).toHaveBeenCalledExactlyOnceWith("tradeBps", 250);
+  });
+
+  it("save a custom value on Enter", async () => {
+    const onChange = vi.fn();
+    render(<PredictDialog {...props()} slippage={{ settings: { tradeBps: null, creditsBps: null }, onChange }} />);
+    await userEvent.click(gear());
+
+    await userEvent.type(screen.getByRole("textbox", { name: "Max slippage on trades, custom percent" }), "3{Enter}");
+
+    expect(onChange).toHaveBeenCalledExactlyOnceWith("tradeBps", 300);
   });
 
   it("go back to Auto from the Auto button", async () => {
     const onChange = vi.fn();
-    render(<PredictDialog {...props()} slippage={{ settings: { tradeBps: null, creditsBps: 50 }, onChange }} />);
+    render(
+      <PredictDialog
+        {...props()}
+        {...withCredits}
+        slippage={{ settings: { tradeBps: null, creditsBps: 50 }, onChange }}
+      />,
+    );
     await userEvent.click(gear());
     const credits = within(document.querySelector<HTMLElement>('[data-slippage="creditsBps"]')!);
 
@@ -795,17 +831,80 @@ describe("the settings", () => {
     expect(onChange).toHaveBeenLastCalledWith("creditsBps", null);
   });
 
-  it("refuse a percent over the cap, saying the range, and keep the setting", async () => {
+  it("keep an out-of-range entry and its error once the field is left, saving nothing", async () => {
     const onChange = vi.fn();
     render(<PredictDialog {...props()} slippage={{ settings: { tradeBps: null, creditsBps: null }, onChange }} />);
     await userEvent.click(gear());
     const field = screen.getByRole("textbox", { name: "Max slippage on trades, custom percent" });
 
-    await userEvent.type(field, "51");
+    await userEvent.type(field, "60");
+    expect(field).not.toHaveAttribute("aria-invalid");
+    await userEvent.tab();
 
-    expect(onChange).toHaveBeenLastCalledWith("tradeBps", 500);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(field).toHaveValue("60");
     expect(field).toHaveAttribute("aria-invalid", "true");
-    expect(field).toHaveAccessibleDescription(/Enter a percent from 0 to 50\.$/);
+    expect(field).toHaveAccessibleDescription(/Enter a percent from 0\.01 to 50\.$/);
+  });
+
+  it("refuse 0, at which no swap can fill", async () => {
+    const onChange = vi.fn();
+    render(<PredictDialog {...props()} slippage={{ settings: { tradeBps: null, creditsBps: null }, onChange }} />);
+    await userEvent.click(gear());
+    const field = screen.getByRole("textbox", { name: "Max slippage on trades, custom percent" });
+
+    await userEvent.type(field, "0");
+    await userEvent.tab();
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(field).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("warn on a low custom value without refusing it", async () => {
+    render(
+      <PredictDialog {...props()} slippage={{ settings: { tradeBps: 5, creditsBps: null }, onChange: vi.fn() }} />,
+    );
+    await userEvent.click(gear());
+
+    expect(screen.getByRole("textbox", { name: "Max slippage on trades, custom percent" })).toHaveAccessibleDescription(
+      /Low slippage\. A trade may fail if the pool moves at all\.$/,
+    );
+  });
+
+  it("show the credits swap's setting only to a visitor with credits", async () => {
+    const view = render(<PredictDialog {...props()} />);
+    await userEvent.click(gear());
+    expect(document.querySelector('[data-slippage="creditsBps"]')).toBeNull();
+
+    view.rerender(<PredictDialog {...props()} {...withCredits} />);
+    expect(document.querySelector('[data-slippage="creditsBps"]')).not.toBeNull();
+  });
+
+  it("close on Done and on the X beside the title, leaving the popup open", async () => {
+    const onClose = vi.fn();
+    render(<PredictDialog {...props()} onClose={onClose} />);
+
+    await userEvent.click(gear());
+    await userEvent.click(within(panel()).getByRole("button", { name: "Done" }));
+    expect(gear()).toHaveAttribute("aria-expanded", "false");
+
+    await userEvent.click(gear());
+    await userEvent.click(screen.getByRole("button", { name: "Close settings" }));
+    expect(gear()).toHaveAttribute("aria-expanded", "false");
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("keep the keyboard in the header and the panel, Tab from the end to the gear and back", async () => {
+    render(<PredictDialog {...props()} />);
+    await userEvent.click(gear());
+    const done = within(panel()).getByRole("button", { name: "Done" });
+
+    done.focus();
+    await userEvent.tab();
+    expect(gear()).toHaveFocus();
+
+    await userEvent.tab({ shift: true });
+    expect(done).toHaveFocus();
   });
 
   it("warn on a high custom value without refusing it", async () => {
@@ -821,7 +920,11 @@ describe("the settings", () => {
 
   it("warn on a high credits swap slippage in the swap's own words", async () => {
     render(
-      <PredictDialog {...props()} slippage={{ settings: { tradeBps: null, creditsBps: 500 }, onChange: vi.fn() }} />,
+      <PredictDialog
+        {...props()}
+        {...withCredits}
+        slippage={{ settings: { tradeBps: null, creditsBps: 500 }, onChange: vi.fn() }}
+      />,
     );
     await userEvent.click(gear());
 
@@ -842,7 +945,7 @@ describe("the settings", () => {
   it.each([
     ["while a run goes", { isRunning: true }],
     ["after a run stopped with money moved", { canRetry: true }],
-    ["while new prices wait to be confirmed", { moved: 1 }],
+    ["while new prices wait to be confirmed", { moved: MOVED }],
   ])("cannot be opened %s", (_name, state) => {
     render(<PredictDialog {...props()} {...state} />);
 
@@ -851,17 +954,45 @@ describe("the settings", () => {
 });
 
 describe("prices that moved before signing", () => {
-  it("ask for a confirm on the button and say how many estimates moved", () => {
-    render(<PredictDialog {...props()} moved={2} />);
+  it("ask for a confirm on the button and say what moved", () => {
+    render(<PredictDialog {...props()} moved={{ markets: 2, credits: false }} />);
 
     expect(screen.getByRole("button", { name: "Confirm new prices" })).toBeEnabled();
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Prices moved on 2 estimates. Check the new figures, then confirm.",
+    expect(screen.getByRole("status")).toHaveTextContent("Prices moved on 2 markets. Check Details, then confirm.");
+  });
+
+  it("name the one market that moved on the status line", () => {
+    render(
+      <PredictDialog
+        {...props()}
+        moved={MOVED}
+        preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 340, was: { from: 312, to: 355 } } }}
+      />,
     );
+
+    expect(screen.getByRole("status")).toHaveTextContent(/now goes to 340 \$M, not 355 \$M\. Confirm to go on\.$/);
+  });
+
+  it("open Details on the new figures", () => {
+    const view = render(<PredictDialog {...props()} />);
+    expect(summaryHead()).toHaveAttribute("aria-expanded", "false");
+
+    view.rerender(<PredictDialog {...props()} moved={MOVED} />);
+
+    expect(summaryHead()).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("go back to the form from beside the confirm", async () => {
+    const onBack = vi.fn();
+    render(<PredictDialog {...props()} moved={MOVED} onBack={onBack} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Go back" }));
+
+    expect(onBack).toHaveBeenCalledOnce();
   });
 
   it("lock the amount the new figures were planned from", () => {
-    render(<PredictDialog {...props()} moved={1} />);
+    render(<PredictDialog {...props()} moved={MOVED} />);
 
     expect(screen.getByLabelText("Amount")).toHaveAttribute("readonly");
   });
@@ -870,11 +1001,50 @@ describe("prices that moved before signing", () => {
     const view = render(<PredictDialog {...props()} preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 355 } }} />);
 
     view.rerender(
-      <PredictDialog {...props()} moved={1} preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 340 } }} />,
+      <PredictDialog {...props()} moved={MOVED} preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 340 } }} />,
     );
 
     expect(within(screen.getByTestId("predict-summary")).getAllByTestId("market-move")[0]).toHaveTextContent(
       "312 → 340 $M",
     );
+  });
+
+  it("show the new figures when a running run stops at moved, not those held from its start", () => {
+    const view = render(
+      <PredictDialog {...props()} isRunning preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 355 } }} />,
+    );
+
+    view.rerender(
+      <PredictDialog {...props()} moved={MOVED} preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 340 } }} />,
+    );
+
+    expect(within(screen.getByTestId("predict-summary")).getAllByTestId("market-move")[0]).toHaveTextContent(
+      "312 → 340 $M",
+    );
+  });
+});
+
+describe("Predict before its prices are read", () => {
+  it("holds Predict until Details has a plan for each estimate to hold the run to", () => {
+    render(<PredictDialog {...props()} pricesReady={false} />);
+
+    expect(screen.getByRole("button", { name: "Predict" })).toBeDisabled();
+    expect(summaryHead()).toHaveTextContent("Checking prices…");
+  });
+});
+
+describe("a credits swap that loses much", () => {
+  it("names the loss on the status line without the visitor opening Details", () => {
+    render(<PredictDialog {...props()} {...withCredits} creditsSwap={lossySwap} />);
+
+    expect(screen.getByRole("status")).toHaveTextContent("The credits swap loses ≈ 38 xDAI. Details has the figures.");
+    expect(screen.getByRole("button", { name: "Predict" })).toBeEnabled();
+  });
+
+  it("says nothing of a loss under 1% of the credits' value", () => {
+    const small = { ...lossySwap, preview: { ...lossySwap.preview, loss: WAD } };
+    render(<PredictDialog {...props()} {...withCredits} creditsSwap={small} />);
+
+    expect(within(screen.getByRole("status")).queryByText(/./)).toBeNull();
   });
 });

@@ -46,7 +46,7 @@ async function settle(dialog: Locator) {
 async function footprint(dialog: Locator) {
   const round = (value: number) => Math.round(value * 10) / 10;
   const box = (await dialog.boundingBox())!;
-  const button = (await dialog.locator(".predict-cta").boundingBox())!;
+  const button = (await dialog.locator(".predict-footer > .predict-cta").boundingBox())!;
   return {
     dialog: [box.x, box.y, box.width, box.height].map(round),
     footer: [button.x, button.y, button.width, button.height].map(round),
@@ -97,7 +97,7 @@ for (const viewport of VIEWPORTS) {
           expect.soft(await isWhole(dialog.getByRole("textbox", { name: field })), field).toBe(true);
         }
         // the body is under the panel, covered and out of the focus order
-        const predict = dialog.locator(".predict-cta");
+        const predict = dialog.locator(".predict-footer > .predict-cta");
         expect(await isWhole(predict)).toBe(false);
         expect(
           await predict.evaluate((element: HTMLElement) => (element.focus(), document.activeElement === element)),
@@ -157,7 +157,7 @@ test.describe("the settings on a phone on its side at 844 x 390", () => {
     const panel = (await dialog.locator(".predict-settings").boundingBox())!;
     expect(Math.round(panel.y)).toBe(Math.round(header.y + header.height));
     expect(await isWhole(dialog.getByRole("textbox", { name: TRADES_FIELD }))).toBe(true);
-    expect(await isWhole(dialog.locator(".predict-cta"))).toBe(false);
+    expect(await isWhole(dialog.locator(".predict-footer > .predict-cta"))).toBe(false);
   });
 });
 

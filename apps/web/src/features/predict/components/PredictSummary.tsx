@@ -8,16 +8,19 @@ import { formatEstimate } from "@/utils/formatEstimate";
 import { INERT } from "@/utils/inert";
 
 import type { ListedEstimate, PriceMove } from "./PredictList";
-import type { CreditsSwapPreview } from "../flow/plan";
+import type { CreditsSwapPreview } from "../flow/types";
+import { DEFAULT_SLIPPAGE } from "../oracle/tolerances";
 import { shownAmount } from "../utils/funding";
 import type { OptionSide } from "../utils/plan";
 import { CHECKING_PRICES } from "../utils/predictSteps";
-import { slippagePercent, type SlippageSettings } from "../utils/slippage";
+import { slippagePercent, type SlippageKind, type SlippageSettings } from "../utils/slippage";
 
 /** The credits a run spends and their swap into xDAI as quoted now. */
 export interface CreditsSwapShown {
   credits: bigint;
   preview: CreditsSwapPreview;
+  /** The swap as shown before the pools moved, when it now pays less. */
+  was?: CreditsSwapPreview;
 }
 
 /** WXDAI and xDAI, which the credits swap pays, have 18 decimals. */
@@ -190,6 +193,7 @@ export function PredictSummary({
   isEstimated = false,
   creditsSwap,
   slippage,
+  onOpenSettings,
 }: {
   selected: ListedEstimate[];
   /** Keyed by lower-case market. */
@@ -206,10 +210,13 @@ export function PredictSummary({
   isEstimated?: boolean;
   /** Credits the run swaps into xDAI, absent where it spends none. */
   creditsSwap?: CreditsSwapShown;
-  /** The visitor's settings; a kind set off Auto is named. */
+  /** The visitor's settings, each kind the run uses named with its value. */
   slippage?: SlippageSettings;
+  /** Opens the settings; absent while they cannot change. */
+  onOpenSettings?: () => void;
 }) {
   const body = useId();
+  const fees = feesTotal(selected, preview);
   const isPlanned = selected.some((estimate) => preview[estimate.scale.market.toLowerCase()]?.plan !== undefined);
 
   return (
@@ -268,9 +275,14 @@ export function PredictSummary({
                     {figure(creditsSwap.preview.quoted, XDAI_DECIMALS, true, ["xDAI", "xDAI"])}
                   </span>
                 </p>
+                {creditsSwap.was ? (
+                  <p data-testid="credits-was" className="text-fs-tone-warning-text -mt-1 pb-1.5 pl-4 text-right">
+                    {`Before: ${figure(creditsSwap.was.quoted, XDAI_DECIMALS, true, ["xDAI", "xDAI"])}`}
+                  </p>
+                ) : null}
                 {creditsSwap.preview.loss > 0n ? (
                   <p data-testid="credits-loss" className={clsx(ROW, "pb-1.5")}>
-                    <span className="text-fs-popup-text-2 shrink-0">Lost in the swap</span>
+                    <span className="text-fs-popup-text-2 shrink-0">Swap loss</span>
                     <span className={VALUE}>
                       {figure(creditsSwap.preview.loss, XDAI_DECIMALS, true, ["xDAI", "xDAI"])}
                     </span>
@@ -298,7 +310,7 @@ export function PredictSummary({
                       </span>
                     </div>
                     {move?.was ? (
-                      <p data-testid="market-was" className="text-fs-popup-text-3 -mt-1 mb-1 pl-4 text-right">
+                      <p data-testid="market-was" className="text-fs-tone-warning-text -mt-1 mb-1 pl-4 text-right">
                         {`Before: ${marketMove(estimate, move.was)}`}
                       </p>
                     ) : null}
@@ -323,17 +335,27 @@ export function PredictSummary({
                 );
               })}
             </ul>
-            {slippage?.tradeBps != null ? (
-              <p data-testid="custom-slippage" className={clsx(ROW, "py-1")}>
-                <span className="text-fs-popup-text-2 shrink-0">Max slippage</span>
-                <span className={VALUE}>{`${slippagePercent(slippage.tradeBps)}%`}</span>
+            {fees !== undefined ? (
+              <p data-testid="fees-total" className={clsx(ROW, "py-1")}>
+                <span className="text-fs-popup-text-2 shrink-0">Pool fees, all markets</span>
+                <span className={VALUE}>{figure(fees, collateral.decimals, true, TOKENS)}</span>
               </p>
             ) : null}
-            {creditsSwap && slippage?.creditsBps != null ? (
-              <p data-testid="custom-slippage" className={clsx(ROW, "py-1")}>
-                <span className="text-fs-popup-text-2 shrink-0">Credits swap slippage</span>
-                <span className={VALUE}>{`${slippagePercent(slippage.creditsBps)}%`}</span>
-              </p>
+            {slippage ? (
+              <SlippageRow
+                kind="tradeBps"
+                label="Max slippage on trades"
+                settings={slippage}
+                onPress={onOpenSettings}
+              />
+            ) : null}
+            {slippage && creditsSwap ? (
+              <SlippageRow
+                kind="creditsBps"
+                label="Max slippage on the credits swap"
+                settings={slippage}
+                onPress={onOpenSettings}
+              />
             ) : null}
             {isPlanned ? (
               <p data-testid="trades-note" className="text-fs-popup-text-3 mt-1 text-xs leading-4 text-pretty">
@@ -344,6 +366,55 @@ export function PredictSummary({
         </div>
       </div>
     </div>
+  );
+}
+
+/** Every option's pool fees summed, where more than one option pays any. */
+function feesTotal(selected: ListedEstimate[], preview: Record<string, PriceMove>): bigint | undefined {
+  const fees = selected
+    .map((estimate) => preview[estimate.scale.market.toLowerCase()]?.plan?.feeValue ?? 0n)
+    .filter((fee) => fee > 0n);
+  return fees.length > 1 ? fees.reduce((sum, fee) => sum + fee, 0n) : undefined;
+}
+
+/** One kind's max slippage, `1% (Auto)` or the visitor's own; pressed, it opens the settings. */
+function SlippageRow({
+  kind,
+  label,
+  settings,
+  onPress,
+}: {
+  kind: SlippageKind;
+  label: string;
+  settings: SlippageSettings;
+  onPress?: () => void;
+}) {
+  const custom = settings[kind];
+  const value = custom === null ? `${slippagePercent(DEFAULT_SLIPPAGE[kind])}% (Auto)` : `${slippagePercent(custom)}%`;
+  const content = (
+    <>
+      <span className="text-fs-popup-text-2 shrink-0">{label}</span>
+      <span className={VALUE}>{value}</span>
+    </>
+  );
+  return onPress ? (
+    <button
+      type="button"
+      data-testid="slippage-row"
+      onClick={onPress}
+      className={clsx(
+        ROW,
+        "-mx-1 cursor-pointer rounded-fs-control px-1 py-1 text-left",
+        "transition-colors duration-(--fs-dur-echo) ease-(--fs-ease-enter) [@media(hover:hover)]:hover:bg-fs-popup-hover",
+        "[--fs-focus-offset:-2px]",
+      )}
+    >
+      {content}
+    </button>
+  ) : (
+    <p data-testid="slippage-row" className={clsx(ROW, "py-1")}>
+      {content}
+    </p>
   );
 }
 

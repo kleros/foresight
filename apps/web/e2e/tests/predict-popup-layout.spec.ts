@@ -156,7 +156,7 @@ async function settle(dialog: Locator) {
 /** The boxes a state change must not move: the dialog, its button, and the scrolled body's full height. */
 async function footprint(page: Page, dialog: Locator) {
   const box = (await dialog.boundingBox())!;
-  const button = (await dialog.locator(".predict-cta").boundingBox())!;
+  const button = (await dialog.locator(".predict-footer > .predict-cta").boundingBox())!;
   const body = await page.getByTestId("predict-body").evaluate((element) => element.getBoundingClientRect().height);
   const bullet = (await dialog.locator("ol [data-bullet]").first().boundingBox())!;
   const round = (value: number) => Math.round(value * 10) / 10;
@@ -192,7 +192,7 @@ for (const height of [812, 667]) {
           expect.soft(375 - (popup.x + popup.width), "right margin").toBeGreaterThanOrEqual(SIDE_MARGIN);
         }
 
-        const barTop = (await dialog.locator(".predict-cta").boundingBox())!.y;
+        const barTop = (await dialog.locator(".predict-footer > .predict-cta").boundingBox())!.y;
         const cue = await dialog
           .getByTestId("more-below")
           .evaluate((element) =>
@@ -571,7 +571,7 @@ for (const viewport of [
       const dialog = await openPopup(page, 2);
 
       await expect(dialog.getByTestId("amount-slider")).toBeVisible();
-      expect((await dialog.locator(".predict-cta").boundingBox())!.height).toBe(52);
+      expect((await dialog.locator(".predict-footer > .predict-cta").boundingBox())!.height).toBe(52);
     });
   });
 }
@@ -649,7 +649,7 @@ for (const viewport of [
           const [padding, bars] = await close.evaluate((element) => {
             let scroller = element.parentElement!;
             while (getComputedStyle(scroller).overflowY !== "auto") scroller = scroller.parentElement!;
-            const footer = scroller.querySelector(".predict-cta")!.parentElement!;
+            const footer = scroller.querySelector(".predict-footer > .predict-cta")!.parentElement!;
             const { scrollPaddingTop, scrollPaddingBottom } = getComputedStyle(scroller);
             return [
               [parseFloat(scrollPaddingTop), parseFloat(scrollPaddingBottom)],
@@ -758,7 +758,7 @@ for (const viewport of [
         await page.emulateMedia({ reducedMotion: "reduce" });
         const dialog = await openPopup(page, 10, state);
         const box = (await dialog.boundingBox())!;
-        const button = dialog.locator(".predict-cta");
+        const button = dialog.locator(".predict-footer > .predict-cta");
         const buttonBox = (await button.boundingBox())!;
         expect(buttonBox.y + buttonBox.height, "the button's foot").toBeLessThanOrEqual(box.y + box.height);
         if (state === "failed") {
@@ -1449,7 +1449,7 @@ test.describe("the price check before a run", () => {
 
     await expect(dialog.locator('[data-bullet="running"]')).toHaveCount(0);
     await expect(dialog.getByTestId("predict-summary").getByRole("button")).toHaveText("Checking prices…");
-    await expect(dialog.locator(".predict-cta")).toHaveText("Checking prices…");
+    await expect(dialog.locator(".predict-footer > .predict-cta")).toHaveText("Checking prices…");
     const rows = dialog.getByRole("listitem", { name: /^Timeline item/ });
     await expect(rows).toHaveCount(3);
     const subtitles = await rows.evaluateAll((items) =>
@@ -1510,7 +1510,7 @@ test.describe("the popup under reduced motion", () => {
       const dialog = await openPopup(page, 2, state);
       // a ring that cannot turn reads as a stray glyph, so the busy label stands alone
       await expect(dialog.getByTestId("predict-spinner")).toBeHidden();
-      await expect(dialog.locator(".predict-cta")).toHaveAttribute("data-busy");
+      await expect(dialog.locator(".predict-footer > .predict-cta")).toHaveAttribute("data-busy");
       const animations = await dialog
         .locator("li, li *, button svg, [data-testid=predict-spinner]")
         .evaluateAll((items) => items.map((item) => getComputedStyle(item).animationName));
@@ -2046,7 +2046,7 @@ test.describe("the success dialog", () => {
     );
     expect((await close.boundingBox())!.height).toBe(44);
     await expect(close).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-    await expect(dialog.locator(".predict-cta")).toHaveCount(1);
+    await expect(dialog.locator(".predict-footer > .predict-cta")).toHaveCount(1);
   });
 
   for (const theme of ["light", "dark"]) {

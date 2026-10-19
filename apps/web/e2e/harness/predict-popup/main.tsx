@@ -60,6 +60,8 @@ const dialog = params.get("dialog");
 const isEmailVerified = params.get("verified") !== "0";
 /** `&signin=busy` the success dialog's sign-in while the wallet signs. */
 const signingIn = params.get("signin") === "busy";
+/** `?prices=loading` the pools not read yet, so Details checks prices and Predict waits. */
+const pricesLoading = params.get("prices") === "loading";
 /** `?leftOut=N` estimates the run left out, said on the status line; a `harness-left-out` event changes it after open. */
 const initialLeftOut = Number(params.get("leftOut") ?? "0");
 
@@ -310,11 +312,14 @@ function Harness() {
                   vaultValue: shown.creditsIn + parseUnits(swapLoss, 18),
                   floor: shown.creditsIn,
                   loss: parseUnits(swapLoss, 18),
+                  minted: shown.creditsIn,
                 },
               }
             : undefined
         }
-        moved={state === "moved" ? 1 : undefined}
+        moved={state === "moved" ? { markets: 1, credits: false } : undefined}
+        pricesReady={!pricesLoading}
+        onBack={state === "moved" ? () => {} : undefined}
         onPredict={() => {}}
       />
     </>

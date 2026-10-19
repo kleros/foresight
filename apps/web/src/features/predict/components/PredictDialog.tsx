@@ -10,6 +10,7 @@ import { ScrollFade } from "@/components/ui/ScrollFade";
 
 import CloseIcon from "@/assets/svg/close.svg";
 
+import { formatEstimate } from "@/utils/formatEstimate";
 import { INERT } from "@/utils/inert";
 
 import type { PayToken } from "../types";
@@ -20,8 +21,16 @@ import { PredictList, type ListedEstimate, type PriceMove } from "./PredictList"
 import { PredictSettings } from "./PredictSettings";
 import { PredictStepsTimeline } from "./PredictStepsTimeline";
 import { PredictSummary, type CreditsSwapShown } from "./PredictSummary";
-import type { Funding } from "../utils/funding";
-import { CHECKING_PRICES, CONFIRM_MOVED, statusLine, type PredictSteps, type StatusLine } from "../utils/predictSteps";
+import { HIGH_SLIPPAGE_BPS } from "../oracle/tolerances";
+import { shownAmount, type Funding } from "../utils/funding";
+import {
+  CHECKING_PRICES,
+  CONFIRM_MOVED,
+  statusLine,
+  type MovedStatus,
+  type PredictSteps,
+  type StatusLine,
+} from "../utils/predictSteps";
 import type { SlippageKind, SlippageSettings } from "../utils/slippage";
 
 interface PredictDialogProps {
@@ -62,8 +71,12 @@ interface PredictDialogProps {
   slippage: { settings: SlippageSettings; onChange: (kind: SlippageKind, bps: number | null) => void };
   /** Credits the run would swap into xDAI and the swap as quoted now; absent where it spends none. */
   creditsSwap?: CreditsSwapShown;
-  /** Estimates whose plan changed when Predict read the pools again; the button then confirms the new figures. */
-  moved?: number;
+  /** What changed when the pools were read again before signing; the button then confirms the new figures. */
+  moved?: { markets: number; credits: boolean };
+  /** Every option's plan is read, and the credits swap's quote where credits are spent, so Predict holds the run to them. */
+  pricesReady: boolean;
+  /** Declines the moved figures and gives the form back, where nothing has been signed. */
+  onBack?: () => void;
   /** Starts a run, picks a stopped one up again, or confirms moved prices. */
   onPredict: () => void;
 }
@@ -74,12 +87,25 @@ const STATUS_TONE: Record<StatusLine["tone"], string> = {
   error: "text-fs-tone-error-text",
 };
 
-/** What `value` was when `locked` last turned on, held until it turns off. */
-function useHeldWhile<T>(value: T, locked: boolean): T {
-  const [held, setHeld] = useState<{ value: T } | null>(locked ? { value } : null);
-  if (locked && !held) setHeld({ value });
-  if (!locked && held) setHeld(null);
-  return locked && held ? held.value : value;
+/** What `value` was when `lock` last took a new key, held until it is null. */
+function useHeldWhile<T>(value: T, lock: string | null): T {
+  const [held, setHeld] = useState<{ value: T; lock: string } | null>(lock === null ? null : { value, lock });
+  if (lock !== null && held?.lock !== lock) setHeld({ value, lock });
+  if (lock === null && held) setHeld(null);
+  return lock !== null && held?.lock === lock ? held.value : value;
+}
+
+/** A credits swap losing at least this share of the credits' value is said on the status line before a run. */
+const LOUD_LOSS_BPS = BigInt(HIGH_SLIPPAGE_BPS.creditsBps);
+
+/** The one market whose plan changed, where it now goes and where it went, for the status line. */
+function onlyMoved(selected: ListedEstimate[], preview: Record<string, PriceMove> | undefined): MovedStatus["only"] {
+  const changed = selected.filter((estimate) => preview?.[estimate.scale.market.toLowerCase()]?.was);
+  if (changed.length !== 1) return undefined;
+  const estimate = changed[0]!;
+  const move = preview![estimate.scale.market.toLowerCase()]!;
+  const format = (value: number) => formatEstimate(value, estimate.scale.unit);
+  return { name: estimate.scale.name, to: format(move.to), was: format(move.was!.to) };
 }
 
 /** The busy button for a running step that is not waiting on the wallet. */
@@ -127,24 +153,56 @@ export function PredictDialog({
   slippage,
   creditsSwap,
   moved,
+  pricesReady,
+  onBack,
   onPredict,
 }: PredictDialogProps) {
   const isMoved = moved !== undefined;
   const isHeld = isRunning || canRetry || recovered !== undefined;
   // at moved the visitor confirms the figures as shown, so the form cannot change under them
   const isLocked = isHeld || isMoved;
+  // what is shown is held through a run, and taken afresh as the run stops at moved or goes on from it
+  const lock = isMoved ? "moved" : isHeld ? "run" : null;
   const tooMuch = funding !== null && amount !== undefined && amount > funding.available;
   // with nothing held, an empty amount has nothing to trade with
   const nothingToTrade = isFirstPrediction && (funding?.collateralIn ?? 0n) === 0n;
-  const status = statusLine({ steps, notice, leftOut, moved });
   const isPricing = steps.pricing === true;
   const runToken = recovered?.token;
   // a refreshed balance or re-priced preview would change what the visitor is reading mid-run
-  const shownFunding = useHeldWhile(funding, isHeld);
-  const shownPreview = useHeldWhile(preview, isHeld);
-  const shownCreditsSwap = useHeldWhile(creditsSwap, isHeld);
-  // the visitor's own choice, so no run state opens or closes it
+  const shownFunding = useHeldWhile(funding, lock);
+  const shownPreview = useHeldWhile(preview, lock);
+  const shownCreditsSwap = useHeldWhile(creditsSwap, lock);
+  const swap = recovered ? undefined : shownCreditsSwap?.preview;
+  const status = statusLine({
+    steps,
+    notice,
+    leftOut,
+    moved: moved && { ...moved, only: onlyMoved(selected, shownPreview) },
+    creditsLoss:
+      swap && swap.loss * 10_000n >= swap.vaultValue * LOUD_LOSS_BPS
+        ? `≈\u00a0${shownAmount(swap.loss, 18)}\u00a0xDAI`
+        : undefined,
+  });
+  // the visitor's choice, but for moved figures, which the status line asks them to check there
   const [summaryOpen, setSummaryOpen] = useState(false);
+  const [wasMoved, setWasMoved] = useState(isMoved);
+  if (isMoved !== wasMoved) {
+    setWasMoved(isMoved);
+    if (isMoved) setSummaryOpen(true);
+  }
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!isMoved) return;
+    // after the summary's rows unfold, so the first changed figure is where it scrolls to
+    const unfold = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--fs-dur-enter")) || 0;
+    const timer = setTimeout(() => {
+      const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      bodyRef.current
+        ?.querySelector("[data-testid=market-was], [data-testid=credits-was]")
+        ?.scrollIntoView?.({ block: "nearest", behavior: reduce ? "auto" : "smooth" });
+    }, unfold);
+    return () => clearTimeout(timer);
+  }, [isMoved]);
   const statusRef = useRef<HTMLParagraphElement>(null);
   // the settings change what the next run signs, so they close while the form is locked to a run
   const [settingsWanted, setSettingsWanted] = useState(false);
@@ -153,6 +211,7 @@ export function PredictDialog({
   const titleId = useId();
   const gearRef = useRef<HTMLButtonElement>(null);
   const firstSetting = useRef<HTMLButtonElement>(null);
+  const settingsPanel = useRef<HTMLDivElement>(null);
   const settingsWereOpen = useRef(false);
   useEffect(() => {
     if (settingsOpen) firstSetting.current?.focus();
@@ -207,7 +266,10 @@ export function PredictDialog({
           )}
         >
           <h2 id={titleId} className="text-fs-popup-text text-lg font-semibold tracking-[-0.01em]">
-            {settingsOpen ? "Settings" : "Predict"}
+            {/* keyed, so the new title enters as the panel does */}
+            <span key={settingsOpen ? "settings" : "predict"} className="predict-text-swap inline-block">
+              {settingsOpen ? "Settings" : "Predict"}
+            </span>
           </h2>
           <div className="flex items-center gap-1">
             <button
@@ -218,6 +280,18 @@ export function PredictDialog({
               aria-controls={settingsId}
               disabled={isLocked}
               onClick={() => setSettingsWanted((open) => !open)}
+              onKeyDown={(event) => {
+                // the body under the panel is inert, so the dialog's own wrap finds nothing before the gear
+                if (!settingsOpen || event.key !== "Tab" || !event.shiftKey) return;
+                const controls = settingsPanel.current?.querySelectorAll<HTMLElement>(
+                  "button:not([disabled]), input:not([disabled])",
+                );
+                const last = controls?.[controls.length - 1];
+                if (!last) return;
+                event.preventDefault();
+                event.stopPropagation();
+                last.focus();
+              }}
               className={clsx(
                 "relative grid size-8 cursor-pointer place-items-center rounded-full",
                 "transition-colors duration-(--fs-dur-echo) ease-(--fs-ease-enter)",
@@ -231,10 +305,11 @@ export function PredictDialog({
             </button>
             <LightButton
               text=""
-              aria-label="Close"
+              aria-label={settingsOpen ? "Close settings" : "Close"}
               icon={<CloseIcon className="text-fs-popup-text-2 size-4.5" />}
               isDisabled={isRunning}
-              onPress={onClose}
+              // under the Settings title the X closes the settings, not the prediction behind them
+              onPress={settingsOpen ? () => setSettingsWanted(false) : onClose}
               className={clsx(
                 "relative -mr-1.5 size-8 justify-center rounded-full! p-0",
                 "hover:bg-transparent [@media(hover:hover)]:hover:bg-fs-popup-hover disabled:opacity-40",
@@ -247,13 +322,16 @@ export function PredictDialog({
         </div>
 
         <PredictSettings
-          ref={firstSetting}
           id={settingsId}
           labelledBy={titleId}
           isOpen={settingsOpen}
           settings={slippage.settings}
           onChange={slippage.onChange}
           onClose={() => setSettingsWanted(false)}
+          hasCredits={credits !== undefined}
+          panelRef={settingsPanel}
+          firstControlRef={firstSetting}
+          onTabPastEnd={() => gearRef.current?.focus()}
         />
 
         {/* takes no box, so the regions stay the column's own; under the settings they keep their space, out of reach */}
@@ -293,7 +371,7 @@ export function PredictDialog({
             minOverflow={1}
             fadeSize={40}
           >
-            <div data-testid="predict-body" className="pt-2 short:pt-1.5">
+            <div ref={bodyRef} data-testid="predict-body" className="pt-2 short:pt-1.5">
               <PredictAmountSection
                 amount={recovered ? recovered.deposit : amount}
                 onAmountChange={onAmountChange}
@@ -316,10 +394,12 @@ export function PredictDialog({
                 mint={recovered || !shownFunding ? undefined : { amount: shownFunding.collateralIn, noun: optionNoun }}
                 isOpen={summaryOpen}
                 onToggle={() => setSummaryOpen((open) => !open)}
-                isPricing={isPricing}
+                // before the run, Details waits for the plans Predict will hold the run to
+                isPricing={isPricing || (!pricesReady && !isLocked && notice === undefined && selected.length > 0)}
                 isEstimated={(runToken ?? token).id === "native"}
                 creditsSwap={recovered ? undefined : shownCreditsSwap}
-                slippage={slippage.settings}
+                slippage={recovered ? undefined : slippage.settings}
+                onOpenSettings={isLocked ? undefined : () => setSettingsWanted(true)}
               />
               <PredictStepsTimeline steps={steps} />
             </div>
@@ -336,13 +416,18 @@ export function PredictDialog({
             )}
           >
             {status ? (
-              <span key={status.text} className={clsx(status.tone === "error" && "fs-enter")}>
+              <span key={status.text} className={clsx(status.tone !== "neutral" && "fs-enter")}>
                 {status.text}
               </span>
             ) : null}
           </p>
 
-          <div className="bg-fs-surface landscape-phone:pb-2 sticky bottom-0 pt-1 pb-4 short:pb-3">
+          <div className="predict-footer bg-fs-surface landscape-phone:pb-2 sticky bottom-0 flex gap-2 pt-1 pb-4 short:pb-3">
+            {isMoved && onBack ? (
+              <div className="w-28 shrink-0">
+                <PredictButton text="Go back" quiet isDisabled={false} onPress={onBack} />
+              </div>
+            ) : null}
             <PredictButton
               text={
                 recovered
@@ -360,7 +445,13 @@ export function PredictDialog({
               isDisabled={
                 notice !== undefined ||
                 (!canRetry &&
-                  (recovered !== undefined || selected.length === 0 || funding === null || tooMuch || nothingToTrade))
+                  !isMoved &&
+                  (recovered !== undefined ||
+                    selected.length === 0 ||
+                    funding === null ||
+                    tooMuch ||
+                    nothingToTrade ||
+                    !pricesReady))
               }
             />
           </div>

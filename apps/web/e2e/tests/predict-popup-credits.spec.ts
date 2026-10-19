@@ -54,7 +54,7 @@ async function footprint(dialog: Locator) {
   return {
     line: await box(dialog.getByTestId("credits-line")),
     dialog: await box(dialog),
-    footer: await box(dialog.locator(".predict-cta")),
+    footer: await box(dialog.locator(".predict-footer > .predict-cta")),
     body: round(await dialog.getByTestId("predict-body").evaluate((element) => element.scrollHeight)),
   };
 }
@@ -119,7 +119,7 @@ for (const viewport of VIEWPORTS) {
           for (const title of STEPS) {
             const step = dialog.getByText(title, { exact: true });
             await step.evaluate((element) => element.scrollIntoView({ block: "nearest" }));
-            const barTop = (await dialog.locator(".predict-cta").boundingBox())!.y;
+            const barTop = (await dialog.locator(".predict-footer > .predict-cta").boundingBox())!.y;
             const box = (await step.boundingBox())!;
             expect
               .soft(box.y + box.height, `${credits}: "${title}" ends above the Predict bar`)

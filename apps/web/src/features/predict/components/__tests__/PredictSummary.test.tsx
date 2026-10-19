@@ -1,4 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import type { OptionScale } from "@/types/optionScale";
@@ -433,11 +434,28 @@ describe("PredictSummary's pool fees", () => {
 
     expect(legs("Greta Gerwig").some((leg) => leg.startsWith("Pool fees"))).toBe(false);
   });
+
+  it("sums the fees under the markets where more than one option pays any", () => {
+    const fee = (cents_: bigint) => ({ ...shortOf(false), feeValue: cents(cents_) });
+    renderSummary(
+      { [GERWIG]: { from: 312, to: 355, plan: fee(3n) }, [COOGLER]: { from: 296, to: 300, plan: fee(4n) } },
+      true,
+    );
+
+    expect(screen.getByTestId("fees-total")).toHaveTextContent(/^Pool fees, all markets≈ 0.07 tokens$/);
+  });
+
+  it("sums nothing where one option pays fees", () => {
+    renderSummary({ [GERWIG]: { from: 312, to: 355, plan: { ...shortOf(false), feeValue: cents(3n) } } }, true);
+
+    expect(screen.queryByTestId("fees-total")).toBeNull();
+  });
 });
 
 function renderWith(extra: {
   creditsSwap?: CreditsSwapShown;
   slippage?: { tradeBps: number | null; creditsBps: number | null };
+  onOpenSettings?: () => void;
 }) {
   return render(
     <PredictSummary selected={selected} preview={{}} collateral={sDai} isOpen onToggle={vi.fn()} {...extra} />,
@@ -447,7 +465,7 @@ function renderWith(extra: {
 describe("PredictSummary's credits swap", () => {
   const swap = (loss: bigint): CreditsSwapShown => ({
     credits: 15n * WAD,
-    preview: { quoted: cents(1620n), vaultValue: cents(1620n) + loss, floor: cents(1610n), loss },
+    preview: { quoted: cents(1620n), vaultValue: cents(1620n) + loss, floor: cents(1610n), loss, minted: cents(1290n) },
   });
 
   it("names the credits it swaps and the xDAI the quote pays", () => {
@@ -459,7 +477,14 @@ describe("PredictSummary's credits swap", () => {
   it("names what the swap loses against the vault's rate", () => {
     renderWith({ creditsSwap: swap(cents(3n)) });
 
-    expect(screen.getByTestId("credits-loss")).toHaveTextContent(/^Lost in the swap≈ 0.03 xDAI$/);
+    expect(screen.getByTestId("credits-loss")).toHaveTextContent(/^Swap loss≈ 0.03 xDAI$/);
+  });
+
+  it("names what the swap paid before the pool moved, in the warning tone", () => {
+    renderWith({ creditsSwap: { ...swap(0n), was: { ...swap(0n).preview, quoted: cents(1700n) } } });
+
+    expect(screen.getByTestId("credits-was")).toHaveTextContent(/^Before: ≈ 17 xDAI$/);
+    expect(screen.getByTestId("credits-was")).toHaveClass("text-fs-tone-warning-text");
   });
 
   it("names no loss where the pool pays the vault's rate or more", () => {
@@ -470,33 +495,37 @@ describe("PredictSummary's credits swap", () => {
 });
 
 describe("PredictSummary's slippage", () => {
+  const slippageRows = () => screen.getAllByTestId("slippage-row").map((row) => row.textContent);
+  const creditsSwap: CreditsSwapShown = {
+    credits: WAD,
+    preview: { quoted: WAD, vaultValue: WAD, floor: WAD, loss: 0n, minted: WAD },
+  };
+
+  it("names the trades' slippage on Auto with its value", () => {
+    renderWith({ slippage: { tradeBps: null, creditsBps: null } });
+
+    expect(slippageRows()).toEqual(["Max slippage on trades1% (Auto)"]);
+  });
+
   it("names a custom trade slippage", () => {
     renderWith({ slippage: { tradeBps: 300, creditsBps: null } });
 
-    expect(screen.getAllByTestId("custom-slippage").map((row) => row.textContent)).toEqual(["Max slippage3%"]);
+    expect(slippageRows()).toEqual(["Max slippage on trades3%"]);
   });
 
-  it("names a custom credits slippage only where credits are swapped", () => {
-    renderWith({ slippage: { tradeBps: null, creditsBps: 50 } });
-    expect(screen.queryByTestId("custom-slippage")).toBeNull();
+  it("names the credits swap's slippage only where credits are swapped", () => {
+    renderWith({ slippage: { tradeBps: null, creditsBps: 50 }, creditsSwap });
+
+    expect(slippageRows()).toEqual(["Max slippage on trades1% (Auto)", "Max slippage on the credits swap0.5%"]);
   });
 
-  it("names both where credits are swapped", () => {
-    renderWith({
-      slippage: { tradeBps: 300, creditsBps: 50 },
-      creditsSwap: { credits: WAD, preview: { quoted: WAD, vaultValue: WAD, floor: WAD, loss: 0n } },
-    });
+  it("opens the settings from a row", async () => {
+    const onOpenSettings = vi.fn();
+    renderWith({ slippage: { tradeBps: null, creditsBps: null }, onOpenSettings });
 
-    expect(screen.getAllByTestId("custom-slippage").map((row) => row.textContent)).toEqual([
-      "Max slippage3%",
-      "Credits swap slippage0.5%",
-    ]);
-  });
+    await userEvent.click(screen.getByRole("button", { name: /Max slippage on trades/ }));
 
-  it("names nothing on Auto", () => {
-    renderWith({ slippage: { tradeBps: null, creditsBps: null } });
-
-    expect(screen.queryByTestId("custom-slippage")).toBeNull();
+    expect(onOpenSettings).toHaveBeenCalledOnce();
   });
 });
 
@@ -506,5 +535,6 @@ describe("PredictSummary after the pools moved", () => {
 
     expect(within(rows()[0]!).getByTestId("market-move")).toHaveTextContent(/^312 → 340 \$M$/);
     expect(within(rows()[0]!).getByTestId("market-was")).toHaveTextContent(/^Before: 312 → 355 \$M$/);
+    expect(within(rows()[0]!).getByTestId("market-was")).toHaveClass("text-fs-tone-warning-text");
   });
 });

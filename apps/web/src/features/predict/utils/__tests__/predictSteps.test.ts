@@ -306,20 +306,51 @@ describe("statusLine", () => {
     expect(statusLine({ steps: idle, leftOut: 1 })?.text).toBe("1 estimate could not be traded.");
   });
 
-  it("asks the visitor to check the new figures when the pools moved, in the warning tone", () => {
-    expect(statusLine({ steps: idle, leftOut: 0, moved: 2 })).toEqual({
-      text: "Prices moved on 2 estimates. Check the new figures, then confirm.",
+  it("asks the visitor to check Details when the pools moved, in the warning tone", () => {
+    expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 2, credits: false } })).toEqual({
+      text: "Prices moved on 2 markets. Check Details, then confirm.",
       tone: "warning",
     });
-    expect(statusLine({ steps: idle, leftOut: 0, moved: 1 })?.text).toBe(
-      "Prices moved on 1 estimate. Check the new figures, then confirm.",
+    expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 1, credits: false } })?.text).toBe(
+      "Prices moved on 1 market. Check Details, then confirm.",
+    );
+    expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 1, credits: true } })?.text).toBe(
+      "Prices moved on 1 market and the credits swap. Check Details, then confirm.",
+    );
+    expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 0, credits: true } })?.text).toBe(
+      "The credits swap now pays less. Check Details, then confirm.",
+    );
+  });
+
+  it("names the one market that moved, where it goes now and where it went before", () => {
+    const only = { name: "Berlin", to: "400 $M", was: "420 $M" };
+    expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 1, credits: false, only } })?.text).toBe(
+      "Berlin now goes to 400 $M, not 420 $M. Confirm to go on.",
+    );
+    const long = { ...only, name: "A market name far too long to quote" };
+    expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 1, credits: false, only: long } })?.text).toBe(
+      "Prices moved on 1 market. Check Details, then confirm.",
     );
   });
 
   it("puts a notice before the moved pools", () => {
-    expect(statusLine({ steps: idle, leftOut: 0, moved: 1, notice: "Switch to Gnosis to predict." })?.text).toBe(
-      "Switch to Gnosis to predict.",
-    );
+    expect(
+      statusLine({
+        steps: idle,
+        leftOut: 0,
+        moved: { markets: 1, credits: false },
+        notice: "Switch to Gnosis to predict.",
+      })?.text,
+    ).toBe("Switch to Gnosis to predict.");
+  });
+
+  it("names a large credits swap loss before a run, and not once one has started", () => {
+    expect(statusLine({ steps: idle, leftOut: 0, creditsLoss: "≈ 38 xDAI" })).toEqual({
+      text: "The credits swap loses ≈ 38 xDAI. Details has the figures.",
+      tone: "warning",
+    });
+    const started = steps({ progress: progress({ stage: "signing" }) });
+    expect(statusLine({ steps: started, leftOut: 0, creditsLoss: "≈ 38 xDAI" })).toBeNull();
   });
 
   it("says in a few words that a sent transaction is not confirmed yet", () => {
@@ -340,7 +371,7 @@ describe("statusLine", () => {
   it.each([
     ["rejected", "You declined in your wallet."],
     ["cancelled", "Cancelled or replaced in your wallet."],
-    ["reverted", "The trade failed at these prices."],
+    ["reverted", "The trade failed at these prices. Retry, or close and raise max slippage in Settings."],
     ["rpc", "The network did not answer."],
     ["unknown", "Something went wrong."],
     ["no-route", "No trade found for these estimates. Try a larger amount."],

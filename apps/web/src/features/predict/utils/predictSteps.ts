@@ -31,11 +31,14 @@ export interface PredictSteps {
   pricing?: true;
 }
 
+/** The credits swap has no quote or route, so a run spending credits cannot be planned. */
+export const CREDITS_UNAVAILABLE = "Credits can't be spent right now. Untick them to predict with your own funds.";
+
 /** The chain's own errors name gas and contracts, which the popup never shows. */
 const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], string> = {
   rejected: "You declined in your wallet.",
   cancelled: "Cancelled or replaced in your wallet.",
-  reverted: "The trade failed at these prices.",
+  reverted: "The trade failed at these prices. Retry, or close and raise max slippage in Settings.",
   rpc: "The network did not answer.",
   unknown: "Something went wrong.",
   "no-route": "No trade found for these estimates. Try a larger amount.",
@@ -43,7 +46,7 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
   quote: "Could not get prices. Try again shortly.",
   funds: OUT_OF_FUNDS_COPY,
   balance: "Trade wallet balance is lower than shown. Check the amount.",
-  credits: "Credits can't be spent right now. Untick them to predict with your own funds.",
+  credits: CREDITS_UNAVAILABLE,
   "deposit-unconfirmed": "Your last transaction may still be confirming. Check your wallet.",
   pending: "A transaction from your wallet is still confirming. Try again once it lands.",
   "wrong-wallet": "Started from another wallet. Connect it to finish.",
@@ -247,21 +250,47 @@ export function statusLine(args: {
   steps: PredictSteps;
   notice?: string;
   leftOut: number;
-  /** Estimates whose plan changed when Predict read the pools again, waiting for the visitor to confirm. */
-  moved?: number;
+  /** What changed when the pools were read again before signing, waiting for the visitor to confirm. */
+  moved?: MovedStatus;
+  /** The credits swap's loss as Details shows it, when it is large enough to say before a run. */
+  creditsLoss?: string;
 }): StatusLine | null {
-  const { steps, notice, leftOut, moved } = args;
+  const { steps, notice, leftOut, moved, creditsLoss } = args;
   if (notice) return { text: notice, tone: "warning" };
   if (steps.failure) return { text: steps.failure, tone: steps.pending ? "warning" : "error" };
   if (moved !== undefined) return { text: movedText(moved), tone: "warning" };
   if (steps.note) return { text: steps.note, tone: "neutral" };
+  if (creditsLoss !== undefined && !steps.started) {
+    return { text: `The credits swap loses ${creditsLoss}. Details has the figures.`, tone: "warning" };
+  }
   if (leftOut > 0) return { text: `${leftOutText(leftOut)}.`, tone: "neutral" };
   return null;
 }
 
-/** Said when the pools moved between the preview and Predict, before anything is signed. */
-function movedText(count: number): string {
-  return `Prices moved on ${count} ${count === 1 ? "estimate" : "estimates"}. Check the new figures, then confirm.`;
+export interface MovedStatus {
+  /** Markets whose plan changed. */
+  markets: number;
+  /** The credits swap now pays less than its shown floor. */
+  credits: boolean;
+  /** The one market that moved, where it now goes and where it went before. */
+  only?: { name: string; to: string; was: string };
+}
+
+/** A market name longer than this is not quoted on the two-line status line. */
+const NAMED_MAX = 24;
+
+/** Said when the pools moved since Details was read, before anything more is signed. */
+function movedText({ markets, credits, only }: MovedStatus): string {
+  if (!credits && markets === 1 && only && only.name.length <= NAMED_MAX) {
+    return `${only.name} now goes to ${only.to}, not ${only.was}. Confirm to go on.`;
+  }
+  const count = `${markets} ${markets === 1 ? "market" : "markets"}`;
+  const what = credits
+    ? markets > 0
+      ? `Prices moved on ${count} and the credits swap`
+      : "The credits swap now pays less"
+    : `Prices moved on ${count}`;
+  return `${what}. Check Details, then confirm.`;
 }
 
 /** The button's label while the visitor is asked to confirm the new figures. */

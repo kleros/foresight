@@ -592,6 +592,34 @@
     filter: none;
   }
 }
+/* the panel scrolls on a phone on its side, in the popup's own line colour */
+.predict-settings * {
+  scrollbar-color: var(--fs-popup-line-strong) var(--fs-surface);
+}
+.predict-settings ::-webkit-scrollbar-thumb {
+  background: var(--fs-popup-line-strong);
+}
+/* a swapped label enters as the settings panel does (transitions.dev 04's enter half), keyed so each text replays it */
+.predict-text-swap {
+  animation: predict-text-swap var(--fs-dur-enter) var(--fs-ease-enter) both;
+}
+@keyframes predict-text-swap {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+    filter: blur(2px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .predict-text-swap {
+    animation-name: predict-text-fade;
+  }
+}
+@keyframes predict-text-fade {
+  from {
+    opacity: 0;
+  }
+}
 
 /* an indeterminate line under the summary while a run prices its routes */
 .predict-sweep {
