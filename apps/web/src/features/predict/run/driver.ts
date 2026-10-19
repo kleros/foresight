@@ -24,6 +24,7 @@ import {
   AtEstimatesError,
   createPredictHooks,
   CreditsUnavailableError,
+  heldMoves,
   isTx,
   NoRouteError,
   optionsPerBatch,
@@ -139,6 +140,8 @@ export function createPredictRun(args: {
   let moved: MovedPlans | undefined;
   /** A batch's moved plans, from its build's error to the pause it causes. */
   let movedByBuild: MovedPlans | undefined;
+  /** Slippage a retry took up, stored with the run only once `confirm` accepts the plans it gives. */
+  let pendingSlippage: PredictSlippage | undefined;
   let cached: PredictProgress;
 
   const deps: PredictDeps = {
@@ -285,7 +288,8 @@ export function createPredictRun(args: {
   function stage(): PredictProgress["stage"] {
     const run = orchestrator.getRun();
     if (!run) return failure ? "halted" : checking ? "quoting" : moved ? "moved" : "idle";
-    if (moved && run.status === "paused") return "moved";
+    if (moved && (run.status === "paused" || run.status === "failed")) return "moved";
+    if (checking && run.status !== "running") return "quoting";
     if ((reconciling || awaitingUnanswered) && !failure) return "confirming";
     if (reviewing && !failure) return "review";
 
@@ -476,6 +480,7 @@ export function createPredictRun(args: {
       report(undefined);
       held = heldTo;
       moved = undefined;
+      pendingSlippage = undefined;
       leavingOut.clear();
       moneyMoved = false;
 
@@ -511,6 +516,36 @@ export function createPredictRun(args: {
       await orchestrator.start({ flowId: args.flowId, snapshot: checked.snapshot, ctx, steps: checked.steps });
     })();
 
+  /**
+   * Re-plans every batch still to land at `settings` against what the run is held to. A changed plan stops the
+   * run at moved with `settings` pending; an unchanged one stores them and carries on with `carryOn`.
+   */
+  const replanAt = (settings: PredictSlippage, carryOn: (() => void) | undefined) =>
+    detached(async () => {
+      const run = orchestrator.getRun();
+      if (!run) return;
+      const settled = new Set(settledEntries(run.steps).map((step) => step.stepId));
+      const check = {};
+      checking = check;
+      notify();
+      const found = await heldMoves(run.ctx, { ...run.snapshot, slippage: settings }, deps, settled).catch(
+        (error: unknown) => {
+          if (checking === check) checking = undefined;
+          throw error;
+        },
+      );
+      if (checking !== check) return;
+      checking = undefined;
+      if (found) {
+        pendingSlippage = settings;
+        moved = { ...found, bySlippage: true };
+        notify();
+        return;
+      }
+      orchestrator.updateSnapshot({ slippage: settings }, { source: "requote" });
+      carryOn?.();
+    })();
+
   return {
     start(heldTo) {
       if (checking || orchestrator.getStatus() !== "idle") return;
@@ -533,9 +568,11 @@ export function createPredictRun(args: {
         startRun(next);
         return;
       }
-      if (status !== "paused") return;
+      if (status !== "paused" && status !== "failed") return;
       held = next;
       moved = undefined;
+      if (pendingSlippage) orchestrator.updateSnapshot({ slippage: pendingSlippage }, { source: "requote" });
+      pendingSlippage = undefined;
       report(undefined);
       resumeRun();
     },
@@ -559,11 +596,12 @@ export function createPredictRun(args: {
       const sent = run && pendingHashOf(run) ? currentEntry(run.steps)?.stepId : undefined;
       for (const stepId of [...leavingOut.keys()]) if (stepId !== sent) leavingOut.delete(stepId);
       const settings = args.slippage?.();
-      // a held run's rebuilt batch is checked against what Details showed, so new settings stop it at moved
-      if (run && held && settings && !sameSlippage(run.snapshot.slippage, settings)) {
-        orchestrator.updateSnapshot({ slippage: settings }, { source: "requote" });
-      }
       report(undefined);
+      // a sent batch is settled first, at the slippage it was signed with
+      if (run && !sent && held && settings && !sameSlippage(run.snapshot.slippage, settings)) {
+        replanAt(settings, again);
+        return;
+      }
       again?.();
     },
 
@@ -581,6 +619,7 @@ export function createPredictRun(args: {
       held = undefined;
       moved = undefined;
       movedByBuild = undefined;
+      pendingSlippage = undefined;
       report(undefined);
     },
 

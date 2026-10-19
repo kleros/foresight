@@ -743,3 +743,41 @@ export function createPredictHooks(
     },
   };
 }
+
+/**
+ * What every batch not in `settled` would trade at `snapshot`'s slippage, against what the run is held to.
+ * A batch after an unsettled first one is priced as if its split had landed. Other build failures are left to the run.
+ */
+export async function heldMoves(
+  ctx: PredictCtx,
+  snapshot: PredictSnapshot,
+  deps: PredictDeps,
+  settled: ReadonlySet<string>,
+): Promise<MovedPlans | undefined> {
+  const quiet = { ...deps, onLeftOut: undefined };
+  const { tradeBps, creditsBps } = snapshot.slippage;
+  const firstPending = !settled.has(STEP_ID.predict(1));
+  const credits =
+    firstPending && snapshot.creditsToSpend > 0n
+      ? await creditsLeg(ctx, snapshot.creditsToSpend, creditsBps, quiet).catch(() => undefined)
+      : undefined;
+  let moved: MovedPlans | undefined;
+  for (const [index, options] of batched(snapshot.options, snapshot.optionsPerBatch).entries()) {
+    const stepId = STEP_ID.predict(index + 1);
+    if (settled.has(stepId)) continue;
+    try {
+      await predictCalls({
+        ctx,
+        stepId,
+        options,
+        mint: firstPending ? snapshot.collateralIn + (index > 0 ? (credits?.minted ?? 0n) : 0n) : 0n,
+        credits: index === 0 ? credits : undefined,
+        slippageBps: tradeBps,
+        deps: quiet,
+      });
+    } catch (error) {
+      if (error instanceof PlansMovedError) moved = mergeMoved(moved, error.moved);
+    }
+  }
+  return moved;
+}

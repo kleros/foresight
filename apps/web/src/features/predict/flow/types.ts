@@ -179,4 +179,6 @@ export interface MovedPlans {
   markets: Address[];
   plans: ShownPlans;
   credits?: CreditsSwapPreview;
+  /** Found by re-planning at slippage the visitor changed after the run stopped. */
+  bySlippage?: true;
 }
