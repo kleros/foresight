@@ -20,6 +20,7 @@ import {
   type SwapQuoter,
 } from "@/lib/swap/types";
 
+import { CREDITS_SLIPPAGE_BPS, SLIPPAGE_BPS } from "../../../oracle/tolerances";
 import type {
   LandedTx,
   OptionChainState,
@@ -105,6 +106,7 @@ export const snapshot = (overrides: Partial<PredictSnapshot> = {}): PredictSnaps
   creditsAtStart: 0n,
   fromBlock: 1n,
   startedAt: 1_700_000_000,
+  slippage: { tradeBps: SLIPPAGE_BPS, creditsBps: CREDITS_SLIPPAGE_BPS },
   ...overrides,
 });
 

@@ -39,7 +39,7 @@ import {
   type Ledger,
   type LedgerScope,
 } from "./support/ledger";
-import { DUST_WEI } from "../../oracle/tolerances";
+import { CREDITS_SLIPPAGE_BPS, DEFAULT_SLIPPAGE, DUST_WEI } from "../../oracle/tolerances";
 import { expectedSplit, fundingRequest, planFunding, type Funding } from "../../utils/funding";
 import type { PredictCtx, PredictOption, PredictRequest, PredictSnapshot } from "../types";
 
@@ -231,6 +231,7 @@ describe("the predict flow, against a gnosis fork", () => {
           ctx.executor,
         ),
         fromBlock: (await client.getBlockNumber()) + 1n,
+        slippage: { tradeBps: 300, creditsBps: CREDITS_SLIPPAGE_BPS },
         startedAt: Math.floor(Date.now() / 1000),
       };
 
@@ -239,7 +240,6 @@ describe("the predict flow, against a gnosis fork", () => {
       const deps = {
         reader,
         quoter: createLensQuoter(client, CHAIN_ID),
-        slippageBps: 300,
         onLeftOut: (each: PredictOption, reason: unknown) => leftOut.push(`${each.childMarket}: ${String(reason)}`),
       };
       const steps = planPredict(snapshot, deps);
@@ -642,12 +642,12 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
         .createPredictReader({ client, sessionId: session.id, collateral: session.collateralToken })
         .collateralBalance(ctx.executor),
       fromBlock: (await client.getBlockNumber()) + 1n,
+      slippage: DEFAULT_SLIPPAGE,
       startedAt: Math.floor(Date.now() / 1000),
     };
     const deps = {
       reader: app.createPredictReader({ client, sessionId: session.id, collateral: session.collateralToken }),
       quoter: app.createLensQuoter(client, CHAIN_ID),
-      slippageBps: tolerances.SLIPPAGE_BPS,
     };
 
     const scope: LedgerScope = {
@@ -1077,6 +1077,7 @@ describe("the split amount when the cached trade-wallet balance is stale, agains
       collateralBefore: args.cached(real),
       creditsFromEoa: 0n,
       creditsToSpend: 0n,
+      slippage: { tradeBps: 300, creditsBps: CREDITS_SLIPPAGE_BPS },
       startedAt: Math.floor(Date.now() / 1000),
     };
     const ctx: PredictCtx = {
@@ -1109,7 +1110,6 @@ describe("the split amount when the cached trade-wallet balance is stale, agains
       }),
       reader: app.createPredictReader({ client, sessionId: session.id, collateral: session.collateralToken }),
       quoter: app.createLensQuoter(client, CHAIN_ID),
-      slippageBps: 300,
       flowId: `predict-stale-cache-${Date.now()}`,
       ctx: () => ctx,
       snapshot: () => snapshot,
@@ -1236,6 +1236,8 @@ interface ScenarioRun {
   start: Map<Address, { up: bigint; down: bigint; fees: { up: bigint; down: bigint } }>;
   /** Each option's trades as the popup's Details showed them before the run. */
   preview: Map<Address, ReturnType<Awaited<ReturnType<typeof load>>["previewTrades"]>>;
+  /** The credits swap as Details showed it before the run, for a run that spends credits. */
+  creditsSwap?: import("../plan").CreditsSwapPreview;
   /** A fresh driver on the storage as the tab left it, as a reload opens it. */
   reopen: () => import("../../run/types").PredictDriver;
 }
@@ -1488,8 +1490,16 @@ describe("money kept by every predict run, against a gnosis fork", () => {
     const request: PredictRequest = {
       options,
       ...fundingRequest(funding, native),
+      slippage: DEFAULT_SLIPPAGE,
       startedAt: Math.floor(Date.now() / 1000),
     };
+    const creditsSwap =
+      request.creditsToSpend > 0n
+        ? await app.previewCreditsSwap(ctx, request.creditsToSpend, request.slippage.creditsBps, {
+            reader: app.createPredictReader({ client, sessionId: session.id, collateral: session.collateralToken }),
+            creditsQuoter: app.createLensExactInputQuoter(client, CHAIN_ID),
+          })
+        : undefined;
 
     const start = new Map<Address, { up: bigint; down: bigint; fees: { up: bigint; down: bigint } }>();
     for (const option of options) {
@@ -1518,9 +1528,9 @@ describe("money kept by every predict run, against a gnosis fork", () => {
             pools: state.pools,
             targetPriceWad: option.targetPriceWad,
             held: state.held,
-            splitAmount: state.underlying + expectedSplit(funding),
+            splitAmount: state.underlying + expectedSplit(funding, request.slippage.creditsBps),
           },
-          tolerances.SLIPPAGE_BPS,
+          request.slippage.tradeBps,
         ),
       );
     }
@@ -1608,7 +1618,6 @@ describe("money kept by every predict run, against a gnosis fork", () => {
         reader,
         quoter: app.createLensQuoter(client, CHAIN_ID),
         creditsQuoter: app.createLensExactInputQuoter(client, CHAIN_ID),
-        slippageBps: tolerances.SLIPPAGE_BPS,
         flowId,
         store: createFlowRunStore({ storage: from }),
         ctx: () => ctx,
@@ -1639,6 +1648,7 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       driver,
       start,
       preview,
+      creditsSwap,
       reopen: () => {
         if (!leftBehind) throw new Error("The tab never closed.");
         driver.dispose();
@@ -1646,6 +1656,13 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       },
     };
   }
+
+  /** The credits swap's loss Details showed, in hundredths of a percent of the credits' vault value, rounded up. */
+  const shownLossBps = (run: Pick<ScenarioRun, "creditsSwap">): bigint => {
+    const shown = run.creditsSwap;
+    if (!shown || shown.vaultValue === 0n) return 0n;
+    return (shown.loss * 10_000n + shown.vaultValue - 1n) / shown.vaultValue;
+  };
 
   /** The batch transactions a run sent that landed. */
   const landedBatches = (run: Pick<ScenarioRun, "sent" | "ctx">) =>
@@ -1792,7 +1809,7 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       const off = minted > preview ? minted - preview : preview - minted;
       expect(off, `minted ${minted} against the vault's preview ${preview}`).toBeLessThanOrEqual(DUST_WEI);
 
-      // the credits leg loses no more to the pool than the caps allow, against the vault rate
+      // the credits leg loses no more to the pool than Details showed, past its slippage floor and the mint margin
       const value = (shares: bigint) =>
         client.readContract({
           address: collateral,
@@ -1801,13 +1818,13 @@ describe("money kept by every predict run, against a gnosis fork", () => {
           args: [shares],
           blockNumber: block - 1n,
         });
-      const kept = 10_000n - BigInt(tolerances.CREDITS_MAX_LOSS_BPS) - BigInt(tolerances.CREDITS_SLIPPAGE_BPS);
+      const kept = 10_000n - shownLossBps(run) - BigInt(request.slippage.creditsBps) - app.MINT_RATE_MARGIN_BPS - 1n;
       expect(await value(minted)).toBeGreaterThanOrEqual(((await value(request.creditsToSpend)) * kept) / 10_000n);
 
       // the swap's surplus over the floor stays in the trade wallet as WXDAI, within the slippage allowance
       const dust = moved(before, after, executor, route.wxdai);
       expect(dust).toBeGreaterThanOrEqual(0n);
-      const slip = BigInt(tolerances.CREDITS_SLIPPAGE_BPS);
+      const slip = BigInt(request.slippage.creditsBps);
       expect(dust).toBeLessThanOrEqual((floor * slip) / (10_000n - slip) + 1n);
     } else {
       expect(execute, "no credits spent").toBeUndefined();
@@ -1862,7 +1879,7 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       const previewOff =
         shown!.split > legs.childSplit ? shown!.split - legs.childSplit : legs.childSplit - shown!.split;
       const allowed =
-        (request.creditsToSpend * BigInt(tolerances.CREDITS_MAX_LOSS_BPS)) / 10_000n +
+        (request.creditsToSpend * (shownLossBps(run) + app.MINT_RATE_MARGIN_BPS + 1n)) / 10_000n +
         (request.depositNative ? DUST_WEI : 0n);
       expect(
         previewOff,

@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Address } from "viem";
 
+import type { PredictSlippage } from "@/features/predict/flow/types";
 import { usePredictRun, type PredictRunInput } from "@/features/predict/hooks/usePredictRun";
 import type { SelectedEstimate } from "@/features/predict/types";
 import { fundingRequest, type Funding } from "@/features/predict/utils/funding";
@@ -29,6 +30,7 @@ export function usePredictExecution(args: {
   tradeWallet: Address | undefined;
   funding: Funding | null;
   native: boolean;
+  slippage: PredictSlippage;
 }) {
   const { session, selected, owner, chainId, tradeWallet } = args;
   const queryClient = useQueryClient();
@@ -38,8 +40,8 @@ export function usePredictExecution(args: {
   const { collateralToken } = session;
 
   // read when the button is pressed, not when the run is built
-  const fundingRef = useRef({ funding: args.funding, native: args.native });
-  fundingRef.current = { funding: args.funding, native: args.native };
+  const fundingRef = useRef({ funding: args.funding, native: args.native, slippage: args.slippage });
+  fundingRef.current = { funding: args.funding, native: args.native, slippage: args.slippage };
 
   const input: PredictRunInput | null =
     owner !== undefined &&
@@ -72,6 +74,7 @@ export function usePredictExecution(args: {
                   creditsToSpend: 0n,
                 };
           },
+          slippage: () => fundingRef.current.slippage,
           onComplete: () => {
             void queryClient.invalidateQueries({ queryKey: fundsKeyPrefix });
             void queryClient.invalidateQueries({ queryKey: executorKey(owner) });

@@ -64,6 +64,7 @@ const input = (owner: Address, executor: Address): PredictRunInput => ({
     creditsFromEoa: 0n,
     creditsToSpend: 0n,
   }),
+  slippage: () => ({ tradeBps: 100, creditsBps: 20 }),
 });
 
 type SendArgs = Parameters<typeof sendTransaction>[1] & { account?: unknown; chainId?: number };

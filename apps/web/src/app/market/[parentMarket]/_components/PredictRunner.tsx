@@ -7,6 +7,7 @@ import { useAccount } from "wagmi";
 
 import type { PayTokenChoice } from "@/features/predict/components/PredictAmountSection";
 import { PredictDialog } from "@/features/predict/components/PredictDialog";
+import { DEFAULT_SLIPPAGE } from "@/features/predict/oracle/tolerances";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import type { PayToken, SelectedEstimate } from "@/features/predict/types";
 import { expectedSplit, roundToDisplay } from "@/features/predict/utils/funding";
@@ -78,11 +79,13 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
   const token = tokens.find((choice) => choice.id === tokenId) ?? tokens[0]!;
   const kept = selected.filter((estimate) => !removed.includes(estimate.scale.market));
 
+  const slippage = DEFAULT_SLIPPAGE;
   const preview = usePricePreview({
     session,
     selected: kept,
     tradeWallet: predicted,
-    collateralIn: funding ? expectedSplit(funding) : 0n,
+    collateralIn: funding ? expectedSplit(funding, slippage.creditsBps) : 0n,
+    slippageBps: slippage.tradeBps,
   });
 
   const { driver, progress, ready } = usePredictExecution({
@@ -93,6 +96,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
     tradeWallet: predicted,
     funding,
     native: token.id === "native",
+    slippage,
   });
   const stage = progress?.stage ?? "idle";
   const recovered = progress?.recovered;

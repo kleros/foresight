@@ -111,11 +111,14 @@ async function buildUpLeg(args: { pool: PoolLiquidity; targetPriceWad: bigint })
   const option: PredictOption = { ...OPTION, targetPriceWad: args.targetPriceWad };
   const quoter = recordingLensQuoter();
   const reader = fakeReader({ state: () => chainState({ pools: { up: args.pool, down: UNPRICED } }) });
-  const snap = snapshot({ options: [option], collateralIn: WAD, deposit: WAD });
+  const snap = snapshot({
+    options: [option],
+    collateralIn: WAD,
+    deposit: WAD,
+    slippage: { tradeBps: SLIPPAGE_BPS, creditsBps: 0 },
+  });
 
-  const step = planPredict(snap, { reader, quoter, slippageBps: SLIPPAGE_BPS }).find(
-    (each) => each.id === STEP_ID.predict(1),
-  )!;
+  const step = planPredict(snap, { reader, quoter }).find((each) => each.id === STEP_ID.predict(1))!;
   const tx = await step.build(ctx(), snap);
 
   const batch = decodeFunctionData({ abi: tradeExecutorAbi, data: tx.data! });

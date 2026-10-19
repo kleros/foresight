@@ -91,6 +91,7 @@ function mount(overrides: Partial<Args> = {}) {
     tradeWallet: TRADE_WALLET,
     funding: FUNDING,
     native: false,
+    slippage: { tradeBps: 100, creditsBps: 20 },
     ...overrides,
   };
   const view = renderHook((props: Args) => usePredictExecution(props), { wrapper, initialProps: args });
@@ -119,6 +120,13 @@ describe("usePredictExecution, how the visitor pays", () => {
     mount({ native: false });
 
     expect(lastInput()?.funding().depositNative).toBe(false);
+  });
+
+  it("hands the run the slippage the popup holds when Predict is pressed, not when the run was built", () => {
+    const view = mount();
+    view.rerender({ ...view.args, slippage: { tradeBps: 250, creditsBps: 60 } });
+
+    expect(inputs[0]?.slippage()).toEqual({ tradeBps: 250, creditsBps: 60 });
   });
 
   it("hands the run the deposit from the funding", () => {

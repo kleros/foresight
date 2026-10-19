@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import type { Address } from "viem";
 
 import type { PriceMove } from "@/features/predict/components/PredictList";
-import { SLIPPAGE_BPS } from "@/features/predict/oracle/tolerances";
 import { createPredictReader } from "@/features/predict/run/reader";
 import type { SelectedEstimate } from "@/features/predict/types";
 import { previewTrades } from "@/features/predict/utils/plan";
@@ -24,8 +23,10 @@ export function usePricePreview(args: {
   tradeWallet: Address | undefined;
   /** Collateral the prediction splits. */
   collateralIn: bigint;
+  /** The trades' slippage setting, which sizes the buys. */
+  slippageBps: number;
 }): Record<string, PriceMove> {
-  const { session, selected, tradeWallet, collateralIn } = args;
+  const { session, selected, tradeWallet, collateralIn, slippageBps } = args;
   const { collateralToken } = session;
   const options = toPredictOptions(session, selected);
 
@@ -57,7 +58,7 @@ export function usePricePreview(args: {
         held: state.held,
         splitAmount: state.underlying + collateralIn,
       },
-      SLIPPAGE_BPS,
+      slippageBps,
     );
     if (trades) {
       const { from, to, ...plan } = trades;

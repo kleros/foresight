@@ -38,9 +38,10 @@ import type {
   PredictOption,
   PredictReader,
   PredictRequest,
+  PredictSlippage,
   PredictSnapshot,
 } from "./types";
-import { CREDITS_MAX_LOSS_BPS, CREDITS_SLIPPAGE_BPS, SLIPPAGE_BPS } from "../oracle/tolerances";
+import { MAX_SLIPPAGE_BPS } from "../oracle/tolerances";
 import { atEstimate, planBuys, planSells, type OptionSide, type SoldLeg } from "../utils/plan";
 
 /**
@@ -61,8 +62,6 @@ export interface PredictDeps {
   quoter: SwapQuoter;
   /** Quotes the swap the credits manager makes; needed only by a run that spends credits. */
   creditsQuoter?: ExactInputQuoter;
-  /** Hundredths of a percent a quote may move against the executor before the swap reverts. */
-  slippageBps?: number;
   optionsPerBatch?: number;
   /** Told about an option no route could be found for, which the batch `stepId` leaves out. */
   onLeftOut?: (option: PredictOption, reason: unknown, stepId: string) => void;
@@ -106,7 +105,7 @@ export class PredictConfigError extends Error {
   }
 }
 
-/** The credits cannot be spent now: the manager is short, or its swap would lose too much or pay elsewhere. */
+/** The credits cannot be spent now: the manager is short, no route swaps them, or the route pays elsewhere. */
 export class CreditsUnavailableError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
@@ -146,10 +145,10 @@ async function optionCalls(
   option: PredictOption,
   state: OptionChainState,
   mint: bigint,
+  slippageBps: number,
   deps: PredictDeps,
 ): Promise<ExecutorCall[]> {
   const splitAmount = state.underlying + mint;
-  const slippageBps = deps.slippageBps ?? SLIPPAGE_BPS;
   const target = { pools: state.pools, targetPriceWad: option.targetPriceWad, held: state.held, splitAmount };
 
   const sells: QuotedSwap[] = [];
@@ -221,17 +220,27 @@ interface CreditsLeg {
  */
 export const MINT_RATE_MARGIN_BPS = 1n;
 
-/**
- * The manager swaps `creditsToSpend` of its collateral for WXDAI paid to the executor, which unwraps
- * the floor and splits it at the parent as xDAI. The surplus over the floor stays as WXDAI.
- */
-async function creditsLeg(ctx: PredictCtx, amount: bigint, deps: PredictDeps): Promise<CreditsLeg> {
+/** The credits swap as quoted now: what it pays, what the credits redeem for at the vault, and the floor. */
+export interface CreditsSwapPreview {
+  /** WXDAI the quote pays the executor. */
+  quoted: bigint;
+  /** xDAI the credits' collateral redeems for at the vault's rate. */
+  vaultValue: bigint;
+  /** The least the swap may pay, `creditsBps` below the quote. */
+  floor: bigint;
+  /** What the pool's fee and price take against the vault rate; none when the pool pays more. */
+  loss: bigint;
+}
+
+async function quoteCreditsSwap(
+  ctx: Pick<PredictCtx, "collateral" | "executor" | "credits">,
+  amount: bigint,
+  creditsBps: number,
+  deps: Pick<PredictDeps, "reader" | "creditsQuoter">,
+) {
   const route = ctx.credits;
   if (route === null) throw new PredictConfigError("Credits cannot fund this session on this network.");
   if (!deps.creditsQuoter) throw new PredictConfigError("There is no quoter for the credits swap.");
-  if ((await deps.reader.managerCollateral()) < amount) {
-    throw new CreditsUnavailableError("The credits manager cannot cover these credits right now.");
-  }
 
   let quote;
   try {
@@ -257,12 +266,40 @@ async function creditsLeg(ctx: PredictCtx, amount: bigint, deps: PredictDeps): P
   ) {
     throw new CreditsUnavailableError("The credits swap was quoted for another route than the manager's.");
   }
-  const fair = await deps.reader.vaultValue(amount);
-  if (quote.amountOut * 10_000n < fair * (10_000n - BigInt(CREDITS_MAX_LOSS_BPS))) {
-    throw new CreditsUnavailableError("The credits swap would lose more than allowed to the pool right now.");
+
+  const vaultValue = await deps.reader.vaultValue(amount);
+  const preview: CreditsSwapPreview = {
+    quoted: quote.amountOut,
+    vaultValue,
+    floor: (quote.amountOut * (10_000n - BigInt(creditsBps))) / 10_000n,
+    loss: vaultValue > quote.amountOut ? vaultValue - quote.amountOut : 0n,
+  };
+  return { params, preview };
+}
+
+/** The credits swap a run spending `amount` would make now, for the popup to show before Predict. */
+export async function previewCreditsSwap(
+  ctx: Pick<PredictCtx, "collateral" | "executor" | "credits">,
+  amount: bigint,
+  creditsBps: number,
+  deps: Pick<PredictDeps, "reader" | "creditsQuoter">,
+): Promise<CreditsSwapPreview> {
+  return (await quoteCreditsSwap(ctx, amount, creditsBps, deps)).preview;
+}
+
+/**
+ * The manager swaps `creditsToSpend` of its collateral for WXDAI paid to the executor, which unwraps
+ * the floor and splits it at the parent as xDAI. The surplus over the floor stays as WXDAI.
+ */
+async function creditsLeg(ctx: PredictCtx, amount: bigint, creditsBps: number, deps: PredictDeps): Promise<CreditsLeg> {
+  const route = ctx.credits;
+  if (route === null) throw new PredictConfigError("Credits cannot fund this session on this network.");
+  if ((await deps.reader.managerCollateral()) < amount) {
+    throw new CreditsUnavailableError("The credits manager cannot cover these credits right now.");
   }
 
-  const floor = (quote.amountOut * (10_000n - BigInt(CREDITS_SLIPPAGE_BPS))) / 10_000n;
+  const { params, preview: swapped } = await quoteCreditsSwap(ctx, amount, creditsBps, deps);
+  const floor = swapped.floor;
   const swap = encodeFunctionData({
     abi: ALGEBRA_ROUTER_ABI,
     functionName: "exactInputSingle",
@@ -304,9 +341,10 @@ async function predictCalls(args: {
   mint: bigint;
   /** The first batch's credits leg, whose minted collateral every option gets as well. */
   credits?: CreditsLeg;
+  slippageBps: number;
   deps: PredictDeps;
 }): Promise<ExecutorValueCall[]> {
-  const { ctx, stepId, options, mint, credits, deps } = args;
+  const { ctx, stepId, options, mint, credits, slippageBps, deps } = args;
   const states = await deps.reader.optionStates({ options, executor: ctx.executor });
 
   const calls: ExecutorValueCall[] = [
@@ -325,7 +363,7 @@ async function predictCalls(args: {
     if (state === undefined) continue;
 
     try {
-      calls.push(...(await optionCalls(ctx, option, state, perOption, deps)).map(withoutValue));
+      calls.push(...(await optionCalls(ctx, option, state, perOption, slippageBps, deps)).map(withoutValue));
       traded += 1;
     } catch (reason) {
       if (reason instanceof QuoteFailedError) throw reason;
@@ -460,10 +498,19 @@ function collateralInto(logs: Log[], ctx: PredictCtx): bigint {
     .reduce((sum, log) => sum + log.args.value, 0n);
 }
 
+const validSlippage = (bps: number) => Number.isInteger(bps) && bps >= 0 && bps <= MAX_SLIPPAGE_BPS;
+
+function assertSlippage(slippage: PredictSlippage): void {
+  if (!validSlippage(slippage.tradeBps) || !validSlippage(slippage.creditsBps)) {
+    throw new PredictConfigError(`Slippage must be a whole number of basis points from 0 to ${MAX_SLIPPAGE_BPS}.`);
+  }
+}
+
 export function planPredict(snapshot: PredictRequest, deps: PredictDeps): Step[] {
   if (snapshot.options.length === 0) {
     throw new PredictConfigError("There are no estimates to predict.");
   }
+  assertSlippage(snapshot.slippage);
 
   const steps: Step[] = [
     {
@@ -519,7 +566,8 @@ export function planPredict(snapshot: PredictRequest, deps: PredictDeps): Step[]
               stepId: id,
               options: snap.options.filter((option) => optionIds.has(option.childMarket)),
               mint: index === 0 ? snap.collateralIn : 0n,
-              credits: spends ? await creditsLeg(ctx, snap.creditsToSpend, deps) : undefined,
+              credits: spends ? await creditsLeg(ctx, snap.creditsToSpend, snap.slippage.creditsBps, deps) : undefined,
+              slippageBps: snap.slippage.tradeBps,
               deps,
             }),
           ),
@@ -536,13 +584,22 @@ export function planPredict(snapshot: PredictRequest, deps: PredictDeps): Step[]
  */
 export async function assertRoutes(ctx: PredictCtx, snapshot: PredictSnapshot, deps: PredictDeps): Promise<void> {
   const quiet = { ...deps, onLeftOut: undefined };
-  const credits = snapshot.creditsToSpend > 0n ? await creditsLeg(ctx, snapshot.creditsToSpend, deps) : undefined;
+  const { tradeBps, creditsBps } = snapshot.slippage;
+  const credits =
+    snapshot.creditsToSpend > 0n ? await creditsLeg(ctx, snapshot.creditsToSpend, creditsBps, deps) : undefined;
   const mint = snapshot.collateralIn + (credits?.minted ?? 0n);
   const batches = batched(snapshot.options, deps.optionsPerBatch ?? PREDICT_BATCH_SIZE);
   let atEstimates = 0;
   for (const [index, options] of batches.entries()) {
     try {
-      await predictCalls({ ctx, stepId: STEP_ID.predict(index + 1), options, mint, deps: quiet });
+      await predictCalls({
+        ctx,
+        stepId: STEP_ID.predict(index + 1),
+        options,
+        mint,
+        slippageBps: tradeBps,
+        deps: quiet,
+      });
     } catch (error) {
       if (!(error instanceof AtEstimatesError)) throw error;
       atEstimates += 1;

@@ -5,13 +5,14 @@ import { withdrawTx } from "@/lib/trade-executor/funding";
 
 import { gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
 
-import { CREDITS_MAX_LOSS_BPS, CREDITS_SLIPPAGE_BPS } from "../../oracle/tolerances";
+import { CREDITS_SLIPPAGE_BPS } from "../../oracle/tolerances";
 import {
   assertRoutes,
   CreditsUnavailableError,
   MINT_RATE_MARGIN_BPS,
   planPredict,
   PredictConfigError,
+  previewCreditsSwap,
   STEP_ID,
   TxPendingError,
   type PredictDeps,
@@ -70,7 +71,8 @@ async function build(snap: PredictSnapshot, used: PredictDeps = deps(), at: Pred
 
 /** What the fake credits quote pays for `credits`, and the floor the batch must hold it to. */
 const quoted = (credits: bigint) => (((credits * VAULT_RATE) / WAD) * (10_000n - 5n)) / 10_000n;
-const floorOf = (credits: bigint) => (quoted(credits) * (10_000n - BigInt(CREDITS_SLIPPAGE_BPS))) / 10_000n;
+const floorOf = (credits: bigint, slippageBps = CREDITS_SLIPPAGE_BPS) =>
+  (quoted(credits) * (10_000n - BigInt(slippageBps))) / 10_000n;
 const mintedFrom = (wxdai: bigint) => (wxdai * WAD) / VAULT_RATE;
 
 describe("planPredict with credits", () => {
@@ -242,10 +244,24 @@ describe("the first batch of a credits run", () => {
     await expect(build(creditsRun(), used)).rejects.toBeInstanceOf(CreditsUnavailableError);
   });
 
-  it("refuses before signing when the swap would lose more than the cap against the vault rate", async () => {
-    const used = deps({ creditsQuoter: fakeCreditsQuoter({ lossBps: BigInt(CREDITS_MAX_LOSS_BPS) + 1n }) });
+  it("spends the credits whatever the swap gives up against the vault rate, held to its slippage floor", async () => {
+    const used = deps({ creditsQuoter: fakeCreditsQuoter({ lossBps: 300n }) });
+    const lossy = (((2n * WAD * VAULT_RATE) / WAD) * (10_000n - 300n)) / 10_000n;
 
-    await expect(build(creditsRun(), used)).rejects.toBeInstanceOf(CreditsUnavailableError);
+    const calls = valueCalls((await build(creditsRun(), used)).data!);
+    const [, swap] = decodeFunctionData({ abi: EXECUTE_ABI, data: calls[0]!.data }).args;
+    const [params] = decodeFunctionData({ abi: ALGEBRA_ROUTER_ABI, data: swap }).args;
+    expect(params.amountOutMinimum).toBe((lossy * (10_000n - BigInt(CREDITS_SLIPPAGE_BPS))) / 10_000n);
+  });
+
+  it("holds the credits swap to the run's own credits slippage", async () => {
+    const run = creditsRun({ slippage: { tradeBps: 100, creditsBps: 75 } });
+
+    const calls = valueCalls((await build(run)).data!);
+    const [, swap] = decodeFunctionData({ abi: EXECUTE_ABI, data: calls[0]!.data }).args;
+    const [params] = decodeFunctionData({ abi: ALGEBRA_ROUTER_ABI, data: swap }).args;
+    expect(params.amountOutMinimum).toBe(floorOf(2n * WAD, 75));
+    expect(calls[2]!.value).toBe(floorOf(2n * WAD, 75));
   });
 
   it("refuses a credits quote that routes anywhere but the whitelisted Swapr router, or pays anyone else", async () => {
@@ -295,5 +311,26 @@ describe("assertRoutes with credits", () => {
     await expect(
       assertRoutes(ctx(), creditsRun(), deps({ reader: fakeReader({ manager: WAD }) })),
     ).rejects.toBeInstanceOf(CreditsUnavailableError);
+  });
+});
+
+describe("previewCreditsSwap", () => {
+  it("names what the swap is quoted to pay, the credits' vault value, the floor, and the difference lost", async () => {
+    const used = deps({ creditsQuoter: fakeCreditsQuoter({ lossBps: 40n }) });
+    const value = (2n * WAD * VAULT_RATE) / WAD;
+    const paid = (value * (10_000n - 40n)) / 10_000n;
+
+    await expect(previewCreditsSwap(ctx(), 2n * WAD, 20, used)).resolves.toEqual({
+      quoted: paid,
+      vaultValue: value,
+      floor: (paid * (10_000n - 20n)) / 10_000n,
+      loss: value - paid,
+    });
+  });
+
+  it("counts no loss when the pool pays above the vault rate", async () => {
+    const used = deps({ creditsQuoter: fakeCreditsQuoter({ lossBps: -10n }) });
+
+    expect((await previewCreditsSwap(ctx(), 2n * WAD, 20, used)).loss).toBe(0n);
   });
 });

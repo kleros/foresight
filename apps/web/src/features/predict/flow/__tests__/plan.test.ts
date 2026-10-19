@@ -5,12 +5,14 @@ import { lensQuoterOn, nodeAnswers } from "@/lib/swap/__tests__/support/lensNode
 
 import { gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
 
+import { MAX_SLIPPAGE_BPS } from "../../oracle/tolerances";
 import { LEG_HEADROOM_BPS } from "../../utils/plan";
 import {
   AtEstimatesError,
   createPredictHooks,
   PREDICT_BATCH_SIZE,
   planPredict,
+  PredictConfigError,
   QuoteFailedError,
   STEP_ID,
   TxPendingError,
@@ -225,12 +227,28 @@ describe("the predict step", () => {
   });
 
   it("quotes and sizes the buy with the same slippage setting", async () => {
-    const { deps: used } = await buildPredict(snapshot(), { slippageBps: 300 });
+    const { deps: used } = await buildPredict(snapshot({ slippage: { tradeBps: 300, creditsBps: 20 } }));
     const quoter = used.quoter as ReturnType<typeof fakeQuoter>;
 
     const sold = ((WAD / 2n) * (10_000n + LEG_HEADROOM_BPS)) / 10_000n;
     expect(quoter.requests[1]!.amount).toBe(((sold / 2n + WAD - sold) * 96n) / 100n);
     expect(quoter.requests.map((request) => request.slippageBps)).toEqual([300, 300]);
+  });
+
+  it("refuses a slippage setting that leaves the buys nothing to spend, or none at all", () => {
+    for (const tradeBps of [-1, MAX_SLIPPAGE_BPS + 1, Number.NaN]) {
+      expect(() => planPredict(snapshot({ slippage: { tradeBps, creditsBps: 20 } }), deps())).toThrow(
+        PredictConfigError,
+      );
+    }
+    for (const creditsBps of [-1, MAX_SLIPPAGE_BPS + 1]) {
+      expect(() => planPredict(snapshot({ slippage: { tradeBps: 100, creditsBps } }), deps())).toThrow(
+        PredictConfigError,
+      );
+    }
+    expect(() =>
+      planPredict(snapshot({ slippage: { tradeBps: MAX_SLIPPAGE_BPS, creditsBps: 0 } }), deps()),
+    ).not.toThrow();
   });
 
   it("says a batch whose only option the market already agrees with has nothing to trade", async () => {

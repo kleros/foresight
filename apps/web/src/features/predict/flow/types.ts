@@ -79,6 +79,14 @@ export interface PredictReader {
   sentWithNonce(args: { owner: Address; nonce: number; fromBlock: bigint }): Promise<SentTx>;
 }
 
+/** Hundredths of a percent each kind of swap may pay below its quote before it reverts. */
+export interface PredictSlippage {
+  /** Every option's sells and buys. */
+  tradeBps: number;
+  /** The credits manager's swap into xDAI. */
+  creditsBps: number;
+}
+
 export interface PredictSnapshot {
   options: PredictOption[];
   /** What the visitor chose to add, in the token they chose. */
@@ -103,6 +111,8 @@ export interface PredictSnapshot {
   /** The block after the latest as the run started: the first this run's transactions can land in. */
   fromBlock: bigint;
   startedAt: number;
+  /** As the visitor's settings had it when the run started; every rebuilt batch keeps it. */
+  slippage: PredictSlippage;
   /** Options that settled batches left out for lack of a route; absent until one does. */
   leftOut?: Address[];
 }

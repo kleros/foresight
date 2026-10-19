@@ -2,7 +2,7 @@ import { cutToOwned, formatAmount, formatDisplayAmount, OWNED_DECIMALS } from "@
 
 import type { CreditLine } from "./credits";
 import type { PredictRequest } from "../flow/types";
-import { CREDITS_SLIPPAGE_BPS, GAS_RESERVE_WEI } from "../oracle/tolerances";
+import { GAS_RESERVE_WEI } from "../oracle/tolerances";
 import type { PayToken } from "../types";
 
 const WAD = 10n ** 18n;
@@ -136,11 +136,11 @@ export function fundingRequest(
 }
 
 /**
- * The collateral a run is expected to split: the sDAI as is, and the credits at the floor their
- * swap is held to, before the pool's own fee and price, which only the quote knows.
+ * The collateral a run is expected to split: the sDAI as is, and the credits at the floor
+ * `creditsSlippageBps` holds their swap to, before the pool's own fee and price, which only the quote knows.
  */
-export const expectedSplit = (funding: Funding): bigint =>
-  funding.collateralIn - funding.creditsIn + (funding.creditsIn * BigInt(10_000 - CREDITS_SLIPPAGE_BPS)) / 10_000n;
+export const expectedSplit = (funding: Funding, creditsSlippageBps: number): bigint =>
+  funding.collateralIn - funding.creditsIn + (funding.creditsIn * BigInt(10_000 - creditsSlippageBps)) / 10_000n;
 
 /** Rounded down to the decimals the popup shows, so the signed amount is the shown amount. */
 export const roundToDisplay = cutToOwned;

@@ -90,7 +90,6 @@ export function createPredictRun(args: {
   ctx: () => PredictCtx;
   snapshot: () => PredictRequest;
   store?: FlowRunStore;
-  slippageBps?: number;
   optionsPerBatch?: number;
   onComplete?: () => void;
   now?: () => number;
@@ -125,7 +124,6 @@ export function createPredictRun(args: {
     reader: args.reader,
     quoter: args.quoter,
     creditsQuoter: args.creditsQuoter,
-    slippageBps: args.slippageBps,
     optionsPerBatch: args.optionsPerBatch,
     onLeftOut: (option, _reason, stepId) => {
       const left = leavingOut.get(stepId) ?? [];

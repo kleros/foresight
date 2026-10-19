@@ -4,7 +4,7 @@ import { OWNED_DECIMALS } from "@/utils/amount";
 
 import type { CreditsHeld } from "@/lib/trade-executor/credits";
 
-import { CREDITS_SLIPPAGE_BPS, MAX_CREDITS_PER_RUN } from "../../oracle/tolerances";
+import { CREDITS_SLIPPAGE_BPS } from "../../oracle/tolerances";
 import { creditLines, creditsOffer, MIN_CREDITS } from "../credits";
 import { expectedSplit, fundingRequest, fundingSummary, planFunding, shownAmount } from "../funding";
 
@@ -156,16 +156,16 @@ describe("planFunding with a credits line", () => {
 });
 
 describe("credits a run may spend", () => {
-  it("caps what is usable at the most a run may spend, and says the offer is short of what is held", () => {
-    const held = { wallet: MAX_CREDITS_PER_RUN * 2n, tradeWallet: 0n, manager: MAX_CREDITS_PER_RUN * 10n };
+  it("offers every credit held, however many, when the manager covers them", () => {
+    const held = { wallet: 5000n * WAD, tradeWallet: 250n * WAD, manager: 10_000n * WAD };
 
-    expect(creditsOffer(held)).toEqual({ state: "short", held: MAX_CREDITS_PER_RUN * 2n, usable: MAX_CREDITS_PER_RUN });
+    expect(creditsOffer(held)).toEqual({ state: "usable", held: 5250n * WAD, usable: 5250n * WAD });
   });
 
-  it("caps at the manager's collateral or the per-run maximum, whichever is lower", () => {
-    const held = { wallet: MAX_CREDITS_PER_RUN * 2n, tradeWallet: 0n, manager: MAX_CREDITS_PER_RUN / 2n };
+  it("offers what the manager's collateral covers, and says the offer is short of what is held", () => {
+    const held = { wallet: 300n * WAD, tradeWallet: 0n, manager: 120n * WAD };
 
-    expect(creditsOffer(held)).toMatchObject({ state: "short", usable: MAX_CREDITS_PER_RUN / 2n });
+    expect(creditsOffer(held)).toEqual({ state: "short", held: 300n * WAD, usable: 120n * WAD });
   });
 });
 
@@ -266,7 +266,12 @@ describe("the split a credits run is expected to make", () => {
       credits: creditLines(held, creditsOffer(held)),
     });
 
-    expect(expectedSplit(funding)).toBe(6n * WAD + (4n * WAD * BigInt(10_000 - CREDITS_SLIPPAGE_BPS)) / 10_000n);
-    expect(expectedSplit(planFunding({ amount: 10n * WAD, ownWallet: 20n * WAD, tradeWallet: 0n }))).toBe(10n * WAD);
+    expect(expectedSplit(funding, CREDITS_SLIPPAGE_BPS)).toBe(
+      6n * WAD + (4n * WAD * BigInt(10_000 - CREDITS_SLIPPAGE_BPS)) / 10_000n,
+    );
+    expect(expectedSplit(funding, 150)).toBe(6n * WAD + (4n * WAD * 9850n) / 10_000n);
+    expect(expectedSplit(planFunding({ amount: 10n * WAD, ownWallet: 20n * WAD, tradeWallet: 0n }), 150)).toBe(
+      10n * WAD,
+    );
   });
 });

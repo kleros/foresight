@@ -14,8 +14,7 @@ import { wagmiConfig } from "@/lib/web3/wagmi";
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
 import type { CreditsRoute } from "@/config/contracts";
 
-import type { PredictCtx, PredictOption, PredictRequest } from "../flow/types";
-import { SLIPPAGE_BPS } from "../oracle/tolerances";
+import type { PredictCtx, PredictOption, PredictRequest, PredictSlippage } from "../flow/types";
 import { createPredictRun } from "../run/driver";
 import { predictFlowId } from "../run/interrupted";
 import { createPredictReader } from "../run/reader";
@@ -40,7 +39,9 @@ export interface PredictRunInput {
    * The money the popup shows, read when Predict is pressed. An xDAI deposit's collateral is read
    * back once it lands; `collateralIn` is the estimate until then.
    */
-  funding: () => Omit<PredictRequest, "options" | "startedAt">;
+  funding: () => Omit<PredictRequest, "options" | "startedAt" | "slippage">;
+  /** The popup's slippage settings, read when Predict is pressed. */
+  slippage: () => PredictSlippage;
   onComplete?: () => void;
 }
 
@@ -91,7 +92,6 @@ export function usePredictRun(input: PredictRunInput | null): {
       quoter: createLensQuoter(publicClient, DEFAULT_CHAIN_ID as 100),
       creditsQuoter: createLensExactInputQuoter(publicClient, DEFAULT_CHAIN_ID as 100),
       store,
-      slippageBps: SLIPPAGE_BPS,
       flowId,
       ctx: (): PredictCtx => {
         const now = latest.current;
@@ -111,7 +111,12 @@ export function usePredictRun(input: PredictRunInput | null): {
       snapshot: (): PredictRequest => {
         const now = latest.current;
         if (!now) throw new Error("This session is no longer open for predictions.");
-        return { options: now.options(), ...now.funding(), startedAt: Math.floor(Date.now() / 1000) };
+        return {
+          options: now.options(),
+          ...now.funding(),
+          slippage: now.slippage(),
+          startedAt: Math.floor(Date.now() / 1000),
+        };
       },
       onComplete: () => latest.current?.onComplete?.(),
     });
