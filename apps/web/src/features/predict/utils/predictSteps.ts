@@ -243,14 +243,29 @@ export interface StatusLine {
  * The popup's one status line under the steps, most pressing first: what the visitor has to do,
  * why a run stopped, what a run is checking, or what it left out. Empty while things go normally.
  */
-export function statusLine(args: { steps: PredictSteps; notice?: string; leftOut: number }): StatusLine | null {
-  const { steps, notice, leftOut } = args;
+export function statusLine(args: {
+  steps: PredictSteps;
+  notice?: string;
+  leftOut: number;
+  /** Estimates whose plan changed when Predict read the pools again, waiting for the visitor to confirm. */
+  moved?: number;
+}): StatusLine | null {
+  const { steps, notice, leftOut, moved } = args;
   if (notice) return { text: notice, tone: "warning" };
   if (steps.failure) return { text: steps.failure, tone: steps.pending ? "warning" : "error" };
+  if (moved !== undefined) return { text: movedText(moved), tone: "warning" };
   if (steps.note) return { text: steps.note, tone: "neutral" };
   if (leftOut > 0) return { text: `${leftOutText(leftOut)}.`, tone: "neutral" };
   return null;
 }
+
+/** Said when the pools moved between the preview and Predict, before anything is signed. */
+export function movedText(count: number): string {
+  return `Prices moved on ${count} ${count === 1 ? "estimate" : "estimates"}. Check the new figures, then confirm.`;
+}
+
+/** The button's label while the visitor is asked to confirm the new figures. */
+export const CONFIRM_MOVED = "Confirm new prices";
 
 /** "2 estimates could not be traded", with no full stop. */
 export function leftOutText(count: number): string {

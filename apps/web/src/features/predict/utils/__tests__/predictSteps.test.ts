@@ -306,6 +306,22 @@ describe("statusLine", () => {
     expect(statusLine({ steps: idle, leftOut: 1 })?.text).toBe("1 estimate could not be traded.");
   });
 
+  it("asks the visitor to check the new figures when the pools moved, in the warning tone", () => {
+    expect(statusLine({ steps: idle, leftOut: 0, moved: 2 })).toEqual({
+      text: "Prices moved on 2 estimates. Check the new figures, then confirm.",
+      tone: "warning",
+    });
+    expect(statusLine({ steps: idle, leftOut: 0, moved: 1 })?.text).toBe(
+      "Prices moved on 1 estimate. Check the new figures, then confirm.",
+    );
+  });
+
+  it("puts a notice before the moved pools", () => {
+    expect(statusLine({ steps: idle, leftOut: 0, moved: 1, notice: "Switch to Gnosis to predict." })?.text).toBe(
+      "Switch to Gnosis to predict.",
+    );
+  });
+
   it("says in a few words that a sent transaction is not confirmed yet", () => {
     const pending = steps({
       progress: progress({
