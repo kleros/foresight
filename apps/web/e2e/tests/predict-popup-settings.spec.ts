@@ -209,7 +209,7 @@ test.describe("the settings by keyboard", () => {
 
     await field.fill("60");
     await expect(field).not.toHaveAttribute("aria-invalid");
-    await field.blur();
+    await dialog.getByRole("heading", { name: "Max slippage" }).click();
 
     await expect(field).toHaveValue("60");
     await expect(field).toHaveAttribute("aria-invalid", "true");
@@ -277,7 +277,7 @@ test.describe("the settings, compact", () => {
     const dialog = await openPopup(page, "theme=light&settings=open");
     const field = dialog.getByRole("textbox", { name: TRADES_FIELD });
     await field.fill("99");
-    await field.blur();
+    await dialog.getByRole("heading", { name: "Max slippage" }).click();
     const reset = dialog.getByRole("button", { name: "Reset" });
 
     await expect(reset).toBeEnabled();

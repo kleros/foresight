@@ -121,9 +121,11 @@ export function PredictSettings({
         "rounded-b-2xl md:rounded-b-xl",
       )}
     >
+      {/* takes focus from a click on its blank space, which the dialog's focus scope would hand back to the field */}
       <div
+        tabIndex={-1}
         className={clsx(
-          "predict-settings-card rounded-fs-panel bg-fs-popup-panel flex flex-col gap-2 border px-3.5 pt-3 pb-3",
+          "predict-settings-card rounded-fs-panel outline-none bg-fs-popup-panel flex flex-col gap-2 border px-3.5 pt-3 pb-3",
           "border-(--fs-popup-line) shadow-(--fs-popup-shadow)",
         )}
       >
