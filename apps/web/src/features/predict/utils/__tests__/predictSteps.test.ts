@@ -371,7 +371,7 @@ describe("statusLine", () => {
   it.each([
     ["rejected", "You declined in your wallet."],
     ["cancelled", "Cancelled or replaced in your wallet."],
-    ["reverted", "The trade failed at these prices. Retry, or close and raise max slippage in Settings."],
+    ["reverted", "The trade failed at these prices. Retry, or close and raise slippage."],
     ["rpc", "The network did not answer."],
     ["unknown", "Something went wrong."],
     ["no-route", "No trade found for these estimates. Try a larger amount."],

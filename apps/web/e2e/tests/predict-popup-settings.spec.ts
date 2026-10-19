@@ -9,6 +9,7 @@ const VIEWPORTS = [
 ];
 const THEMES = ["light", "dark"] as const;
 const TRADES_FIELD = "Max slippage on trades, custom percent";
+const CREDITS_FIELD = "Max slippage on the credits swap, custom percent";
 
 let harness: Awaited<ReturnType<typeof startHarness>>;
 
@@ -88,14 +89,15 @@ for (const viewport of VIEWPORTS) {
         const dialog = await openPopup(page, `theme=${theme}`);
         const before = await footprint(dialog);
 
-        await dialog.getByRole("button", { name: "Settings" }).click();
+        await dialog.getByRole("button", { name: "Settings", exact: true }).click();
         await settle(dialog);
 
         expect(await footprint(dialog)).toEqual(before);
         await expect(dialog.getByRole("heading", { level: 2, name: "Settings" })).toBeVisible();
-        for (const field of [TRADES_FIELD, "Max slippage on the credits swap, custom percent"]) {
-          expect.soft(await isWhole(dialog.getByRole("textbox", { name: field })), field).toBe(true);
-        }
+        expect(await isWhole(dialog.getByRole("textbox", { name: TRADES_FIELD }))).toBe(true);
+        // a visitor with no credits has no credits swap to set
+        await expect(dialog.getByRole("textbox", { name: CREDITS_FIELD })).toHaveCount(0);
+        expect(await isWhole(dialog.getByRole("button", { name: "Done" }))).toBe(true);
         // the body is under the panel, covered and out of the focus order
         const predict = dialog.locator(".predict-footer > .predict-cta");
         expect(await isWhole(predict)).toBe(false);
@@ -124,7 +126,10 @@ for (const viewport of VIEWPORTS) {
 
       test(`draws the high-slippage panel as reviewed, in the ${theme} theme`, async ({ page }) => {
         await page.emulateMedia({ reducedMotion: "reduce" });
-        const dialog = await openPopup(page, `theme=${theme}&settings=open&slippage=trade:800,credits:50`);
+        const dialog = await openPopup(
+          page,
+          `theme=${theme}&settings=open&credits=enough&slippage=trade:800,credits:50`,
+        );
         await dialog.getByRole("textbox", { name: TRADES_FIELD }).blur();
         await settle(dialog);
 
@@ -141,7 +146,7 @@ test.describe("the settings on a phone on its side at 844 x 390", () => {
 
   test("open under the header, whole, from a popup scrolled to its end", async ({ page }) => {
     const dialog = await openPopup(page, "theme=light&options=10");
-    const gear = dialog.getByRole("button", { name: "Settings" });
+    const gear = dialog.getByRole("button", { name: "Settings", exact: true });
     const scrolled = await gear.evaluate((element) => {
       let scroller = element.parentElement!;
       while (getComputedStyle(scroller).overflowY !== "auto") scroller = scroller.parentElement!;
@@ -157,6 +162,7 @@ test.describe("the settings on a phone on its side at 844 x 390", () => {
     const panel = (await dialog.locator(".predict-settings").boundingBox())!;
     expect(Math.round(panel.y)).toBe(Math.round(header.y + header.height));
     expect(await isWhole(dialog.getByRole("textbox", { name: TRADES_FIELD }))).toBe(true);
+    expect(await isWhole(dialog.getByRole("button", { name: "Done" }))).toBe(true);
     expect(await isWhole(dialog.locator(".predict-footer > .predict-cta"))).toBe(false);
   });
 });
@@ -168,7 +174,7 @@ test.describe("the settings by keyboard", () => {
     page,
   }) => {
     const dialog = await openPopup(page, "theme=light");
-    const gear = dialog.getByRole("button", { name: "Settings" });
+    const gear = dialog.getByRole("button", { name: "Settings", exact: true });
 
     await gear.focus();
     await page.keyboard.press("Enter");
@@ -183,6 +189,34 @@ test.describe("the settings by keyboard", () => {
     await expect(gear).toBeFocused();
     await expect(gear).toHaveAttribute("aria-expanded", "false");
     await expect(dialog).toBeVisible();
+  });
+
+  test("wrap Tab at the panel's last control to the gear, and Shift+Tab at the gear back to it", async ({ page }) => {
+    const dialog = await openPopup(page, "theme=light&credits=enough&settings=open");
+    const gear = dialog.getByRole("button", { name: "Settings", exact: true });
+    const done = dialog.getByRole("button", { name: "Done" });
+
+    await done.focus();
+    await page.keyboard.press("Tab");
+    await expect(gear).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(done).toBeFocused();
+  });
+
+  test("keep an out-of-range entry and its error once the field is left, saving nothing", async ({ page }) => {
+    const dialog = await openPopup(page, "theme=light&settings=open");
+    const field = dialog.getByRole("textbox", { name: TRADES_FIELD });
+
+    await field.fill("60");
+    await expect(field).not.toHaveAttribute("aria-invalid");
+    await field.blur();
+
+    await expect(field).toHaveValue("60");
+    await expect(field).toHaveAttribute("aria-invalid", "true");
+    await expect(dialog.getByText("Enter a percent from 0.01 to 50.")).toBeVisible();
+    expect(await page.evaluate(() => localStorage.getItem("foresight-predict-slippage") ?? "")).not.toContain(
+      '"tradeBps":6',
+    );
   });
 
   test("keep a custom value in the browser across a reload", async ({ page }) => {
@@ -212,19 +246,31 @@ for (const viewport of VIEWPORTS) {
       test(`keep the popup's footprint, say so whole on the status line and ask to confirm, in the ${theme} theme`, async ({
         page,
       }) => {
-        const idle = await footprint(await openPopup(page, `theme=${theme}`));
+        // moved opens Details, the one region that may add to the popup, so idle is measured with it open
+        const before = await openPopup(page, `theme=${theme}`);
+        await before.getByTestId("predict-summary").getByRole("button").first().click();
+        await settle(before);
+        const idle = await footprint(before);
         const dialog = await openPopup(page, `theme=${theme}&state=moved`);
 
-        expect(await footprint(dialog)).toEqual(idle);
+        // Go back shares the button's row, so only its width gives way
+        const moved = await footprint(dialog);
+        expect(moved.dialog).toEqual(idle.dialog);
+        expect([moved.footer[1], moved.footer[3]]).toEqual([idle.footer[1], idle.footer[3]]);
         const status = dialog.getByRole("status");
-        await expect(status).toHaveText("Prices moved on 1 estimate. Check the new figures, then confirm.");
+        await expect(status).toHaveText(/^\S.* now goes to .+, not .+\. Confirm to go on\.$/);
         expect(await isWhole(status.locator("span"))).toBe(true);
         await expect(dialog.getByRole("button", { name: "Confirm new prices" })).toBeEnabled();
+        expect(await isWhole(dialog.getByRole("button", { name: "Go back" }))).toBe(true);
       });
 
       test(`name the changed move's figures before, in the ${theme} theme`, async ({ page }) => {
         const dialog = await openPopup(page, `theme=${theme}&state=moved`);
-        await dialog.getByTestId("predict-summary").getByRole("button").click();
+        // Details opens on its own at moved
+        await expect(dialog.getByTestId("predict-summary").getByRole("button").first()).toHaveAttribute(
+          "aria-expanded",
+          "true",
+        );
         await settle(dialog);
         const was = dialog.getByTestId("market-was");
 
@@ -247,7 +293,7 @@ for (const viewport of VIEWPORTS) {
           page,
           `theme=${theme}&fee=3000&short=1&credits=enough&swapLoss=0.03&slippage=trade:300,credits:50`,
         );
-        const head = dialog.getByTestId("predict-summary").getByRole("button");
+        const head = dialog.getByTestId("predict-summary").getByRole("button").first();
         await head.click();
         await settle(dialog);
 
@@ -260,13 +306,17 @@ for (const viewport of VIEWPORTS) {
             .getByRole("listitem")
             .filter({ hasText: /^Pool fees/ })
             .first(),
-          ...(await dialog.getByTestId("custom-slippage").all()),
+          dialog.getByTestId("fees-total"),
+          ...(await dialog.getByTestId("slippage-row").all()),
         ];
         for (const row of rows) {
           await row.scrollIntoViewIfNeeded();
           expect.soft(await isWhole(row), (await row.textContent()) ?? "").toBe(true);
         }
-        await expect(dialog.getByTestId("custom-slippage")).toHaveText(["Max slippage3%", "Credits swap slippage0.5%"]);
+        await expect(dialog.getByTestId("slippage-row")).toHaveText([
+          "Max slippage on trades3%",
+          "Max slippage on the credits swap0.5%",
+        ]);
         await dialog.getByTestId("stops-short").first().scrollIntoViewIfNeeded();
         await expect(page).toHaveScreenshot(`details-${viewport.width}x${viewport.height}-${theme}.png`, {
           animations: "disabled",

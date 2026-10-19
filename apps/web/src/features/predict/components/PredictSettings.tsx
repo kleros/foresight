@@ -37,7 +37,7 @@ const FIELDS: { kind: SlippageKind; label: string; hint: string; high: string; l
 const RANGE_ERROR = `Enter a percent from ${slippagePercent(MIN_SLIPPAGE_BPS)} to ${slippagePercent(MAX_SLIPPAGE_BPS)}.`;
 
 /** Every control in `panel` a Tab can reach, in order. */
-const reachable = (panel: HTMLElement | null): HTMLElement[] =>
+export const reachable = (panel: HTMLElement | null): HTMLElement[] =>
   Array.from(panel?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled])") ?? []);
 
 /**

@@ -519,6 +519,22 @@ describe("PredictSummary's slippage", () => {
     expect(slippageRows()).toEqual(["Max slippage on trades1% (Auto)", "Max slippage on the credits swap0.5%"]);
   });
 
+  it("keeps the row out of the tab order while Details is folded", () => {
+    render(
+      <PredictSummary
+        selected={selected}
+        preview={{}}
+        collateral={sDai}
+        isOpen={false}
+        onToggle={vi.fn()}
+        slippage={{ tradeBps: null, creditsBps: null }}
+        onOpenSettings={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("slippage-row").tagName).toBe("P");
+  });
+
   it("opens the settings from a row", async () => {
     const onOpenSettings = vi.fn();
     renderWith({ slippage: { tradeBps: null, creditsBps: null }, onOpenSettings });

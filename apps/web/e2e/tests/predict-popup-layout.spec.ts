@@ -130,7 +130,7 @@ async function openPopup(
 
 /** Opens the summary under the amount, as the visitor would, and waits for its entrance to finish. */
 async function openSummary(dialog: Locator) {
-  const head = dialog.getByTestId("predict-summary").getByRole("button");
+  const head = dialog.getByTestId("predict-summary").getByRole("button").first();
   await head.click();
   await expect(head).toHaveAttribute("aria-expanded", "true");
   await dialog.page().mouse.move(0, 0);
@@ -1291,7 +1291,8 @@ test.describe("the popup opening focused", () => {
           expect(accent).toBe(theme === "light" ? "rgb(107, 60, 245)" : "rgb(155, 123, 255)");
 
           const seen: string[] = [];
-          for (let step = 0; step < 10; step++) {
+          // the header's gear and close, the list's removes, the amount's controls, the summary, then Predict
+          for (let step = 0; step < 12; step++) {
             await page.keyboard.press("Tab");
             // the ring's colour transitions in
             await settle(dialog);
@@ -1448,7 +1449,7 @@ test.describe("the price check before a run", () => {
     const dialog = await openPopup(page, 2, "quoting");
 
     await expect(dialog.locator('[data-bullet="running"]')).toHaveCount(0);
-    await expect(dialog.getByTestId("predict-summary").getByRole("button")).toHaveText("Checking prices…");
+    await expect(dialog.getByTestId("predict-summary").getByRole("button").first()).toHaveText("Checking prices…");
     await expect(dialog.locator(".predict-footer > .predict-cta")).toHaveText("Checking prices…");
     const rows = dialog.getByRole("listitem", { name: /^Timeline item/ });
     await expect(rows).toHaveCount(3);
@@ -1897,7 +1898,7 @@ test.describe("the summary opening and closing", () => {
     page,
   }) => {
     const dialog = await openPopup(page, 2);
-    const head = dialog.getByTestId("predict-summary").getByRole("button");
+    const head = dialog.getByTestId("predict-summary").getByRole("button").first();
     const bulletTop = () =>
       dialog
         .locator("ol [data-bullet]")
@@ -2046,7 +2047,7 @@ test.describe("the success dialog", () => {
     );
     expect((await close.boundingBox())!.height).toBe(44);
     await expect(close).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-    await expect(dialog.locator(".predict-footer > .predict-cta")).toHaveCount(1);
+    await expect(dialog.locator(".predict-cta")).toHaveCount(1);
   });
 
   for (const theme of ["light", "dark"]) {
@@ -2175,7 +2176,7 @@ test.describe("the popup's hover tone", () => {
     const dialog = await openPopup(page, 2, "idle", undefined, "&theme=dark");
     for (const control of [
       dialog.getByRole("button", { name: "Close" }),
-      dialog.getByTestId("predict-summary").getByRole("button"),
+      dialog.getByTestId("predict-summary").getByRole("button").first(),
     ]) {
       await control.hover();
       await expect(control).toHaveCSS("background-color", "rgb(46, 32, 108)");

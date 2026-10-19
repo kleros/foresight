@@ -18,7 +18,7 @@ import { PredictAmountSection, type PayTokenChoice } from "./PredictAmountSectio
 import { PredictButton } from "./PredictButton";
 import type { CreditsChoice } from "./PredictCreditsLine";
 import { PredictList, type ListedEstimate, type PriceMove } from "./PredictList";
-import { PredictSettings } from "./PredictSettings";
+import { PredictSettings, reachable } from "./PredictSettings";
 import { PredictStepsTimeline } from "./PredictStepsTimeline";
 import { PredictSummary, type CreditsSwapShown } from "./PredictSummary";
 import { HIGH_SLIPPAGE_BPS } from "../oracle/tolerances";
@@ -184,7 +184,7 @@ export function PredictDialog({
         : undefined,
   });
   // the visitor's choice, but for moved figures, which the status line asks them to check there
-  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(isMoved);
   const [wasMoved, setWasMoved] = useState(isMoved);
   if (isMoved !== wasMoved) {
     setWasMoved(isMoved);
@@ -283,10 +283,7 @@ export function PredictDialog({
               onKeyDown={(event) => {
                 // the body under the panel is inert, so the dialog's own wrap finds nothing before the gear
                 if (!settingsOpen || event.key !== "Tab" || !event.shiftKey) return;
-                const controls = settingsPanel.current?.querySelectorAll<HTMLElement>(
-                  "button:not([disabled]), input:not([disabled])",
-                );
-                const last = controls?.[controls.length - 1];
+                const last = reachable(settingsPanel.current).at(-1);
                 if (!last) return;
                 event.preventDefault();
                 event.stopPropagation();

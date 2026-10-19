@@ -217,6 +217,8 @@ export function PredictSummary({
 }) {
   const body = useId();
   const fees = feesTotal(selected, preview);
+  // a button in the folded body is one the dialog's focus trap would Tab to and fail to focus
+  const openSettings = isOpen ? onOpenSettings : undefined;
   const isPlanned = selected.some((estimate) => preview[estimate.scale.market.toLowerCase()]?.plan !== undefined);
 
   return (
@@ -342,19 +344,14 @@ export function PredictSummary({
               </p>
             ) : null}
             {slippage ? (
-              <SlippageRow
-                kind="tradeBps"
-                label="Max slippage on trades"
-                settings={slippage}
-                onPress={onOpenSettings}
-              />
+              <SlippageRow kind="tradeBps" label="Max slippage on trades" settings={slippage} onPress={openSettings} />
             ) : null}
             {slippage && creditsSwap ? (
               <SlippageRow
                 kind="creditsBps"
                 label="Max slippage on the credits swap"
                 settings={slippage}
-                onPress={onOpenSettings}
+                onPress={openSettings}
               />
             ) : null}
             {isPlanned ? (
