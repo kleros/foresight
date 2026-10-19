@@ -1468,6 +1468,60 @@ for (const viewport of [
   }
 }
 
+for (const viewport of [
+  { width: 1280, height: 800 },
+  { width: 375, height: 812 },
+]) {
+  for (const theme of ["light", "dark"]) {
+    test(`the share slider's rail, fill and thumb are 3:1 against what they sit on, ${viewport.width} x ${viewport.height} ${theme}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      const dialog = await openPopup(page, 2, "idle", undefined, `&theme=${theme}`);
+      const slider = dialog.getByTestId("amount-slider");
+      const [track, fill, thumb] = await Promise.all([
+        slider.locator("#slider-track").boundingBox(),
+        slider.locator("#slider-fill").boundingBox(),
+        slider.locator("div:has(>#slider-label)").boundingBox(),
+      ]);
+      const shot = (await page.screenshot()).toString("base64");
+      // halfway along the unfilled rail, and along the fill clear of its rounded end and the thumb
+      const open = Math.round((thumb!.x + thumb!.width + track!.x + track!.width) / 2);
+      const centre = Math.floor(track!.y + track!.height / 2);
+      const points = {
+        panel: [open, Math.floor(track!.y) - 5],
+        edge: [open, Math.floor(track!.y)],
+        rail: [open, centre],
+        fillStart: [Math.round(fill!.x + 6), centre],
+        fillEnd: [Math.round(thumb!.x - 4), centre],
+        thumbPanel: [Math.round(thumb!.x + thumb!.width / 2), Math.floor(thumb!.y) - 3],
+        thumbRing: [Math.round(thumb!.x + thumb!.width / 2), Math.floor(thumb!.y) + 1],
+      };
+      const px = await page.evaluate(
+        async ({ shot, points }) => {
+          const bitmap = await createImageBitmap(await (await fetch(`data:image/png;base64,${shot}`)).blob());
+          const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+          const context = canvas.getContext("2d")!;
+          context.drawImage(bitmap, 0, 0);
+          const scale = bitmap.width / window.innerWidth;
+          return Object.fromEntries(
+            Object.entries(points).map(([name, [x, y]]) => [
+              name,
+              `rgb(${context.getImageData(Math.floor(x! * scale), Math.floor(y! * scale), 1, 1).data.slice(0, 3).join(", ")})`,
+            ]),
+          );
+        },
+        { shot, points },
+      );
+
+      expect.soft(contrast(px.edge!, px.panel!), "the rail's edge on the panel").toBeGreaterThanOrEqual(3);
+      expect.soft(contrast(px.fillStart!, px.rail!), "the fill's start on the rail").toBeGreaterThanOrEqual(3);
+      expect.soft(contrast(px.fillEnd!, px.rail!), "the fill's end on the rail").toBeGreaterThanOrEqual(3);
+      expect.soft(contrast(px.thumbRing!, px.thumbPanel!), "the thumb's ring on the panel").toBeGreaterThanOrEqual(3);
+    });
+  }
+}
+
 test.describe("the header's close button", () => {
   test.use({ viewport: { width: 375, height: 667 } });
 

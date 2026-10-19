@@ -34,6 +34,8 @@
   /* the share slider's rail and its quarter dots; the dots are decorative, as the share label states the value */
   --fs-popup-track: #e6e2f3;
   --fs-popup-track-dot: #c8c2e0;
+  /* the share slider's rail edge: 3.3:1 on the washed panel; the fill is 3.6:1 or more on --fs-popup-track */
+  --fs-popup-track-edge: #7f78a6;
   /* the amount panel's tint: 6% of the axis, even along it. Declared per theme so it mixes that theme's ends */
   --fs-popup-wash: linear-gradient(
     100deg,
@@ -66,6 +68,8 @@
   --fs-popup-cta-disabled-text: #9aa6c6;
   --fs-popup-track: #392c74;
   --fs-popup-track-dot: #5b4e9c;
+  /* 3.7:1 on the washed panel; the fill is 3.4:1 or more on --fs-popup-track */
+  --fs-popup-track-edge: #7a72b4;
   /* the dark panel takes 6% of either end without a visible change, so it mixes more */
   --fs-popup-wash: linear-gradient(
     100deg,
