@@ -1,7 +1,7 @@
 import type { CreateConnectorFn } from "@wagmi/core";
 import { http, type EIP1193RequestFn } from "viem";
 
-import { rpcTimeoutMs } from "@/config/rpc";
+import { rpcTimeoutMs } from "@/config/chains";
 
 /**
  * The connector `create` makes, with `eth_sendTransaction` on a local node given the app's long

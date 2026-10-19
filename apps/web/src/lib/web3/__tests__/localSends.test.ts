@@ -7,14 +7,7 @@ import { createEmitter } from "@wagmi/core/internal";
 import { createWalletClient, custom, defineChain, type EIP1193RequestFn } from "viem";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-// config/env parses at module load and throws on missing variables, so the
-// import happens dynamically after these are stubbed.
-const REQUIRED_ENV = {
-  NEXT_PUBLIC_REOWN_PROJECT_ID: "test-project",
-  NEXT_PUBLIC_ATLAS_URI: "http://localhost:4747",
-  NEXT_PUBLIC_IPFS_GATEWAY: "http://localhost:4747/ipfs",
-  NEXT_PUBLIC_SUBGRAPH_URL: "http://localhost:8080/v1/graphql",
-};
+import { withLocalSendTimeout } from "../localSends";
 
 const ACCOUNT = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const HASH = `0x${"ab".repeat(32)}`;
@@ -50,8 +43,6 @@ afterAll(() => {
 });
 
 beforeEach(() => {
-  vi.resetModules();
-  for (const [name, value] of Object.entries(REQUIRED_ENV)) vi.stubEnv(name, value);
   methods.length = 0;
 });
 
@@ -72,7 +63,6 @@ const configAt = (rpc: string): Parameters<CreateConnectorFn>[0] => ({
 });
 
 async function devWalletOn(rpc: string) {
-  const { withLocalSendTimeout } = await import("../localSends");
   const connector = withLocalSendTimeout(mock({ accounts: [ACCOUNT] }))(configAt(rpc));
   return connector.getProvider({ chainId: 100 }) as Promise<{ request: EIP1193RequestFn }>;
 }
@@ -103,7 +93,6 @@ describe("the dev wallet's send on a local node", () => {
 
 describe("the dev wallet's send on a remote node", () => {
   it("is the connector's own provider, untouched", async () => {
-    const { withLocalSendTimeout } = await import("../localSends");
     const own = { request: vi.fn() };
     const inner = ((config) => ({
       ...mock({ accounts: [ACCOUNT] })(config),
