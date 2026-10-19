@@ -20,9 +20,9 @@ test.afterAll(async () => {
   await harness?.close();
 });
 
-/** Opens the harness with `query`, `?` params of e2e/harness/predict-popup/main.tsx, once its entrances end. */
+/** Opens the harness with `query`, `?` params of e2e/harness/predict-popup/main.tsx, two options unless it names a count. */
 async function openPopup(page: Page, query: string) {
-  await openHarness(page, `${harness.url}?options=2&${query}`);
+  await openHarness(page, `${harness.url}?${query.includes("options=") ? "" : "options=2&"}${query}`);
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("button", { name: "Close" })).toBeVisible();
   await settle(dialog);
@@ -135,6 +135,31 @@ for (const viewport of VIEWPORTS) {
     }
   });
 }
+
+test.describe("the settings on a phone on its side at 844 x 390", () => {
+  test.use({ viewport: { width: 844, height: 390 } });
+
+  test("open under the header, whole, from a popup scrolled to its end", async ({ page }) => {
+    const dialog = await openPopup(page, "theme=light&options=10");
+    const gear = dialog.getByRole("button", { name: "Settings" });
+    const scrolled = await gear.evaluate((element) => {
+      let scroller = element.parentElement!;
+      while (getComputedStyle(scroller).overflowY !== "auto") scroller = scroller.parentElement!;
+      scroller.scrollTop = scroller.scrollHeight;
+      return scroller.scrollTop;
+    });
+    expect(scrolled, "the popup scrolls on a phone on its side").toBeGreaterThan(0);
+
+    await gear.click();
+    await settle(dialog);
+
+    const header = (await dialog.locator(".predict-header").boundingBox())!;
+    const panel = (await dialog.locator(".predict-settings").boundingBox())!;
+    expect(Math.round(panel.y)).toBe(Math.round(header.y + header.height));
+    expect(await isWhole(dialog.getByRole("textbox", { name: TRADES_FIELD }))).toBe(true);
+    expect(await isWhole(dialog.locator(".predict-cta"))).toBe(false);
+  });
+});
 
 test.describe("the settings by keyboard", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
