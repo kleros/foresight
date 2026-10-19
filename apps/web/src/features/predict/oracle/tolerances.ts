@@ -29,3 +29,6 @@ export const DEFAULT_SLIPPAGE: PredictSlippage = { tradeBps: SLIPPAGE_BPS, credi
 
 /** The most slippage a run accepts on any swap, as CowSwap caps it: 50%. */
 export const MAX_SLIPPAGE_BPS = 5_000;
+
+/** Custom slippage above these warns in the settings: 5% on trades, 1% on the credits swap's stable pair. */
+export const HIGH_SLIPPAGE_BPS: Readonly<PredictSlippage> = { tradeBps: 500, creditsBps: 100 };
