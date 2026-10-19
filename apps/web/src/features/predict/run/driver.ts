@@ -7,8 +7,10 @@ import {
   settledEntries,
   type FlowError,
   type FlowRunStore,
+  type FlowTx,
   type OrchestratorRun,
   type TxGateway,
+  type TxStep,
 } from "@foresight/tx-orchestrator";
 import type { Address, Hash } from "viem";
 
@@ -22,6 +24,7 @@ import {
   AtEstimatesError,
   createPredictHooks,
   CreditsUnavailableError,
+  isTx,
   NoRouteError,
   planPredict,
   PredictConfigError,
@@ -35,6 +38,39 @@ import type { PredictCtx, PredictReader, PredictRequest, PredictSnapshot } from 
 
 /** The trade wallet, or the wallet's credits, hold less than the prediction was shown to draw on. */
 class TradeWalletShortError extends Error {}
+
+/** A send the wallet never answered, which the chain may still mine under `nonce`. */
+interface UnansweredSend {
+  owner: Address;
+  nonce: number;
+  /** The latest block as the send went out; the transaction can land no earlier. */
+  fromBlock: bigint;
+  tx: FlowTx;
+}
+
+/** How long, and how often, the chain is read for a send the wallet never answered. */
+const UNANSWERED_SEND = { waitMs: 120_000, pollMs: 2_000 };
+
+const TRANSPORT_FAILURES = new Set(["TimeoutError", "HttpRequestError"]);
+
+/** The request timed out or never reached the node, so the transaction may have gone out. */
+function unanswered(error: unknown): boolean {
+  let link: unknown = error;
+  for (let depth = 0; typeof link === "object" && link !== null && depth < 10; depth++) {
+    const { name, code, cause } = link as { name?: unknown; code?: unknown; cause?: unknown };
+    // a JSON-RPC error code is the node's answer
+    if (typeof code === "number") return false;
+    if (typeof name === "string" && TRANSPORT_FAILURES.has(name)) return true;
+    link = cause;
+  }
+  return false;
+}
+
+const sleep = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => (clearTimeout(timer), resolve()), { once: true });
+  });
 
 /** Why a saved run cannot be continued from the connected wallet, if it cannot. */
 function foreign(saved: PredictCtx, current: PredictCtx): "wrong-wallet" | "wrong-chain" | undefined {
@@ -58,6 +94,8 @@ export function createPredictRun(args: {
   optionsPerBatch?: number;
   onComplete?: () => void;
   now?: () => number;
+  /** How long, and how often, the chain is read for a send the wallet never answered. */
+  unansweredSend?: { waitMs: number; pollMs: number };
 }): PredictDriver {
   const listeners = new Set<() => void>();
   /** Options left out by each batch not yet settled, by step id; a settled batch's are kept in the run's snapshot. */
@@ -77,6 +115,10 @@ export function createPredictRun(args: {
   let reviewing = false;
   /** Set once this run sends a transaction that moves money; a failed step put back to pending does not clear it. */
   let moneyMoved = false;
+  /** Set while the chain is read for a send the wallet never answered. */
+  let awaitingUnanswered = false;
+  /** Sends the wallet never answered and the chain had not mined when the run stopped, by step id. */
+  const unansweredSends = new Map<string, UnansweredSend>();
   let cached: PredictProgress;
 
   const deps: PredictDeps = {
@@ -91,9 +133,70 @@ export function createPredictRun(args: {
     },
   };
 
+  const waiting = args.unansweredSend ?? UNANSWERED_SEND;
+
+  /** The hash the chain mined `send` under, read until it does or `waiting.waitMs` runs out. */
+  async function answerOf(send: UnansweredSend, signal?: AbortSignal): Promise<Hash | TxPendingError | undefined> {
+    const deadline = Date.now() + waiting.waitMs;
+    let pending = false;
+    while (!signal?.aborted) {
+      const found = await args.reader.sentWithNonce(send).catch(() => undefined);
+      if (found?.status === "mined") return isTx(found, send.tx) ? found.hash : undefined;
+      if (found?.status === "taken") return undefined;
+      if (found) pending = found.status === "pending";
+      if (Date.now() >= deadline) break;
+      await sleep(waiting.pollMs, signal);
+    }
+    return pending ? new TxPendingError() : undefined;
+  }
+
+  /** The wallet's send, carried on with the chain's own record of it when the wallet's answer is lost. */
+  const gateway: TxGateway = {
+    ...args.gateway,
+    async sendTransaction(tx, options) {
+      const run = orchestrator.getRun();
+      const stepId = run ? currentEntry(run.steps)?.stepId : undefined;
+      if (!run || stepId === undefined) return args.gateway.sendTransaction(tx, options);
+
+      const owner = run.ctx.owner;
+      const [nonce, fromBlock] = await Promise.all([args.reader.nextNonce(owner), args.reader.latestBlock()]);
+      try {
+        return await args.gateway.sendTransaction(tx, options);
+      } catch (error) {
+        if (!unanswered(error)) throw error;
+        const send = { owner, nonce, fromBlock, tx };
+        awaitingUnanswered = true;
+        notify();
+        const answer = await answerOf(send, options?.signal).finally(() => {
+          awaitingUnanswered = false;
+        });
+        if (typeof answer === "string") return answer;
+        unansweredSends.set(stepId, send);
+        throw answer ?? error;
+      }
+    },
+  };
+
+  /** Each step first asks whether a send of its that the wallet never answered has since been mined. */
+  function checkingUnanswered(steps: TxStep<PredictSnapshot, PredictCtx>[]): TxStep<PredictSnapshot, PredictCtx>[] {
+    return steps.map((step) => ({
+      ...step,
+      canSkip: async (ctx, snap) => {
+        const send = unansweredSends.get(step.id);
+        if (send) {
+          const found = await args.reader.sentWithNonce(send);
+          if (found.status === "pending") throw new TxPendingError();
+          unansweredSends.delete(step.id);
+          if (found.status === "mined" && found.success && isTx(found, send.tx)) return true;
+        }
+        return step.canSkip ? step.canSkip(ctx, snap) : false;
+      },
+    }));
+  }
+
   const orchestrator = createTxOrchestrator<PredictSnapshot, PredictCtx>({
     adapterId: "predict-flow",
-    gateway: args.gateway,
+    gateway,
     hooks: createPredictHooks({
       reader: args.reader,
       takeSkips: (stepId) => {
@@ -159,7 +262,7 @@ export function createPredictRun(args: {
   function stage(): PredictProgress["stage"] {
     const run = orchestrator.getRun();
     if (!run) return failure ? "halted" : checking ? "quoting" : "idle";
-    if (reconciling && !failure) return "confirming";
+    if ((reconciling || awaitingUnanswered) && !failure) return "confirming";
     if (reviewing && !failure) return "review";
 
     switch (run.status) {
@@ -283,7 +386,7 @@ export function createPredictRun(args: {
       return;
     }
 
-    const steps = planPredict(stored.snapshot, deps);
+    const steps = checkingUnanswered(planPredict(stored.snapshot, deps));
     const restored = orchestrator.restore({ flowId: args.flowId, steps });
     if (!restored) return;
 
@@ -341,7 +444,8 @@ export function createPredictRun(args: {
 
     const requested = args.snapshot();
     const ctx = args.ctx();
-    const steps = planPredict(requested, deps);
+    unansweredSends.clear();
+    const steps = checkingUnanswered(planPredict(requested, deps));
     // The rows exist before the run does, so the popup opens on the list rather than on nothing.
     planned = steps.map((step) => ({ id: step.id, label: step.label, state: "pending" }));
     const check = {};
@@ -400,6 +504,7 @@ export function createPredictRun(args: {
       moneyMoved = false;
       buildFailure = undefined;
       skipping.clear();
+      unansweredSends.clear();
       planned = [];
       report(undefined);
     },

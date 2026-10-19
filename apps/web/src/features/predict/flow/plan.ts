@@ -384,7 +384,7 @@ const landedSince = (deps: Pick<PredictDeps, "reader">, ctx: PredictCtx, snap: R
   deps.reader.landedSince({ owner: ctx.owner, executor: ctx.executor, fromBlock: snap.fromBlock });
 
 /** `landed` is `tx` itself: the same target, value and calldata. */
-const isTx = (landed: LandedTx, tx: FlowTx): boolean =>
+export const isTx = (landed: Pick<LandedTx, "to" | "value" | "input">, tx: FlowTx): boolean =>
   isAddressEqual(landed.to, tx.to) &&
   landed.value === (tx.value ?? 0n) &&
   landed.input.toLowerCase() === (tx.data ?? "0x").toLowerCase();

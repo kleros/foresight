@@ -1,4 +1,4 @@
-import type { Address, Hex } from "viem";
+import type { Address, Hash, Hex } from "viem";
 
 import type { CreditsRoute } from "@/config/contracts";
 
@@ -41,6 +41,16 @@ export interface LandedTx {
   collateralReceived: bigint;
 }
 
+/** What became of the owner's transaction with a given nonce. */
+export type SentTx =
+  | ({ status: "mined"; hash: Hash; success: boolean } & Pick<LandedTx, "to" | "value" | "input">)
+  /** Broadcast and not mined. */
+  | { status: "pending" }
+  /** Mined, but in a block before the one looked from. */
+  | { status: "taken" }
+  /** Nothing has used the nonce yet. */
+  | { status: "none" };
+
 export interface PredictReader {
   /** False until the owner has paid for their executor. */
   isExecutorDeployed(executor: Address): Promise<boolean>;
@@ -63,6 +73,10 @@ export interface PredictReader {
   landedSince(args: { owner: Address; executor: Address; fromBlock: bigint }): Promise<LandedTx[]>;
   /** True while `owner` has a transaction broadcast and not yet mined. */
   hasPending(owner: Address): Promise<boolean>;
+  /** The nonce `owner`'s next transaction takes, counting those broadcast and not mined. */
+  nextNonce(owner: Address): Promise<number>;
+  /** `owner`'s transaction with `nonce`, looked for in the blocks from `fromBlock` on. */
+  sentWithNonce(args: { owner: Address; nonce: number; fromBlock: bigint }): Promise<SentTx>;
 }
 
 export interface PredictSnapshot {

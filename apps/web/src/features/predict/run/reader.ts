@@ -110,6 +110,36 @@ export function createPredictReader(args: {
       return pending > latest;
     },
 
+    nextNonce(owner) {
+      return args.client.getTransactionCount({ address: owner, blockTag: "pending" });
+    },
+
+    async sentWithNonce({ owner, nonce, fromBlock }) {
+      const [mined, broadcast] = await Promise.all([
+        args.client.getTransactionCount({ address: owner, blockTag: "latest" }),
+        args.client.getTransactionCount({ address: owner, blockTag: "pending" }),
+      ]);
+      if (mined <= nonce) return { status: broadcast > nonce ? "pending" : "none" };
+
+      const head = await args.client.getBlockNumber({ cacheTime: 0 });
+      for (let number = head; number >= fromBlock; number--) {
+        const block = await args.client.getBlock({ blockNumber: number, includeTransactions: true });
+        const tx = block.transactions.find((each) => isAddressEqual(each.from, owner) && each.nonce === nonce);
+        if (!tx) continue;
+        if (tx.to === null) return { status: "taken" };
+        const receipt = await args.client.getTransactionReceipt({ hash: tx.hash });
+        return {
+          status: "mined",
+          hash: tx.hash,
+          to: tx.to,
+          value: tx.value,
+          input: tx.input,
+          success: receipt.status === "success",
+        };
+      }
+      return { status: "taken" };
+    },
+
     async optionStates({ options, executor }) {
       const [refs, balances] = await Promise.all([
         fetchSessionPools(args.sessionId),

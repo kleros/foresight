@@ -147,6 +147,8 @@ export function fakeReader(
     latestBlock: () => Promise.resolve(1n),
     landedSince: () => Promise.resolve(typeof opts.landed === "function" ? opts.landed() : (opts.landed ?? [])),
     hasPending: () => Promise.resolve(opts.pending?.() ?? false),
+    nextNonce: () => Promise.resolve(0),
+    sentWithNonce: () => Promise.resolve({ status: "none" }),
     optionStates: (args) => {
       asked.push(args);
       return Promise.resolve(args.options.map((each) => opts.state?.(each) ?? chainState()));
