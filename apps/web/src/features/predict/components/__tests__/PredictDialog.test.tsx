@@ -404,13 +404,21 @@ describe("predicting", () => {
   });
 
   it("offers no remove on a stored run's estimates", () => {
-    render(<PredictDialog {...props()} recovered={{ deposit: WAD, token: sDai, slippage: { tradeBps: 100 } }} canRetry />);
+    render(
+      <PredictDialog {...props()} recovered={{ deposit: WAD, token: sDai, slippage: { tradeBps: 100 } }} canRetry />,
+    );
 
     expect(screen.queryByRole("button", { name: /Remove/ })).toBeNull();
   });
 
   it("will not resume a stored run that cannot be picked up", () => {
-    render(<PredictDialog {...props()} recovered={{ deposit: WAD, token: sDai, slippage: { tradeBps: 100 } }} canRetry={false} />);
+    render(
+      <PredictDialog
+        {...props()}
+        recovered={{ deposit: WAD, token: sDai, slippage: { tradeBps: 100 } }}
+        canRetry={false}
+      />,
+    );
 
     expect(screen.getByRole("button", { name: "Resume" })).toBeDisabled();
   });
@@ -665,7 +673,13 @@ describe("the summary under the amount", () => {
   });
 
   it("names no mint for a stored run, which minted what it stored", async () => {
-    render(<PredictDialog {...props()} recovered={{ deposit: 4n * WAD, token: sDai, slippage: { tradeBps: 100 } }} canRetry />);
+    render(
+      <PredictDialog
+        {...props()}
+        recovered={{ deposit: 4n * WAD, token: sDai, slippage: { tradeBps: 100 } }}
+        canRetry
+      />,
+    );
 
     await userEvent.click(summaryHead());
 
@@ -705,7 +719,13 @@ describe("the summary under the amount", () => {
     expect(summaryHead()).toHaveAttribute("aria-expanded", "false");
     view.rerender(<PredictDialog {...props()} preview={preview} canRetry isPending />);
     expect(summaryHead()).toHaveAttribute("aria-expanded", "false");
-    view.rerender(<PredictDialog {...props()} preview={preview} recovered={{ deposit: 4n * WAD, token: sDai, slippage: { tradeBps: 100 } }} />);
+    view.rerender(
+      <PredictDialog
+        {...props()}
+        preview={preview}
+        recovered={{ deposit: 4n * WAD, token: sDai, slippage: { tradeBps: 100 } }}
+      />,
+    );
     expect(summaryHead()).toHaveAttribute("aria-expanded", "false");
   });
 
@@ -803,7 +823,7 @@ describe("the settings", () => {
     render(<PredictDialog {...props()} slippage={{ settings: { tradeBps: null, creditsBps: null }, onChange }} />);
     await userEvent.click(gear());
 
-    await userEvent.type(screen.getByRole("textbox", { name: "Max slippage on trades, custom percent" }), "2.5");
+    await userEvent.type(screen.getByRole("textbox", { name: "Max slippage, custom percent" }), "2.5");
     expect(onChange).not.toHaveBeenCalled();
     await userEvent.tab();
 
@@ -815,7 +835,7 @@ describe("the settings", () => {
     render(<PredictDialog {...props()} slippage={{ settings: { tradeBps: null, creditsBps: null }, onChange }} />);
     await userEvent.click(gear());
 
-    await userEvent.type(screen.getByRole("textbox", { name: "Max slippage on trades, custom percent" }), "3{Enter}");
+    await userEvent.type(screen.getByRole("textbox", { name: "Max slippage, custom percent" }), "3{Enter}");
 
     expect(onChange).toHaveBeenCalledExactlyOnceWith("tradeBps", 300);
   });
@@ -843,7 +863,7 @@ describe("the settings", () => {
     const onChange = vi.fn();
     render(<PredictDialog {...props()} slippage={{ settings: { tradeBps: null, creditsBps: null }, onChange }} />);
     await userEvent.click(gear());
-    const field = screen.getByRole("textbox", { name: "Max slippage on trades, custom percent" });
+    const field = screen.getByRole("textbox", { name: "Max slippage, custom percent" });
 
     await userEvent.type(field, "60");
     expect(field).not.toHaveAttribute("aria-invalid");
@@ -855,11 +875,48 @@ describe("the settings", () => {
     expect(field).toHaveAccessibleDescription(/Enter a percent from 0\.01 to 50\.$/);
   });
 
+  it("offer Reset while a field holds an entry it refused, and go back to Auto from it", async () => {
+    render(<PredictDialog {...props()} />);
+    await userEvent.click(gear());
+    const field = screen.getByRole("textbox", { name: "Max slippage, custom percent" });
+    await userEvent.type(field, "99");
+    await userEvent.tab();
+
+    await userEvent.click(within(panel()).getByRole("button", { name: "Reset" }));
+
+    const after = screen.getByRole("textbox", { name: "Max slippage, custom percent" });
+    expect(after).toHaveValue("");
+    expect(after).not.toHaveAttribute("aria-invalid");
+    expect(within(panel()).getAllByRole("button", { name: "Auto" })[0]).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("drop an entry it refused when the panel closes, so it reopens on the slippage in use", async () => {
+    render(<PredictDialog {...props()} />);
+    await userEvent.click(gear());
+    await userEvent.type(screen.getByRole("textbox", { name: "Max slippage, custom percent" }), "99");
+    await userEvent.click(within(panel()).getByRole("button", { name: "Done" }));
+
+    await userEvent.click(gear());
+
+    const field = screen.getByRole("textbox", { name: "Max slippage, custom percent" });
+    expect(field).toHaveValue("");
+    expect(field).not.toHaveAttribute("aria-invalid");
+    expect(within(panel()).getByRole("button", { name: "Reset" })).toBeDisabled();
+  });
+
+  it("show each setting's hint to every visitor", async () => {
+    render(<PredictDialog {...props()} {...withCredits} />);
+    await userEvent.click(gear());
+
+    expect(within(panel()).getByText("How far a trade may fill from its plan.")).toBeVisible();
+    expect(within(panel()).getByText("How far the swap may fill below its quote.")).toBeVisible();
+  });
+
   it("refuse 0, at which no swap can fill", async () => {
     const onChange = vi.fn();
     render(<PredictDialog {...props()} slippage={{ settings: { tradeBps: null, creditsBps: null }, onChange }} />);
     await userEvent.click(gear());
-    const field = screen.getByRole("textbox", { name: "Max slippage on trades, custom percent" });
+    const field = screen.getByRole("textbox", { name: "Max slippage, custom percent" });
 
     await userEvent.type(field, "0");
     await userEvent.tab();
@@ -874,7 +931,7 @@ describe("the settings", () => {
     );
     await userEvent.click(gear());
 
-    expect(screen.getByRole("textbox", { name: "Max slippage on trades, custom percent" })).toHaveAccessibleDescription(
+    expect(screen.getByRole("textbox", { name: "Max slippage, custom percent" })).toHaveAccessibleDescription(
       /Low slippage\. A trade may fail if the pool moves at all\.$/,
     );
   });
@@ -921,7 +978,7 @@ describe("the settings", () => {
     );
     await userEvent.click(gear());
 
-    expect(screen.getByRole("textbox", { name: "Max slippage on trades, custom percent" })).toHaveAccessibleDescription(
+    expect(screen.getByRole("textbox", { name: "Max slippage, custom percent" })).toHaveAccessibleDescription(
       /High slippage\. A trade may fill at a much worse price\.$/,
     );
   });
@@ -936,16 +993,16 @@ describe("the settings", () => {
     );
     await userEvent.click(gear());
 
-    expect(
-      screen.getByRole("textbox", { name: "Max slippage on the credits swap, custom percent" }),
-    ).toHaveAccessibleDescription(/High slippage\. The swap may pay much less than its quote\.$/);
+    expect(screen.getByRole("textbox", { name: "Credits swap slippage, custom percent" })).toHaveAccessibleDescription(
+      /High slippage\. The swap may pay much less than its quote\.$/,
+    );
   });
 
   it("show the slippage in use on Auto in each empty field, and name it", async () => {
     render(<PredictDialog {...props()} {...withCredits} />);
     await userEvent.click(gear());
-    const trades = screen.getByRole("textbox", { name: "Max slippage on trades, custom percent" });
-    const credits = screen.getByRole("textbox", { name: "Max slippage on the credits swap, custom percent" });
+    const trades = screen.getByRole("textbox", { name: "Max slippage, custom percent" });
+    const credits = screen.getByRole("textbox", { name: "Credits swap slippage, custom percent" });
 
     expect(trades).toHaveValue("");
     expect(trades).toHaveAttribute("placeholder", "1");
@@ -985,14 +1042,14 @@ describe("the settings", () => {
       <PredictDialog {...props()} slippage={{ settings: { tradeBps: 300, creditsBps: null }, onChange: vi.fn() }} />,
     );
     await userEvent.click(gear());
-    const field = screen.getByRole("textbox", { name: "Max slippage on trades, custom percent" });
+    const field = screen.getByRole("textbox", { name: "Max slippage, custom percent" });
     await userEvent.clear(field);
     await userEvent.type(field, "70");
     await userEvent.tab();
 
     await userEvent.click(within(panel()).getByRole("button", { name: "Reset" }));
 
-    const after = screen.getByRole("textbox", { name: "Max slippage on trades, custom percent" });
+    const after = screen.getByRole("textbox", { name: "Max slippage, custom percent" });
     expect(after).not.toHaveAttribute("aria-invalid");
     expect(within(panel()).getAllByRole("button", { name: "Auto" })[0]).toHaveFocus();
   });

@@ -14,6 +14,7 @@ import { formatEstimate } from "@/utils/formatEstimate";
 import { INERT } from "@/utils/inert";
 
 import type { PayToken } from "../types";
+import { GearIcon } from "./GearIcon";
 import { PredictAmountSection, type PayTokenChoice } from "./PredictAmountSection";
 import { PredictButton } from "./PredictButton";
 import type { CreditsChoice } from "./PredictCreditsLine";
@@ -21,7 +22,6 @@ import { PredictList, type ListedEstimate, type PriceMove } from "./PredictList"
 import { PredictSettings, reachable } from "./PredictSettings";
 import { PredictStepsTimeline } from "./PredictStepsTimeline";
 import { PredictSummary, type CreditsSwapShown } from "./PredictSummary";
-import { GearIcon } from "./GearIcon";
 import { HIGH_SLIPPAGE_BPS } from "../oracle/tolerances";
 import { shownAmount, type Funding } from "../utils/funding";
 import {
@@ -313,7 +313,7 @@ export function PredictDialog({
                 last.focus();
               }}
               className={clsx(
-                "relative grid size-8 cursor-pointer place-items-center rounded-full",
+                "group relative grid size-8 cursor-pointer place-items-center rounded-full",
                 "transition-colors duration-(--fs-dur-echo) ease-(--fs-ease-enter)",
                 "[@media(hover:hover)]:hover:bg-fs-popup-hover aria-expanded:bg-fs-popup-chip",
                 "disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent",
@@ -331,7 +331,9 @@ export function PredictDialog({
                 data-open={isCustomSlippage || undefined}
                 className={clsx(
                   "predict-gear-dot bg-fs-popup-accent-text absolute top-1 right-1 size-1.5 rounded-full",
-                  "ring-fs-surface ring-2",
+                  // the ring takes the button's own fill, so it parts the dot from the gear and nothing else
+                  "ring-fs-surface ring-2 [@media(hover:hover)]:group-enabled:group-hover:ring-fs-popup-hover",
+                  "group-aria-expanded:ring-fs-popup-chip",
                 )}
               />
             </button>

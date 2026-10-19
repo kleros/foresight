@@ -579,7 +579,7 @@ describe("a run stopped after money moved", () => {
     );
 
     await userEvent.click(popup.getByRole("button", { name: "Settings" }));
-    await userEvent.type(popup.getByRole("textbox", { name: "Max slippage on trades, custom percent" }), "3");
+    await userEvent.type(popup.getByRole("textbox", { name: "Max slippage, custom percent" }), "3");
     await userEvent.click(popup.getByRole("button", { name: "Done" }));
     await userEvent.click(popup.getByRole("button", { name: "Try the rest" }));
 
@@ -595,7 +595,7 @@ describe("the slippage a run uses", () => {
     const popup = await openPopup();
 
     await userEvent.click(popup.getByRole("button", { name: "Settings" }));
-    await userEvent.type(popup.getByRole("textbox", { name: "Max slippage on trades, custom percent" }), "3");
+    await userEvent.type(popup.getByRole("textbox", { name: "Max slippage, custom percent" }), "3");
     await userEvent.tab();
 
     expect(runInput.current?.slippage()).toEqual({ tradeBps: 300, creditsBps: DEFAULT_SLIPPAGE.creditsBps });

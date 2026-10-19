@@ -202,7 +202,9 @@ describe("a retry's new slippage before the visitor confirms it", () => {
     const options = [option(1), option(2), option(3)];
     const request = snapshot({ options, deposit: WAD, collateralIn: WAD, slippage: AUTO });
     const { driver, sent, setSettings } = setup(request, { revertNth: 2, blockGasLimit: onePerBatch() });
-    const plans = Object.fromEntries(options.map((each) => [each.childMarket.toLowerCase(), planOn(WAD, SLIPPAGE_BPS)]));
+    const plans = Object.fromEntries(
+      options.map((each) => [each.childMarket.toLowerCase(), planOn(WAD, SLIPPAGE_BPS)]),
+    );
     driver.start({ plans });
     await stageIs(driver, "halted");
     expect(driver.getProgress().batchesDone).toBe(1);

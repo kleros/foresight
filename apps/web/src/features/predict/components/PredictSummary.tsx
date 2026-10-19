@@ -7,12 +7,12 @@ import { ChevronIcon } from "@/components/ui/ChevronIcon";
 import { formatEstimate } from "@/utils/formatEstimate";
 import { INERT } from "@/utils/inert";
 
+import { GearIcon } from "./GearIcon";
 import type { ListedEstimate, PriceMove } from "./PredictList";
 import type { CreditsSwapPreview } from "../flow/types";
 import { shownAmount } from "../utils/funding";
 import type { OptionSide } from "../utils/plan";
 import { CHECKING_PRICES } from "../utils/predictSteps";
-import { GearIcon } from "./GearIcon";
 import { SLIPPAGE_LABEL, slippagePercent } from "../utils/slippage";
 
 /** The credits a run spends and their swap into xDAI as quoted now. */

@@ -9,25 +9,22 @@ import {
   isHighSlippage,
   isLowSlippage,
   parseSlippagePercent,
+  SLIPPAGE_LABEL,
   slippagePercent,
   type SlippageKind,
   type SlippageSettings,
 } from "../utils/slippage";
 
-const FIELDS: { kind: SlippageKind; label: string; name: string; hint: string; high: string; low: string }[] = [
+const FIELDS: { kind: SlippageKind; hint: string; high: string; low: string }[] = [
   {
     kind: "tradeBps",
-    label: "Max slippage",
-    name: "Max slippage on trades",
-    hint: "How far each trade may fill from its planned price.",
+    hint: "How far a trade may fill from its plan.",
     high: "High slippage. A trade may fill at a much worse price.",
     low: "Low slippage. A trade may fail if the pool moves at all.",
   },
   {
     kind: "creditsBps",
-    label: "Credits swap",
-    name: "Max slippage on the credits swap",
-    hint: "How far the swap of your credits may fill below its quote.",
+    hint: "How far the swap may fill below its quote.",
     high: "High slippage. The swap may pay much less than its quote.",
     low: "Low slippage. The swap may fail if the pool moves at all.",
   },
@@ -71,8 +68,19 @@ export function PredictSettings({
 }) {
   // a Reset drops what each field holds unsaved, so every field remounts on it
   const [resets, setResets] = useState(0);
+  // closing drops an entry left invalid too, so the panel never reopens on a value the run does not use
+  const [closes, setCloses] = useState(0);
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  const [drafted, setDrafted] = useState<Partial<Record<SlippageKind, boolean>>>({});
+  if (wasOpen !== isOpen) {
+    setWasOpen(isOpen);
+    if (!isOpen) {
+      setCloses((count) => count + 1);
+      setDrafted({});
+    }
+  }
   const fields = FIELDS.filter((field) => hasCredits || field.kind !== "creditsBps");
-  const isCustom = fields.some((field) => settings[field.kind] !== null);
+  const isCustom = fields.some((field) => settings[field.kind] !== null || drafted[field.kind]);
   useEffect(() => {
     // Reset disables itself, so the focus moves on to the first choice
     if (resets > 0) reachable(panelRef.current)[0]?.focus();
@@ -115,17 +123,20 @@ export function PredictSettings({
     >
       <div
         className={clsx(
-          "predict-settings-card rounded-fs-panel bg-fs-popup-panel flex flex-col gap-2 border px-4 pt-3 pb-3",
+          "predict-settings-card rounded-fs-panel bg-fs-popup-panel flex flex-col gap-2 border px-3.5 pt-3 pb-3",
           "border-(--fs-popup-line) shadow-(--fs-popup-shadow)",
         )}
       >
         {fields.map((field, index) => (
           <SlippageField
-            key={`${field.kind}-${resets}`}
+            key={`${field.kind}-${resets}-${closes}`}
             autoRef={index === 0 ? firstControlRef : undefined}
             {...field}
             value={settings[field.kind]}
             onChange={(bps) => onChange(field.kind, bps)}
+            onDrafted={(isDrafted) =>
+              setDrafted((was) => (Boolean(was[field.kind]) === isDrafted ? was : { ...was, [field.kind]: isDrafted }))
+            }
           />
         ))}
         <div className="mt-1 flex items-center justify-between gap-3 border-t border-(--fs-popup-line) pt-3">
@@ -135,11 +146,12 @@ export function PredictSettings({
             onClick={() => {
               for (const field of FIELDS) if (settings[field.kind] !== null) onChange(field.kind, null);
               setResets((count) => count + 1);
+              setDrafted({});
             }}
             className={clsx(
               "type-label text-fs-popup-accent-text relative -ml-2 h-8 cursor-pointer rounded-fs-control px-2",
               "font-medium transition-colors duration-(--fs-dur-echo) ease-(--fs-ease-enter)",
-              "[@media(hover:hover)]:hover:bg-fs-popup-hover disabled:text-fs-popup-text-3 disabled:cursor-default",
+              "[@media(hover:hover)]:hover:bg-fs-popup-hover disabled:cursor-default disabled:opacity-40",
               "disabled:hover:bg-transparent before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']",
             )}
           >
@@ -167,19 +179,15 @@ export function PredictSettings({
 
 function SlippageField({
   kind,
-  label,
-  name,
   hint,
   high,
   low,
   value,
   onChange,
+  onDrafted,
   autoRef,
 }: {
   kind: SlippageKind;
-  label: string;
-  /** The field's full name for assistive tech, where `label` leans on the panel around it. */
-  name: string;
   hint: string;
   /** Said under a value over the kind's high threshold. */
   high: string;
@@ -188,8 +196,11 @@ function SlippageField({
   /** Basis points, or null on Auto. */
   value: number | null;
   onChange: (bps: number | null) => void;
+  /** Told whether the field holds an entry that is not saved. */
+  onDrafted: (isDrafted: boolean) => void;
   autoRef?: Ref<HTMLButtonElement>;
 }) {
+  const label = SLIPPAGE_LABEL[kind];
   const labelId = useId();
   const hintId = useId();
   const messageId = useId();
@@ -204,6 +215,8 @@ function SlippageField({
   const isLow = value !== null && isLowSlippage(kind, value);
   const isAuto = value === null && draft === null;
   const autoValue = slippagePercent(DEFAULT_SLIPPAGE[kind]);
+  const isDrafted = draft !== null;
+  useEffect(() => onDrafted(isDrafted), [isDrafted, onDrafted]);
 
   const commit = () => {
     if (draft === null || parsed === "invalid") return;
@@ -218,17 +231,19 @@ function SlippageField({
       : isLow
         ? { text: low, tone: "text-fs-tone-warning-text" }
         : null;
+  // the last message stays in place while its row folds away, then goes, so the same one is announced again
+  const [folding, setFolding] = useState(message);
+  if (message && (folding?.text !== message.text || folding.tone !== message.tone)) setFolding(message);
+  const drawn = message ?? folding;
 
   return (
     <section data-slippage={kind} className="flex flex-col">
-      <div className="flex min-h-9 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+      {/* over the lines under it, so Auto's and the field's extended targets stay whole */}
+      <div className="relative z-10 flex min-h-8 flex-wrap items-center justify-between gap-x-2 gap-y-1">
         <h3 id={labelId} className="type-label text-fs-popup-text font-medium">
           {label}
         </h3>
-        <p id={hintId} className="sr-only">
-          {`${hint} Auto is ${autoValue}%.`}
-        </p>
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="ml-auto flex items-center gap-1">
           <button
             ref={autoRef}
             type="button"
@@ -239,7 +254,7 @@ function SlippageField({
               onChange(null);
             }}
             className={clsx(
-              "type-label relative h-8 shrink-0 cursor-pointer rounded-fs-control px-3 font-medium",
+              "type-label relative h-8 shrink-0 cursor-pointer rounded-fs-control px-2.5 font-medium",
               // a 44px target in the row's 32px
               "before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']",
               "transition-colors duration-(--fs-dur-echo) ease-(--fs-ease-enter)",
@@ -252,14 +267,14 @@ function SlippageField({
           </button>
           <label
             className={clsx(
-              "bg-fs-surface relative flex h-8 w-20 min-w-0 items-center rounded-fs-control border px-2.5",
+              "bg-fs-surface relative flex h-8 w-[68px] min-w-0 items-center rounded-fs-control border px-2",
               "before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']",
               // the field's own outline is off, so the box takes the one keyboard ring
               "focus-within:outline-2 focus-within:outline-offset-[-1px] focus-within:outline-(--fs-focus-ring)",
               isInvalid ? "border-(--fs-tone-error)" : "border-(--fs-popup-line-strong)",
             )}
           >
-            <span className="sr-only">{`${name}, custom percent`}</span>
+            <span className="sr-only">{`${label}, custom percent`}</span>
             <input
               type="text"
               inputMode="decimal"
@@ -269,7 +284,7 @@ function SlippageField({
               // on Auto the field shows the value in use
               placeholder={autoValue}
               aria-invalid={isInvalid || undefined}
-              aria-describedby={`${hintId} ${messageId}`}
+              aria-describedby={message ? `${hintId} ${messageId}` : hintId}
               onChange={(event) => setDraft(event.target.value)}
               onFocus={() => setFocused(true)}
               onBlur={() => {
@@ -290,15 +305,27 @@ function SlippageField({
           </label>
         </div>
       </div>
-      {/* mounted empty, so a warning is announced as it appears */}
-      <p id={messageId} aria-live="polite" className={clsx("text-xs leading-4 text-pretty", message?.tone)}>
-        {message ? (
-          <span className="fs-enter flex items-start gap-1 pt-1">
-            <AlertIcon />
-            <span>{message.text}</span>
-          </span>
-        ) : null}
+      <p id={hintId} className="text-fs-popup-text-3 text-xs leading-4 text-pretty">
+        {hint}
+        <span className="sr-only">{` Auto is ${autoValue}%.`}</span>
       </p>
+      {/* folds open under the hint (transitions.dev 21) */}
+      <div
+        data-open={message ? true : undefined}
+        className="predict-settings-message"
+        onTransitionEnd={(event) => {
+          if (event.target === event.currentTarget && !message) setFolding(null);
+        }}
+      >
+        <p id={messageId} aria-live="polite" className={clsx("min-h-0 text-xs leading-4 text-pretty", drawn?.tone)}>
+          {drawn ? (
+            <span className="flex items-start gap-1 pt-1">
+              <AlertIcon />
+              <span>{drawn.text}</span>
+            </span>
+          ) : null}
+        </p>
+      </div>
     </section>
   );
 }
