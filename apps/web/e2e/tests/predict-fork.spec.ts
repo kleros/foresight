@@ -81,6 +81,9 @@ test.describe("a session seeded on the gnosis fork", () => {
       await page.keyboard.press("ArrowRight");
       await page.keyboard.press("ArrowRight");
 
+      // Predict is off without a wallet or outside trading; each is named apart from the button
+      await expect(page.getByText("Connect a wallet to predict.")).toHaveCount(0);
+      await expect(page.getByText("Countdown")).toBeVisible();
       await expect(predict).toBeEnabled();
     });
   }

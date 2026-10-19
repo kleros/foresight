@@ -21,7 +21,7 @@ export default defineConfig({
   reporter: "html",
   use: {
     baseURL: BASE_URL,
-    trace: "on-first-retry",
+    trace: process.env.CI ? "on-first-retry" : "retain-on-failure",
     // The closing-time fields are typed in the browser's time zone;
     timezoneId: "GMT",
   },

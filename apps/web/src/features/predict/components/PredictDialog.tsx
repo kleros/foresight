@@ -14,6 +14,7 @@ import { formatEstimate } from "@/utils/formatEstimate";
 import { INERT } from "@/utils/inert";
 
 import type { PayToken } from "../types";
+import { GearIcon } from "./GearIcon";
 import { PredictAmountSection, type PayTokenChoice } from "./PredictAmountSection";
 import { PredictButton } from "./PredictButton";
 import type { CreditsChoice } from "./PredictCreditsLine";
@@ -26,12 +27,13 @@ import { shownAmount, type Funding } from "../utils/funding";
 import {
   CHECKING_PRICES,
   CONFIRM_MOVED,
+  CONFIRM_SLIPPAGE,
   statusLine,
   type MovedStatus,
   type PredictSteps,
   type StatusLine,
 } from "../utils/predictSteps";
-import type { SlippageKind, SlippageSettings } from "../utils/slippage";
+import { resolveSlippage, type SlippageKind, type SlippageSettings } from "../utils/slippage";
 
 interface PredictDialogProps {
   isOpen: boolean;
@@ -63,8 +65,11 @@ interface PredictDialogProps {
   canRetry: boolean;
   /** The stopped run sent a transaction whose outcome is unknown; pressing on checks it first. */
   isPending?: boolean;
-  /** A stored run under review: its own deposit fills the locked amount form, and Resume replaces Predict. */
-  recovered?: { deposit: bigint; token: PayTokenChoice };
+  /**
+   * A stored run under review: its own deposit fills the locked amount form, Resume replaces Predict, and Details
+   * names its own slippage, the credits swap's only while that swap is still to sign.
+   */
+  recovered?: { deposit: bigint; token: PayTokenChoice; slippage: { tradeBps: number; creditsBps?: number } };
   /** What the visitor has to do before this prediction can be made, if anything. */
   notice?: string;
   /** The visitor's slippage, which the settings panel changes. */
@@ -72,11 +77,15 @@ interface PredictDialogProps {
   /** Credits the run would swap into xDAI and the swap as quoted now; absent where it spends none. */
   creditsSwap?: CreditsSwapShown;
   /** What changed when the pools were read again before signing; the button then confirms the new figures. */
-  moved?: { markets: number; credits: boolean };
+  moved?: { markets: number; credits: boolean; bySlippage?: true };
   /** Every option's plan is read, and the credits swap's quote where credits are spent, so Predict holds the run to them. */
   pricesReady: boolean;
   /** Declines the moved figures and gives the form back, where nothing has been signed. */
   onBack?: () => void;
+  /** Reads the prices again where they could not be read; the button then offers it. */
+  onRetryPrices?: () => void;
+  /** The prices are being read again. */
+  isRetryingPrices?: boolean;
   /** Starts a run, picks a stopped one up again, or confirms moved prices. */
   onPredict: () => void;
 }
@@ -105,7 +114,8 @@ function onlyMoved(selected: ListedEstimate[], preview: Record<string, PriceMove
   const estimate = changed[0]!;
   const move = preview![estimate.scale.market.toLowerCase()]!;
   const format = (value: number) => formatEstimate(value, estimate.scale.unit);
-  return { name: estimate.scale.name, to: format(move.to), was: format(move.was!.to) };
+  const [to, was] = [format(move.to), format(move.was!.to)];
+  return to === was ? undefined : { name: estimate.scale.name, to, was };
 }
 
 /** The busy button for a running step that is not waiting on the wallet. */
@@ -155,6 +165,8 @@ export function PredictDialog({
   moved,
   pricesReady,
   onBack,
+  onRetryPrices,
+  isRetryingPrices = false,
   onPredict,
 }: PredictDialogProps) {
   const isMoved = moved !== undefined;
@@ -173,6 +185,11 @@ export function PredictDialog({
   const shownPreview = useHeldWhile(preview, lock);
   const shownCreditsSwap = useHeldWhile(creditsSwap, lock);
   const swap = recovered ? undefined : shownCreditsSwap?.preview;
+  const resolved = resolveSlippage(slippage.settings);
+  const inUse = {
+    tradeBps: resolved.tradeBps,
+    ...(shownCreditsSwap && !shownCreditsSwap.landed ? { creditsBps: resolved.creditsBps } : {}),
+  };
   const status = statusLine({
     steps,
     notice,
@@ -204,9 +221,14 @@ export function PredictDialog({
     return () => clearTimeout(timer);
   }, [isMoved]);
   const statusRef = useRef<HTMLParagraphElement>(null);
-  // the settings change what the next run signs, so they close while the form is locked to a run
+  // a stopped run's retry takes up new settings and stops at moved where they change its plan; a stored run
+  // has no plan shown to check against, and a sent transaction is settled before anything else
+  const settingsLocked = isRunning || isMoved || recovered !== undefined || isPending;
   const [settingsWanted, setSettingsWanted] = useState(false);
-  const settingsOpen = settingsWanted && !isLocked;
+  const settingsOpen = settingsWanted && !settingsLocked;
+  const isCustomSlippage =
+    slippage.settings.tradeBps !== null || (credits !== undefined && slippage.settings.creditsBps !== null);
+  const customId = useId();
   const settingsId = useId();
   const titleId = useId();
   const gearRef = useRef<HTMLButtonElement>(null);
@@ -278,7 +300,8 @@ export function PredictDialog({
               aria-label="Settings"
               aria-expanded={settingsOpen}
               aria-controls={settingsId}
-              disabled={isLocked}
+              aria-describedby={isCustomSlippage ? customId : undefined}
+              disabled={settingsLocked}
               onClick={() => setSettingsWanted((open) => !open)}
               onKeyDown={(event) => {
                 // the body under the panel is inert, so the dialog's own wrap finds nothing before the gear
@@ -290,7 +313,7 @@ export function PredictDialog({
                 last.focus();
               }}
               className={clsx(
-                "relative grid size-8 cursor-pointer place-items-center rounded-full",
+                "group relative grid size-8 cursor-pointer place-items-center rounded-full",
                 "transition-colors duration-(--fs-dur-echo) ease-(--fs-ease-enter)",
                 "[@media(hover:hover)]:hover:bg-fs-popup-hover aria-expanded:bg-fs-popup-chip",
                 "disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent",
@@ -299,6 +322,20 @@ export function PredictDialog({
               )}
             >
               <GearIcon className="text-fs-popup-text-2 size-4.5" />
+              <span id={customId} className="sr-only">
+                Custom slippage set
+              </span>
+              <span
+                aria-hidden
+                data-testid={isCustomSlippage ? "settings-custom" : undefined}
+                data-open={isCustomSlippage || undefined}
+                className={clsx(
+                  "predict-gear-dot bg-fs-popup-accent-text absolute top-1 right-1 size-1.5 rounded-full",
+                  // the ring takes the button's own fill, so it parts the dot from the gear and nothing else
+                  "ring-fs-surface ring-2 [@media(hover:hover)]:group-enabled:group-hover:ring-fs-popup-hover",
+                  "group-aria-expanded:ring-fs-popup-chip",
+                )}
+              />
             </button>
             <LightButton
               text=""
@@ -392,11 +429,15 @@ export function PredictDialog({
                 isOpen={summaryOpen}
                 onToggle={() => setSummaryOpen((open) => !open)}
                 // before the run, Details waits for the plans Predict will hold the run to
-                isPricing={isPricing || (!pricesReady && !isLocked && notice === undefined && selected.length > 0)}
+                isPricing={
+                  isPricing ||
+                  isRetryingPrices ||
+                  (!pricesReady && !isLocked && notice === undefined && selected.length > 0)
+                }
                 isEstimated={(runToken ?? token).id === "native"}
                 creditsSwap={recovered ? undefined : shownCreditsSwap}
-                slippage={recovered ? undefined : slippage.settings}
-                onOpenSettings={isLocked ? undefined : () => setSettingsWanted(true)}
+                slippage={recovered?.slippage ?? inUse}
+                onOpenSettings={settingsLocked ? undefined : () => setSettingsWanted(true)}
               />
               <PredictStepsTimeline steps={steps} />
             </div>
@@ -413,7 +454,10 @@ export function PredictDialog({
             )}
           >
             {status ? (
-              <span key={status.text} className={clsx(status.tone !== "neutral" && "fs-enter")}>
+              <span
+                key={status.text}
+                className={clsx(status.tone !== "neutral" && "fs-enter", status.small && "truncate text-xs leading-4")}
+              >
                 {status.text}
               </span>
             ) : null}
@@ -427,47 +471,47 @@ export function PredictDialog({
             ) : null}
             <PredictButton
               text={
-                recovered
-                  ? "Resume"
-                  : isPending
-                    ? "Check again"
-                    : canRetry
-                      ? "Try the rest"
-                      : isMoved
-                        ? CONFIRM_MOVED
-                        : "Predict"
+                onRetryPrices
+                  ? "Try again"
+                  : recovered
+                    ? "Resume"
+                    : isPending
+                      ? "Check again"
+                      : canRetry
+                        ? "Try the rest"
+                        : isMoved
+                          ? moved?.bySlippage
+                            ? CONFIRM_SLIPPAGE
+                            : CONFIRM_MOVED
+                          : "Predict"
               }
-              busyText={isRunning ? (isPricing ? CHECKING_PRICES : busyLabel(steps)) : undefined}
-              onPress={onPredict}
+              busyText={
+                isRunning
+                  ? isPricing
+                    ? CHECKING_PRICES
+                    : busyLabel(steps)
+                  : isRetryingPrices
+                    ? CHECKING_PRICES
+                    : undefined
+              }
+              onPress={onRetryPrices ?? onPredict}
               isDisabled={
-                notice !== undefined ||
-                (!canRetry &&
-                  !isMoved &&
-                  (recovered !== undefined ||
-                    selected.length === 0 ||
-                    funding === null ||
-                    tooMuch ||
-                    nothingToTrade ||
-                    !pricesReady))
+                onRetryPrices
+                  ? false
+                  : notice !== undefined ||
+                    (!canRetry &&
+                      !isMoved &&
+                      (recovered !== undefined ||
+                        selected.length === 0 ||
+                        funding === null ||
+                        tooMuch ||
+                        nothingToTrade ||
+                        !pricesReady))
               }
             />
           </div>
         </div>
       </div>
     </Modal>
-  );
-}
-
-function GearIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" aria-hidden className={className}>
-      <path
-        d="M8.3 2.5h3.4l.5 2.1 1.5.9 2.1-.6 1.7 2.9-1.6 1.5v1.4l1.6 1.5-1.7 2.9-2.1-.6-1.5.9-.5 2.1H8.3l-.5-2.1-1.5-.9-2.1.6-1.7-2.9 1.6-1.5V9.3L2.5 7.8l1.7-2.9 2.1.6 1.5-.9.5-2.1Z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-      <circle cx="10" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
   );
 }

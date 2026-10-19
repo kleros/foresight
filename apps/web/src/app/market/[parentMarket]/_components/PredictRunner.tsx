@@ -8,6 +8,7 @@ import { useAccount } from "wagmi";
 import type { PayTokenChoice } from "@/features/predict/components/PredictAmountSection";
 import { PredictDialog } from "@/features/predict/components/PredictDialog";
 import type { PriceMove } from "@/features/predict/components/PredictList";
+import { STEP_ID } from "@/features/predict/flow/stepIds";
 import type { HeldTo, ShownPlans } from "@/features/predict/run/types";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import { useSlippageStore } from "@/features/predict/stores/slippageStore";
@@ -174,6 +175,8 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
   };
   // while a run is held to what it was shown, that is what Details shows
   const isHeldRun = held !== undefined && (isRunning || canRetry);
+  // the first batch carries the credits swap
+  const creditsLanded = progress?.steps.some((step) => step.id === STEP_ID.predict(1) && step.state === "success");
   const shownMoves = moved
     ? movesFrom(
         moved.plans,
@@ -229,6 +232,20 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
     progress,
   });
 
+  // the form's own prices and credits quote matter only to a press that starts a new run
+  const startsNew = !moved && !canRetry && !recovered && !pendingHash;
+  // once a run is going its own state is the story, not what the wallet is doing now
+  const shownNotice = isRunning
+    ? undefined
+    : notice({
+        owner,
+        onRightChain: chainId === DEFAULT_CHAIN_ID,
+        ready,
+        creditsFailed: creditsFailed && startsNew,
+        pricesFailed: preview.failed && startsNew,
+        pricesFailedAgain: preview.failedAgain,
+      });
+
   return (
     <PredictDialog
       isOpen
@@ -260,32 +277,47 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
       isRunning={isRunning}
       canRetry={canRetry}
       isPending={Boolean(pendingHash)}
-      recovered={recovered && { deposit: recovered.deposit, token: runToken }}
-      notice={
-        // once a run is going its own state is the story, not what the wallet is doing now
-        isRunning
-          ? undefined
-          : notice({
-              owner,
-              onRightChain: chainId === DEFAULT_CHAIN_ID,
-              ready,
-              creditsFailed: creditsFailed && !moved,
-              pricesFailed: preview.failed && !moved,
-            })
+      recovered={
+        recovered && {
+          deposit: recovered.deposit,
+          token: runToken,
+          slippage: {
+            tradeBps: recovered.slippage.tradeBps,
+            ...(recovered.creditsToSpend > 0n && !creditsLanded ? { creditsBps: recovered.slippage.creditsBps } : {}),
+          },
+        }
       }
+      notice={shownNotice}
       slippage={{ settings: slippageSettings, onChange: setSlippage }}
       creditsSwap={
         shownCredits && (creditsIn > 0n || moved?.credits || isHeldRun)
-          ? { credits: creditsIn, preview: shownCredits, ...(creditsWas ? { was: creditsWas } : {}) }
+          ? {
+              credits: creditsIn,
+              preview: shownCredits,
+              ...(creditsWas ? { was: creditsWas } : {}),
+              ...(isHeldRun && creditsLanded ? { landed: true as const } : {}),
+            }
           : undefined
       }
-      moved={moved && { markets: moved.markets.length, credits: moved.credits !== undefined }}
+      moved={
+        moved && {
+          markets: moved.markets.length,
+          credits: moved.credits !== undefined,
+          ...(moved.bySlippage ? { bySlippage: true as const } : {}),
+        }
+      }
       pricesReady={preview.ready}
       onBack={moved && !progress?.moneyMoved ? () => driver?.reset() : undefined}
+      // only where the prices are what stands in the way
+      onRetryPrices={shownNotice === PRICES_FAILED || shownNotice === PRICES_FAILED_AGAIN ? preview.retry : undefined}
+      isRetryingPrices={preview.retrying}
       onPredict={predict}
     />
   );
 }
+
+const PRICES_FAILED = "Prices could not be read.";
+const PRICES_FAILED_AGAIN = "Prices still could not be read.";
 
 /** Why this prediction cannot be made, in the words of the thing the visitor has to do. */
 function notice(args: {
@@ -294,11 +326,13 @@ function notice(args: {
   ready: boolean;
   creditsFailed: boolean;
   pricesFailed: boolean;
+  /** A read after a failed one failed too. */
+  pricesFailedAgain: boolean;
 }): string | undefined {
   if (!args.owner) return "Connect a wallet to predict.";
   if (!args.onRightChain) return "Switch to Gnosis to predict.";
   if (!args.ready) return "This session cannot be traded yet.";
-  if (args.pricesFailed) return "Prices could not be read. Try again in a moment.";
+  if (args.pricesFailed) return args.pricesFailedAgain ? PRICES_FAILED_AGAIN : PRICES_FAILED;
   if (args.creditsFailed) return CREDITS_UNAVAILABLE;
   return undefined;
 }

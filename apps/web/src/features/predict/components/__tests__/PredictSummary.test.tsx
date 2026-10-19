@@ -454,7 +454,7 @@ describe("PredictSummary's pool fees", () => {
 
 function renderWith(extra: {
   creditsSwap?: CreditsSwapShown;
-  slippage?: { tradeBps: number | null; creditsBps: number | null };
+  slippage?: { tradeBps: number; creditsBps?: number };
   onOpenSettings?: () => void;
 }) {
   return render(
@@ -509,22 +509,16 @@ describe("PredictSummary's slippage", () => {
     preview: { amount: WAD, creditsBps: 20, quoted: WAD, vaultValue: WAD, floor: WAD, loss: 0n, minted: WAD },
   };
 
-  it("names the trades' slippage on Auto with its value", () => {
-    renderWith({ slippage: { tradeBps: null, creditsBps: null } });
+  it("names the trades' slippage in use as its value", () => {
+    renderWith({ slippage: { tradeBps: 300 } });
 
-    expect(slippageRows()).toEqual(["Max slippage on trades1% (Auto)"]);
+    expect(slippageRows()).toEqual(["Max slippage3%"]);
   });
 
-  it("names a custom trade slippage", () => {
-    renderWith({ slippage: { tradeBps: 300, creditsBps: null } });
+  it("names the credits swap's slippage where one is still to sign", () => {
+    renderWith({ slippage: { tradeBps: 100, creditsBps: 50 }, creditsSwap });
 
-    expect(slippageRows()).toEqual(["Max slippage on trades3%"]);
-  });
-
-  it("names the credits swap's slippage only where credits are swapped", () => {
-    renderWith({ slippage: { tradeBps: null, creditsBps: 50 }, creditsSwap });
-
-    expect(slippageRows()).toEqual(["Max slippage on trades1% (Auto)", "Max slippage on the credits swap0.5%"]);
+    expect(slippageRows()).toEqual(["Max slippage1%", "Credits swap slippage0.5%"]);
   });
 
   it("keeps the row out of the tab order while Details is folded", () => {
@@ -535,7 +529,7 @@ describe("PredictSummary's slippage", () => {
         collateral={sDai}
         isOpen={false}
         onToggle={vi.fn()}
-        slippage={{ tradeBps: null, creditsBps: null }}
+        slippage={{ tradeBps: 100 }}
         onOpenSettings={vi.fn()}
       />,
     );
@@ -545,9 +539,9 @@ describe("PredictSummary's slippage", () => {
 
   it("opens the settings from a row", async () => {
     const onOpenSettings = vi.fn();
-    renderWith({ slippage: { tradeBps: null, creditsBps: null }, onOpenSettings });
+    renderWith({ slippage: { tradeBps: 100 }, onOpenSettings });
 
-    await userEvent.click(screen.getByRole("button", { name: /Max slippage on trades/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^Max slippage/ }));
 
     expect(onOpenSettings).toHaveBeenCalledOnce();
   });

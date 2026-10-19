@@ -38,7 +38,7 @@ export const CREDITS_UNAVAILABLE = "Credits can't be spent right now. Untick the
 const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], string> = {
   rejected: "You declined in your wallet.",
   cancelled: "Cancelled or replaced in your wallet.",
-  reverted: "The trade failed at these prices. Retry, or close and raise slippage.",
+  reverted: "The trade failed at these prices. Raise slippage in Settings and retry.",
   rpc: "The network did not answer.",
   unknown: "Something went wrong.",
   "no-route": "No trade found for these estimates. Try a larger amount.",
@@ -240,6 +240,8 @@ export function predictSteps(
 export interface StatusLine {
   text: string;
   tone: "neutral" | "warning" | "error";
+  /** Said for the visitor's information only, in the popup's small type on one line. */
+  small?: true;
 }
 
 /**
@@ -261,7 +263,7 @@ export function statusLine(args: {
   if (moved !== undefined) return { text: movedText(moved), tone: "warning" };
   if (steps.note) return { text: steps.note, tone: "neutral" };
   if (creditsLoss !== undefined && !steps.started) {
-    return { text: `The credits swap loses ${creditsLoss}. Details has the figures.`, tone: "warning" };
+    return { text: `Credits swap loses ${creditsLoss}.`, tone: "warning", small: true };
   }
   if (leftOut > 0) return { text: `${leftOutText(leftOut)}.`, tone: "neutral" };
   return null;
@@ -274,13 +276,16 @@ export interface MovedStatus {
   credits: boolean;
   /** The one market that moved, where it now goes and where it went before. */
   only?: { name: string; to: string; was: string };
+  /** The plans changed with the visitor's new slippage, not with the pools. */
+  bySlippage?: true;
 }
 
 /** A market name longer than this is not quoted on the two-line status line. */
 const NAMED_MAX = 24;
 
 /** Said when the pools moved since Details was read, before anything more is signed. */
-function movedText({ markets, credits, only }: MovedStatus): string {
+function movedText({ markets, credits, only, bySlippage }: MovedStatus): string {
+  if (bySlippage) return "Your new slippage changes the trades. Check Details, then confirm.";
   if (!credits && markets === 1 && only && only.name.length <= NAMED_MAX) {
     return `${only.name} now goes to ${only.to}, not ${only.was}. Confirm to go on.`;
   }
@@ -295,6 +300,9 @@ function movedText({ markets, credits, only }: MovedStatus): string {
 
 /** The button's label while the visitor is asked to confirm the new figures. */
 export const CONFIRM_MOVED = "Confirm new prices";
+
+/** The button's label where the new figures come from the visitor's new slippage. */
+export const CONFIRM_SLIPPAGE = "Confirm trades";
 
 /** "2 estimates could not be traded", with no full stop. */
 export function leftOutText(count: number): string {

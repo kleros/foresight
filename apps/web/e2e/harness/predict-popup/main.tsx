@@ -62,6 +62,10 @@ const isEmailVerified = params.get("verified") !== "0";
 const signingIn = params.get("signin") === "busy";
 /** `?prices=loading` the pools not read yet, so Details checks prices and Predict waits. */
 const pricesLoading = params.get("prices") === "loading";
+/** `?prices=failed` the pools could not be read, so the button offers to read them again. */
+const pricesFailed = params.get("prices") === "failed";
+/** `&movedBy=slippage` with `state=moved`: the plans changed with the visitor's new slippage. */
+const movedBySlippage = params.get("movedBy") === "slippage";
 /** `?leftOut=N` estimates the run left out, said on the status line; a `harness-left-out` event changes it after open. */
 const initialLeftOut = Number(params.get("leftOut") ?? "0");
 
@@ -283,7 +287,8 @@ function Harness() {
         onClose={() => {}}
         selected={selected}
         onRemove={() => {}}
-        preview={state === "recovered" ? undefined : preview}
+        // pools that could not be read plan nothing, as the app's preview does
+        preview={state === "recovered" || pricesFailed ? undefined : preview}
         amount={typed}
         onAmountChange={setTyped}
         tokens={tokens}
@@ -300,8 +305,14 @@ function Harness() {
         isRunning={isRunning}
         canRetry={state === "failed" || state === "pending" || state === "recovered"}
         isPending={state === "pending"}
-        recovered={state === "recovered" ? { deposit: 4n * WAD, token: sDai } : undefined}
-        notice={state === "disconnected" ? "Connect a wallet to predict." : undefined}
+        recovered={state === "recovered" ? { deposit: 4n * WAD, token: sDai, slippage: { tradeBps: 100 } } : undefined}
+        notice={
+          state === "disconnected"
+            ? "Connect a wallet to predict."
+            : pricesFailed
+              ? "Prices could not be read."
+              : undefined
+        }
         slippage={{ settings: slippage, onChange: setSlippage }}
         creditsSwap={
           swapLoss !== null && shown && shown.creditsIn > 0n
@@ -319,9 +330,14 @@ function Harness() {
               }
             : undefined
         }
-        moved={state === "moved" ? { markets: 1, credits: false } : undefined}
-        pricesReady={!pricesLoading}
+        moved={
+          state === "moved"
+            ? { markets: 1, credits: false, ...(movedBySlippage ? { bySlippage: true as const } : {}) }
+            : undefined
+        }
+        pricesReady={!pricesLoading && !pricesFailed}
         onBack={state === "moved" ? () => {} : undefined}
+        onRetryPrices={pricesFailed ? () => {} : undefined}
         onPredict={() => {}}
       />
     </>

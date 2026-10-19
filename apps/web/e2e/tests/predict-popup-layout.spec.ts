@@ -145,6 +145,8 @@ async function settle(dialog: Locator) {
       element
         .getAnimations({ subtree: true })
         .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
+        // the cue's nudge ends where it starts, and waiting it out would end it
+        .filter((animation) => (animation as CSSAnimation).animationName !== "fsNudgeDown")
         // a scroll-driven animation finishes only at the end of its scroll
         .filter((animation) => animation.timeline === document.timeline)
         // a transition retargeted mid-flight is cancelled, which rejects its promise
@@ -539,6 +541,147 @@ test.describe("the popup's scroll area", () => {
 
     await expect(fade).toBeVisible();
     expect((await fade.boundingBox())!.height).toBeGreaterThanOrEqual(40);
+  });
+});
+
+/** The cue arrow's animations, with what each keyframe sets besides its own timing. */
+function nudges(page: Page) {
+  return page.getByTestId("more-below-arrow").evaluate((arrow) =>
+    arrow.getAnimations().map((animation) => ({
+      name: (animation as CSSAnimation).animationName,
+      iterations: animation.effect!.getTiming().iterations,
+      properties: [
+        ...new Set(
+          (animation.effect as KeyframeEffect)
+            .getKeyframes()
+            .flatMap((frame) =>
+              Object.keys(frame).filter((key) => !["offset", "computedOffset", "easing", "composite"].includes(key)),
+            ),
+        ),
+      ],
+    })),
+  );
+}
+
+/** Records the cue arrow's animation events from the page's first script. */
+async function recordNudges(page: Page) {
+  await page.addInitScript(() => {
+    const seen: string[] = [];
+    (window as unknown as { nudges: string[] }).nudges = seen;
+    for (const type of ["animationstart", "animationiteration", "animationend", "animationcancel"]) {
+      document.addEventListener(
+        type,
+        (event) => {
+          const target = event.target as Element;
+          if (target.getAttribute?.("data-testid") === "more-below-arrow") {
+            seen.push(`${type}:${(event as AnimationEvent).animationName}`);
+          }
+        },
+        true,
+      );
+    }
+  });
+  return () => page.evaluate(() => (window as unknown as { nudges: string[] }).nudges);
+}
+
+test.describe("the more-below cue's arrow", () => {
+  // 375 x 667 opens with every step in view; its cue shows once Details opens
+  const CASES = [
+    { width: 1280, height: 720, options: 10, details: false },
+    { width: 375, height: 640, options: 10, details: false },
+    { width: 375, height: 667, options: 2, details: true },
+  ];
+
+  for (const { width, height, options, details } of CASES) {
+    for (const theme of ["light", "dark"]) {
+      test(`nudges three times by transform alone, then rests, at ${width} x ${height} in the ${theme} theme`, async ({
+        page,
+      }) => {
+        await page.setViewportSize({ width, height });
+        const events = await recordNudges(page);
+        const dialog = await openPopup(page, options, "idle", undefined, `&theme=${theme}`);
+        const arrow = dialog.getByTestId("more-below-arrow");
+        if (details) {
+          await expect(arrow).not.toHaveClass(/fs-nudge-down/);
+          await openSummary(dialog);
+        }
+        await expect(dialog.getByTestId("more-below")).toHaveCSS("opacity", "1");
+
+        expect(await nudges(page)).toEqual([{ name: "fsNudgeDown", iterations: 3, properties: ["transform"] }]);
+        // at 20 times the rate, the bound is counted without waiting out 6s
+        await arrow.evaluate((element) => {
+          for (const animation of element.getAnimations()) animation.playbackRate = 20;
+        });
+        await expect.poll(events).toContain("animationend:fsNudgeDown");
+        await page.waitForTimeout(500);
+
+        expect(await events()).toEqual([
+          "animationstart:fsNudgeDown",
+          "animationiteration:fsNudgeDown",
+          "animationiteration:fsNudgeDown",
+          "animationend:fsNudgeDown",
+        ]);
+        await expect(arrow).not.toHaveClass(/fs-nudge-down/);
+        expect(await nudges(page)).toEqual([]);
+        await expect(dialog.getByTestId("more-below")).toHaveCSS("opacity", "1");
+      });
+    }
+  }
+
+  test("stops for good once the body is scrolled", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 640 });
+    const events = await recordNudges(page);
+    const dialog = await openPopup(page, 10);
+    const scroller = page.getByTestId("predict-body").locator("..");
+    expect(await nudges(page)).toHaveLength(1);
+
+    await scroller.evaluate((element) => element.scrollBy(0, 8));
+    await expect(dialog.getByTestId("more-below-arrow")).not.toHaveClass(/fs-nudge-down/);
+    await scroller.evaluate((element) => element.scrollTo(0, 0));
+    await page.waitForTimeout(500);
+
+    await expect(dialog.getByTestId("more-below")).toHaveCSS("opacity", "1");
+    expect(await nudges(page)).toEqual([]);
+    const seen = await events();
+    expect(seen.filter((event) => event.startsWith("animationstart"))).toHaveLength(1);
+    expect(seen).not.toContain("animationiteration:fsNudgeDown");
+  });
+
+  for (const theme of ["light", "dark"]) {
+    test(`holds still under reduced motion in the ${theme} theme`, async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.setViewportSize({ width: 375, height: 640 });
+      const events = await recordNudges(page);
+      const dialog = await openPopup(page, 10, "idle", undefined, `&theme=${theme}`);
+      await expect(dialog.getByTestId("more-below")).toHaveCSS("opacity", "1");
+      await page.waitForTimeout(500);
+
+      expect(await nudges(page)).toEqual([]);
+      await expect(dialog.getByTestId("more-below-arrow")).toHaveCSS("animation-name", "none");
+      expect(await events()).toEqual([]);
+    });
+  }
+
+  test("sits under a padded hairline, inside its strip at either end of the nudge", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 640 });
+    const dialog = await openPopup(page, 10);
+    const cue = dialog.getByTestId("more-below");
+    const arrow = dialog.getByTestId("more-below-arrow");
+    const strip = (await cue.boundingBox())!;
+    expect(await cue.evaluate((element) => getComputedStyle(element).paddingTop)).toBe("6px");
+
+    // the delay, then the lift's peak at 12.5% and the drop's at 25% of 2s
+    for (const at of [0, 500, 750]) {
+      await arrow.evaluate((element, time) => {
+        for (const animation of element.getAnimations()) {
+          animation.pause();
+          animation.currentTime = time;
+        }
+      }, at);
+      const box = (await arrow.boundingBox())!;
+      expect.soft(box.y, `${at}ms: below the hairline`).toBeGreaterThan(strip.y + 1);
+      expect.soft(box.y + box.height, `${at}ms: inside the strip`).toBeLessThanOrEqual(strip.y + strip.height);
+    }
   });
 });
 
@@ -1232,6 +1375,46 @@ for (const viewport of [
       await expect(slider.locator("#slider-label")).toBeHidden();
     });
   });
+}
+
+for (const viewport of [
+  { width: 1280, height: 800 },
+  { width: 375, height: 812 },
+]) {
+  for (const theme of ["light", "dark"]) {
+    test(`the share slider at 0% paints only its track along its line, ${viewport.width} x ${viewport.height} ${theme}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      const dialog = await openPopup(page, 2, "idle", undefined, `&first=0&theme=${theme}`);
+      const slider = dialog.getByTestId("amount-slider");
+      await expect(dialog.getByTestId("amount-share")).toHaveText("0%");
+
+      const strays = await slider.locator("#slider-track").evaluate((track) => {
+        const row = track.closest("[data-testid=amount-slider]")!;
+        const line = track.getBoundingClientRect();
+        // past the thumb at 0%, anything drawn over or beside the track's line
+        const from = line.left + line.width * 0.2;
+        // react-aria's range input is visually hidden
+        return [...row.querySelectorAll(":not(input)")]
+          .filter((element) => !element.contains(track) && !track.contains(element))
+          .filter((element) => getComputedStyle(element).visibility === "visible")
+          .filter((element) => {
+            const box = element.getBoundingClientRect();
+            return (
+              box.width > 0 &&
+              box.height > 0 &&
+              box.right > from &&
+              box.left < line.right + 4 &&
+              box.bottom > line.top - 4 &&
+              box.top < line.bottom + 4
+            );
+          })
+          .map((element) => element.outerHTML.slice(0, 80));
+      });
+      expect(strays, "only the track paints along its line").toEqual([]);
+    });
+  }
 }
 
 test.describe("the header's close button", () => {

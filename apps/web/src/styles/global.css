@@ -58,7 +58,6 @@
   --color-fs-popup-cta-disabled: var(--fs-popup-cta-disabled);
   --color-fs-popup-cta-disabled-text: var(--fs-popup-cta-disabled-text);
   --color-fs-popup-track: var(--fs-popup-track);
-  --color-fs-popup-track-dot: var(--fs-popup-track-dot);
   --radius-fs-popup: var(--fs-radius-popup);
   --radius-fs-panel: var(--fs-radius-panel);
   --radius-fs-control: var(--fs-radius-control);
@@ -562,42 +561,86 @@
     opacity: 0;
   }
 }
-/* The predict popup's settings: a panel reveal (transitions.dev 07) on the popup's tokens, quicker out than in.
-   Hidden once closed, so nothing in it is read or reached; visibility flips after the fade out. */
+/* The predict popup's settings: the dim fades as the card grows from the gear (transitions.dev 05, origin top
+   right). The scale has three durations, so the close runs on the enter one with a settling curve. */
 .predict-settings {
   opacity: 0;
-  transform: translateY(8px);
-  filter: blur(2px);
   visibility: hidden;
   transition:
-    opacity var(--fs-dur-echo) var(--fs-ease-exit),
-    transform var(--fs-dur-echo) var(--fs-ease-exit),
-    filter var(--fs-dur-echo) var(--fs-ease-exit),
-    visibility 0s linear var(--fs-dur-echo);
+    opacity var(--fs-dur-enter) var(--fs-ease-structural),
+    visibility 0s linear var(--fs-dur-enter);
 }
 .predict-settings[data-open] {
   opacity: 1;
-  transform: none;
-  filter: none;
   visibility: visible;
   transition:
     opacity var(--fs-dur-enter) var(--fs-ease-enter),
-    transform var(--fs-dur-enter) var(--fs-ease-enter),
-    filter var(--fs-dur-enter) var(--fs-ease-enter),
     visibility 0s;
 }
+.predict-settings-card {
+  transform-origin: top right;
+  transform: translateY(-4px) scale(0.97);
+  filter: blur(2px);
+  transition:
+    transform var(--fs-dur-enter) var(--fs-ease-structural),
+    filter var(--fs-dur-enter) var(--fs-ease-structural);
+}
+.predict-settings[data-open] .predict-settings-card {
+  transform: none;
+  filter: none;
+  transition:
+    transform var(--fs-dur-enter) var(--fs-ease-enter),
+    filter var(--fs-dur-enter) var(--fs-ease-enter);
+}
 @media (prefers-reduced-motion: reduce) {
-  .predict-settings {
+  .predict-settings-card {
     transform: none;
     filter: none;
   }
 }
+/* a field's warning folds open under it (transitions.dev 21), so the card's height eases rather than jumps */
+.predict-settings-message {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--fs-dur-enter) var(--fs-ease-structural),
+    opacity var(--fs-dur-enter) var(--fs-ease-structural);
+}
+.predict-settings-message[data-open] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.predict-settings-message > * {
+  overflow: hidden;
+}
 /* the panel scrolls on a phone on its side, in the popup's own line colour */
+.predict-settings,
 .predict-settings * {
   scrollbar-color: var(--fs-popup-line-strong) var(--fs-surface);
 }
 .predict-settings ::-webkit-scrollbar-thumb {
   background: var(--fs-popup-line-strong);
+}
+/* the gear's custom-slippage dot pops on as a notification badge does (transitions.dev 03), and off quicker */
+.predict-gear-dot {
+  transform: scale(0);
+  opacity: 0;
+  transition:
+    transform var(--fs-dur-echo) var(--fs-ease-exit),
+    opacity var(--fs-dur-echo) var(--fs-ease-exit);
+}
+.predict-gear-dot[data-open] {
+  transform: none;
+  opacity: 1;
+  transition:
+    transform var(--fs-dur-enter) var(--fs-ease-spring),
+    opacity var(--fs-dur-enter) var(--fs-ease-enter);
+}
+@media (prefers-reduced-motion: reduce) {
+  .predict-gear-dot {
+    transform: none;
+  }
 }
 /* a swapped label enters as the settings panel does (transitions.dev 04's enter half), keyed so each text replays it */
 .predict-text-swap {

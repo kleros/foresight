@@ -38,6 +38,8 @@ async function openCredits(page: Page, credits: string, theme: string) {
       element
         .getAnimations({ subtree: true })
         .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
+        // the cue's nudge ends where it starts, and waiting it out would end it
+        .filter((animation) => (animation as CSSAnimation).animationName !== "fsNudgeDown")
         .map((animation) => animation.finished.catch(() => undefined)),
     ),
   );
@@ -180,4 +182,26 @@ for (const viewport of VIEWPORTS) {
       });
     });
   }
+}
+
+for (const viewport of VIEWPORTS) {
+  test.describe(`a large credits swap loss at ${viewport.width} x ${viewport.height}`, () => {
+    test.use({ viewport });
+
+    test("is said whole on one small line of the status line", async ({ page }) => {
+      await openHarness(page, `${harness.url}?options=2&credits=enough&swapLoss=0.5&theme=light`);
+      const line = page.getByRole("dialog").getByRole("status").locator("span");
+
+      await expect(line).toHaveText("Credits swap loses ≈ 0.5 xDAI.");
+      const [height, lineHeight, fontSize, fits] = await line.evaluate((element) => [
+        element.getBoundingClientRect().height,
+        parseFloat(getComputedStyle(element).lineHeight),
+        parseFloat(getComputedStyle(element).fontSize),
+        element.scrollWidth <= element.clientWidth,
+      ]);
+      expect(height).toBe(lineHeight);
+      expect(fontSize).toBe(12);
+      expect(fits).toBe(true);
+    });
+  });
 }
