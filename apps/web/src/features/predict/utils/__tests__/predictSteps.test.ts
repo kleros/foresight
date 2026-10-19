@@ -331,7 +331,7 @@ describe("statusLine", () => {
     ["quote", "Could not get prices. Try again shortly."],
     ["funds", "Your wallet is short, fee included. Lower the amount or add funds."],
     ["balance", "Trade wallet balance is lower than shown. Check the amount."],
-    ["deposit-unconfirmed", "Your last deposit may still be confirming. Check your wallet."],
+    ["deposit-unconfirmed", "Your last transaction may still be confirming. Check your wallet."],
     ["wrong-wallet", "Started from another wallet. Connect it to finish."],
     ["wrong-chain", "Started on another network. Switch to it to finish."],
   ] as const)("names a %s stop in words with a referent", (reason, text) => {
