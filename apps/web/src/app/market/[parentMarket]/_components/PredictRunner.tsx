@@ -8,12 +8,12 @@ import { useAccount } from "wagmi";
 import type { PayTokenChoice } from "@/features/predict/components/PredictAmountSection";
 import { PredictDialog } from "@/features/predict/components/PredictDialog";
 import type { PriceMove } from "@/features/predict/components/PredictList";
-import type { ShownPlans } from "@/features/predict/run/types";
+import type { HeldTo, ShownPlans } from "@/features/predict/run/types";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import { useSlippageStore } from "@/features/predict/stores/slippageStore";
 import type { PayToken, SelectedEstimate } from "@/features/predict/types";
-import { expectedSplit, roundToDisplay } from "@/features/predict/utils/funding";
-import { fundsToAdd, predictSteps, type FundsToAdd } from "@/features/predict/utils/predictSteps";
+import { roundToDisplay, shownSplit } from "@/features/predict/utils/funding";
+import { CREDITS_UNAVAILABLE, fundsToAdd, predictSteps, type FundsToAdd } from "@/features/predict/utils/predictSteps";
 import { resolveSlippage } from "@/features/predict/utils/slippage";
 import type { SessionDetail } from "@/features/sessions/types";
 import { optionNounSingular } from "@/features/sessions/utils/optionNoun";
@@ -53,9 +53,6 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
   const [removed, setRemoved] = useState<string[]>([]);
   // what the steps say is being added, held from the press so a refreshed balance cannot rewrite it
   const [frozenToAdd, setFrozenToAdd] = useState<FundsToAdd>();
-  // the plans Details showed when Predict was pressed, and those the visitor then confirmed after the pools moved
-  const [pressedPlans, setPressedPlans] = useState<ShownPlans>();
-  const [confirmedPlans, setConfirmedPlans] = useState<ShownPlans>();
 
   const clearEstimate = useEstimateStore((state) => state.clearEstimate);
   const executor = useExecutor();
@@ -90,7 +87,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
   const setSlippage = useSlippageStore((state) => state.setSlippage);
   const slippage = resolveSlippage(slippageSettings);
   const creditsIn = funding?.creditsIn ?? 0n;
-  const creditsQuote = useCreditsSwapPreview({
+  const { preview: creditsQuote, failed: creditsFailed } = useCreditsSwapPreview({
     sessionId: session.id,
     collateral: collateralToken,
     tradeWallet: predicted,
@@ -101,7 +98,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
     session,
     selected: kept,
     tradeWallet: predicted,
-    collateralIn: funding ? expectedSplit(funding, slippage.creditsBps) : 0n,
+    collateralIn: funding ? shownSplit(funding, creditsQuote?.minted) : undefined,
     slippageBps: slippage.tradeBps,
   });
 
@@ -120,6 +117,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
   const isRunning = stage === "quoting" || stage === "signing" || stage === "confirming";
   const retryable = stage === "halted" && Boolean(progress?.failure?.retryable);
   const moved = stage === "moved" ? progress?.moved : undefined;
+  const held = progress?.held;
 
   useEffect(() => {
     driver?.recover();
@@ -174,19 +172,22 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
     }
     return moves;
   };
+  // while a run is held to what it was shown, that is what Details shows
+  const isHeldRun = held !== undefined && (isRunning || canRetry);
   const shownMoves = moved
     ? movesFrom(
         moved.plans,
-        pressedPlans,
+        held?.plans,
         moved.markets.map((market) => market.toLowerCase()),
       )
-    : confirmedPlans && (isRunning || canRetry)
-      ? movesFrom(confirmedPlans)
+    : isHeldRun
+      ? movesFrom(held.plans)
       : preview.moves;
+  const shownCredits = moved?.credits ?? (isHeldRun ? held.credits : creditsQuote);
+  const creditsWas = moved?.credits ? held?.credits : undefined;
 
   const predict = () => {
     if (moved) {
-      setConfirmedPlans(moved.plans);
       driver?.confirm();
       return;
     }
@@ -203,9 +204,11 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
     if (stage === "halted" && !pendingHash) driver?.reset();
     for (const market of removed) clearEstimate(session.parentMarket, market);
     setFrozenToAdd(fundsToAdd(funding, token, collateral));
-    setPressedPlans(preview.plans);
-    setConfirmedPlans(undefined);
-    driver?.start(preview.plans);
+    const heldTo: HeldTo = {
+      plans: preview.plans,
+      ...(creditsIn > 0n && creditsQuote ? { credits: creditsQuote } : {}),
+    };
+    driver?.start(heldTo);
   };
 
   // an amount over the balance cannot be predicted, so nothing is named as being added for it
@@ -259,20 +262,42 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
       recovered={recovered && { deposit: recovered.deposit, token: runToken }}
       notice={
         // once a run is going its own state is the story, not what the wallet is doing now
-        isRunning ? undefined : notice({ owner, onRightChain: chainId === DEFAULT_CHAIN_ID, ready })
+        isRunning
+          ? undefined
+          : notice({
+              owner,
+              onRightChain: chainId === DEFAULT_CHAIN_ID,
+              ready,
+              creditsFailed: creditsFailed && !moved,
+              pricesFailed: preview.failed && !moved,
+            })
       }
       slippage={{ settings: slippageSettings, onChange: setSlippage }}
-      creditsSwap={creditsQuote && creditsIn > 0n ? { credits: creditsIn, preview: creditsQuote } : undefined}
-      moved={moved?.markets.length}
+      creditsSwap={
+        shownCredits && (creditsIn > 0n || moved?.credits || isHeldRun)
+          ? { credits: creditsIn, preview: shownCredits, ...(creditsWas ? { was: creditsWas } : {}) }
+          : undefined
+      }
+      moved={moved && { markets: moved.markets.length, credits: moved.credits !== undefined }}
+      pricesReady={preview.ready}
+      onBack={moved && !progress?.moneyMoved ? () => driver?.reset() : undefined}
       onPredict={predict}
     />
   );
 }
 
 /** Why this prediction cannot be made, in the words of the thing the visitor has to do. */
-function notice(args: { owner?: string; onRightChain: boolean; ready: boolean }): string | undefined {
+function notice(args: {
+  owner?: string;
+  onRightChain: boolean;
+  ready: boolean;
+  creditsFailed: boolean;
+  pricesFailed: boolean;
+}): string | undefined {
   if (!args.owner) return "Connect a wallet to predict.";
   if (!args.onRightChain) return "Switch to Gnosis to predict.";
   if (!args.ready) return "This session cannot be traded yet.";
+  if (args.pricesFailed) return "Prices could not be read. Try again in a moment.";
+  if (args.creditsFailed) return CREDITS_UNAVAILABLE;
   return undefined;
 }

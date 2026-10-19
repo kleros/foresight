@@ -1,8 +1,7 @@
 import type { TxErrorCause } from "@foresight/tx-orchestrator";
 import type { Address, Hash } from "viem";
 
-import type { PredictSnapshot } from "../flow/types";
-import type { PreviewTrades } from "../utils/plan";
+import type { HeldTo, MovedPlans, PredictSnapshot } from "../flow/types";
 
 /**
  * `no-route`: no option can be moved toward its estimate with what the run has to spend.
@@ -39,7 +38,7 @@ export type PredictStage =
   | "confirming"
   /** A stored run, reconciled with the chain, waiting for the visitor to resume it. */
   | "review"
-  /** Predict was pressed and the pools now give another plan than the one shown; nothing is signed until `confirm`. */
+  /** A read of the pools before a batch gives another plan than the run is held to; nothing more is signed until `confirm`. */
   | "moved"
   /** Stopped with something the visitor can act on. */
   | "halted"
@@ -69,20 +68,21 @@ export interface PredictProgress {
   moneyMoved?: true;
   /** The snapshot of a run restored from storage. It, not the popup's form, is what the run signs. */
   recovered?: PredictSnapshot;
-  /** At the `moved` stage: the options whose plan changed, and every option's plan as the pools give it now. */
-  moved?: { markets: Address[]; plans: ShownPlans };
+  /** At the `moved` stage: what changed since the run was held to `held`. */
+  moved?: MovedPlans;
+  /** What the run was started or confirmed against; absent for a recovered run, which nothing was shown for. */
+  held?: HeldTo;
 }
 
-/** Each option's plan as the popup showed it, keyed by its lower-case child market. */
-export type ShownPlans = Readonly<Record<string, PreviewTrades>>;
+export type { HeldTo, MovedPlans, ShownPlans } from "../flow/types";
 
 export interface PredictDriver {
   /**
-   * Starts a run from the form, or loads a stored one for review instead. With `shown`, the pools
-   * are read again first, and a plan that changed beyond the trade slippage stops at `moved`.
+   * Starts a run from the form, or loads a stored one for review instead. With `held`, every batch
+   * reads the pools again before it is signed, and a plan that changed stops the run at `moved`.
    */
-  start(shown?: ShownPlans): void;
-  /** Goes ahead from `moved`, against the plans it named; a pool that moved again stops it there again. */
+  start(held?: HeldTo): void;
+  /** Goes on from `moved`, held to what it named; pools that moved again stop it there again. */
   confirm(): void;
   /** Loads a stored run for review, reconciled with the chain. Signs nothing. */
   recover(): void;

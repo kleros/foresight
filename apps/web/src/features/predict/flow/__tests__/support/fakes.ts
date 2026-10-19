@@ -239,7 +239,13 @@ export interface FakeExactInputQuoter extends ExactInputQuoter {
  * `exactInputSingle` with no minimum and no limit, as Lens does.
  */
 export function fakeCreditsQuoter(
-  opts: { lossBps?: bigint; router?: Address; recipient?: Address; refuse?: boolean } = {},
+  opts: {
+    /** A function reads a loss that changes as a test's pool moves. */
+    lossBps?: bigint | (() => bigint);
+    router?: Address;
+    recipient?: Address;
+    refuse?: boolean;
+  } = {},
 ): FakeExactInputQuoter {
   const requests: ExactInputRequest[] = [];
   return {
@@ -247,7 +253,8 @@ export function fakeCreditsQuoter(
     quote: (request) => {
       requests.push(request);
       if (opts.refuse) return Promise.reject(new NoSwapRouteError("No route."));
-      const amountOut = (((request.amount * VAULT_RATE) / WAD) * (10_000n - (opts.lossBps ?? 5n))) / 10_000n;
+      const lossBps = typeof opts.lossBps === "function" ? opts.lossBps() : (opts.lossBps ?? 5n);
+      const amountOut = (((request.amount * VAULT_RATE) / WAD) * (10_000n - lossBps)) / 10_000n;
       return Promise.resolve({
         amountOut,
         router: opts.router ?? addresses.swapRouter,

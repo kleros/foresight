@@ -136,11 +136,13 @@ export function fundingRequest(
 }
 
 /**
- * The collateral a run is expected to split: the sDAI as is, and the credits at the floor
- * `creditsSlippageBps` holds their swap to, before the pool's own fee and price, which only the quote knows.
+ * The collateral each option splits, as the run signs it: the sDAI as is, and what the credits swap's
+ * floor mints, from its quote. Undefined while a run spending credits has no quote yet.
  */
-export const expectedSplit = (funding: Funding, creditsSlippageBps: number): bigint =>
-  funding.collateralIn - funding.creditsIn + (funding.creditsIn * BigInt(10_000 - creditsSlippageBps)) / 10_000n;
+export function shownSplit(funding: Funding, creditsMinted: bigint | undefined): bigint | undefined {
+  if (funding.creditsIn > 0n && creditsMinted === undefined) return undefined;
+  return funding.collateralIn - funding.creditsIn + (creditsMinted ?? 0n);
+}
 
 /** Rounded down to the decimals the popup shows, so the signed amount is the shown amount. */
 export const roundToDisplay = cutToOwned;

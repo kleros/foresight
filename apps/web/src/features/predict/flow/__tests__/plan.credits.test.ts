@@ -315,16 +315,19 @@ describe("assertRoutes with credits", () => {
 });
 
 describe("previewCreditsSwap", () => {
-  it("names what the swap is quoted to pay, the credits' vault value, the floor, and the difference lost", async () => {
+  it("names what the swap is quoted to pay, the credits' vault value, the floor, the difference lost and the split it mints", async () => {
     const used = deps({ creditsQuoter: fakeCreditsQuoter({ lossBps: 40n }) });
     const value = (2n * WAD * VAULT_RATE) / WAD;
     const paid = (value * (10_000n - 40n)) / 10_000n;
+    const floor = (paid * (10_000n - 20n)) / 10_000n;
+    const minted = mintedFrom(floor);
 
     await expect(previewCreditsSwap(ctx(), 2n * WAD, 20, used)).resolves.toEqual({
       quoted: paid,
       vaultValue: value,
-      floor: (paid * (10_000n - 20n)) / 10_000n,
+      floor,
       loss: value - paid,
+      minted: minted - (minted * MINT_RATE_MARGIN_BPS) / 10_000n,
     });
   });
 

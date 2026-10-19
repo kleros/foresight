@@ -4,9 +4,8 @@ import { OWNED_DECIMALS } from "@/utils/amount";
 
 import type { CreditsHeld } from "@/lib/trade-executor/credits";
 
-import { CREDITS_SLIPPAGE_BPS } from "../../oracle/tolerances";
 import { creditLines, creditsOffer, MIN_CREDITS } from "../credits";
-import { expectedSplit, fundingRequest, fundingSummary, planFunding, shownAmount } from "../funding";
+import { fundingRequest, fundingSummary, planFunding, shownAmount, shownSplit } from "../funding";
 
 const WAD = 10n ** 18n;
 const sDai = { id: "collateral" as const, symbol: "sDAI", decimals: 18 };
@@ -256,22 +255,24 @@ describe("credits signed as shown", () => {
   });
 });
 
-describe("the split a credits run is expected to make", () => {
-  it("counts the sDAI as is and the credits at the floor their swap is held to", () => {
-    const held = { wallet: 4n * WAD, tradeWallet: 0n, manager: 1000n * WAD };
-    const funding = planFunding({
+describe("the split each option is shown to make", () => {
+  const held = { wallet: 4n * WAD, tradeWallet: 0n, manager: 1000n * WAD };
+  const withCredits = () =>
+    planFunding({
       amount: 10n * WAD,
       ownWallet: 20n * WAD,
       tradeWallet: 0n,
       credits: creditLines(held, creditsOffer(held)),
     });
 
-    expect(expectedSplit(funding, CREDITS_SLIPPAGE_BPS)).toBe(
-      6n * WAD + (4n * WAD * BigInt(10_000 - CREDITS_SLIPPAGE_BPS)) / 10_000n,
-    );
-    expect(expectedSplit(funding, 150)).toBe(6n * WAD + (4n * WAD * 9850n) / 10_000n);
-    expect(expectedSplit(planFunding({ amount: 10n * WAD, ownWallet: 20n * WAD, tradeWallet: 0n }), 150)).toBe(
+  it("counts the sDAI as is and the credits at what their swap's floor mints", () => {
+    expect(shownSplit(withCredits(), 3n * WAD)).toBe(6n * WAD + 3n * WAD);
+    expect(shownSplit(planFunding({ amount: 10n * WAD, ownWallet: 20n * WAD, tradeWallet: 0n }), undefined)).toBe(
       10n * WAD,
     );
+  });
+
+  it("is unknown while the credits swap has no quote", () => {
+    expect(shownSplit(withCredits(), undefined)).toBeUndefined();
   });
 });

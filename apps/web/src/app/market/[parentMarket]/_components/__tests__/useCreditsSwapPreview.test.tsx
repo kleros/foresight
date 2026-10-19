@@ -50,11 +50,12 @@ describe("useCreditsSwapPreview", () => {
     const { result } = mount(2n * WAD);
     const value = (2n * WAD * VAULT_RATE) / WAD;
 
-    await waitFor(() => expect(result.current).toBeDefined());
-    expect(result.current?.loss).toBe(value - (value * (10_000n - 40n)) / 10_000n);
+    await waitFor(() => expect(result.current.preview).toBeDefined());
+    expect(result.current.preview?.loss).toBe(value - (value * (10_000n - 40n)) / 10_000n);
+    expect(result.current.failed).toBe(false);
   });
 
   it("names nothing while no credits are spent", () => {
-    expect(mount(0n).result.current).toBeUndefined();
+    expect(mount(0n).result.current).toEqual({ failed: false });
   });
 });

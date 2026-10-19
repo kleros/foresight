@@ -12,6 +12,7 @@ import {
   createPredictHooks,
   batchGas,
   BATCH_GAS_SHARE_BPS,
+  MAX_TX_GAS,
   optionsPerBatch,
   planPredict,
   PredictConfigError,
@@ -127,6 +128,14 @@ describe("optionsPerBatch", () => {
 
   it("grows with the block gas limit", () => {
     expect(optionsPerBatch(60_000_000n, false)).toBeGreaterThan(optionsPerBatch(17_000_000n, false));
+  });
+
+  it("never sizes a batch past one transaction's gas cap, however large the block", () => {
+    for (const credits of [false, true]) {
+      const size = optionsPerBatch(120_000_000n, credits);
+      expect(batchGas(size, credits)).toBeLessThanOrEqual(MAX_TX_GAS);
+      expect(batchGas(size + 1, credits)).toBeGreaterThan(MAX_TX_GAS);
+    }
   });
 
   it("still sends one option at a time where the budget holds none", () => {

@@ -23,6 +23,10 @@ export interface PricePreview {
   plans: ShownPlans;
   /** Underlying each option's trade wallet already holds, keyed as `plans`. */
   held: Record<string, bigint>;
+  /** Every option's pools are read and the split is known, so `plans` holds a plan for each option that has one. */
+  ready: boolean;
+  /** The pools could not be read. */
+  failed: boolean;
 }
 
 /** An option's plan as the summary shows it, in the option's unit; `held` counts only where the plan splits. */
@@ -41,8 +45,8 @@ export function usePricePreview(args: {
   selected: SelectedEstimate[];
   /** The owner's trade wallet, whose held tokens the trades start from. */
   tradeWallet: Address | undefined;
-  /** Collateral the prediction splits. */
-  collateralIn: bigint;
+  /** Collateral each option splits; undefined while it is not known, which plans nothing. */
+  collateralIn: bigint | undefined;
   /** The trades' slippage setting, which sizes the buys. */
   slippageBps: number;
 }): PricePreview {
@@ -65,12 +69,13 @@ export function usePricePreview(args: {
     enabled: tradeWallet !== undefined && collateralToken !== null && options.length > 0,
   });
 
-  const preview: PricePreview = { moves: {}, plans: {}, held: {} };
+  const ready = collateralIn !== undefined && (options.length === 0 || states.isSuccess);
+  const preview: PricePreview = { moves: {}, plans: {}, held: {}, ready, failed: states.isError };
   const plans: Record<string, PreviewTrades> = {};
   for (const [index, option] of options.entries()) {
     const state = states.data?.[index];
     const scale = session.options.find((each) => each.market === option.childMarket);
-    if (!state || !scale) continue;
+    if (!state || !scale || collateralIn === undefined) continue;
 
     const trades = previewTrades(
       {

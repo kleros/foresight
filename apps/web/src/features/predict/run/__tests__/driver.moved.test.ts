@@ -71,7 +71,7 @@ describe("createPredictRun when Predict is pressed", () => {
   it("goes ahead when the pools still give the plan shown", async () => {
     const { driver, sent } = setup(AS_SHOWN);
 
-    driver.start({ [KEY]: planOn(AS_SHOWN) });
+    driver.start({ plans: { [KEY]: planOn(AS_SHOWN) } });
     await signed(driver);
 
     expect(sent).toHaveLength(1);
@@ -81,7 +81,7 @@ describe("createPredictRun when Predict is pressed", () => {
   it("signs nothing and names the option whose plan the pools moved, with the plan they give now", async () => {
     const { driver, sent, store } = setup(DEEPER);
 
-    driver.start({ [KEY]: planOn(AS_SHOWN) });
+    driver.start({ plans: { [KEY]: planOn(AS_SHOWN) } });
     await vi.waitFor(() => expect(driver.getProgress().stage).toBe("moved"));
 
     expect(driver.getProgress().moved).toEqual({ markets: [OPTION.childMarket], plans: { [KEY]: planOn(DEEPER) } });
@@ -92,7 +92,7 @@ describe("createPredictRun when Predict is pressed", () => {
 
   it("goes ahead on confirm, against the plan it named", async () => {
     const { driver, sent } = setup(DEEPER);
-    driver.start({ [KEY]: planOn(AS_SHOWN) });
+    driver.start({ plans: { [KEY]: planOn(AS_SHOWN) } });
     await vi.waitFor(() => expect(driver.getProgress().stage).toBe("moved"));
 
     driver.confirm();
@@ -104,7 +104,7 @@ describe("createPredictRun when Predict is pressed", () => {
 
   it("names the plan again rather than signing when the pools move again before confirm", async () => {
     const { driver, sent, moveTo } = setup(DEEPER);
-    driver.start({ [KEY]: planOn(AS_SHOWN) });
+    driver.start({ plans: { [KEY]: planOn(AS_SHOWN) } });
     await vi.waitFor(() => expect(driver.getProgress().stage).toBe("moved"));
 
     moveTo(BETWEEN);
@@ -115,10 +115,10 @@ describe("createPredictRun when Predict is pressed", () => {
     expect(sent).toEqual([]);
   });
 
-  it("compares nothing for an option the popup showed no plan for", async () => {
+  it("compares nothing for a run started with nothing to hold it to", async () => {
     const { driver, sent } = setup(DEEPER);
 
-    driver.start({});
+    driver.start();
     await signed(driver);
 
     expect(sent).toHaveLength(1);
@@ -126,7 +126,7 @@ describe("createPredictRun when Predict is pressed", () => {
 
   it("drops the named plan on reset", async () => {
     const { driver } = setup(DEEPER);
-    driver.start({ [KEY]: planOn(AS_SHOWN) });
+    driver.start({ plans: { [KEY]: planOn(AS_SHOWN) } });
     await vi.waitFor(() => expect(driver.getProgress().stage).toBe("moved"));
 
     driver.reset();

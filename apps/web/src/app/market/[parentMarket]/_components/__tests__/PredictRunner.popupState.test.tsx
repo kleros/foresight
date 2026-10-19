@@ -35,6 +35,7 @@ const OPTIONS = [
 const wallet = vi.hoisted(() => ({ sDai: 0n, xDai: 0n, trade: 0n }));
 /** Last input the page handed the run. */
 const runInput = vi.hoisted(() => ({ current: null as PredictRunInput | null }));
+const pools = vi.hoisted(() => ({ ready: true, failed: false }));
 
 vi.mock("@/lib/graphql/batcher", () => ({ fetchGraphql: vi.fn() }));
 /* The factory cannot reference imports, so GATEWAY's value is restated. */
@@ -85,6 +86,11 @@ vi.mock("@/features/predict/api/getSavingsRate", () => ({
 }));
 
 vi.mock("../useHasPredicted", () => ({ useHasPredicted: () => false }));
+// the pools read for Details; the run is a fake, so no plan is compared
+vi.mock("../usePricePreview", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../usePricePreview")>()),
+  usePricePreview: () => ({ moves: {}, plans: {}, held: {}, ready: pools.ready, failed: pools.failed }),
+}));
 vi.mock("@/components/wallet/EnsureChain", () => ({ default: ({ children }: { children: ReactNode }) => children }));
 
 const driver = {
@@ -187,6 +193,7 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
+  Object.assign(pools, { ready: true, failed: false });
   vi.clearAllMocks();
   window.localStorage.clear();
   useEstimateStore.setState({ estimates: {} });
@@ -420,10 +427,38 @@ describe("prices that moved when Predict read the pools again", () => {
     move(detail, 300);
     await userEvent.click(popup.getByRole("button", { name: "Confirm new prices" }));
 
-    act(() => run.set({ ...idle, stage: "signing" }));
+    const scale = detail.options[0]!;
+    act(() =>
+      run.set({ ...idle, stage: "signing", held: { plans: { [scale.market.toLowerCase()]: planTo(scale, 300) } } }),
+    );
     await userEvent.click(within(popup.getByTestId("predict-summary")).getAllByRole("button")[0]!);
 
     expect(popup.getAllByTestId("market-move")[0]).toHaveTextContent(/→ 300/);
+  });
+
+  it("gives the form back from Go back, keeping the popup open", async () => {
+    const { detail, popup } = await pressPredict();
+    move(detail, 300);
+
+    await userEvent.click(popup.getByRole("button", { name: "Go back" }));
+
+    expect(driver.reset).toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("offers no Go back once money has moved", async () => {
+    const { detail, popup } = await pressPredict();
+    const scale = detail.options[0]!;
+    act(() =>
+      run.set({
+        ...idle,
+        stage: "moved",
+        moneyMoved: true,
+        moved: { markets: [scale.market], plans: { [scale.market.toLowerCase()]: planTo(scale, 300) } },
+      }),
+    );
+
+    expect(popup.queryByRole("button", { name: "Go back" })).toBeNull();
   });
 
   it("throws the moved check away when the popup closes", async () => {
@@ -436,6 +471,22 @@ describe("prices that moved when Predict read the pools again", () => {
   });
 });
 
+describe("Predict before the pools are read", () => {
+  it("waits while Details reads them, and says so when they cannot be read", async () => {
+    wallet.sDai = 10n * WAD;
+    pools.ready = false;
+    renderPage();
+    const popup = await openPopup();
+    await userEvent.type(amountField(popup), "5");
+
+    expect(popup.getByRole("button", { name: "Predict" })).toBeDisabled();
+
+    pools.failed = true;
+    await userEvent.type(amountField(popup), "1");
+    expect(popup.getByRole("status")).toHaveTextContent("Prices could not be read. Try again in a moment.");
+  });
+});
+
 describe("the slippage a run uses", () => {
   it("is the visitor's setting as Predict is pressed, Auto where they set none", async () => {
     wallet.sDai = 10n * WAD;
@@ -444,6 +495,7 @@ describe("the slippage a run uses", () => {
 
     await userEvent.click(popup.getByRole("button", { name: "Settings" }));
     await userEvent.type(popup.getByRole("textbox", { name: "Max slippage on trades, custom percent" }), "3");
+    await userEvent.tab();
 
     expect(runInput.current?.slippage()).toEqual({ tradeBps: 300, creditsBps: DEFAULT_SLIPPAGE.creditsBps });
   });

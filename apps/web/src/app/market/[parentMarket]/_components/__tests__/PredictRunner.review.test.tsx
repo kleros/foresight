@@ -19,6 +19,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PredictOption } from "@/features/predict/flow/types";
 import type { SelectedEstimate } from "@/features/predict/types";
+import type { SessionDetail } from "@/features/sessions/types";
 import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 import { toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
 
@@ -220,17 +221,44 @@ vi.mock("../usePredictFunding", () => ({
   }),
 }));
 vi.mock("../useHasPredicted", () => ({ useHasPredicted: () => true }));
-// a live preview for every estimate in the form, which a reopened run's summary must not show
-vi.mock("../usePricePreview", () => ({
-  usePricePreview: ({ selected }: { selected: SelectedEstimate[] }) => ({
-    moves: Object.fromEntries(
-      selected.map((estimate) => [estimate.scale.market.toLowerCase(), { from: 300, to: 350 }]),
-    ),
-    plans: {},
-    held: {},
-  }),
-  toPriceMove: vi.fn(),
-}));
+// a live preview for every estimate in the form, which a reopened run's summary must not show; its plans are
+// the fake chain's pools for the form's split, which a new run is held to
+vi.mock("../usePricePreview", async (importOriginal) => {
+  const { chainState } = await import("@/features/predict/flow/__tests__/support/fakes");
+  const { previewTrades } = await import("@/features/predict/utils/plan");
+  const { toPredictOptions } = await import("../toPredictOptions");
+  const state = chainState();
+  return {
+    ...(await importOriginal<typeof import("../usePricePreview")>()),
+    usePricePreview: (args: {
+      session: SessionDetail;
+      selected: SelectedEstimate[];
+      collateralIn: bigint | undefined;
+      slippageBps: number;
+    }) => ({
+      moves: Object.fromEntries(
+        args.selected.map((estimate) => [estimate.scale.market.toLowerCase(), { from: 300, to: 350 }]),
+      ),
+      plans: Object.fromEntries(
+        toPredictOptions(args.session, args.selected).map((option) => [
+          option.childMarket.toLowerCase(),
+          previewTrades(
+            {
+              pools: state.pools,
+              targetPriceWad: option.targetPriceWad,
+              held: state.held,
+              splitAmount: state.underlying + (args.collateralIn ?? 0n),
+            },
+            args.slippageBps,
+          )!,
+        ]),
+      ),
+      held: {},
+      ready: true,
+      failed: false,
+    }),
+  };
+});
 
 afterAll(() => {
   vi.unstubAllEnvs();

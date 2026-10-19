@@ -32,7 +32,10 @@ import { creditsManagerAbi, gnosisRouterAbi, tradeExecutorAbi, wxdaiAbi } from "
 
 import { STEP_ID } from "./stepIds";
 import type {
+  CreditsSwapPreview,
+  HeldTo,
   LandedTx,
+  MovedPlans,
   OptionChainState,
   PredictCtx,
   PlannedRequest,
@@ -41,8 +44,17 @@ import type {
   PredictSlippage,
   PredictSnapshot,
 } from "./types";
-import { MAX_SLIPPAGE_BPS } from "../oracle/tolerances";
-import { atEstimate, planBuys, planSells, type OptionSide, type SoldLeg } from "../utils/plan";
+import { DEFAULT_SLIPPAGE, MAX_SLIPPAGE_BPS } from "../oracle/tolerances";
+import {
+  atEstimate,
+  planBuys,
+  planChanged,
+  planSells,
+  previewTrades,
+  type OptionSide,
+  type PreviewTrades,
+  type SoldLeg,
+} from "../utils/plan";
 
 /**
  * The predict-flow adapter: set up the trade wallet, add money, then move the pools toward the
@@ -62,6 +74,8 @@ export const OPTION_GAS = 1_500_000n;
 export const CREDITS_LEG_GAS = 700_000n;
 /** Of ten thousand, the share of the block gas limit one batch is sized to fill. */
 export const BATCH_GAS_SHARE_BPS = 5_000n;
+/** The most gas one transaction may use where EIP-7825 applies, whatever the block's limit. */
+export const MAX_TX_GAS = 16_777_216n;
 
 /** What a batch of `options` is sized to spend, the credits leg included when it carries one. */
 export const batchGas = (options: number, credits: boolean): bigint =>
@@ -69,7 +83,8 @@ export const batchGas = (options: number, credits: boolean): bigint =>
 
 /** The options one batch holds under `blockGasLimit`'s budget; never fewer than one. */
 export function optionsPerBatch(blockGasLimit: bigint, credits: boolean): number {
-  const room = (blockGasLimit * BATCH_GAS_SHARE_BPS) / 10_000n - batchGas(0, credits);
+  const share = (blockGasLimit * BATCH_GAS_SHARE_BPS) / 10_000n;
+  const room = (share < MAX_TX_GAS ? share : MAX_TX_GAS) - batchGas(0, credits);
   return room < OPTION_GAS ? 1 : Number(room / OPTION_GAS);
 }
 
@@ -80,6 +95,8 @@ export interface PredictDeps {
   creditsQuoter?: ExactInputQuoter;
   /** Told about an option no route could be found for, which the batch `stepId` leaves out. */
   onLeftOut?: (option: PredictOption, reason: unknown, stepId: string) => void;
+  /** What the visitor was shown; a batch whose plan differs is not signed. None holds nothing. */
+  heldTo?: () => HeldTo | undefined;
 }
 
 const outcomeToken = (option: PredictOption, side: OptionSide): Address =>
@@ -127,6 +144,17 @@ export class CreditsUnavailableError extends Error {
     this.name = "CreditsUnavailableError";
   }
 }
+
+/** The pools give another plan, or the credits swap pays less, than the run is held to. */
+export class PlansMovedError extends Error {
+  constructor(readonly moved: MovedPlans) {
+    super("The pools moved since the plan was shown.");
+    this.name = "PlansMovedError";
+  }
+}
+
+/** Of ten thousand, how far a plan's figures may move from those shown before it is moved, at most. */
+export const MOVED_TOLERANCE_BPS = DEFAULT_SLIPPAGE.tradeBps;
 
 /** The owner has a transaction broadcast and not mined, which may be the one a step would sign again. */
 export class TxPendingError extends Error {
@@ -227,6 +255,8 @@ interface CreditsLeg {
   calls: ExecutorValueCall[];
   /** What each option splits of the mint: the vault's preview less `MINT_RATE_MARGIN_BPS`. */
   minted: bigint;
+  /** The swap as quoted now, when it pays less than the floor the run is held to, or none was shown. */
+  moved?: CreditsSwapPreview;
 }
 
 /**
@@ -234,18 +264,6 @@ interface CreditsLeg {
  * landing in sDAI raises its rate, so `splitFromBase` can mint less than the build-time preview.
  */
 export const MINT_RATE_MARGIN_BPS = 1n;
-
-/** The credits swap as quoted now: what it pays, what the credits redeem for at the vault, and the floor. */
-export interface CreditsSwapPreview {
-  /** WXDAI the quote pays the executor. */
-  quoted: bigint;
-  /** xDAI the credits' collateral redeems for at the vault's rate. */
-  vaultValue: bigint;
-  /** The least the swap may pay, `creditsBps` below the quote. */
-  floor: bigint;
-  /** What the pool's fee and price take against the vault rate; none when the pool pays more. */
-  loss: bigint;
-}
 
 async function quoteCreditsSwap(
   ctx: Pick<PredictCtx, "collateral" | "executor" | "credits">,
@@ -283,13 +301,21 @@ async function quoteCreditsSwap(
   }
 
   const vaultValue = await deps.reader.vaultValue(amount);
+  const floor = (quote.amountOut * (10_000n - BigInt(creditsBps))) / 10_000n;
   const preview: CreditsSwapPreview = {
     quoted: quote.amountOut,
     vaultValue,
-    floor: (quote.amountOut * (10_000n - BigInt(creditsBps))) / 10_000n,
+    floor,
     loss: vaultValue > quote.amountOut ? vaultValue - quote.amountOut : 0n,
+    minted: await mintedFrom(floor, deps),
   };
   return { params, preview };
+}
+
+/** The collateral each option splits of `floor` xDAI, held back so a rate rise cannot leave the split short. */
+async function mintedFrom(floor: bigint, deps: Pick<PredictDeps, "reader">): Promise<bigint> {
+  const preview = await deps.reader.previewDeposit(floor);
+  return preview - (preview * MINT_RATE_MARGIN_BPS) / 10_000n;
 }
 
 /** The credits swap a run spending `amount` would make now, for the popup to show before Predict. */
@@ -305,6 +331,7 @@ export async function previewCreditsSwap(
 /**
  * The manager swaps `creditsToSpend` of its collateral for WXDAI paid to the executor, which unwraps
  * the floor and splits it at the parent as xDAI. The surplus over the floor stays as WXDAI.
+ * A run held to a shown swap keeps its floor, so the split is the one shown.
  */
 async function creditsLeg(ctx: PredictCtx, amount: bigint, creditsBps: number, deps: PredictDeps): Promise<CreditsLeg> {
   const route = ctx.credits;
@@ -314,16 +341,18 @@ async function creditsLeg(ctx: PredictCtx, amount: bigint, creditsBps: number, d
   }
 
   const { params, preview: swapped } = await quoteCreditsSwap(ctx, amount, creditsBps, deps);
-  const floor = swapped.floor;
+  const held = deps.heldTo?.();
+  const moved = held !== undefined && (held.credits === undefined || swapped.quoted < held.credits.floor);
+  const floor = !moved && held?.credits ? held.credits.floor : swapped.floor;
   const swap = encodeFunctionData({
     abi: ALGEBRA_ROUTER_ABI,
     functionName: "exactInputSingle",
     args: [{ ...params, amountOutMinimum: floor, limitSqrtPrice: 0n }],
   });
 
-  const preview = await deps.reader.previewDeposit(floor);
   return {
-    minted: preview - (preview * MINT_RATE_MARGIN_BPS) / 10_000n,
+    minted: await mintedFrom(floor, deps),
+    ...(moved ? { moved: swapped } : {}),
     calls: [
       {
         to: route.manager,
@@ -361,6 +390,13 @@ async function predictCalls(args: {
 }): Promise<ExecutorValueCall[]> {
   const { ctx, stepId, options, mint, credits, slippageBps, deps } = args;
   const states = await deps.reader.optionStates({ options, executor: ctx.executor });
+  const held = deps.heldTo?.();
+  if (held) {
+    const moved = movedFrom(held, options, states, mint + (credits?.minted ?? 0n), slippageBps);
+    if (moved.markets.length > 0 || credits?.moved) {
+      throw new PlansMovedError({ ...moved, ...(credits?.moved ? { credits: credits.moved } : {}) });
+    }
+  }
 
   const calls: ExecutorValueCall[] = [
     ...(credits?.calls ?? []),
@@ -398,6 +434,50 @@ async function predictCalls(args: {
 }
 
 const withoutValue = (call: ExecutorCall): ExecutorValueCall => ({ ...call, value: 0n });
+
+const trades = (plan: PreviewTrades) => plan.sells.length > 0 || plan.buys.length > 0;
+
+/**
+ * Each option's plan as the pools give it now, worked out as the popup's preview does, and the
+ * options whose plan differs from `held`'s; an option shown no plan differs once it trades.
+ */
+function movedFrom(
+  held: HeldTo,
+  options: PredictOption[],
+  states: OptionChainState[],
+  perOption: bigint,
+  slippageBps: number,
+): MovedPlans {
+  const tolerance = Math.min(slippageBps, MOVED_TOLERANCE_BPS);
+  const plans: Record<string, PreviewTrades> = {};
+  const markets: Address[] = [];
+  for (const [index, option] of options.entries()) {
+    const state = states[index];
+    if (state === undefined) continue;
+    const now = previewTrades(
+      {
+        pools: state.pools,
+        targetPriceWad: option.targetPriceWad,
+        held: state.held,
+        splitAmount: state.underlying + perOption,
+      },
+      slippageBps,
+    );
+    if (now === null) continue;
+    const key = option.childMarket.toLowerCase();
+    plans[key] = now;
+    const before = held.plans[key];
+    if (before === undefined ? trades(now) : planChanged(before, now, tolerance)) markets.push(option.childMarket);
+  }
+  return { markets, plans };
+}
+
+/** One moved result for several batches. */
+const mergeMoved = (into: MovedPlans | undefined, next: MovedPlans): MovedPlans => ({
+  markets: [...(into?.markets ?? []), ...next.markets],
+  plans: { ...into?.plans, ...next.plans },
+  ...((next.credits ?? into?.credits) ? { credits: next.credits ?? into?.credits } : {}),
+});
 
 /** `batchValueExecute` only when a call carries native value, so a run without credits signs `batchExecute`. */
 function batchTx(executor: Address, calls: ExecutorValueCall[]): FlowTx {
@@ -605,24 +685,27 @@ export async function assertRoutes(ctx: PredictCtx, snapshot: PredictSnapshot, d
   const { tradeBps, creditsBps } = snapshot.slippage;
   const credits =
     snapshot.creditsToSpend > 0n ? await creditsLeg(ctx, snapshot.creditsToSpend, creditsBps, deps) : undefined;
-  const mint = snapshot.collateralIn + (credits?.minted ?? 0n);
   const batches = batched(snapshot.options, snapshot.optionsPerBatch);
   let atEstimates = 0;
+  let moved: MovedPlans | undefined;
   for (const [index, options] of batches.entries()) {
     try {
       await predictCalls({
         ctx,
         stepId: STEP_ID.predict(index + 1),
         options,
-        mint,
+        mint: snapshot.collateralIn + (index > 0 ? (credits?.minted ?? 0n) : 0n),
+        credits: index === 0 ? credits : undefined,
         slippageBps: tradeBps,
         deps: quiet,
       });
     } catch (error) {
-      if (!(error instanceof AtEstimatesError)) throw error;
-      atEstimates += 1;
+      if (error instanceof PlansMovedError) moved = mergeMoved(moved, error.moved);
+      else if (error instanceof AtEstimatesError) atEstimates += 1;
+      else throw error;
     }
   }
+  if (moved) throw new PlansMovedError(moved);
   if (atEstimates === batches.length) throw new AtEstimatesError();
   if (atEstimates > 0) {
     throw new NoRouteError(

@@ -4,7 +4,7 @@ import type { CreditsRoute } from "@/config/contracts";
 
 import type { PoolLiquidity } from "@/types/pool";
 
-import type { OutcomeBalances } from "../utils/plan";
+import type { OutcomeBalances, PreviewTrades } from "../utils/plan";
 
 /**
  * What a prediction is built from. Framework-free, like the rest of `flow/`: the reads and the
@@ -145,4 +145,35 @@ export interface PredictCtx {
   sDaiAdapter: Address | null;
   /** Null where credits cannot fund this session's collateral. */
   credits: CreditsRoute | null;
+}
+
+/** The credits swap as quoted: what it pays, what the credits redeem for at the vault, and the floor. */
+export interface CreditsSwapPreview {
+  /** WXDAI the quote pays the executor. */
+  quoted: bigint;
+  /** xDAI the credits' collateral redeems for at the vault's rate. */
+  vaultValue: bigint;
+  /** The least the swap may pay, `creditsBps` below the quote. */
+  floor: bigint;
+  /** What the pool's fee and price take against the vault rate; none when the pool pays more. */
+  loss: bigint;
+  /** Collateral each option splits of the floor: the vault's preview less `MINT_RATE_MARGIN_BPS`. */
+  minted: bigint;
+}
+
+/** Each option's plan as the popup showed it, keyed by its lower-case child market. */
+export type ShownPlans = Readonly<Record<string, PreviewTrades>>;
+
+/** What a run is held to: the plans and the credits swap the visitor saw before signing. */
+export interface HeldTo {
+  plans: ShownPlans;
+  /** Absent where the popup showed no credits swap. */
+  credits?: CreditsSwapPreview;
+}
+
+/** The options whose plan changed, every option's plan as the pools give it now, and a moved credits swap. */
+export interface MovedPlans {
+  markets: Address[];
+  plans: ShownPlans;
+  credits?: CreditsSwapPreview;
 }

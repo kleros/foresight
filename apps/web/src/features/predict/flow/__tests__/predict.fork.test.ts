@@ -40,7 +40,7 @@ import {
   type LedgerScope,
 } from "./support/ledger";
 import { CREDITS_SLIPPAGE_BPS, DEFAULT_SLIPPAGE, DUST_WEI } from "../../oracle/tolerances";
-import { expectedSplit, fundingRequest, planFunding, type Funding } from "../../utils/funding";
+import { fundingRequest, planFunding, shownSplit, type Funding } from "../../utils/funding";
 import type { PredictCtx, PredictOption, PredictRequest, PredictSnapshot } from "../types";
 
 /**
@@ -1239,7 +1239,7 @@ interface ScenarioRun {
   /** Each option's trades as the popup's Details showed them before the run. */
   preview: Map<Address, ReturnType<Awaited<ReturnType<typeof load>>["previewTrades"]>>;
   /** The credits swap as Details showed it before the run, for a run that spends credits. */
-  creditsSwap?: import("../plan").CreditsSwapPreview;
+  creditsSwap?: import("../types").CreditsSwapPreview;
   /** A fresh driver on the storage as the tab left it, as a reload opens it. */
   reopen: () => import("../../run/types").PredictDriver;
 }
@@ -1530,7 +1530,7 @@ describe("money kept by every predict run, against a gnosis fork", () => {
             pools: state.pools,
             targetPriceWad: option.targetPriceWad,
             held: state.held,
-            splitAmount: state.underlying + expectedSplit(funding, request.slippage.creditsBps),
+            splitAmount: state.underlying + shownSplit(funding, creditsSwap?.minted)!,
           },
           request.slippage.tradeBps,
         ),
@@ -1630,7 +1630,11 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       });
     const driver = driverOn(storage);
 
-    driver.start();
+    // held to Details as the popup holds it, so every batch checks the pools against the preview
+    driver.start({
+      plans: Object.fromEntries([...preview].map(([market, plan]) => [market.toLowerCase(), plan!])),
+      ...(creditsSwap ? { credits: creditsSwap } : {}),
+    });
     await vi.waitFor(() => expect(["halted", "complete"]).toContain(driver.getProgress().stage), {
       timeout: 300_000,
       interval: 250,
@@ -1817,6 +1821,7 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       const unwrap = first.find((call) => call.to.toLowerCase() === route.wxdai.toLowerCase())!;
       const [floor] = decodeFunctionData({ abi: WXDAI_WITHDRAW_ABI, data: unwrap.data }).args;
       expect(floor).toBe(leg.amountOutMinimum);
+      expect(floor, "the swap is held to the floor Details showed").toBe(run.creditsSwap!.floor);
       const base = first.find((call) => call.value > 0n)!;
       expect(base.value).toBe(floor);
 
@@ -1905,8 +1910,7 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       const previewOff =
         shown!.split > legs.childSplit ? shown!.split - legs.childSplit : legs.childSplit - shown!.split;
       const allowed =
-        (request.creditsToSpend * (shownLossBps(run) + app.MINT_RATE_MARGIN_BPS + 1n)) / 10_000n +
-        (request.depositNative ? DUST_WEI : 0n);
+        (request.creditsToSpend * (app.MINT_RATE_MARGIN_BPS + 1n)) / 10_000n + (request.depositNative ? DUST_WEI : 0n);
       expect(
         previewOff,
         `${option.childMarket}: previewed a split of ${shown!.split}, split ${legs.childSplit}`,

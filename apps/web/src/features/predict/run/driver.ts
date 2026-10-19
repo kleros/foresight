@@ -18,7 +18,7 @@ import { chainText, OUT_OF_FUNDS, REVERTS } from "@/utils/txErrorText";
 
 import type { ExactInputQuoter, SwapQuoter } from "@/lib/swap/types";
 
-import type { PredictDriver, PredictFailureReason, PredictProgress, PredictStepRow, ShownPlans } from "./types";
+import type { PredictDriver, PredictFailureReason, PredictProgress, PredictStepRow } from "./types";
 import {
   assertRoutes,
   AtEstimatesError,
@@ -28,6 +28,7 @@ import {
   NoRouteError,
   optionsPerBatch,
   planPredict,
+  PlansMovedError,
   PredictConfigError,
   QuoteFailedError,
   STEP_ID,
@@ -35,54 +36,18 @@ import {
   TxPendingError,
   type PredictDeps,
 } from "../flow/plan";
-import type { PlannedRequest, PredictCtx, PredictReader, PredictRequest, PredictSnapshot } from "../flow/types";
-import { planChanged, previewTrades, type PreviewTrades } from "../utils/plan";
+import type {
+  HeldTo,
+  MovedPlans,
+  PlannedRequest,
+  PredictCtx,
+  PredictReader,
+  PredictRequest,
+  PredictSnapshot,
+} from "../flow/types";
 
 /** The trade wallet, or the wallet's credits, hold less than the prediction was shown to draw on. */
 class TradeWalletShortError extends Error {}
-
-/** The pools give another plan than the one shown. */
-class PlansMovedError extends Error {
-  constructor(readonly moved: NonNullable<PredictProgress["moved"]>) {
-    super("The pools moved since the plan was shown.");
-  }
-}
-
-/**
- * Each option's plan as the pools give it now, worked out as the popup's preview does, and the
- * options whose plan differs from `shown` beyond the trade slippage. None for an option not shown.
- */
-async function replanned(
-  reader: PredictReader,
-  ctx: PredictCtx,
-  snapshot: PredictSnapshot,
-  shown: ShownPlans,
-): Promise<NonNullable<PredictProgress["moved"]> | undefined> {
-  const states = await reader.optionStates({ options: snapshot.options, executor: ctx.executor });
-  const { tradeBps, creditsBps } = snapshot.slippage;
-  const mint = snapshot.collateralIn + (snapshot.creditsToSpend * BigInt(10_000 - creditsBps)) / 10_000n;
-  const plans: Record<string, PreviewTrades> = {};
-  const markets: Address[] = [];
-  for (const [index, option] of snapshot.options.entries()) {
-    const state = states[index];
-    if (state === undefined) continue;
-    const now = previewTrades(
-      {
-        pools: state.pools,
-        targetPriceWad: option.targetPriceWad,
-        held: state.held,
-        splitAmount: state.underlying + mint,
-      },
-      tradeBps,
-    );
-    if (now === null) continue;
-    const key = option.childMarket.toLowerCase();
-    plans[key] = now;
-    const before = shown[key];
-    if (before !== undefined && planChanged(before, now, tradeBps)) markets.push(option.childMarket);
-  }
-  return markets.length > 0 ? { markets, plans } : undefined;
-}
 
 /** A send the wallet never answered, which the chain may still mine under `nonce`. */
 interface UnansweredSend {
@@ -162,14 +127,19 @@ export function createPredictRun(args: {
   let awaitingUnanswered = false;
   /** Sends the wallet never answered and the chain had not mined when the run stopped, by step id. */
   const unansweredSends = new Map<string, UnansweredSend>();
-  /** Set when Predict found the pools giving another plan than the one shown; cleared by the next press. */
-  let moved: PredictProgress["moved"];
+  /** What the run is held to; none for a recovered run. */
+  let held: HeldTo | undefined;
+  /** Set when a batch found the pools giving another plan than `held`; cleared by `confirm` and `reset`. */
+  let moved: MovedPlans | undefined;
+  /** A batch's moved plans, from its build's error to the pause it causes. */
+  let movedByBuild: MovedPlans | undefined;
   let cached: PredictProgress;
 
   const deps: PredictDeps = {
     reader: args.reader,
     quoter: args.quoter,
     creditsQuoter: args.creditsQuoter,
+    heldTo: () => held,
     onLeftOut: (option, _reason, stepId) => {
       const left = leavingOut.get(stepId) ?? [];
       if (!left.includes(option.childMarket)) leavingOut.set(stepId, [...left, option.childMarket]);
@@ -254,6 +224,10 @@ export function createPredictRun(args: {
     // transient and leave nothing behind, so they pause for a retry rather than ending the run.
     // A missing route is fatal to the orchestrator and a failed quote pauses it.
     classifyError: (error) => {
+      if (error instanceof PlansMovedError) {
+        movedByBuild = error.moved;
+        return "rpc";
+      }
       buildFailure =
         error instanceof NoRouteError
           ? "no-route"
@@ -305,6 +279,7 @@ export function createPredictRun(args: {
   function stage(): PredictProgress["stage"] {
     const run = orchestrator.getRun();
     if (!run) return failure ? "halted" : checking ? "quoting" : moved ? "moved" : "idle";
+    if (moved && run.status === "paused") return "moved";
     if ((reconciling || awaitingUnanswered) && !failure) return "confirming";
     if (reviewing && !failure) return "review";
 
@@ -326,7 +301,7 @@ export function createPredictRun(args: {
     const run = orchestrator.getRun();
     const settled = new Map(settledEntries(run?.steps ?? []).map((step) => [step.stepId, step]));
     const current = run?.status === "running" ? currentEntry(run.steps)?.stepId : undefined;
-    const failedStep = errorOf(run)?.stepId;
+    const failedStep = moved ? undefined : errorOf(run)?.stepId;
 
     const steps = (run?.steps ?? []).map((entry): PredictStepRow => {
       const done = settled.get(entry.stepId);
@@ -354,6 +329,7 @@ export function createPredictRun(args: {
       ...(moneyMoved ? { moneyMoved: true as const } : {}),
       ...(recovered && run ? { recovered: run.snapshot } : {}),
       ...(moved ? { moved } : {}),
+      ...(held ? { held } : {}),
     };
   }
 
@@ -364,6 +340,13 @@ export function createPredictRun(args: {
     if (event.stepId !== STEP_ID.createExecutor) moneyMoved = true;
   });
   orchestrator.on("flow:paused", () => {
+    if (movedByBuild) {
+      moved = movedByBuild;
+      movedByBuild = undefined;
+      buildFailure = undefined;
+      notify();
+      return;
+    }
     const run = orchestrator.getRun();
     const reason = buildFailure ?? errorOf(run)?.cause;
     buildFailure = undefined;
@@ -435,6 +418,7 @@ export function createPredictRun(args: {
     if (!restored) return;
 
     planned = [];
+    held = undefined;
     recovered = true;
     reconciling = true;
     notify();
@@ -458,8 +442,8 @@ export function createPredictRun(args: {
     notify();
   });
 
-  /** Pins the trade wallet's balance before anything is signed, holds the plan to `shown`, and checks a route exists. */
-  async function prepare(ctx: PredictCtx, requested: PlannedRequest, shown?: ShownPlans): Promise<PredictSnapshot> {
+  /** Pins the trade wallet's balance before anything is signed, and checks a route exists for the plan held to. */
+  async function prepare(ctx: PredictCtx, requested: PlannedRequest): Promise<PredictSnapshot> {
     const [collateralAtStart, creditsAtStart, latest] = await Promise.all([
       args.reader.collateralBalance(ctx.executor),
       args.reader.creditsBalance(ctx.executor),
@@ -477,15 +461,14 @@ export function createPredictRun(args: {
       throw new TradeWalletShortError();
     }
     const snapshot = { ...requested, collateralAtStart, creditsAtStart, fromBlock };
-    const changed = shown && (await replanned(args.reader, ctx, snapshot, shown));
-    if (changed) throw new PlansMovedError(changed);
     await assertRoutes(ctx, snapshot, deps);
     return snapshot;
   }
 
-  const startRun = (shown?: ShownPlans) =>
+  const startRun = (heldTo?: HeldTo) =>
     detached(async () => {
       report(undefined);
+      held = heldTo;
       moved = undefined;
       leavingOut.clear();
       moneyMoved = false;
@@ -506,7 +489,7 @@ export function createPredictRun(args: {
           planned = steps.map((step) => ({ id: step.id, label: step.label, state: "pending" }));
           notify();
         }
-        return { steps, snapshot: await prepare(ctx, sized, shown) };
+        return { steps, snapshot: await prepare(ctx, sized) };
       })().then(
         (ready) => ready,
         (error: unknown) => ({ error }),
@@ -523,19 +506,32 @@ export function createPredictRun(args: {
     })();
 
   return {
-    start(shown) {
+    start(heldTo) {
       if (checking || orchestrator.getStatus() !== "idle") return;
       // A stored run has steps that may already be on chain, and `start` would refuse anyway.
       if (args.store?.load(args.flowId)) {
         recoverRun();
         return;
       }
-      startRun(shown);
+      startRun(heldTo);
     },
 
     confirm() {
-      if (!moved || checking || orchestrator.getStatus() !== "idle") return;
-      startRun(moved.plans);
+      if (!moved || checking) return;
+      const next: HeldTo = {
+        plans: { ...held?.plans, ...moved.plans },
+        ...((moved.credits ?? held?.credits) ? { credits: moved.credits ?? held?.credits } : {}),
+      };
+      const status = orchestrator.getStatus();
+      if (status === "idle") {
+        startRun(next);
+        return;
+      }
+      if (status !== "paused") return;
+      held = next;
+      moved = undefined;
+      report(undefined);
+      resumeRun();
     },
 
     recover() {
@@ -571,7 +567,9 @@ export function createPredictRun(args: {
       leavingOut.clear();
       unansweredSends.clear();
       planned = [];
+      held = undefined;
       moved = undefined;
+      movedByBuild = undefined;
       report(undefined);
     },
 
