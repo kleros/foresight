@@ -344,10 +344,11 @@ describe("statusLine", () => {
     ).toBe("Switch to Gnosis to predict.");
   });
 
-  it("names a large credits swap loss before a run, and not once one has started", () => {
+  it("names a large credits swap loss in one short small line before a run, and not once one has started", () => {
     expect(statusLine({ steps: idle, leftOut: 0, creditsLoss: "≈ 38 xDAI" })).toEqual({
-      text: "The credits swap loses ≈ 38 xDAI. Details has the figures.",
+      text: "Credits swap loses ≈ 38 xDAI.",
       tone: "warning",
+      small: true,
     });
     const started = steps({ progress: progress({ stage: "signing" }) });
     expect(statusLine({ steps: started, leftOut: 0, creditsLoss: "≈ 38 xDAI" })).toBeNull();

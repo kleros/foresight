@@ -240,6 +240,8 @@ export function predictSteps(
 export interface StatusLine {
   text: string;
   tone: "neutral" | "warning" | "error";
+  /** Said for the visitor's information only, in the popup's small type on one line. */
+  small?: true;
 }
 
 /**
@@ -261,7 +263,7 @@ export function statusLine(args: {
   if (moved !== undefined) return { text: movedText(moved), tone: "warning" };
   if (steps.note) return { text: steps.note, tone: "neutral" };
   if (creditsLoss !== undefined && !steps.started) {
-    return { text: `The credits swap loses ${creditsLoss}. Details has the figures.`, tone: "warning" };
+    return { text: `Credits swap loses ${creditsLoss}.`, tone: "warning", small: true };
   }
   if (leftOut > 0) return { text: `${leftOutText(leftOut)}.`, tone: "neutral" };
   return null;

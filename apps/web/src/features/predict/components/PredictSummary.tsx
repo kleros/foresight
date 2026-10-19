@@ -9,11 +9,10 @@ import { INERT } from "@/utils/inert";
 
 import type { ListedEstimate, PriceMove } from "./PredictList";
 import type { CreditsSwapPreview } from "../flow/types";
-import { DEFAULT_SLIPPAGE } from "../oracle/tolerances";
 import { shownAmount } from "../utils/funding";
 import type { OptionSide } from "../utils/plan";
 import { CHECKING_PRICES } from "../utils/predictSteps";
-import { slippagePercent, type SlippageKind, type SlippageSettings } from "../utils/slippage";
+import { resolveSlippage, slippagePercent, type SlippageKind, type SlippageSettings } from "../utils/slippage";
 
 /** The credits a run spends and their swap into xDAI as quoted now. */
 export interface CreditsSwapShown {
@@ -344,15 +343,10 @@ export function PredictSummary({
               </p>
             ) : null}
             {slippage ? (
-              <SlippageRow kind="tradeBps" label="Max slippage on trades" settings={slippage} onPress={openSettings} />
+              <SlippageRow kind="tradeBps" label="Max slippage" settings={slippage} onPress={openSettings} />
             ) : null}
             {slippage && creditsSwap ? (
-              <SlippageRow
-                kind="creditsBps"
-                label="Max slippage on the credits swap"
-                settings={slippage}
-                onPress={openSettings}
-              />
+              <SlippageRow kind="creditsBps" label="Credits swap slippage" settings={slippage} onPress={openSettings} />
             ) : null}
             {isPlanned ? (
               <p data-testid="trades-note" className="text-fs-popup-text-3 mt-1 text-xs leading-4 text-pretty">
@@ -374,7 +368,7 @@ function feesTotal(selected: ListedEstimate[], preview: Record<string, PriceMove
   return fees.length > 1 ? fees.reduce((sum, fee) => sum + fee, 0n) : undefined;
 }
 
-/** One kind's max slippage, `1% (Auto)` or the visitor's own; pressed, it opens the settings. */
+/** One kind's max slippage as the run uses it, Auto's value or the visitor's own; pressed, it opens the settings. */
 function SlippageRow({
   kind,
   label,
@@ -386,8 +380,7 @@ function SlippageRow({
   settings: SlippageSettings;
   onPress?: () => void;
 }) {
-  const custom = settings[kind];
-  const value = custom === null ? `${slippagePercent(DEFAULT_SLIPPAGE[kind])}% (Auto)` : `${slippagePercent(custom)}%`;
+  const value = `${slippagePercent(resolveSlippage(settings)[kind])}%`;
   const content = (
     <>
       <span className="text-fs-popup-text-2 shrink-0">{label}</span>
