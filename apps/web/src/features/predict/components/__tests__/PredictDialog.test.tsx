@@ -434,7 +434,7 @@ describe("what the funds step says is added", () => {
   const xDai = { id: "native" as const, symbol: "xDAI", decimals: 18 };
   const wallet = { address: "0xdcee0000000000000000000000000000000c664f", deployed: true } as const;
 
-  it("names an xDAI payment in xDAI, with the sDAI it becomes", () => {
+  it("names an xDAI payment in xDAI alone", () => {
     // 900 xDAI at 1.254273999999999999 xDAI per sDAI is 717.546564785684787149 sDAI
     const paid = planFunding({
       amount: 900n * WAD,
@@ -455,7 +455,7 @@ describe("what the funds step says is added", () => {
       />,
     );
 
-    expect(subtitleOf("Add funds")).toBe("900 xDAI (≈ 717.5466 sDAI)");
+    expect(subtitleOf("Add funds")).toBe("900 xDAI");
   });
 
   it("names an sDAI payment in sDAI alone", () => {

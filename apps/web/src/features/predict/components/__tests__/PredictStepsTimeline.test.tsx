@@ -42,6 +42,25 @@ describe("PredictStepsTimeline while adding funds", () => {
 
     expect(item("Add funds").querySelector("h2 + p")?.textContent).toBe("Confirming…");
   });
+
+  it("keeps each of credits and a deposit whole, so the line breaks only after the +", () => {
+    render(
+      <PredictStepsTimeline
+        steps={predictSteps({
+          wallet: { address: WALLET, deployed: true },
+          toAdd: 1_234_543n * WAD,
+          symbol: "xDAI",
+          decimals: 18,
+          credits: 162588n * 10n ** 14n,
+          progress: null,
+        })}
+      />,
+    );
+
+    expect(item("Add funds").querySelector("h2 + p")?.textContent).toBe(
+      "16.2588\u00a0credits\u00a0+ 1,234,543\u00a0xDAI",
+    );
+  });
 });
 
 const halted: PredictProgress = {

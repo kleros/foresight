@@ -103,6 +103,8 @@ const CREDITS = {
   empty: { wallet: 120n * WAD, tradeWallet: 0n, manager: 0n },
   /** a four-decimal manager balance, short of a larger holding and under the per-run cap */
   long: { wallet: 2000n * WAD, tradeWallet: 0n, manager: parseUnits("81.7347", 18) },
+  /** four-decimal credits, all in the visitor's wallet, so the funds step moves them */
+  odd: { wallet: parseUnits("16.2588", 18), tradeWallet: 0n, manager: 1000n * WAD },
 };
 const heldCredits = creditsState ? (CREDITS[creditsState] ?? null) : null;
 const offer = creditsOffer(heldCredits);
@@ -123,7 +125,11 @@ const selected: ListedEstimate[] = CITIES.slice(0, count).map((name, index) => (
 
 const sDai = { id: "collateral" as const, symbol: "sDAI", decimals: 18 };
 /** `?tokens=2` offers xDAI beside sDAI, so the token select can open. */
-const tokens = params.get("tokens") === "2" ? [sDai, { id: "native" as const, symbol: "xDAI", decimals: 18 }] : [sDai];
+const xDai = { id: "native" as const, symbol: "xDAI", decimals: 18 };
+const tokens = params.get("tokens") === "2" ? [sDai, xDai] : [sDai];
+/** `?pay=native` pays in xDAI at 1.0937 xDAI an sDAI; the steps then say what the shown funding adds, credits included, as the app's do. */
+const paysNative = params.get("pay") === "native";
+const payToken = paysNative ? xDai : sDai;
 const collateral = { symbol: "sDAI", decimals: 18 };
 
 const run = (
@@ -191,6 +197,7 @@ const fundingFor = (isUsing: boolean) =>
         amount: amount ?? 0n,
         ownWallet: held,
         tradeWallet: 6n * WAD,
+        ...(paysNative ? { tokenPerCollateralWad: parseUnits("1.0937", 18) } : {}),
         credits: isUsing ? creditLines(heldCredits, offer) : [],
       });
 const funding = fundingFor(false);
@@ -238,11 +245,13 @@ const preview = Object.fromEntries(
 );
 const progress = PROGRESS[state] ?? null;
 const isRunning = state === "quoting" || state === "signing" || state === "confirming";
-const steps = predictSteps({
-  wallet: { address: WALLET, deployed: !isFirstPrediction },
-  ...fundsToAdd(state === "over" ? null : funding, sDai, collateral),
-  progress,
-});
+const stepsFor = (shown: typeof funding) =>
+  predictSteps({
+    wallet: { address: WALLET, deployed: !isFirstPrediction },
+    ...fundsToAdd(state === "over" ? null : shown, payToken, collateral),
+    progress,
+  });
+const steps = stepsFor(funding);
 
 const success = (
   <PredictSuccessView
@@ -299,8 +308,8 @@ function Harness() {
         preview={state === "recovered" || pricesFailed ? undefined : preview}
         amount={typed}
         onAmountChange={setTyped}
-        tokens={tokens}
-        token={sDai}
+        tokens={paysNative ? [sDai, xDai] : tokens}
+        token={payToken}
         onTokenChange={() => {}}
         funding={shown}
         collateral={collateral}
@@ -308,7 +317,7 @@ function Harness() {
         optionNoun="city"
         isFirstPrediction={isFirstPrediction}
         isDisconnected={state === "disconnected"}
-        steps={steps}
+        steps={paysNative ? stepsFor(shown) : steps}
         leftOut={leftOut}
         isRunning={isRunning}
         canRetry={state === "failed" || state === "pending" || state === "recovered"}

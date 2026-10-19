@@ -41,6 +41,16 @@ const TIMELINE_STATE: Record<StepView, TimelineItem["state"]> = {
   failed: undefined,
 };
 
+/** Parts joined by " + " are kept whole, so a wrapped line breaks only after a "+". */
+function keepPartsWhole(text: string): string {
+  return text.includes(" + ")
+    ? text
+        .split(" + ")
+        .map((part) => part.replaceAll(" ", "\u00a0"))
+        .join("\u00a0+ ")
+    : text;
+}
+
 export function PredictStepsTimeline({ steps }: { steps: PredictSteps }) {
   const timeline = useRef<HTMLDivElement>(null);
   const running = steps.rows.find((row) => row.view === "running")?.key;
@@ -59,7 +69,7 @@ export function PredictStepsTimeline({ steps }: { steps: PredictSteps }) {
   const items: TimelineItem[] = steps.rows.map((row) => ({
     title: row.title,
     // the detail sits on the title's line, right-aligned
-    party: row.subtitle,
+    party: keepPartsWhole(row.subtitle),
     subtitle: "",
     Icon: BULLETS[row.key],
     state: TIMELINE_STATE[row.view],

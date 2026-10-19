@@ -1522,6 +1522,43 @@ for (const viewport of [
   }
 }
 
+/** Four-decimal credits from the visitor's wallet and a seven-figure xDAI deposit: the longest the funds step says. */
+const WORST_FUNDS = "&trades=worst&pay=native&credits=odd";
+
+for (const viewport of [
+  { width: 320, height: 568 },
+  { width: 375, height: 812 },
+  { width: 1280, height: 800 },
+]) {
+  for (const theme of ["light", "dark"]) {
+    test(`the Add funds step says credits and a seven-figure xDAI deposit whole, in a row of one height, ${viewport.width} x ${viewport.height} ${theme}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      const heights: number[] = [];
+      for (const state of ["idle", "signing", "failed"] as const) {
+        const dialog = await openPopup(page, 2, state, undefined, `${WORST_FUNDS}&theme=${theme}`);
+        const row = dialog.locator(".predict-steps > li").filter({ hasText: "Add funds" });
+        heights.push((await row.boundingBox())!.height);
+        if (state !== "idle") continue;
+
+        const value = row.locator("h2 + p");
+        await expect(value).toHaveText(/^16\.2588\scredits\s\+\s1,234,\d{3}\.\d{4}\sxDAI$/);
+        const fit = await value.evaluate((element) => {
+          const box = element.getBoundingClientRect();
+          const column = element.closest("li")!.querySelector(":scope > div:nth-child(2)")!.getBoundingClientRect();
+          return {
+            cut: element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1,
+            inside: box.left >= column.left - 1 && box.right <= column.right + 1 && box.bottom <= column.bottom + 1,
+          };
+        });
+        expect(fit).toEqual({ cut: false, inside: true });
+      }
+      expect(new Set(heights).size, `the row's heights across idle, signing and failed: ${heights}`).toBe(1);
+    });
+  }
+}
+
 test.describe("the header's close button", () => {
   test.use({ viewport: { width: 375, height: 667 } });
 

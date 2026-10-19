@@ -247,9 +247,10 @@ test.describe("a credits prediction on the gnosis fork", () => {
         ),
       ),
     ).toBeVisible();
-    const step = popup.getByText(/(^|\+ )[\d.,]+ xDAI \(≈ [\d.,]+ sDAI\)$/);
+    // the step keeps each part whole with no-break spaces
+    const step = popup.getByText(/(^|\+\s)[\d.,]+\sxDAI$/);
     await expect(step).toBeVisible();
-    const deposit = parseEther((await step.textContent())!.match(/([\d.,]+) xDAI \(/)![1]!.replace(/,/g, ""));
+    const deposit = parseEther((await step.textContent())!.match(/([\d.,]+)\sxDAI$/)![1]!.replace(/,/g, ""));
 
     await popup.getByRole("button", { name: "Predict", exact: true }).click();
     const success = page.getByRole("dialog", { name: "Prediction placed" });
