@@ -68,7 +68,7 @@ function renderSummary(
 }
 
 type Plan = NonNullable<PriceMove["plan"]>;
-const NO_TRADES: Plan = { split: 0n, sells: [], merge: 0n, buys: [], held: 0n };
+const NO_TRADES: Plan = { split: 0n, sells: [], merge: 0n, buys: [], held: 0n, feeValue: 0n };
 /** `units` hundredths of a token. */
 const cents = (units: bigint) => (units * WAD) / 100n;
 
@@ -83,7 +83,7 @@ describe("PredictSummary's headline", () => {
     const plan: Plan = {
       ...NO_TRADES,
       split: WAD,
-      sells: [{ side: "down", amountIn: cents(2n), underlyingOut: cents(1n), toTarget: false }],
+      sells: [{ side: "down", amountIn: cents(2n), underlyingOut: cents(1n), toTarget: false, fee: 0n }],
     };
     renderSummary({ [GERWIG]: { from: 312, to: 312.0001, plan } });
 
@@ -131,10 +131,11 @@ describe("PredictSummary's trades", () => {
   it("lists an option's legs in the order the run makes them, with ≈ on every figure the pool maths simulates", () => {
     const plan: Plan = {
       held: 0n,
+      feeValue: 0n,
       split: 10n * WAD,
-      sells: [{ side: "down", amountIn: cents(720n), underlyingOut: cents(310n), toTarget: false }],
+      sells: [{ side: "down", amountIn: cents(720n), underlyingOut: cents(310n), toTarget: false, fee: 0n }],
       merge: cents(280n),
-      buys: [{ side: "up", amountIn: cents(580n), outcomeOut: cents(840n), toTarget: false }],
+      buys: [{ side: "up", amountIn: cents(580n), outcomeOut: cents(840n), toTarget: false, fee: 0n }],
     };
     renderSummary({ [GERWIG]: { from: 312, to: 355, plan } }, true);
 
@@ -149,10 +150,11 @@ describe("PredictSummary's trades", () => {
   it("names a buy the merge alone pays for exactly", () => {
     const plan: Plan = {
       held: 0n,
+      feeValue: 0n,
       split: WAD,
       sells: [],
       merge: WAD,
-      buys: [{ side: "down", amountIn: cents(98n), outcomeOut: 2n * WAD, toTarget: false }],
+      buys: [{ side: "down", amountIn: cents(98n), outcomeOut: 2n * WAD, toTarget: false, fee: 0n }],
     };
     renderSummary({ [GERWIG]: { from: 312, to: 300, plan } }, true);
 
@@ -163,7 +165,7 @@ describe("PredictSummary's trades", () => {
     const plan: Plan = {
       ...NO_TRADES,
       split: WAD,
-      sells: [{ side: "down", amountIn: WAD, underlyingOut: cents(40n), toTarget: false }],
+      sells: [{ side: "down", amountIn: WAD, underlyingOut: cents(40n), toTarget: false, fee: 0n }],
     };
     renderSummary({ [GERWIG]: { from: 312, to: 355, plan } }, true);
     const trades = within(screen.getByRole("list", { name: "Trades for Greta Gerwig" }));
@@ -175,7 +177,7 @@ describe("PredictSummary's trades", () => {
   it("leaves out a split and a merge of nothing", () => {
     const plan: Plan = {
       ...NO_TRADES,
-      sells: [{ side: "up", amountIn: WAD, underlyingOut: cents(25n), toTarget: false }],
+      sells: [{ side: "up", amountIn: WAD, underlyingOut: cents(25n), toTarget: false, fee: 0n }],
     };
     renderSummary({ [GERWIG]: { from: 312, to: 280, plan } }, true);
 
@@ -205,7 +207,7 @@ describe("PredictSummary's trades", () => {
             ...NO_TRADES,
             split: 12n * WAD,
             held: 2n * WAD,
-            buys: [{ side: "up", amountIn: WAD, outcomeOut: 2n * WAD, toTarget: false }],
+            buys: [{ side: "up", amountIn: WAD, outcomeOut: 2n * WAD, toTarget: false, fee: 0n }],
           },
         },
       },
@@ -225,7 +227,7 @@ describe("PredictSummary's trades", () => {
             ...NO_TRADES,
             split: 2n * WAD,
             held: 2n * WAD,
-            buys: [{ side: "up", amountIn: WAD, outcomeOut: 2n * WAD, toTarget: false }],
+            buys: [{ side: "up", amountIn: WAD, outcomeOut: 2n * WAD, toTarget: false, fee: 0n }],
           },
         },
       },
@@ -239,9 +241,9 @@ describe("PredictSummary's trades", () => {
     const plan: Plan = {
       ...NO_TRADES,
       split: 2n * WAD,
-      sells: [{ side: "up", amountIn: WAD, underlyingOut: cents(50n), toTarget: true }],
+      sells: [{ side: "up", amountIn: WAD, underlyingOut: cents(50n), toTarget: true, fee: 0n }],
       merge: cents(99n),
-      buys: [{ side: "down", amountIn: cents(30n), outcomeOut: WAD, toTarget: false }],
+      buys: [{ side: "down", amountIn: cents(30n), outcomeOut: WAD, toTarget: false, fee: 0n }],
     };
     renderSummary({ [GERWIG]: { from: 312, to: 280, plan } }, true);
 
@@ -257,7 +259,7 @@ describe("PredictSummary's trades", () => {
       ...NO_TRADES,
       split: WAD,
       merge: WAD,
-      buys: [{ side: "down", amountIn: cents(98n), outcomeOut: 2n * WAD, toTarget: true }],
+      buys: [{ side: "down", amountIn: cents(98n), outcomeOut: 2n * WAD, toTarget: true, fee: 0n }],
     };
     renderSummary({ [GERWIG]: { from: 312, to: 300, plan } }, true);
 
@@ -269,7 +271,7 @@ describe("PredictSummary's trades", () => {
       ...NO_TRADES,
       split: 10n * WAD,
       merge: WAD,
-      buys: [{ side: "up", amountIn: WAD, outcomeOut: 3n * WAD, toTarget: false }],
+      buys: [{ side: "up", amountIn: WAD, outcomeOut: 3n * WAD, toTarget: false, fee: 0n }],
     };
     renderSummary(
       { [GERWIG]: { from: 312, to: 355, plan } },
@@ -290,7 +292,7 @@ describe("PredictSummary's trades", () => {
   it("names one of a unit in the singular", () => {
     const plan: Plan = {
       ...NO_TRADES,
-      sells: [{ side: "up", amountIn: 2n * WAD, underlyingOut: WAD, toTarget: false }],
+      sells: [{ side: "up", amountIn: 2n * WAD, underlyingOut: WAD, toTarget: false, fee: 0n }],
     };
     renderSummary({ [GERWIG]: { from: 312, to: 280, plan } }, true, selected, { amount: WAD, noun: "city" });
 
@@ -301,7 +303,7 @@ describe("PredictSummary's trades", () => {
   it("groups a large figure and rounds it to the amount field's four decimals", () => {
     const plan: Plan = {
       ...NO_TRADES,
-      sells: [{ side: "down", amountIn: 1_234_567_891n * 10n ** 15n, underlyingOut: WAD, toTarget: false }],
+      sells: [{ side: "down", amountIn: 1_234_567_891n * 10n ** 15n, underlyingOut: WAD, toTarget: false, fee: 0n }],
     };
     renderSummary({ [GERWIG]: { from: 312, to: 355, plan } }, true);
 
@@ -338,7 +340,7 @@ describe("PredictSummary's trades", () => {
       ...NO_TRADES,
       split: WAD,
       merge: 10n ** 13n,
-      sells: [{ side: "up", amountIn: WAD, underlyingOut: cents(25n), toTarget: false }],
+      sells: [{ side: "up", amountIn: WAD, underlyingOut: cents(25n), toTarget: false, fee: 0n }],
     };
     renderSummary({ [GERWIG]: { from: 312, to: 280, plan } }, true);
 

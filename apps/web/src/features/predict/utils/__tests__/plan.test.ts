@@ -438,6 +438,7 @@ describe("previewTrades", () => {
       buys: [],
       from: WAD / 4n,
       to: WAD / 4n,
+      feeValue: 0n,
     });
   });
 
@@ -445,6 +446,35 @@ describe("previewTrades", () => {
     const trades = previewTrades(option({ splitAmount: 0n }), SLIPPAGE_BPS);
 
     expect(trades).toMatchObject({ sells: [], buys: [], from: WAD, to: WAD });
+  });
+
+  it("names each leg's pool fee in the token it spends, at the pool's own rate", () => {
+    // 0.3% on UP's pool, 1% on DOWN's, in millionths as Algebra holds them
+    const feed = option({
+      pools: { up: { ...pool(AT["1"]), fee: 3_000n }, down: { ...pool(AT["0.25"], DEEP), fee: 10_000n } },
+    });
+    const trades = previewTrades(feed, SLIPPAGE_BPS)!;
+    const [sell] = trades.sells;
+    const [buy] = trades.buys;
+
+    expect(sell!.fee).toBe((sell!.amountIn * 3_000n + 999_999n) / 1_000_000n);
+    expect(buy!.fee).toBe((buy!.amountIn * 10_000n + 999_999n) / 1_000_000n);
+  });
+
+  it("totals the fees in underlying, a sell's outcome-token fee at what that sell pays per token", () => {
+    const feed = option({
+      pools: { up: { ...pool(AT["1"]), fee: 3_000n }, down: { ...pool(AT["0.25"], DEEP), fee: 10_000n } },
+    });
+    const { sells, buys, feeValue } = previewTrades(feed, SLIPPAGE_BPS)!;
+
+    expect(feeValue).toBe((sells[0]!.fee * sells[0]!.underlyingOut) / sells[0]!.amountIn + buys[0]!.fee);
+  });
+
+  it("names no fee on a pool that takes none", () => {
+    const trades = previewTrades(option(), SLIPPAGE_BPS)!;
+
+    expect([...trades.sells, ...trades.buys].map((leg) => leg.fee)).toEqual([0n, 0n]);
+    expect(trades.feeValue).toBe(0n);
   });
 
   it("has nothing to show for an UP pool that never priced", () => {

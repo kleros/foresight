@@ -1,6 +1,13 @@
 import type { PoolLiquidity } from "@/types/pool";
 
-import { limitSqrtPriceX96, priceFromSqrtPriceX96, swapToward, volumeUntilPrice, type PoolVolumes } from "./poolMath";
+import {
+  feeOf,
+  limitSqrtPriceX96,
+  priceFromSqrtPriceX96,
+  swapToward,
+  volumeUntilPrice,
+  type PoolVolumes,
+} from "./poolMath";
 import { PRICE_TOLERANCE_TICKS } from "../oracle/tolerances";
 
 /**
@@ -222,6 +229,8 @@ interface PreviewLeg {
   amountIn: bigint;
   /** The pool reaches the target before the leg's amount is spent, so `amountIn` is the pool maths' figure. */
   toTarget: boolean;
+  /** The pool's fee on `amountIn`: outcome tokens for a sell, underlying for a buy. */
+  fee: bigint;
 }
 
 /** One option's trades as the pool maths plays them out against the pools as read. */
@@ -235,14 +244,15 @@ export interface PreviewTrades {
   /** The UP token's price before and after, as a wad. */
   from: bigint;
   to: bigint;
+  /** Every leg's fee in underlying, a sell's valued at what that sell pays per outcome token. */
+  feeValue: bigint;
 }
 
 /** The leg's headroom stays in the trade wallet when the price limit stops the swap at the target. */
-const spent = (leg: SwapLeg): PreviewLeg => ({
-  side: leg.side,
-  amountIn: min(leg.amountIn, leg.amountInAtLimit),
-  toTarget: leg.amountInAtLimit < leg.amountIn,
-});
+function spent(leg: SwapLeg, pool: PoolLiquidity): PreviewLeg {
+  const amountIn = min(leg.amountIn, leg.amountInAtLimit);
+  return { side: leg.side, amountIn, toTarget: leg.amountInAtLimit < leg.amountIn, fee: feeOf(pool, amountIn) };
+}
 
 /**
  * The trades `planSells` and `planBuys` make for one option, each filled by the pool maths alone, and where they
@@ -270,11 +280,14 @@ export function previewTrades(option: OptionTarget, slippageBps: number): Previe
   const buys = plan.legs.map((leg) => {
     const swap = swapToward(option.pools[leg.side], target(leg.side), leg.amountIn);
     if (leg.side === "up") to = swap.priceWad;
-    return { ...spent(leg), outcomeOut: swap.amountOut };
+    return { ...spent(leg, option.pools[leg.side]), outcomeOut: swap.amountOut };
   });
-  const sells = sold.map(({ leg, underlyingOut }) => ({ ...spent(leg), underlyingOut }));
+  const sells = sold.map(({ leg, underlyingOut }) => ({ ...spent(leg, option.pools[leg.side]), underlyingOut }));
+  const feeValue =
+    sells.reduce((sum, leg) => sum + (leg.amountIn > 0n ? (leg.fee * leg.underlyingOut) / leg.amountIn : 0n), 0n) +
+    buys.reduce((sum, leg) => sum + leg.fee, 0n);
 
   // an option with no legs is left out of the run, so nothing of it is split either
   const trades = sells.length > 0 || buys.length > 0;
-  return { split: trades ? option.splitAmount : 0n, sells, merge: plan.mergeAmount, buys, from, to };
+  return { split: trades ? option.splitAmount : 0n, sells, merge: plan.mergeAmount, buys, from, to, feeValue };
 }
