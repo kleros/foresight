@@ -15,6 +15,7 @@ import {
   parseAbi,
   parseEther,
   parseEventLogs,
+  TimeoutError,
   type Address,
   type Hash,
   type Hex,
@@ -1215,6 +1216,8 @@ interface Scenario {
   gas?: bigint;
   /** Closes the tab at the deposit or the first batch: before it is signed, or once it landed with no hash stored. */
   closeTab?: "before-deposit" | "after-deposit" | "before-batch" | "after-batch";
+  /** The wallet times out on the first batch, as the dev wallet's 10 s does on a cold fork, and the node mines it `lagMs` later. */
+  lostAnswer?: { lagMs: number; waitMs?: number };
 }
 
 interface ScenarioRun {
@@ -1538,6 +1541,8 @@ describe("money kept by every predict run, against a gnosis fork", () => {
     let beforeBatch = scenario.beforeBatch;
     const storage = createMemoryStorage();
     let closeTab = scenario.closeTab;
+    let lostAnswer = scenario.lostAnswer;
+    let lateBatch: Promise<void> | undefined;
     let leftBehind: FlowRunStorage | undefined;
     const flowId = `predict-money-${owner.address}-${Date.now()}`;
     const gateway = createViemTxGateway({
@@ -1565,6 +1570,16 @@ describe("money kept by every predict run, against a gnosis fork", () => {
         const data = tx.data ?? "0x";
         const value = tx.value ?? 0n;
         const gas = scenario.gas ?? ((await client.estimateGas({ account: owner, to: tx.to, data, value })) * 3n) / 2n;
+        if (isBatch && lostAnswer) {
+          const { lagMs } = lostAnswer;
+          lostAnswer = undefined;
+          lateBatch = (async () => {
+            await new Promise((resolve) => setTimeout(resolve, lagMs));
+            const hash = await wallet.sendTransaction({ account: owner, chain: gnosis, to: tx.to, data, value, gas });
+            sent.push({ stepId: "", tx, receipt: await client.waitForTransactionReceipt({ hash }) });
+          })();
+          throw new TimeoutError({ body: { method: "eth_sendTransaction" }, url: FORK_RPC_URL! });
+        }
         const nonce = await client.getTransactionCount({ address: owner.address, blockTag: "pending" });
         let hash: Hash;
         try {
@@ -1598,6 +1613,9 @@ describe("money kept by every predict run, against a gnosis fork", () => {
         store: createFlowRunStore({ storage: from }),
         ctx: () => ctx,
         snapshot: () => request,
+        ...(scenario.lostAnswer?.waitMs === undefined
+          ? {}
+          : { unansweredSend: { waitMs: scenario.lostAnswer.waitMs, pollMs: 100 } }),
       });
     const driver = driverOn(storage);
 
@@ -1606,6 +1624,7 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       timeout: 300_000,
       interval: 250,
     });
+    await lateBatch;
     const after = await readLedger(client, scope);
     return {
       ctx,
@@ -2401,6 +2420,49 @@ describe("money kept by every predict run, against a gnosis fork", () => {
         minted + run.request.collateralBefore,
       );
       reloaded.dispose();
+    },
+    900_000,
+  );
+
+  it.skipIf(!FORK_RPC_URL)(
+    "an xDAI run whose first batch the wallet never answers completes from the batch the chain mined",
+    async () => {
+      const run = await runScenario({
+        key: nextKey(),
+        pay: "native",
+        amount: parseEther("1080"),
+        options: nudged(2),
+        lostAnswer: { lagMs: 1_500 },
+      });
+
+      expect(run.progress.failure, "a batch the chain mined was reported failed").toBeUndefined();
+      expect(landedBatches(run)).toHaveLength(1);
+      await expectMoneyKept(run);
+    },
+    900_000,
+  );
+
+  it.skipIf(!FORK_RPC_URL)(
+    "Try the rest after a first batch the wallet never answered, once it mined, completes from that batch, signing nothing again",
+    async () => {
+      const run = await runScenario({
+        key: nextKey(),
+        pay: "native",
+        amount: parseEther("1080"),
+        options: nudged(2),
+        // mined after the run stopped reading for it
+        lostAnswer: { lagMs: 1_500, waitMs: 300 },
+      });
+      expect(run.progress.stage).toBe("halted");
+      expect(landedBatches(run), "the batch mined after the run stopped").toHaveLength(1);
+
+      run.driver.retry();
+      await settledRun(run.driver);
+      const progress = run.driver.getProgress();
+
+      expect(progress.stage, JSON.stringify(progress.failure)).toBe("complete");
+      expect(landedBatches(run), "Try the rest signed the batch again").toHaveLength(1);
+      await expectMoneyKept({ ...run, progress, after: await readLedger(client, SCOPE_TOKENS(run)) });
     },
     900_000,
   );
