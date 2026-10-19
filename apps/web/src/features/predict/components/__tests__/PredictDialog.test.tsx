@@ -386,7 +386,7 @@ describe("predicting", () => {
       <PredictDialog
         {...props()}
         selected={[{ scale: scale(GERWIG, "Greta Gerwig"), value: 410 }]}
-        recovered={{ deposit: 7_250_000_000_000_000_001n, token: sDai }}
+        recovered={{ deposit: 7_250_000_000_000_000_001n, token: sDai, slippage: { tradeBps: 100 } }}
         canRetry
         onPredict={onPredict}
       />,
@@ -404,13 +404,13 @@ describe("predicting", () => {
   });
 
   it("offers no remove on a stored run's estimates", () => {
-    render(<PredictDialog {...props()} recovered={{ deposit: WAD, token: sDai }} canRetry />);
+    render(<PredictDialog {...props()} recovered={{ deposit: WAD, token: sDai, slippage: { tradeBps: 100 } }} canRetry />);
 
     expect(screen.queryByRole("button", { name: /Remove/ })).toBeNull();
   });
 
   it("will not resume a stored run that cannot be picked up", () => {
-    render(<PredictDialog {...props()} recovered={{ deposit: WAD, token: sDai }} canRetry={false} />);
+    render(<PredictDialog {...props()} recovered={{ deposit: WAD, token: sDai, slippage: { tradeBps: 100 } }} canRetry={false} />);
 
     expect(screen.getByRole("button", { name: "Resume" })).toBeDisabled();
   });
@@ -665,7 +665,7 @@ describe("the summary under the amount", () => {
   });
 
   it("names no mint for a stored run, which minted what it stored", async () => {
-    render(<PredictDialog {...props()} recovered={{ deposit: 4n * WAD, token: sDai }} canRetry />);
+    render(<PredictDialog {...props()} recovered={{ deposit: 4n * WAD, token: sDai, slippage: { tradeBps: 100 } }} canRetry />);
 
     await userEvent.click(summaryHead());
 
@@ -705,7 +705,7 @@ describe("the summary under the amount", () => {
     expect(summaryHead()).toHaveAttribute("aria-expanded", "false");
     view.rerender(<PredictDialog {...props()} preview={preview} canRetry isPending />);
     expect(summaryHead()).toHaveAttribute("aria-expanded", "false");
-    view.rerender(<PredictDialog {...props()} preview={preview} recovered={{ deposit: 4n * WAD, token: sDai }} />);
+    view.rerender(<PredictDialog {...props()} preview={preview} recovered={{ deposit: 4n * WAD, token: sDai, slippage: { tradeBps: 100 } }} />);
     expect(summaryHead()).toHaveAttribute("aria-expanded", "false");
   });
 
@@ -1044,7 +1044,7 @@ describe("the settings", () => {
   it.each([
     ["while a run goes", { isRunning: true }],
     ["while a sent transaction is not confirmed", { canRetry: true, isPending: true }],
-    ["for a stored run", { canRetry: true, recovered: { deposit: WAD, token: sDai } }],
+    ["for a stored run", { canRetry: true, recovered: { deposit: WAD, token: sDai, slippage: { tradeBps: 100 } } }],
     ["while new prices wait to be confirmed", { moved: MOVED }],
   ])("cannot be opened %s", (_name, state) => {
     render(<PredictDialog {...props()} {...state} />);
@@ -1071,6 +1071,33 @@ describe("prices that moved before signing", () => {
     );
 
     expect(screen.getByRole("status")).toHaveTextContent(/now goes to 340 \$M, not 355 \$M\. Confirm to go on\.$/);
+  });
+
+  it("does not name a market whose estimate is the one it was going to", () => {
+    render(
+      <PredictDialog
+        {...props()}
+        moved={MOVED}
+        preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 400, was: { from: 312, to: 400 } } }}
+      />,
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent("Prices moved on 1 market. Check Details, then confirm.");
+  });
+
+  it("say the visitor's new slippage changed the trades, where no price moved", () => {
+    render(
+      <PredictDialog
+        {...props()}
+        moved={{ markets: 1, credits: true, bySlippage: true }}
+        preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 400, was: { from: 312, to: 400 } } }}
+      />,
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Your new slippage changes the trades. Check Details, then confirm.",
+    );
+    expect(screen.getByRole("button", { name: "Confirm new trades" })).toBeEnabled();
   });
 
   it("open Details on the new figures", () => {
@@ -1125,7 +1152,7 @@ describe("prices that moved before signing", () => {
 });
 
 describe("prices that could not be read", () => {
-  const notice = "Prices could not be read. Try again in a moment.";
+  const notice = "Prices could not be read.";
 
   it("offer Try again in Predict's place, which reads them again", async () => {
     const onRetryPrices = vi.fn();
@@ -1140,7 +1167,8 @@ describe("prices that could not be read", () => {
   it("check prices on the button while they are read again", () => {
     render(<PredictDialog {...props()} notice={notice} onRetryPrices={vi.fn()} isRetryingPrices />);
 
-    expect(screen.getByRole("button", { name: "Checking prices…" })).toBeDisabled();
+    expect(screen.getAllByRole("button", { name: "Checking prices…" }).at(-1)).toBeDisabled();
+    expect(summaryHead()).toHaveTextContent("Checking prices…");
   });
 });
 
@@ -1167,5 +1195,43 @@ describe("a credits swap that loses much", () => {
     render(<PredictDialog {...props()} {...withCredits} creditsSwap={small} />);
 
     expect(within(screen.getByRole("status")).queryByText(/./)).toBeNull();
+  });
+});
+
+describe("Details' slippage", () => {
+  const slippageRows = async () => {
+    await userEvent.click(summaryHead());
+    return screen.queryAllByTestId("slippage-row").map((row) => row.textContent);
+  };
+
+  it("names a stored run's own slippage, which Resume signs with, not the settings'", async () => {
+    render(
+      <PredictDialog
+        {...props()}
+        canRetry
+        recovered={{ deposit: WAD, token: sDai, slippage: { tradeBps: 300 } }}
+        slippage={{ settings: { tradeBps: 5_000, creditsBps: null }, onChange: vi.fn() }}
+      />,
+    );
+
+    expect(await slippageRows()).toEqual(["Max slippage3%"]);
+  });
+
+  it("names a stored run's credits swap slippage while its swap is still to land", async () => {
+    render(
+      <PredictDialog
+        {...props()}
+        canRetry
+        recovered={{ deposit: WAD, token: sDai, slippage: { tradeBps: 100, creditsBps: 50 } }}
+      />,
+    );
+
+    expect(await slippageRows()).toEqual(["Max slippage1%", "Credits swap slippage0.5%"]);
+  });
+
+  it("leaves out the credits swap's slippage once the swap has landed", async () => {
+    render(<PredictDialog {...props()} {...withCredits} canRetry creditsSwap={{ ...lossySwap, landed: true }} />);
+
+    expect(await slippageRows()).toEqual(["Max slippage1%"]);
   });
 });

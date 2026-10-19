@@ -285,7 +285,8 @@ function Harness() {
         onClose={() => {}}
         selected={selected}
         onRemove={() => {}}
-        preview={state === "recovered" ? undefined : preview}
+        // pools that could not be read plan nothing, as the app's preview does
+        preview={state === "recovered" || pricesFailed ? undefined : preview}
         amount={typed}
         onAmountChange={setTyped}
         tokens={tokens}
@@ -302,12 +303,12 @@ function Harness() {
         isRunning={isRunning}
         canRetry={state === "failed" || state === "pending" || state === "recovered"}
         isPending={state === "pending"}
-        recovered={state === "recovered" ? { deposit: 4n * WAD, token: sDai } : undefined}
+        recovered={state === "recovered" ? { deposit: 4n * WAD, token: sDai, slippage: { tradeBps: 100 } } : undefined}
         notice={
           state === "disconnected"
             ? "Connect a wallet to predict."
             : pricesFailed
-              ? "Prices could not be read. Try again in a moment."
+              ? "Prices could not be read."
               : undefined
         }
         slippage={{ settings: slippage, onChange: setSlippage }}
@@ -328,7 +329,7 @@ function Harness() {
             : undefined
         }
         moved={state === "moved" ? { markets: 1, credits: false } : undefined}
-        pricesReady={!pricesLoading}
+        pricesReady={!pricesLoading && !pricesFailed}
         onBack={state === "moved" ? () => {} : undefined}
         onRetryPrices={pricesFailed ? () => {} : undefined}
         onPredict={() => {}}

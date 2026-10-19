@@ -27,6 +27,8 @@ export interface PricePreview {
   ready: boolean;
   /** The pools could not be read. */
   failed: boolean;
+  /** The pools could not be read on a read after a failed one either. */
+  failedAgain: boolean;
   /** The pools are being read again after `failed`. */
   retrying: boolean;
   /** Reads the pools again. */
@@ -80,6 +82,7 @@ export function usePricePreview(args: {
     held: {},
     ready,
     failed: states.isError,
+    failedAgain: states.isError && states.errorUpdateCount > 1,
     retrying: states.isError && states.isFetching,
     retry: () => void states.refetch(),
   };

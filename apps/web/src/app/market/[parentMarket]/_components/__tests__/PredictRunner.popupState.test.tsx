@@ -35,7 +35,13 @@ const OPTIONS = [
 const wallet = vi.hoisted(() => ({ sDai: 0n, xDai: 0n, trade: 0n }));
 /** Last input the page handed the run. */
 const runInput = vi.hoisted(() => ({ current: null as PredictRunInput | null }));
-const pools = vi.hoisted(() => ({ ready: true, failed: false, retrying: false, retry: (() => {}) as () => void }));
+const pools = vi.hoisted(() => ({
+  ready: true,
+  failed: false,
+  failedAgain: false,
+  retrying: false,
+  retry: (() => {}) as () => void,
+}));
 
 vi.mock("@/lib/graphql/batcher", () => ({ fetchGraphql: vi.fn() }));
 /* The factory cannot reference imports, so GATEWAY's value is restated. */
@@ -95,6 +101,7 @@ vi.mock("../usePricePreview", async (importOriginal) => ({
     held: {},
     ready: pools.ready,
     failed: pools.failed,
+    failedAgain: pools.failedAgain,
     retrying: pools.retrying,
     retry: pools.retry,
   }),
@@ -201,7 +208,7 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
-  Object.assign(pools, { ready: true, failed: false, retrying: false, retry: vi.fn() });
+  Object.assign(pools, { ready: true, failed: false, failedAgain: false, retrying: false, retry: vi.fn() });
   vi.clearAllMocks();
   window.localStorage.clear();
   useEstimateStore.setState({ estimates: {} });
@@ -508,7 +515,17 @@ describe("Predict before the pools are read", () => {
 
     pools.failed = true;
     await userEvent.type(amountField(popup), "1");
-    expect(popup.getByRole("status")).toHaveTextContent("Prices could not be read. Try again in a moment.");
+    expect(popup.getByRole("status")).toHaveTextContent(/^Prices could not be read\.$/);
+  });
+
+  it("says so in new words when a second read fails too", async () => {
+    wallet.sDai = 10n * WAD;
+    pools.failed = true;
+    pools.failedAgain = true;
+    renderPage();
+    const popup = await openPopup();
+
+    expect(popup.getByRole("status")).toHaveTextContent(/^Prices still could not be read\.$/);
   });
 
   it("reads them again from Try again", async () => {
@@ -525,6 +542,28 @@ describe("Predict before the pools are read", () => {
 });
 
 describe("a run stopped after money moved", () => {
+  it("keeps Try the rest, which needs no prices from the form, where the pools cannot be read", async () => {
+    wallet.sDai = 10n * WAD;
+    renderPage();
+    const popup = await openPopup();
+    pools.failed = true;
+    act(() =>
+      run.set({
+        ...idle,
+        stage: "halted",
+        moneyMoved: true,
+        failure: { reason: "reverted", retryable: true },
+        held: { plans: {} },
+      }),
+    );
+
+    await userEvent.click(popup.getByRole("button", { name: "Try the rest" }));
+
+    expect(driver.retry).toHaveBeenCalledOnce();
+    expect(pools.retry).not.toHaveBeenCalled();
+    expect(popup.getByRole("status")).toHaveTextContent(/^The trade failed at these prices\./);
+  });
+
   it("lets the slippage change, and Try the rest retries with the new setting for the run to take up", async () => {
     wallet.sDai = 10n * WAD;
     renderPage();

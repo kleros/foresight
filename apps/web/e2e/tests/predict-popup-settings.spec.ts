@@ -288,7 +288,7 @@ test.describe("prices that could not be read", () => {
     const dialog = await openPopup(page, "theme=light&prices=failed");
 
     expect(await footprint(dialog)).toEqual(before);
-    await expect(dialog.getByRole("status")).toHaveText("Prices could not be read. Try again in a moment.");
+    await expect(dialog.getByRole("status")).toHaveText("Prices could not be read.");
     await expect(dialog.getByRole("button", { name: "Try again" })).toBeEnabled();
   });
 });

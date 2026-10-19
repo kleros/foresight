@@ -14,6 +14,12 @@ export type SlippageSettings = Record<SlippageKind, number | null>;
 
 export const AUTO_SLIPPAGE: SlippageSettings = { tradeBps: null, creditsBps: null };
 
+/** Each setting's one name, in the settings, in Details and for assistive tech. */
+export const SLIPPAGE_LABEL: Record<SlippageKind, string> = {
+  tradeBps: "Max slippage",
+  creditsBps: "Credits swap slippage",
+};
+
 const isBps = (value: unknown): value is number =>
   typeof value === "number" && Number.isInteger(value) && value >= MIN_SLIPPAGE_BPS && value <= MAX_SLIPPAGE_BPS;
 

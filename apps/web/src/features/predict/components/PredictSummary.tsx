@@ -12,7 +12,8 @@ import type { CreditsSwapPreview } from "../flow/types";
 import { shownAmount } from "../utils/funding";
 import type { OptionSide } from "../utils/plan";
 import { CHECKING_PRICES } from "../utils/predictSteps";
-import { resolveSlippage, slippagePercent, type SlippageKind, type SlippageSettings } from "../utils/slippage";
+import { GearIcon } from "./GearIcon";
+import { SLIPPAGE_LABEL, slippagePercent } from "../utils/slippage";
 
 /** The credits a run spends and their swap into xDAI as quoted now. */
 export interface CreditsSwapShown {
@@ -20,6 +21,8 @@ export interface CreditsSwapShown {
   preview: CreditsSwapPreview;
   /** The swap as shown before the pools moved, when it now pays less. */
   was?: CreditsSwapPreview;
+  /** The swap went through with an earlier batch, so no slippage setting applies to it now. */
+  landed?: true;
 }
 
 /** WXDAI and xDAI, which the credits swap pays, have 18 decimals. */
@@ -209,8 +212,8 @@ export function PredictSummary({
   isEstimated?: boolean;
   /** Credits the run swaps into xDAI, absent where it spends none. */
   creditsSwap?: CreditsSwapShown;
-  /** The visitor's settings, each kind the run uses named with its value. */
-  slippage?: SlippageSettings;
+  /** The slippage the next press signs with, in basis points; the credits swap's only where one is still to sign. */
+  slippage?: { tradeBps: number; creditsBps?: number };
   /** Opens the settings; absent while they cannot change. */
   onOpenSettings?: () => void;
 }) {
@@ -343,10 +346,10 @@ export function PredictSummary({
               </p>
             ) : null}
             {slippage ? (
-              <SlippageRow kind="tradeBps" label="Max slippage" settings={slippage} onPress={openSettings} />
+              <SlippageRow label={SLIPPAGE_LABEL.tradeBps} bps={slippage.tradeBps} onPress={openSettings} />
             ) : null}
-            {slippage && creditsSwap ? (
-              <SlippageRow kind="creditsBps" label="Credits swap slippage" settings={slippage} onPress={openSettings} />
+            {slippage?.creditsBps !== undefined ? (
+              <SlippageRow label={SLIPPAGE_LABEL.creditsBps} bps={slippage.creditsBps} onPress={openSettings} />
             ) : null}
             {isPlanned ? (
               <p data-testid="trades-note" className="text-fs-popup-text-3 mt-1 text-xs leading-4 text-pretty">
@@ -368,23 +371,16 @@ function feesTotal(selected: ListedEstimate[], preview: Record<string, PriceMove
   return fees.length > 1 ? fees.reduce((sum, fee) => sum + fee, 0n) : undefined;
 }
 
-/** One kind's max slippage as the run uses it, Auto's value or the visitor's own; pressed, it opens the settings. */
-function SlippageRow({
-  kind,
-  label,
-  settings,
-  onPress,
-}: {
-  kind: SlippageKind;
-  label: string;
-  settings: SlippageSettings;
-  onPress?: () => void;
-}) {
-  const value = `${slippagePercent(resolveSlippage(settings)[kind])}%`;
+/** A max slippage as the run uses it; pressed, it opens the settings. */
+function SlippageRow({ label, bps, onPress }: { label: string; bps: number; onPress?: () => void }) {
+  const value = `${slippagePercent(bps)}%`;
   const content = (
     <>
       <span className="text-fs-popup-text-2 shrink-0">{label}</span>
-      <span className={VALUE}>{value}</span>
+      <span className={clsx(VALUE, onPress && "inline-flex items-center gap-1 self-center")}>
+        {value}
+        {onPress ? <GearIcon className="text-fs-popup-text-3 size-3.5 shrink-0" /> : null}
+      </span>
     </>
   );
   return onPress ? (
