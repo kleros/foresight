@@ -8,6 +8,7 @@ import type { OptionScale } from "@/types/optionScale";
 import type { SelectedEstimate } from "../../types";
 import { planFunding, type Funding } from "../../utils/funding";
 import { fundsToAdd, predictSteps, type PredictSteps } from "../../utils/predictSteps";
+import type { SlippageSettings } from "../../utils/slippage";
 import { PredictDialog } from "../PredictDialog";
 
 const scale = (market: string, name: string): OptionScale => ({
@@ -91,6 +92,7 @@ const props = () => ({
   leftOut: 0,
   isRunning: false,
   canRetry: false,
+  slippage: { settings: { tradeBps: null, creditsBps: null } as SlippageSettings, onChange: vi.fn() },
   onPredict: vi.fn(),
 });
 
@@ -603,7 +605,7 @@ describe("the summary under the amount", () => {
     expect(screen.getByRole("button", { name: "Checking prices…" })).toHaveAttribute("data-busy", "true");
   });
 
-  it("lists only figures the app computes: the mint and each market's move, and no fee, minimum or time", async () => {
+  it("lists only figures the app computes: the mint and each market's move, and no minimum or time", async () => {
     render(<PredictDialog {...props()} preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 355 } }} />);
 
     await userEvent.click(summaryHead());
@@ -725,5 +727,143 @@ describe("what a run shows while it goes", () => {
     view.rerender(<PredictDialog {...props()} steps={{ ...steps, failure: "You declined in your wallet." }} />);
 
     expect(within(screen.getByRole("status")).getByText("You declined in your wallet.")).toHaveClass("fs-enter");
+  });
+});
+
+describe("the settings", () => {
+  const gear = () => screen.getByRole("button", { name: "Settings" });
+  const panel = () => document.getElementById(gear().getAttribute("aria-controls")!)!;
+
+  it("open over the body from the gear in the header, titled Settings, with the first choice focused", async () => {
+    render(<PredictDialog {...props()} />);
+
+    await userEvent.click(gear());
+
+    expect(gear()).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("heading", { level: 2, name: "Settings" })).toBeInTheDocument();
+    expect(panel()).not.toHaveAttribute("inert");
+    expect(within(panel()).getAllByRole("button", { name: "Auto" })[0]).toHaveFocus();
+  });
+
+  it("keep the body out of reach while open", async () => {
+    render(<PredictDialog {...props()} />);
+
+    await userEvent.click(gear());
+
+    expect(screen.getByTestId("predict-body").closest("[inert]")).not.toBeNull();
+  });
+
+  it("are out of reach while closed", () => {
+    render(<PredictDialog {...props()} />);
+
+    expect(panel()).toHaveAttribute("inert");
+    expect(screen.getByTestId("predict-body").closest("[inert]")).toBeNull();
+  });
+
+  it("close on Escape, leaving the popup open and the focus back on the gear", async () => {
+    const onClose = vi.fn();
+    render(<PredictDialog {...props()} onClose={onClose} />);
+    await userEvent.click(gear());
+
+    await userEvent.keyboard("{Escape}");
+
+    expect(gear()).toHaveAttribute("aria-expanded", "false");
+    expect(gear()).toHaveFocus();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("set a custom trade slippage from a typed percent", async () => {
+    const onChange = vi.fn();
+    render(<PredictDialog {...props()} slippage={{ settings: { tradeBps: null, creditsBps: null }, onChange }} />);
+    await userEvent.click(gear());
+
+    await userEvent.type(screen.getByRole("textbox", { name: "Max slippage on trades, custom percent" }), "2.5");
+
+    expect(onChange).toHaveBeenLastCalledWith("tradeBps", 250);
+  });
+
+  it("go back to Auto from the Auto button", async () => {
+    const onChange = vi.fn();
+    render(<PredictDialog {...props()} slippage={{ settings: { tradeBps: null, creditsBps: 50 }, onChange }} />);
+    await userEvent.click(gear());
+    const credits = within(document.querySelector<HTMLElement>('[data-slippage="creditsBps"]')!);
+
+    expect(credits.getByRole("button", { name: "Auto" })).toHaveAttribute("aria-pressed", "false");
+    expect(credits.getByRole("textbox")).toHaveValue("0.5");
+    await userEvent.click(credits.getByRole("button", { name: "Auto" }));
+
+    expect(onChange).toHaveBeenLastCalledWith("creditsBps", null);
+  });
+
+  it("refuse a percent over the cap, saying the range, and keep the setting", async () => {
+    const onChange = vi.fn();
+    render(<PredictDialog {...props()} slippage={{ settings: { tradeBps: null, creditsBps: null }, onChange }} />);
+    await userEvent.click(gear());
+    const field = screen.getByRole("textbox", { name: "Max slippage on trades, custom percent" });
+
+    await userEvent.type(field, "51");
+
+    expect(onChange).toHaveBeenLastCalledWith("tradeBps", 500);
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(field).toHaveAccessibleDescription(/Enter a percent from 0 to 50\.$/);
+  });
+
+  it("warn on a high custom value without refusing it", async () => {
+    render(
+      <PredictDialog {...props()} slippage={{ settings: { tradeBps: 800, creditsBps: null }, onChange: vi.fn() }} />,
+    );
+    await userEvent.click(gear());
+
+    expect(screen.getByRole("textbox", { name: "Max slippage on trades, custom percent" })).toHaveAccessibleDescription(
+      /High slippage\. A trade may fill at a much worse price\.$/,
+    );
+  });
+
+  it("name the Auto value on Auto", async () => {
+    render(<PredictDialog {...props()} />);
+    await userEvent.click(gear());
+
+    expect(screen.getByRole("textbox", { name: "Max slippage on trades, custom percent" })).toHaveAccessibleDescription(
+      /Auto is 1%\.$/,
+    );
+  });
+
+  it.each([
+    ["while a run goes", { isRunning: true }],
+    ["after a run stopped with money moved", { canRetry: true }],
+    ["while new prices wait to be confirmed", { moved: 1 }],
+  ])("cannot be opened %s", (_name, state) => {
+    render(<PredictDialog {...props()} {...state} />);
+
+    expect(gear()).toBeDisabled();
+  });
+});
+
+describe("prices that moved before signing", () => {
+  it("ask for a confirm on the button and say how many estimates moved", () => {
+    render(<PredictDialog {...props()} moved={2} />);
+
+    expect(screen.getByRole("button", { name: "Confirm new prices" })).toBeEnabled();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Prices moved on 2 estimates. Check the new figures, then confirm.",
+    );
+  });
+
+  it("lock the amount the new figures were planned from", () => {
+    render(<PredictDialog {...props()} moved={1} />);
+
+    expect(screen.getByLabelText("Amount")).toHaveAttribute("readonly");
+  });
+
+  it("show the new figures, not the ones held before", () => {
+    const view = render(<PredictDialog {...props()} preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 355 } }} />);
+
+    view.rerender(
+      <PredictDialog {...props()} moved={1} preview={{ [GERWIG.toLowerCase()]: { from: 312, to: 340 } }} />,
+    );
+
+    expect(within(screen.getByTestId("predict-summary")).getAllByTestId("market-move")[0]).toHaveTextContent(
+      "312 → 340 $M",
+    );
   });
 });

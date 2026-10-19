@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { Modal } from "@kleros/ui-components-library";
 import clsx from "clsx";
@@ -10,15 +10,19 @@ import { ScrollFade } from "@/components/ui/ScrollFade";
 
 import CloseIcon from "@/assets/svg/close.svg";
 
+import { INERT } from "@/utils/inert";
+
 import type { PayToken } from "../types";
 import { PredictAmountSection, type PayTokenChoice } from "./PredictAmountSection";
 import { PredictButton } from "./PredictButton";
 import type { CreditsChoice } from "./PredictCreditsLine";
 import { PredictList, type ListedEstimate, type PriceMove } from "./PredictList";
+import { PredictSettings } from "./PredictSettings";
 import { PredictStepsTimeline } from "./PredictStepsTimeline";
-import { PredictSummary } from "./PredictSummary";
+import { PredictSummary, type CreditsSwapShown } from "./PredictSummary";
 import type { Funding } from "../utils/funding";
-import { CHECKING_PRICES, statusLine, type PredictSteps, type StatusLine } from "../utils/predictSteps";
+import { CHECKING_PRICES, CONFIRM_MOVED, statusLine, type PredictSteps, type StatusLine } from "../utils/predictSteps";
+import type { SlippageKind, SlippageSettings } from "../utils/slippage";
 
 interface PredictDialogProps {
   isOpen: boolean;
@@ -54,7 +58,13 @@ interface PredictDialogProps {
   recovered?: { deposit: bigint; token: PayTokenChoice };
   /** What the visitor has to do before this prediction can be made, if anything. */
   notice?: string;
-  /** Starts a run, or picks a stopped one up again. */
+  /** The visitor's slippage, which the settings panel changes. */
+  slippage: { settings: SlippageSettings; onChange: (kind: SlippageKind, bps: number | null) => void };
+  /** Credits the run would swap into xDAI and the swap as quoted now; absent where it spends none. */
+  creditsSwap?: CreditsSwapShown;
+  /** Estimates whose plan changed when Predict read the pools again; the button then confirms the new figures. */
+  moved?: number;
+  /** Starts a run, picks a stopped one up again, or confirms moved prices. */
   onPredict: () => void;
 }
 
@@ -114,21 +124,41 @@ export function PredictDialog({
   isPending = false,
   recovered,
   notice,
+  slippage,
+  creditsSwap,
+  moved,
   onPredict,
 }: PredictDialogProps) {
-  const isLocked = isRunning || canRetry || recovered !== undefined;
+  const isMoved = moved !== undefined;
+  const isHeld = isRunning || canRetry || recovered !== undefined;
+  // at moved the visitor confirms the figures as shown, so the form cannot change under them
+  const isLocked = isHeld || isMoved;
   const tooMuch = funding !== null && amount !== undefined && amount > funding.available;
   // with nothing held, an empty amount has nothing to trade with
   const nothingToTrade = isFirstPrediction && (funding?.collateralIn ?? 0n) === 0n;
-  const status = statusLine({ steps, notice, leftOut });
+  const status = statusLine({ steps, notice, leftOut, moved });
   const isPricing = steps.pricing === true;
   const runToken = recovered?.token;
   // a refreshed balance or re-priced preview would change what the visitor is reading mid-run
-  const shownFunding = useHeldWhile(funding, isLocked);
-  const shownPreview = useHeldWhile(preview, isLocked);
+  const shownFunding = useHeldWhile(funding, isHeld);
+  const shownPreview = useHeldWhile(preview, isHeld);
+  const shownCreditsSwap = useHeldWhile(creditsSwap, isHeld);
   // the visitor's own choice, so no run state opens or closes it
   const [summaryOpen, setSummaryOpen] = useState(false);
   const statusRef = useRef<HTMLParagraphElement>(null);
+  // the settings change what the next run signs, so they close while the form is locked to a run
+  const [settingsWanted, setSettingsWanted] = useState(false);
+  const settingsOpen = settingsWanted && !isLocked;
+  const settingsId = useId();
+  const titleId = useId();
+  const gearRef = useRef<HTMLButtonElement>(null);
+  const firstSetting = useRef<HTMLButtonElement>(null);
+  const settingsWereOpen = useRef(false);
+  useEffect(() => {
+    if (settingsOpen) firstSetting.current?.focus();
+    else if (settingsWereOpen.current) gearRef.current?.focus();
+    settingsWereOpen.current = settingsOpen;
+  }, [settingsOpen]);
   const statusText = status?.text;
   // where the whole popup scrolls, the status line sits under the fold; during a run, the timeline's scroll to its step rules
   useEffect(() => {
@@ -159,8 +189,10 @@ export function PredictDialog({
           it reaches 12px into the dialog's right padding for the close button's target, 4px into the left for Predict's ring */}
       <div
         className={clsx(
-          "flex min-h-0 w-full flex-col",
-          "landscape-phone:overflow-y-auto landscape-phone:scroll-pt-10 landscape-phone:scroll-pb-16",
+          "relative flex min-h-0 w-full flex-col",
+          // under the settings only the panel scrolls
+          settingsOpen ? "landscape-phone:overflow-hidden" : "landscape-phone:overflow-y-auto",
+          "landscape-phone:scroll-pt-10 landscape-phone:scroll-pb-16",
           "short:landscape-phone:scroll-pb-14",
           "landscape-phone:-mr-3 landscape-phone:pr-3 landscape-phone:-ml-1 landscape-phone:pl-1",
           "landscape-phone:w-[calc(100%+16px)]",
@@ -174,114 +206,180 @@ export function PredictDialog({
             "landscape-phone:mb-0 landscape-phone:box-content landscape-phone:pb-2",
           )}
         >
-          <h2 className="text-fs-popup-text text-lg font-semibold tracking-[-0.01em]">Predict</h2>
-          <LightButton
-            text=""
-            aria-label="Close"
-            icon={<CloseIcon className="text-fs-popup-text-2 size-4.5" />}
-            isDisabled={isRunning}
-            onPress={onClose}
-            className={clsx(
-              "relative -mr-1.5 size-8 justify-center rounded-full! p-0",
-              "hover:bg-transparent [@media(hover:hover)]:hover:bg-fs-popup-hover disabled:opacity-40",
-              "before:absolute before:-inset-1.5 before:content-['']",
-              // the scroller's top edge is the button's, so its ring sits inside
-              "landscape-phone:[--fs-focus-offset:-2px]",
-            )}
-          />
+          <h2 id={titleId} className="text-fs-popup-text text-lg font-semibold tracking-[-0.01em]">
+            {settingsOpen ? "Settings" : "Predict"}
+          </h2>
+          <div className="flex items-center gap-1">
+            <button
+              ref={gearRef}
+              type="button"
+              aria-label="Settings"
+              aria-expanded={settingsOpen}
+              aria-controls={settingsId}
+              disabled={isLocked}
+              onClick={() => setSettingsWanted((open) => !open)}
+              className={clsx(
+                "relative grid size-8 cursor-pointer place-items-center rounded-full",
+                "transition-colors duration-(--fs-dur-echo) ease-(--fs-ease-enter)",
+                "[@media(hover:hover)]:hover:bg-fs-popup-hover aria-expanded:bg-fs-popup-chip",
+                "disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent",
+                "before:absolute before:-inset-1.5 before:content-['']",
+                "landscape-phone:[--fs-focus-offset:-2px]",
+              )}
+            >
+              <GearIcon className="text-fs-popup-text-2 size-4.5" />
+            </button>
+            <LightButton
+              text=""
+              aria-label="Close"
+              icon={<CloseIcon className="text-fs-popup-text-2 size-4.5" />}
+              isDisabled={isRunning}
+              onPress={onClose}
+              className={clsx(
+                "relative -mr-1.5 size-8 justify-center rounded-full! p-0",
+                "hover:bg-transparent [@media(hover:hover)]:hover:bg-fs-popup-hover disabled:opacity-40",
+                "before:absolute before:-inset-1.5 before:content-['']",
+                // the scroller's top edge is the button's, so its ring sits inside
+                "landscape-phone:[--fs-focus-offset:-2px]",
+              )}
+            />
+          </div>
         </div>
 
-        <section
-          data-panel="estimates"
-          className="rounded-fs-panel bg-fs-popup-panel shrink-0 px-4 pt-3 pb-1.5 short:pt-2.5 short:pb-1"
-        >
-          <h3 className="type-label text-fs-popup-text-2 font-medium tabular-nums">
-            {`${selected.length} ${selected.length === 1 ? "estimate" : "estimates"}`}
-          </h3>
-          {/* over four rows three and a half show, over three on a phone two and a half: the cut row, under a row-tall fade, is the cue */}
-          <ScrollFade
-            fadeFrom="from-fs-popup-panel"
-            fadeSize={32}
-            className={clsx("mt-1 w-full", selected.length > 4 && "max-h-28", selected.length > 3 && "max-sm:max-h-20")}
+        <PredictSettings
+          ref={firstSetting}
+          id={settingsId}
+          labelledBy={titleId}
+          isOpen={settingsOpen}
+          settings={slippage.settings}
+          onChange={slippage.onChange}
+          onClose={() => setSettingsWanted(false)}
+        />
+
+        {/* takes no box, so the regions stay the column's own; under the settings they keep their space, out of reach */}
+        <div className="contents" {...(settingsOpen ? INERT : {})}>
+          <section
+            data-panel="estimates"
+            className="rounded-fs-panel bg-fs-popup-panel shrink-0 px-4 pt-3 pb-1.5 short:pt-2.5 short:pb-1"
           >
-            <PredictList
-              selected={selected}
-              onRemove={onRemove}
-              isReadOnly={isLocked}
-              isFixed={recovered !== undefined}
-            />
+            <h3 className="type-label text-fs-popup-text-2 font-medium tabular-nums">
+              {`${selected.length} ${selected.length === 1 ? "estimate" : "estimates"}`}
+            </h3>
+            {/* over four rows three and a half show, over three on a phone two and a half: the cut row, under a row-tall fade, is the cue */}
+            <ScrollFade
+              fadeFrom="from-fs-popup-panel"
+              fadeSize={32}
+              className={clsx(
+                "mt-1 w-full",
+                selected.length > 4 && "max-h-28",
+                selected.length > 3 && "max-sm:max-h-20",
+              )}
+            >
+              <PredictList
+                selected={selected}
+                onRemove={onRemove}
+                isReadOnly={isLocked}
+                isFixed={recovered !== undefined}
+              />
+            </ScrollFade>
+          </section>
+
+          {/* the steps end flush with the body, so any overflow hides some of them */}
+          {/* a step row's height of fade, so a bullet half under it never shows a hard edge */}
+          <ScrollFade
+            className="landscape-phone:min-h-0 landscape-phone:flex-none min-h-32 w-full"
+            cue="More below"
+            cueTone="border-(--fs-popup-line) text-fs-popup-text-2"
+            minOverflow={1}
+            fadeSize={40}
+          >
+            <div data-testid="predict-body" className="pt-2 short:pt-1.5">
+              <PredictAmountSection
+                amount={recovered ? recovered.deposit : amount}
+                onAmountChange={onAmountChange}
+                tokens={runToken ? [runToken] : tokens}
+                token={runToken ?? token}
+                onTokenChange={onTokenChange}
+                funding={shownFunding}
+                collateral={collateral}
+                isFirstPrediction={isFirstPrediction}
+                isReadOnly={isLocked}
+                isDisconnected={isDisconnected}
+                note={recovered ? "Locked to the amount this prediction started with." : undefined}
+                credits={credits}
+              />
+              <PredictSummary
+                selected={selected}
+                preview={shownPreview}
+                collateral={collateral}
+                // a stored run minted what it stored, not what this form holds
+                mint={recovered || !shownFunding ? undefined : { amount: shownFunding.collateralIn, noun: optionNoun }}
+                isOpen={summaryOpen}
+                onToggle={() => setSummaryOpen((open) => !open)}
+                isPricing={isPricing}
+                isEstimated={(runToken ?? token).id === "native"}
+                creditsSwap={recovered ? undefined : shownCreditsSwap}
+                slippage={slippage.settings}
+              />
+              <PredictStepsTimeline steps={steps} />
+            </div>
           </ScrollFade>
-        </section>
 
-        {/* the steps end flush with the body, so any overflow hides some of them */}
-        {/* a step row's height of fade, so a bullet half under it never shows a hard edge */}
-        <ScrollFade
-          className="landscape-phone:min-h-0 landscape-phone:flex-none min-h-32 w-full"
-          cue="More below"
-          cueTone="border-(--fs-popup-line) text-fs-popup-text-2"
-          minOverflow={1}
-          fadeSize={40}
-        >
-          <div data-testid="predict-body" className="pt-2 short:pt-1.5">
-            <PredictAmountSection
-              amount={recovered ? recovered.deposit : amount}
-              onAmountChange={onAmountChange}
-              tokens={runToken ? [runToken] : tokens}
-              token={runToken ?? token}
-              onTokenChange={onTokenChange}
-              funding={shownFunding}
-              collateral={collateral}
-              isFirstPrediction={isFirstPrediction}
-              isReadOnly={isLocked}
-              isDisconnected={isDisconnected}
-              note={recovered ? "Locked to the amount this prediction started with." : undefined}
-              credits={credits}
+          {/* outside the body's scroll area, so the reason a run stopped shows with the button; two lines held empty or not */}
+          <p
+            ref={statusRef}
+            role="status"
+            aria-live="polite"
+            className={clsx(
+              "type-label flex h-10 shrink-0 items-center text-left text-[13px] leading-[18px] text-pretty",
+              status && STATUS_TONE[status.tone],
+            )}
+          >
+            {status ? (
+              <span key={status.text} className={clsx(status.tone === "error" && "fs-enter")}>
+                {status.text}
+              </span>
+            ) : null}
+          </p>
+
+          <div className="bg-fs-surface landscape-phone:pb-2 sticky bottom-0 pt-1 pb-4 short:pb-3">
+            <PredictButton
+              text={
+                recovered
+                  ? "Resume"
+                  : isPending
+                    ? "Check again"
+                    : canRetry
+                      ? "Try the rest"
+                      : isMoved
+                        ? CONFIRM_MOVED
+                        : "Predict"
+              }
+              busyText={isRunning ? (isPricing ? CHECKING_PRICES : busyLabel(steps)) : undefined}
+              onPress={onPredict}
+              isDisabled={
+                notice !== undefined ||
+                (!canRetry &&
+                  (recovered !== undefined || selected.length === 0 || funding === null || tooMuch || nothingToTrade))
+              }
             />
-            <PredictSummary
-              selected={selected}
-              preview={shownPreview}
-              collateral={collateral}
-              // a stored run minted what it stored, not what this form holds
-              mint={recovered || !shownFunding ? undefined : { amount: shownFunding.collateralIn, noun: optionNoun }}
-              isOpen={summaryOpen}
-              onToggle={() => setSummaryOpen((open) => !open)}
-              isPricing={isPricing}
-              isEstimated={(runToken ?? token).id === "native"}
-            />
-            <PredictStepsTimeline steps={steps} />
           </div>
-        </ScrollFade>
-
-        {/* outside the body's scroll area, so the reason a run stopped shows with the button; two lines held empty or not */}
-        <p
-          ref={statusRef}
-          role="status"
-          aria-live="polite"
-          className={clsx(
-            "type-label flex h-10 shrink-0 items-center text-left text-[13px] leading-[18px] text-pretty",
-            status && STATUS_TONE[status.tone],
-          )}
-        >
-          {status ? (
-            <span key={status.text} className={clsx(status.tone === "error" && "fs-enter")}>
-              {status.text}
-            </span>
-          ) : null}
-        </p>
-
-        <div className="bg-fs-surface landscape-phone:pb-2 sticky bottom-0 pt-1 pb-4 short:pb-3">
-          <PredictButton
-            text={recovered ? "Resume" : isPending ? "Check again" : canRetry ? "Try the rest" : "Predict"}
-            busyText={isRunning ? (isPricing ? CHECKING_PRICES : busyLabel(steps)) : undefined}
-            onPress={onPredict}
-            isDisabled={
-              notice !== undefined ||
-              (!canRetry &&
-                (recovered !== undefined || selected.length === 0 || funding === null || tooMuch || nothingToTrade))
-            }
-          />
         </div>
       </div>
     </Modal>
+  );
+}
+
+function GearIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden className={className}>
+      <path
+        d="M8.3 2.5h3.4l.5 2.1 1.5.9 2.1-.6 1.7 2.9-1.6 1.5v1.4l1.6 1.5-1.7 2.9-2.1-.6-1.5.9-.5 2.1H8.3l-.5-2.1-1.5-.9-2.1.6-1.7-2.9 1.6-1.5V9.3L2.5 7.8l1.7-2.9 2.1.6 1.5-.9.5-2.1Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <circle cx="10" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
   );
 }

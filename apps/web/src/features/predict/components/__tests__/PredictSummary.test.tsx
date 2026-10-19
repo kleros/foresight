@@ -435,16 +435,12 @@ describe("PredictSummary's pool fees", () => {
   });
 });
 
-function renderWith(extra: { creditsSwap?: CreditsSwapShown; slippage?: { tradeBps: number | null; creditsBps: number | null } }) {
+function renderWith(extra: {
+  creditsSwap?: CreditsSwapShown;
+  slippage?: { tradeBps: number | null; creditsBps: number | null };
+}) {
   return render(
-    <PredictSummary
-      selected={selected}
-      preview={{}}
-      collateral={sDai}
-      isOpen
-      onToggle={vi.fn()}
-      {...extra}
-    />,
+    <PredictSummary selected={selected} preview={{}} collateral={sDai} isOpen onToggle={vi.fn()} {...extra} />,
   );
 }
 

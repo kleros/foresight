@@ -36,7 +36,10 @@ describe("slippageStore", () => {
   });
 
   it("reads a tampered saved value as Auto", async () => {
-    localStorage.setItem(SLIPPAGE_STORAGE_KEY, JSON.stringify({ state: { settings: { tradeBps: 9e9, creditsBps: 30 } } }));
+    localStorage.setItem(
+      SLIPPAGE_STORAGE_KEY,
+      JSON.stringify({ state: { settings: { tradeBps: 9e9, creditsBps: 30 } } }),
+    );
 
     await useSlippageStore.persist.rehydrate();
 

@@ -562,6 +562,37 @@
     opacity: 0;
   }
 }
+/* The predict popup's settings: a panel reveal (transitions.dev 07) on the popup's tokens, quicker out than in.
+   Hidden once closed, so nothing in it is read or reached; visibility flips after the fade out. */
+.predict-settings {
+  opacity: 0;
+  transform: translateY(8px);
+  filter: blur(2px);
+  visibility: hidden;
+  transition:
+    opacity var(--fs-dur-echo) var(--fs-ease-exit),
+    transform var(--fs-dur-echo) var(--fs-ease-exit),
+    filter var(--fs-dur-echo) var(--fs-ease-exit),
+    visibility 0s linear var(--fs-dur-echo);
+}
+.predict-settings[data-open] {
+  opacity: 1;
+  transform: none;
+  filter: none;
+  visibility: visible;
+  transition:
+    opacity var(--fs-dur-enter) var(--fs-ease-enter),
+    transform var(--fs-dur-enter) var(--fs-ease-enter),
+    filter var(--fs-dur-enter) var(--fs-ease-enter),
+    visibility 0s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .predict-settings {
+    transform: none;
+    filter: none;
+  }
+}
+
 /* an indeterminate line under the summary while a run prices its routes */
 .predict-sweep {
   position: absolute;
