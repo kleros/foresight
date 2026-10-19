@@ -13,16 +13,18 @@ import {
   type SlippageSettings,
 } from "../utils/slippage";
 
-const FIELDS: { kind: SlippageKind; label: string; hint: string }[] = [
+const FIELDS: { kind: SlippageKind; label: string; hint: string; high: string }[] = [
   {
     kind: "tradeBps",
     label: "Max slippage on trades",
     hint: "How far each trade may fill from its planned price.",
+    high: "High slippage. A trade may fill at a much worse price.",
   },
   {
     kind: "creditsBps",
     label: "Max slippage on the credits swap",
     hint: "How far the swap of your credits may fill below its quote.",
+    high: "High slippage. The swap may pay much less than its quote.",
   },
 ];
 
@@ -87,11 +89,13 @@ const SlippageField = forwardRef<
     kind: SlippageKind;
     label: string;
     hint: string;
+    /** Said under a value over the kind's high threshold. */
+    high: string;
     /** Basis points, or null on Auto. */
     value: number | null;
     onChange: (bps: number | null) => void;
   }
->(function SlippageField({ kind, label, hint, value, onChange }, autoRef) {
+>(function SlippageField({ kind, label, hint, high, value, onChange }, autoRef) {
   const labelId = useId();
   const hintId = useId();
   const messageId = useId();
@@ -112,7 +116,7 @@ const SlippageField = forwardRef<
   const message = isInvalid
     ? { text: `Enter a percent from 0 to ${slippagePercent(MAX_SLIPPAGE_BPS)}.`, tone: "text-fs-tone-error-text" }
     : isHigh
-      ? { text: "High slippage. A trade may fill at a much worse price.", tone: "text-fs-tone-warning-text" }
+      ? { text: high, tone: "text-fs-tone-warning-text" }
       : { text: `Auto is ${slippagePercent(DEFAULT_SLIPPAGE[kind])}%.`, tone: "text-fs-popup-text-3" };
 
   return (

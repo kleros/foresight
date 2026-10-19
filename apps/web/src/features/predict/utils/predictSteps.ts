@@ -260,7 +260,7 @@ export function statusLine(args: {
 }
 
 /** Said when the pools moved between the preview and Predict, before anything is signed. */
-export function movedText(count: number): string {
+function movedText(count: number): string {
   return `Prices moved on ${count} ${count === 1 ? "estimate" : "estimates"}. Check the new figures, then confirm.`;
 }
 

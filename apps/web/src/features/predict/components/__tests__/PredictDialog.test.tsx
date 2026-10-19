@@ -819,6 +819,17 @@ describe("the settings", () => {
     );
   });
 
+  it("warn on a high credits swap slippage in the swap's own words", async () => {
+    render(
+      <PredictDialog {...props()} slippage={{ settings: { tradeBps: null, creditsBps: 500 }, onChange: vi.fn() }} />,
+    );
+    await userEvent.click(gear());
+
+    expect(
+      screen.getByRole("textbox", { name: "Max slippage on the credits swap, custom percent" }),
+    ).toHaveAccessibleDescription(/High slippage\. The swap may pay much less than its quote\.$/);
+  });
+
   it("name the Auto value on Auto", async () => {
     render(<PredictDialog {...props()} />);
     await userEvent.click(gear());
