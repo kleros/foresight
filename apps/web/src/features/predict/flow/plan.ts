@@ -41,7 +41,7 @@ import type {
   PredictSnapshot,
 } from "./types";
 import { CREDITS_MAX_LOSS_BPS, CREDITS_SLIPPAGE_BPS, SLIPPAGE_BPS } from "../oracle/tolerances";
-import { planBuys, planSells, type OptionSide, type SoldLeg } from "../utils/plan";
+import { atEstimate, planBuys, planSells, type OptionSide, type SoldLeg } from "../utils/plan";
 
 /**
  * The predict-flow adapter: set up the trade wallet, add money, then move the pools toward the
@@ -78,6 +78,17 @@ export class NoRouteError extends Error {
     this.name = "NoRouteError";
   }
 }
+
+/** Every option's pools already sit at its estimate, so there is nothing to trade. */
+export class AtEstimatesError extends Error {
+  constructor() {
+    super("Every pool already sits at its estimate.");
+    this.name = "AtEstimatesError";
+  }
+}
+
+/** One option's pools already sit at its estimate. */
+class OptionAtEstimate extends Error {}
 
 /** The quoter gave no answer, so whether a route exists is unknown; trying again may help. */
 export class QuoteFailedError extends Error {
@@ -179,6 +190,7 @@ async function optionCalls(
   }
 
   if (sells.length === 0 && buys.length === 0) {
+    if (atEstimate(target)) throw new OptionAtEstimate(`${option.childMarket} already sits at your estimate.`);
     throw new Error(`No route moves ${option.childMarket} toward your estimate.`);
   }
 
@@ -307,6 +319,7 @@ async function predictCalls(args: {
   const perOption = mint + (credits?.minted ?? 0n);
 
   let traded = 0;
+  const reasons: unknown[] = [];
   for (const [index, option] of options.entries()) {
     const state = states[index];
     if (state === undefined) continue;
@@ -316,11 +329,15 @@ async function predictCalls(args: {
       traded += 1;
     } catch (reason) {
       if (reason instanceof QuoteFailedError) throw reason;
+      reasons.push(reason);
       deps.onSkip?.(option, reason, stepId);
     }
   }
 
   if (traded === 0) {
+    if (reasons.length > 0 && reasons.every((reason) => reason instanceof OptionAtEstimate)) {
+      throw new AtEstimatesError();
+    }
     throw new NoRouteError("No route was found for any of these estimates. Try again in a moment, or a larger amount.");
   }
 
@@ -521,8 +538,21 @@ export async function assertRoutes(ctx: PredictCtx, snapshot: PredictSnapshot, d
   const quiet = { ...deps, onSkip: undefined };
   const credits = snapshot.creditsToSpend > 0n ? await creditsLeg(ctx, snapshot.creditsToSpend, deps) : undefined;
   const mint = snapshot.collateralIn + (credits?.minted ?? 0n);
-  for (const [index, options] of batched(snapshot.options, deps.optionsPerBatch ?? PREDICT_BATCH_SIZE).entries()) {
-    await predictCalls({ ctx, stepId: STEP_ID.predict(index + 1), options, mint, deps: quiet });
+  const batches = batched(snapshot.options, deps.optionsPerBatch ?? PREDICT_BATCH_SIZE);
+  let atEstimates = 0;
+  for (const [index, options] of batches.entries()) {
+    try {
+      await predictCalls({ ctx, stepId: STEP_ID.predict(index + 1), options, mint, deps: quiet });
+    } catch (error) {
+      if (!(error instanceof AtEstimatesError)) throw error;
+      atEstimates += 1;
+    }
+  }
+  if (atEstimates === batches.length) throw new AtEstimatesError();
+  if (atEstimates > 0) {
+    throw new NoRouteError(
+      "No route was found for some of these estimates. Try again in a moment, or a larger amount.",
+    );
   }
 }
 

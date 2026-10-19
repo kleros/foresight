@@ -19,6 +19,7 @@ import type { ExactInputQuoter, SwapQuoter } from "@/lib/swap/types";
 import type { PredictDriver, PredictFailureReason, PredictProgress, PredictStepRow } from "./types";
 import {
   assertRoutes,
+  AtEstimatesError,
   createPredictHooks,
   CreditsUnavailableError,
   NoRouteError,
@@ -67,7 +68,7 @@ export function createPredictRun(args: {
   /** Set while the routes are checked, before the orchestrator has a run; reset and dispose clear it. */
   let checking: object | undefined;
   /** The reason a step failed with, which the orchestrator's own causes cannot carry. */
-  let buildFailure: "no-route" | "quote" | "funds" | "credits" | "pending" | undefined;
+  let buildFailure: "no-route" | "at-estimates" | "quote" | "funds" | "credits" | "pending" | undefined;
   /** Set while a sent transaction's outcome is read from the chain; the run itself stays stopped meanwhile. */
   let reconciling = false;
   /** Set once a stored run is restored, until it is thrown away: the popup shows its snapshot, not the form. */
@@ -110,15 +111,19 @@ export function createPredictRun(args: {
       buildFailure =
         error instanceof NoRouteError
           ? "no-route"
-          : error instanceof QuoteFailedError
-            ? "quote"
-            : error instanceof CreditsUnavailableError
-              ? "credits"
-              : error instanceof TxPendingError
-                ? "pending"
-                : undefined;
+          : error instanceof AtEstimatesError
+            ? "at-estimates"
+            : error instanceof QuoteFailedError
+              ? "quote"
+              : error instanceof CreditsUnavailableError
+                ? "credits"
+                : error instanceof TxPendingError
+                  ? "pending"
+                  : undefined;
       if (buildFailure === "quote" || buildFailure === "credits" || buildFailure === "pending") return "rpc";
-      if (buildFailure === "no-route" || error instanceof PredictConfigError) return "unknown";
+      if (buildFailure === "no-route" || buildFailure === "at-estimates" || error instanceof PredictConfigError) {
+        return "unknown";
+      }
       if (error instanceof Error && !("cause" in error)) return "rpc";
       const cause = classifyTxError(error);
       if (cause === "rejected") return cause;
@@ -235,6 +240,7 @@ export function createPredictRun(args: {
     const action = () =>
       void work().catch((error: unknown) => {
         if (error instanceof NoRouteError) report("no-route");
+        else if (error instanceof AtEstimatesError) report("at-estimates");
         else if (error instanceof QuoteFailedError) report("quote", action);
         else if (error instanceof CreditsUnavailableError) report("credits");
         else if (error instanceof TxPendingError) report("pending", action);

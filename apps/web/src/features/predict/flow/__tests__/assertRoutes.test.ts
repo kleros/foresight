@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { sqrtPriceX96FromPrice } from "../../utils/poolMath";
-import { assertRoutes, NoRouteError } from "../plan";
+import { assertRoutes, AtEstimatesError, NoRouteError } from "../plan";
 import type { OptionChainState, PredictOption } from "../types";
 import { chainState, ctx, fakeQuoter, fakeReader, option, snapshot, WAD } from "./support/fakes";
 
@@ -39,6 +39,14 @@ describe("assertRoutes", () => {
 
     await expect(assertRoutes(ctx(), snapshot({ options: [routable, stuck] }), deps)).rejects.toBeInstanceOf(
       NoRouteError,
+    );
+  });
+
+  it("says the prices already sit at the estimates only when every batch has nothing to trade", async () => {
+    const deps = { reader: fakeReader({ state: () => atTarget }), quoter: fakeQuoter(), optionsPerBatch: 1 };
+
+    await expect(assertRoutes(ctx(), snapshot({ options: [option(3, TARGET), stuck] }), deps)).rejects.toBeInstanceOf(
+      AtEstimatesError,
     );
   });
 

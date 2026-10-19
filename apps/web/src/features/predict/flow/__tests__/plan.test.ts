@@ -7,6 +7,7 @@ import { gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
 
 import { LEG_HEADROOM_BPS } from "../../utils/plan";
 import {
+  AtEstimatesError,
   createPredictHooks,
   PREDICT_BATCH_SIZE,
   planPredict,
@@ -232,7 +233,7 @@ describe("the predict step", () => {
     expect(quoter.requests.map((request) => request.slippageBps)).toEqual([300, 300]);
   });
 
-  it("leaves out an option the market already agrees with", async () => {
+  it("says a batch whose only option the market already agrees with has nothing to trade", async () => {
     const skipped: PredictOption[] = [];
     // UP sits exactly where the estimate puts it, and DOWN's pool never priced
     const reader = fakeReader({
@@ -245,8 +246,8 @@ describe("the predict step", () => {
         }),
     });
 
-    await expect(buildPredict(snapshot(), { reader, onSkip: (each) => skipped.push(each) })).rejects.toThrow(
-      /no route/i,
+    await expect(buildPredict(snapshot(), { reader, onSkip: (each) => skipped.push(each) })).rejects.toBeInstanceOf(
+      AtEstimatesError,
     );
     expect(skipped).toHaveLength(1);
   });

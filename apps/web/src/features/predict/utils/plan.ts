@@ -1,6 +1,7 @@
 import type { PoolLiquidity } from "@/types/pool";
 
 import { limitSqrtPriceX96, priceFromSqrtPriceX96, swapToward, volumeUntilPrice, type PoolVolumes } from "./poolMath";
+import { PRICE_TOLERANCE_TICKS } from "../oracle/tolerances";
 
 /**
  * Turning one option's estimate into trades. Splitting the underlying gives an equal amount of
@@ -98,6 +99,22 @@ function sideState(option: OptionTarget, side: OptionSide): SideState | null {
     limitSqrtPrice: limitSqrtPriceX96(target, pool.outcomeIsToken0, target > current),
     held: option.held[side] + option.splitAmount,
   };
+}
+
+/** Every priced side of `option` sits within `PRICE_TOLERANCE_TICKS` of its estimate. */
+export function atEstimate(option: Pick<OptionTarget, "pools" | "targetPriceWad">): boolean {
+  const ticks = BigInt(PRICE_TOLERANCE_TICKS);
+  const [above, below] = [10_001n ** ticks, 10_000n ** ticks];
+  const priced = SIDES.filter((side) => option.pools[side].sqrtPriceX96 > 0n);
+  return (
+    priced.length > 0 &&
+    priced.every((side) => {
+      const pool = option.pools[side];
+      const target = side === "up" ? option.targetPriceWad : WAD - option.targetPriceWad;
+      const price = priceFromSqrtPriceX96(pool.sqrtPriceX96, pool.outcomeIsToken0);
+      return price * below <= target * above && price * above >= target * below;
+    })
+  );
 }
 
 /** The sides the market holds above the estimate, each sold as far as the balance reaches. */

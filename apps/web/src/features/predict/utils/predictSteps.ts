@@ -39,6 +39,7 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
   rpc: "The network did not answer.",
   unknown: "Something went wrong.",
   "no-route": "No trade found for these estimates. Try a larger amount.",
+  "at-estimates": "Prices are already at your estimates. Nothing to trade.",
   quote: "Could not get prices. Try again shortly.",
   funds: OUT_OF_FUNDS_COPY,
   balance: "Trade wallet balance is lower than shown. Check the amount.",

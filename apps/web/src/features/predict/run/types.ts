@@ -5,6 +5,7 @@ import type { PredictSnapshot } from "../flow/types";
 
 /**
  * `no-route`: no option can be moved toward its estimate with what the run has to spend.
+ * `at-estimates`: every option's pools already sit at its estimate.
  * `quote`: the quoter gave no answer, so whether a route exists is unknown.
  * `balance`: the trade wallet, or the wallet's credits, hold less than the popup counted on.
  * `credits`: the credits manager cannot cover the credits, or its swap would lose too much.
@@ -15,6 +16,7 @@ import type { PredictSnapshot } from "../flow/types";
 export type PredictFailureReason =
   | TxErrorCause
   | "no-route"
+  | "at-estimates"
   | "quote"
   | "funds"
   | "balance"
