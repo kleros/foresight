@@ -153,6 +153,22 @@ describe("ScrollFade's cue arrow", () => {
     });
   }
 
+  it("stays still for good once the arrow keys scroll the area from a button in it, and not at its space", () => {
+    sized(340, 300);
+    render(
+      <ScrollFade cue="More below">
+        <button type="button">Details</button>
+      </ScrollFade>,
+    );
+    const button = screen.getByRole("button", { name: "Details" });
+    const arrow = screen.getByTestId("more-below-arrow");
+
+    fireEvent.keyDown(button, { key: " " });
+    expect(arrow).toHaveClass("fs-nudge-down");
+    fireEvent.keyDown(button, { key: "ArrowDown" });
+    expect(arrow).not.toHaveClass("fs-nudge-down");
+  });
+
   it("keeps nudging while the arrow keys and space go to a field in the area", () => {
     sized(340, 300);
     render(

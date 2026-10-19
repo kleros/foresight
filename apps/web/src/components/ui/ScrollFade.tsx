@@ -24,14 +24,12 @@ const useMeasureEffect = typeof window === "undefined" ? useEffect : useLayoutEf
 
 const SCROLL_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "]);
 
-/** A field or widget that takes the scroll keys for itself, so pressing them there scrolls nothing. */
-function usesScrollKeys(target: EventTarget | null): boolean {
-  return (
-    target instanceof Element &&
-    target.closest(
-      "input, textarea, select, button, [contenteditable=true], [role=slider], [role=spinbutton], [role=listbox], [role=combobox], [role=menu], [role=radiogroup], [role=checkbox], [role=switch]",
-    ) !== null
-  );
+/** A field or widget that takes the scroll keys for itself; a button or a tick takes only the space. */
+function usesScrollKey(target: EventTarget | null, key: string): boolean {
+  if (!(target instanceof Element)) return false;
+  const fields =
+    "input, textarea, select, [contenteditable=true], [role=slider], [role=spinbutton], [role=listbox], [role=combobox], [role=menu], [role=radiogroup]";
+  return target.closest(key === " " ? `${fields}, button, [role=checkbox], [role=switch]` : fields) !== null;
 }
 
 /**
@@ -87,7 +85,7 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
     // the visitor's own scroll settles the arrow; a scroll the page makes (focus, scrollIntoView) does not
     const settle = () => setNudged(true);
     const settleOnKey = (event: KeyboardEvent) => {
-      if (SCROLL_KEYS.has(event.key) && !usesScrollKeys(event.target)) settle();
+      if (SCROLL_KEYS.has(event.key) && !usesScrollKey(event.target, event.key)) settle();
     };
     el.addEventListener("wheel", settle, { passive: true });
     el.addEventListener("touchmove", settle, { passive: true });
