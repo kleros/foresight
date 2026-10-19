@@ -9,8 +9,10 @@ import {
   planBuys,
   planSells,
   LEG_HEADROOM_BPS,
+  planChanged,
   previewTrades,
   type OptionTarget,
+  type PreviewTrades,
   type SwapLeg,
 } from "../plan";
 import { swapToward } from "../poolMath";
@@ -479,5 +481,50 @@ describe("previewTrades", () => {
 
   it("has nothing to show for an UP pool that never priced", () => {
     expect(previewTrades(option({ pools: { up: pool(0n), down: pool(AT["0.25"]) } }), SLIPPAGE_BPS)).toBeNull();
+  });
+});
+
+describe("planChanged", () => {
+  const shown = previewTrades(option(), SLIPPAGE_BPS)!;
+  /** Each figure of `trades` scaled by `bps` of ten thousand. */
+  const scaled = (trades: PreviewTrades, bps: bigint): PreviewTrades => {
+    const by = (value: bigint) => (value * bps) / 10_000n;
+    return {
+      ...trades,
+      sells: trades.sells.map((leg) => ({ ...leg, amountIn: by(leg.amountIn), underlyingOut: by(leg.underlyingOut) })),
+      buys: trades.buys.map((leg) => ({ ...leg, amountIn: by(leg.amountIn), outcomeOut: by(leg.outcomeOut) })),
+      merge: by(trades.merge),
+      to: by(trades.to),
+    };
+  };
+
+  it("holds a plan the pools still give, figure for figure", () => {
+    expect(planChanged(shown, previewTrades(option(), SLIPPAGE_BPS)!, SLIPPAGE_BPS)).toBe(false);
+  });
+
+  it("holds a plan whose figures moved by no more than the slippage allowed", () => {
+    expect(planChanged(shown, scaled(shown, 10_000n - BigInt(SLIPPAGE_BPS) + 1n), SLIPPAGE_BPS)).toBe(false);
+    expect(planChanged(shown, scaled(shown, 10_000n + BigInt(SLIPPAGE_BPS)), SLIPPAGE_BPS)).toBe(false);
+  });
+
+  it("names a plan whose figures moved by more than the slippage allowed", () => {
+    expect(planChanged(shown, scaled(shown, 10_000n - BigInt(SLIPPAGE_BPS) - 1n), SLIPPAGE_BPS)).toBe(true);
+  });
+
+  it("names a plan where only the price it lands at moved past the slippage allowed", () => {
+    const now = { ...shown, to: (shown.to * (10_000n + BigInt(SLIPPAGE_BPS) * 2n)) / 10_000n };
+
+    expect(planChanged(shown, now, SLIPPAGE_BPS)).toBe(true);
+  });
+
+  it("names a plan that now trades another side, or one leg more or fewer", () => {
+    const [sell] = shown.sells;
+    expect(planChanged(shown, { ...shown, sells: [{ ...sell!, side: "down" }] }, SLIPPAGE_BPS)).toBe(true);
+    expect(planChanged(shown, { ...shown, buys: [] }, SLIPPAGE_BPS)).toBe(true);
+  });
+
+  it("names a plan whose amount now stops short of the estimate, or now reaches it", () => {
+    const [buy] = shown.buys;
+    expect(planChanged(shown, { ...shown, buys: [{ ...buy!, toTarget: !buy!.toTarget }] }, SLIPPAGE_BPS)).toBe(true);
   });
 });

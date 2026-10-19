@@ -291,3 +291,29 @@ export function previewTrades(option: OptionTarget, slippageBps: number): Previe
   const trades = sells.length > 0 || buys.length > 0;
   return { split: trades ? option.splitAmount : 0n, sells, merge: plan.mergeAmount, buys, from, to, feeValue };
 }
+
+/** `now` is within `toleranceBps` of `shown`, as a share of `shown`. */
+function near(shown: bigint, now: bigint, toleranceBps: number): boolean {
+  const off = shown < now ? now - shown : shown - now;
+  return off * 10_000n <= shown * BigInt(toleranceBps);
+}
+
+const sameShape = (shown: readonly PreviewLeg[], now: readonly PreviewLeg[]) =>
+  shown.length === now.length &&
+  shown.every((leg, index) => leg.side === now[index]!.side && leg.toTarget === now[index]!.toTarget);
+
+/**
+ * Whether the pools as read now give another plan than the one shown: another leg, another side,
+ * an estimate reached or missed, or a figure moved by more than `toleranceBps`.
+ */
+export function planChanged(shown: PreviewTrades, now: PreviewTrades, toleranceBps: number): boolean {
+  if (!sameShape(shown.sells, now.sells) || !sameShape(shown.buys, now.buys)) return true;
+  const figures = (trades: PreviewTrades) => [
+    trades.merge,
+    trades.to,
+    ...trades.sells.flatMap((leg) => [leg.amountIn, leg.underlyingOut]),
+    ...trades.buys.flatMap((leg) => [leg.amountIn, leg.outcomeOut]),
+  ];
+  const before = figures(shown);
+  return figures(now).some((figure, index) => !near(before[index]!, figure, toleranceBps));
+}

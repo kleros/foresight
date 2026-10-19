@@ -18,7 +18,7 @@ import { chainText, OUT_OF_FUNDS, REVERTS } from "@/utils/txErrorText";
 
 import type { ExactInputQuoter, SwapQuoter } from "@/lib/swap/types";
 
-import type { PredictDriver, PredictFailureReason, PredictProgress, PredictStepRow } from "./types";
+import type { PredictDriver, PredictFailureReason, PredictProgress, PredictStepRow, ShownPlans } from "./types";
 import {
   assertRoutes,
   AtEstimatesError,
@@ -36,9 +36,53 @@ import {
   type PredictDeps,
 } from "../flow/plan";
 import type { PlannedRequest, PredictCtx, PredictReader, PredictRequest, PredictSnapshot } from "../flow/types";
+import { planChanged, previewTrades, type PreviewTrades } from "../utils/plan";
 
 /** The trade wallet, or the wallet's credits, hold less than the prediction was shown to draw on. */
 class TradeWalletShortError extends Error {}
+
+/** The pools give another plan than the one shown. */
+class PlansMovedError extends Error {
+  constructor(readonly moved: NonNullable<PredictProgress["moved"]>) {
+    super("The pools moved since the plan was shown.");
+  }
+}
+
+/**
+ * Each option's plan as the pools give it now, worked out as the popup's preview does, and the
+ * options whose plan differs from `shown` beyond the trade slippage. None for an option not shown.
+ */
+async function replanned(
+  reader: PredictReader,
+  ctx: PredictCtx,
+  snapshot: PredictSnapshot,
+  shown: ShownPlans,
+): Promise<NonNullable<PredictProgress["moved"]> | undefined> {
+  const states = await reader.optionStates({ options: snapshot.options, executor: ctx.executor });
+  const { tradeBps, creditsBps } = snapshot.slippage;
+  const mint = snapshot.collateralIn + (snapshot.creditsToSpend * BigInt(10_000 - creditsBps)) / 10_000n;
+  const plans: Record<string, PreviewTrades> = {};
+  const markets: Address[] = [];
+  for (const [index, option] of snapshot.options.entries()) {
+    const state = states[index];
+    if (state === undefined) continue;
+    const now = previewTrades(
+      {
+        pools: state.pools,
+        targetPriceWad: option.targetPriceWad,
+        held: state.held,
+        splitAmount: state.underlying + mint,
+      },
+      tradeBps,
+    );
+    if (now === null) continue;
+    const key = option.childMarket.toLowerCase();
+    plans[key] = now;
+    const before = shown[key];
+    if (before !== undefined && planChanged(before, now, tradeBps)) markets.push(option.childMarket);
+  }
+  return markets.length > 0 ? { markets, plans } : undefined;
+}
 
 /** A send the wallet never answered, which the chain may still mine under `nonce`. */
 interface UnansweredSend {
@@ -118,6 +162,8 @@ export function createPredictRun(args: {
   let awaitingUnanswered = false;
   /** Sends the wallet never answered and the chain had not mined when the run stopped, by step id. */
   const unansweredSends = new Map<string, UnansweredSend>();
+  /** Set when Predict found the pools giving another plan than the one shown; cleared by the next press. */
+  let moved: PredictProgress["moved"];
   let cached: PredictProgress;
 
   const deps: PredictDeps = {
@@ -258,7 +304,7 @@ export function createPredictRun(args: {
 
   function stage(): PredictProgress["stage"] {
     const run = orchestrator.getRun();
-    if (!run) return failure ? "halted" : checking ? "quoting" : "idle";
+    if (!run) return failure ? "halted" : checking ? "quoting" : moved ? "moved" : "idle";
     if ((reconciling || awaitingUnanswered) && !failure) return "confirming";
     if (reviewing && !failure) return "review";
 
@@ -307,6 +353,7 @@ export function createPredictRun(args: {
       ...(pendingHash ? { pendingHash } : {}),
       ...(moneyMoved ? { moneyMoved: true as const } : {}),
       ...(recovered && run ? { recovered: run.snapshot } : {}),
+      ...(moved ? { moved } : {}),
     };
   }
 
@@ -411,8 +458,8 @@ export function createPredictRun(args: {
     notify();
   });
 
-  /** Pins the trade wallet's balance before anything is signed, and checks a route exists. */
-  async function prepare(ctx: PredictCtx, requested: PlannedRequest): Promise<PredictSnapshot> {
+  /** Pins the trade wallet's balance before anything is signed, holds the plan to `shown`, and checks a route exists. */
+  async function prepare(ctx: PredictCtx, requested: PlannedRequest, shown?: ShownPlans): Promise<PredictSnapshot> {
     const [collateralAtStart, creditsAtStart, latest] = await Promise.all([
       args.reader.collateralBalance(ctx.executor),
       args.reader.creditsBalance(ctx.executor),
@@ -430,51 +477,65 @@ export function createPredictRun(args: {
       throw new TradeWalletShortError();
     }
     const snapshot = { ...requested, collateralAtStart, creditsAtStart, fromBlock };
+    const changed = shown && (await replanned(args.reader, ctx, snapshot, shown));
+    if (changed) throw new PlansMovedError(changed);
     await assertRoutes(ctx, snapshot, deps);
     return snapshot;
   }
 
-  const startRun = detached(async () => {
-    report(undefined);
-    leavingOut.clear();
-    moneyMoved = false;
+  const startRun = (shown?: ShownPlans) =>
+    detached(async () => {
+      report(undefined);
+      moved = undefined;
+      leavingOut.clear();
+      moneyMoved = false;
 
-    const requested: PredictRequest = args.snapshot();
-    const ctx = args.ctx();
-    unansweredSends.clear();
-    const check = {};
-    checking = check;
-    notify();
+      const requested: PredictRequest = args.snapshot();
+      const ctx = args.ctx();
+      unansweredSends.clear();
+      const check = {};
+      checking = check;
+      notify();
 
-    const checked = await (async () => {
-      const gasLimit = await args.reader.blockGasLimit();
-      const sized = { ...requested, optionsPerBatch: optionsPerBatch(gasLimit, requested.creditsToSpend > 0n) };
-      const steps = checkingUnanswered(planPredict(sized, deps));
-      // The rows exist before the run does, so the popup shows the list while the routes are checked.
-      if (checking === check) {
-        planned = steps.map((step) => ({ id: step.id, label: step.label, state: "pending" }));
+      const checked = await (async () => {
+        const gasLimit = await args.reader.blockGasLimit();
+        const sized = { ...requested, optionsPerBatch: optionsPerBatch(gasLimit, requested.creditsToSpend > 0n) };
+        const steps = checkingUnanswered(planPredict(sized, deps));
+        // The rows exist before the run does, so the popup shows the list while the routes are checked.
+        if (checking === check) {
+          planned = steps.map((step) => ({ id: step.id, label: step.label, state: "pending" }));
+          notify();
+        }
+        return { steps, snapshot: await prepare(ctx, sized, shown) };
+      })().then(
+        (ready) => ready,
+        (error: unknown) => ({ error }),
+      );
+      if (checking !== check) return;
+      checking = undefined;
+      if ("error" in checked) {
+        if (!(checked.error instanceof PlansMovedError)) throw checked.error;
+        moved = checked.error.moved;
         notify();
+        return;
       }
-      return { steps, snapshot: await prepare(ctx, sized) };
-    })().then(
-      (ready) => ready,
-      (error: unknown) => ({ error }),
-    );
-    if (checking !== check) return;
-    checking = undefined;
-    if ("error" in checked) throw checked.error;
-    await orchestrator.start({ flowId: args.flowId, snapshot: checked.snapshot, ctx, steps: checked.steps });
-  });
+      await orchestrator.start({ flowId: args.flowId, snapshot: checked.snapshot, ctx, steps: checked.steps });
+    })();
 
   return {
-    start() {
+    start(shown) {
       if (checking || orchestrator.getStatus() !== "idle") return;
       // A stored run has steps that may already be on chain, and `start` would refuse anyway.
       if (args.store?.load(args.flowId)) {
         recoverRun();
         return;
       }
-      startRun();
+      startRun(shown);
+    },
+
+    confirm() {
+      if (!moved || checking || orchestrator.getStatus() !== "idle") return;
+      startRun(moved.plans);
     },
 
     recover() {
@@ -510,6 +571,7 @@ export function createPredictRun(args: {
       leavingOut.clear();
       unansweredSends.clear();
       planned = [];
+      moved = undefined;
       report(undefined);
     },
 
