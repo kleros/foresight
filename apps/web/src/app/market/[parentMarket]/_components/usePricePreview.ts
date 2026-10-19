@@ -27,6 +27,10 @@ export interface PricePreview {
   ready: boolean;
   /** The pools could not be read. */
   failed: boolean;
+  /** The pools are being read again after `failed`. */
+  retrying: boolean;
+  /** Reads the pools again. */
+  retry: () => void;
 }
 
 /** An option's plan as the summary shows it, in the option's unit; `held` counts only where the plan splits. */
@@ -70,7 +74,15 @@ export function usePricePreview(args: {
   });
 
   const ready = collateralIn !== undefined && (options.length === 0 || states.isSuccess);
-  const preview: PricePreview = { moves: {}, plans: {}, held: {}, ready, failed: states.isError };
+  const preview: PricePreview = {
+    moves: {},
+    plans: {},
+    held: {},
+    ready,
+    failed: states.isError,
+    retrying: states.isError && states.isFetching,
+    retry: () => void states.refetch(),
+  };
   const plans: Record<string, PreviewTrades> = {};
   for (const [index, option] of options.entries()) {
     const state = states.data?.[index];

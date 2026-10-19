@@ -229,6 +229,17 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
     progress,
   });
 
+  // once a run is going its own state is the story, not what the wallet is doing now
+  const shownNotice = isRunning
+    ? undefined
+    : notice({
+        owner,
+        onRightChain: chainId === DEFAULT_CHAIN_ID,
+        ready,
+        creditsFailed: creditsFailed && !moved,
+        pricesFailed: preview.failed && !moved,
+      });
+
   return (
     <PredictDialog
       isOpen
@@ -261,18 +272,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
       canRetry={canRetry}
       isPending={Boolean(pendingHash)}
       recovered={recovered && { deposit: recovered.deposit, token: runToken }}
-      notice={
-        // once a run is going its own state is the story, not what the wallet is doing now
-        isRunning
-          ? undefined
-          : notice({
-              owner,
-              onRightChain: chainId === DEFAULT_CHAIN_ID,
-              ready,
-              creditsFailed: creditsFailed && !moved,
-              pricesFailed: preview.failed && !moved,
-            })
-      }
+      notice={shownNotice}
       slippage={{ settings: slippageSettings, onChange: setSlippage }}
       creditsSwap={
         shownCredits && (creditsIn > 0n || moved?.credits || isHeldRun)
@@ -282,10 +282,15 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
       moved={moved && { markets: moved.markets.length, credits: moved.credits !== undefined }}
       pricesReady={preview.ready}
       onBack={moved && !progress?.moneyMoved ? () => driver?.reset() : undefined}
+      // only where the prices are what stands in the way
+      onRetryPrices={shownNotice === PRICES_FAILED ? preview.retry : undefined}
+      isRetryingPrices={preview.retrying}
       onPredict={predict}
     />
   );
 }
+
+const PRICES_FAILED = "Prices could not be read. Try again in a moment.";
 
 /** Why this prediction cannot be made, in the words of the thing the visitor has to do. */
 function notice(args: {
@@ -298,7 +303,7 @@ function notice(args: {
   if (!args.owner) return "Connect a wallet to predict.";
   if (!args.onRightChain) return "Switch to Gnosis to predict.";
   if (!args.ready) return "This session cannot be traded yet.";
-  if (args.pricesFailed) return "Prices could not be read. Try again in a moment.";
+  if (args.pricesFailed) return PRICES_FAILED;
   if (args.creditsFailed) return CREDITS_UNAVAILABLE;
   return undefined;
 }
