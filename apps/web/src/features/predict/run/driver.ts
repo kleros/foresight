@@ -135,7 +135,7 @@ export function createPredictRun(args: {
 
   const waiting = args.unansweredSend ?? UNANSWERED_SEND;
 
-  /** The hash the chain mined `send` under, read until it does or `waiting.waitMs` runs out. */
+  /** The hash the chain mined `send` under, or a `TxPendingError` if it is still unmined when the wait runs out. */
   async function answerOf(send: UnansweredSend, signal?: AbortSignal): Promise<Hash | TxPendingError | undefined> {
     const deadline = Date.now() + waiting.waitMs;
     let pending = false;

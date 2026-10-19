@@ -46,7 +46,7 @@ export type SentTx =
   | ({ status: "mined"; hash: Hash; success: boolean } & Pick<LandedTx, "to" | "value" | "input">)
   /** Broadcast and not mined. */
   | { status: "pending" }
-  /** Mined, but in a block before the one looked from. */
+  /** Used by a transaction not found from the block looked from. */
   | { status: "taken" }
   /** Nothing has used the nonce yet. */
   | { status: "none" };
