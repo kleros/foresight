@@ -73,7 +73,6 @@ const STAGE_COPY: Partial<Record<PredictProgress["stage"], string>> = {
   confirming: "Confirming…",
 };
 
-
 /** What the funds step adds, frozen when a run starts so a refreshed balance does not rewrite it. */
 export interface FundsToAdd {
   /** In the token the visitor pays with. */

@@ -1507,7 +1507,10 @@ for (const viewport of [
           return Object.fromEntries(
             Object.entries(points).map(([name, [x, y]]) => [
               name,
-              `rgb(${context.getImageData(Math.floor(x! * scale), Math.floor(y! * scale), 1, 1).data.slice(0, 3).join(", ")})`,
+              `rgb(${context
+                .getImageData(Math.floor(x! * scale), Math.floor(y! * scale), 1, 1)
+                .data.slice(0, 3)
+                .join(", ")})`,
             ]),
           );
         },
