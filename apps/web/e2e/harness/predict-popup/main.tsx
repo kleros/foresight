@@ -62,6 +62,8 @@ const isEmailVerified = params.get("verified") !== "0";
 const signingIn = params.get("signin") === "busy";
 /** `?prices=loading` the pools not read yet, so Details checks prices and Predict waits. */
 const pricesLoading = params.get("prices") === "loading";
+/** `?prices=failed` the pools could not be read, so the button offers to read them again. */
+const pricesFailed = params.get("prices") === "failed";
 /** `?leftOut=N` estimates the run left out, said on the status line; a `harness-left-out` event changes it after open. */
 const initialLeftOut = Number(params.get("leftOut") ?? "0");
 
@@ -301,7 +303,13 @@ function Harness() {
         canRetry={state === "failed" || state === "pending" || state === "recovered"}
         isPending={state === "pending"}
         recovered={state === "recovered" ? { deposit: 4n * WAD, token: sDai } : undefined}
-        notice={state === "disconnected" ? "Connect a wallet to predict." : undefined}
+        notice={
+          state === "disconnected"
+            ? "Connect a wallet to predict."
+            : pricesFailed
+              ? "Prices could not be read. Try again in a moment."
+              : undefined
+        }
         slippage={{ settings: slippage, onChange: setSlippage }}
         creditsSwap={
           swapLoss !== null && shown && shown.creditsIn > 0n
@@ -322,6 +330,7 @@ function Harness() {
         moved={state === "moved" ? { markets: 1, credits: false } : undefined}
         pricesReady={!pricesLoading}
         onBack={state === "moved" ? () => {} : undefined}
+        onRetryPrices={pricesFailed ? () => {} : undefined}
         onPredict={() => {}}
       />
     </>

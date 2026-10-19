@@ -232,9 +232,64 @@ test.describe("the settings by keyboard", () => {
     const dialog = await openPopup(page, "theme=light&settings=open");
 
     const style = await dialog
-      .locator(".predict-settings")
+      .locator(".predict-settings-card")
       .evaluate((element) => [getComputedStyle(element).transform, getComputedStyle(element).filter]);
     expect(style).toEqual(["none", "none"]);
+  });
+});
+
+test.describe("the settings, compact", () => {
+  test.use({ viewport: { width: 375, height: 667 } });
+
+  test("sit in a card under the header, sized to its rows, over the dimmed body that closes them", async ({ page }) => {
+    const dialog = await openPopup(page, "theme=light&credits=enough&settings=open");
+    const header = (await dialog.locator(".predict-header").boundingBox())!;
+    const card = (await dialog.locator(".predict-settings-card").boundingBox())!;
+    const panel = (await dialog.locator(".predict-settings").boundingBox())!;
+
+    // the header's own 8px gap, then 4px
+    expect(card.y - (header.y + header.height)).toBeLessThanOrEqual(12);
+    expect(card.height).toBeLessThan(panel.height / 2);
+    expect(await isWhole(dialog.getByRole("button", { name: "Reset" }))).toBe(true);
+    await expect(dialog.getByRole("textbox", { name: TRADES_FIELD })).toHaveAttribute("placeholder", "1");
+
+    await page.mouse.click(panel.x + panel.width / 2, panel.y + panel.height - 40);
+    await settle(dialog);
+    await expect(dialog.getByRole("button", { name: "Settings", exact: true })).toHaveAttribute("aria-expanded", "false");
+  });
+
+  test("mark the gear while a custom value is set", async ({ page }) => {
+    const auto = await openPopup(page, "theme=light");
+    await expect(auto.getByTestId("settings-custom")).toHaveCount(0);
+
+    const custom = await openPopup(page, "theme=light&slippage=trade:300");
+    const dot = custom.getByTestId("settings-custom");
+    await expect(dot).toBeVisible();
+    expect(await isWhole(dot)).toBe(true);
+  });
+
+  test("open after a run stopped with money moved", async ({ page }) => {
+    const dialog = await openPopup(page, "theme=light&state=failed&reason=reverted&first=0");
+    const gear = dialog.getByRole("button", { name: "Settings", exact: true });
+
+    await expect(gear).toBeEnabled();
+    await gear.click();
+    await settle(dialog);
+    expect(await isWhole(dialog.getByRole("textbox", { name: TRADES_FIELD }))).toBe(true);
+  });
+});
+
+test.describe("prices that could not be read", () => {
+  test.use({ viewport: { width: 375, height: 667 } });
+
+  test("offer Try again in the button's place, keeping the popup's footprint", async ({ page }) => {
+    const idle = await openPopup(page, "theme=light");
+    const before = await footprint(idle);
+    const dialog = await openPopup(page, "theme=light&prices=failed");
+
+    expect(await footprint(dialog)).toEqual(before);
+    await expect(dialog.getByRole("status")).toHaveText("Prices could not be read. Try again in a moment.");
+    await expect(dialog.getByRole("button", { name: "Try again" })).toBeEnabled();
   });
 });
 
@@ -314,8 +369,8 @@ for (const viewport of VIEWPORTS) {
           expect.soft(await isWhole(row), (await row.textContent()) ?? "").toBe(true);
         }
         await expect(dialog.getByTestId("slippage-row")).toHaveText([
-          "Max slippage on trades3%",
-          "Max slippage on the credits swap0.5%",
+          "Max slippage3%",
+          "Credits swap slippage0.5%",
         ]);
         await dialog.getByTestId("stops-short").first().scrollIntoViewIfNeeded();
         await expect(page).toHaveScreenshot(`details-${viewport.width}x${viewport.height}-${theme}.png`, {
