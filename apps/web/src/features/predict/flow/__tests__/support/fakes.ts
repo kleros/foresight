@@ -21,6 +21,7 @@ import {
 } from "@/lib/swap/types";
 
 import { CREDITS_SLIPPAGE_BPS, SLIPPAGE_BPS } from "../../../oracle/tolerances";
+import { batchGas, BATCH_GAS_SHARE_BPS } from "../../plan";
 import type {
   LandedTx,
   OptionChainState,
@@ -107,6 +108,7 @@ export const snapshot = (overrides: Partial<PredictSnapshot> = {}): PredictSnaps
   fromBlock: 1n,
   startedAt: 1_700_000_000,
   slippage: { tradeBps: SLIPPAGE_BPS, creditsBps: CREDITS_SLIPPAGE_BPS },
+  optionsPerBatch: 10,
   ...overrides,
 });
 
@@ -114,6 +116,9 @@ export interface FakeReader extends PredictReader {
   /** Every `optionStates` call, so a test can see what a build asked for. */
   readonly asked: Array<{ options: PredictOption[]; executor: Address }>;
 }
+
+/** A block gas limit whose batch budget holds exactly `options` options, with or without the credits leg. */
+export const gasLimitFor = (options: number): bigint => (batchGas(options, true) * 10_000n) / BATCH_GAS_SHARE_BPS;
 
 /** 1.25 xDAI per sDAI share, the fakes' vault rate. */
 export const VAULT_RATE = (WAD * 5n) / 4n;
@@ -131,6 +136,8 @@ export function fakeReader(
     landed?: LandedTx[] | (() => LandedTx[]);
     /** True while the owner has a transaction broadcast and not mined. */
     pending?: () => boolean;
+    /** The latest block's gas limit, Gnosis' 17M by default. */
+    blockGasLimit?: bigint;
   } = {},
 ): FakeReader {
   const asked: FakeReader["asked"] = [];
@@ -147,6 +154,7 @@ export function fakeReader(
     previewDeposit: (assets) => Promise.resolve((assets * WAD) / VAULT_RATE),
     vaultValue: (shares) => Promise.resolve((shares * VAULT_RATE) / WAD),
     latestBlock: () => Promise.resolve(1n),
+    blockGasLimit: () => Promise.resolve(opts.blockGasLimit ?? 17_000_000n),
     landedSince: () => Promise.resolve(typeof opts.landed === "function" ? opts.landed() : (opts.landed ?? [])),
     hasPending: () => Promise.resolve(opts.pending?.() ?? false),
     nextNonce: () => Promise.resolve(0),

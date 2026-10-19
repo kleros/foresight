@@ -66,6 +66,8 @@ export interface PredictReader {
   /** The underlying `shares` of the collateral redeem for now. */
   vaultValue(shares: bigint): Promise<bigint>;
   latestBlock(): Promise<bigint>;
+  /** The latest block's gas limit, which no one transaction may pass. */
+  blockGasLimit(): Promise<bigint>;
   /**
    * What `owner` sent from `fromBlock` on that landed and moved the collateral or the credits
    * into or out of `executor`.
@@ -113,12 +115,20 @@ export interface PredictSnapshot {
   startedAt: number;
   /** As the visitor's settings had it when the run started; every rebuilt batch keeps it. */
   slippage: PredictSlippage;
+  /** Sized from the block gas limit as the run started, so a recovered run re-plans the same batches. */
+  optionsPerBatch: number;
   /** Options that settled batches left out for lack of a route; absent until one does. */
   leftOut?: Address[];
 }
 
-/** What the visitor asked for; the run adds the chain-read starting balances and block when it starts. */
-export type PredictRequest = Omit<PredictSnapshot, "collateralAtStart" | "creditsAtStart" | "fromBlock">;
+/** What the visitor asked for; the run adds what it reads from the chain when it starts. */
+export type PredictRequest = Omit<
+  PredictSnapshot,
+  "collateralAtStart" | "creditsAtStart" | "fromBlock" | "optionsPerBatch"
+>;
+
+/** A request with its batches sized, which is all a plan needs. */
+export type PlannedRequest = PredictRequest & Pick<PredictSnapshot, "optionsPerBatch">;
 
 export interface PredictCtx {
   chainId: number;

@@ -18,6 +18,7 @@ import {
   fakeCreditsQuoter,
   fakeQuoter,
   fakeReader,
+  gasLimitFor,
   landedTx,
   option,
   snapshot,
@@ -154,14 +155,13 @@ function drive(
 ) {
   const driver = createPredictRun({
     gateway: chain.gateway,
-    reader: chain.reader,
+    reader: { ...chain.reader, blockGasLimit: () => Promise.resolve(gasLimitFor(1)) },
     quoter: fakeQuoter(),
     creditsQuoter: fakeCreditsQuoter(),
     flowId,
     store,
     ctx: () => ctx(),
     snapshot: () => request(options),
-    optionsPerBatch: 1,
   });
   drivers.push(driver);
   return driver;
@@ -258,7 +258,13 @@ describe("credits across recovery (A7)", () => {
       status: "paused",
       reason: "rejected",
       ctx: ctx(),
-      snapshot: { ...request(options), collateralAtStart: 0n, creditsAtStart: WAD / 2n, fromBlock: 1n },
+      snapshot: {
+        ...request(options),
+        collateralAtStart: 0n,
+        creditsAtStart: WAD / 2n,
+        fromBlock: 1n,
+        optionsPerBatch: 1,
+      },
       steps,
     });
     return store;

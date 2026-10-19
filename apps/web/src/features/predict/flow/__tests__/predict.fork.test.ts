@@ -232,6 +232,7 @@ describe("the predict flow, against a gnosis fork", () => {
         ),
         fromBlock: (await client.getBlockNumber()) + 1n,
         slippage: { tradeBps: 300, creditsBps: CREDITS_SLIPPAGE_BPS },
+        optionsPerBatch: 1,
         startedAt: Math.floor(Date.now() / 1000),
       };
 
@@ -643,6 +644,7 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
         .collateralBalance(ctx.executor),
       fromBlock: (await client.getBlockNumber()) + 1n,
       slippage: DEFAULT_SLIPPAGE,
+      optionsPerBatch: 1,
       startedAt: Math.floor(Date.now() / 1000),
     };
     const deps = {
@@ -1687,6 +1689,30 @@ describe("money kept by every predict run, against a gnosis fork", () => {
     const collateral = session.collateralToken;
     const receipts = sent.map((each) => each.receipt);
     expect(run.progress.stage, JSON.stringify(run.progress.failure)).toBe("complete");
+
+    // each batch spends no more gas than the batch sizing counts it at
+    for (const { tx, receipt } of landedBatches(run)) {
+      const calls = batchCalls(tx.data!);
+      const options = new Set(
+        calls.flatMap((call) => {
+          if (call.to.toLowerCase() !== ctx.router.toLowerCase()) return [];
+          let inner;
+          try {
+            inner = decodeFunctionData({ abi: app.gnosisRouterAbi, data: call.data });
+          } catch {
+            return [];
+          }
+          return inner.functionName === "splitPosition" &&
+            inner.args[1].toLowerCase() !== ctx.parentMarket.toLowerCase()
+            ? [inner.args[1].toLowerCase()]
+            : [];
+        }),
+      );
+      const credits = calls.some((call) => call.to.toLowerCase() === route.manager.toLowerCase());
+      expect(receipt.gasUsed, `a batch of ${options.size} options`).toBeLessThanOrEqual(
+        app.batchGas(options.size, credits),
+      );
+    }
 
     // M2: the owner is debited exactly what the popup showed, gas aside
     expect(moved(before, after, owner, route.token), "credits moved from the wallet").toBe(-request.creditsFromEoa);

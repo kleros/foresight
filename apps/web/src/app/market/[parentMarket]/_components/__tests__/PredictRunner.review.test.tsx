@@ -178,6 +178,7 @@ vi.mock("@/features/predict/run/reader", async () => {
       previewDeposit: (assets: bigint) => Promise.resolve(assets),
       vaultValue: (shares: bigint) => Promise.resolve(shares),
       latestBlock: () => Promise.resolve(1n),
+      blockGasLimit: () => Promise.resolve(17_000_000n),
       landedSince: () => Promise.resolve([]),
       hasPending: () => Promise.resolve(false),
       nextNonce: () => Promise.resolve(0),

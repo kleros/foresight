@@ -9,11 +9,12 @@ import {
   chainState,
   ctx,
   fakeQuoter,
+  type FakeQuoter,
   fakeReader,
+  gasLimitFor,
   option,
   snapshot,
   WAD,
-  type FakeQuoter,
 } from "../../flow/__tests__/support/fakes";
 import { STEP_ID } from "../../flow/plan";
 import type { PredictOption, PredictSnapshot } from "../../flow/types";
@@ -106,14 +107,18 @@ function setup(args: {
 }) {
   const gateway = scriptedGateway(args.script);
   // later batches mint nothing, so they trade the underlying the first batch's split left in the wallet
-  const reader = fakeReader({ deployed: true, collateral: 0n, state: () => chainState({ underlying: WAD }) });
+  const reader = fakeReader({
+    deployed: true,
+    collateral: 0n,
+    state: () => chainState({ underlying: WAD }),
+    blockGasLimit: gasLimitFor(args.optionsPerBatch ?? 1),
+  });
   const quoter = serialQuoter(args.refuse);
   const driver = createPredictRun({
     gateway,
     reader,
     quoter,
     flowId: `predict-reverted-${drivers.length}`,
-    optionsPerBatch: args.optionsPerBatch ?? 1,
     ctx: () => ctx(),
     snapshot: () => snapshot({ options: args.options, deposit: WAD, collateralIn: WAD, ...args.snap }),
   });

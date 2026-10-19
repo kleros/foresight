@@ -35,9 +35,9 @@ import type {
   LandedTx,
   OptionChainState,
   PredictCtx,
+  PlannedRequest,
   PredictOption,
   PredictReader,
-  PredictRequest,
   PredictSlippage,
   PredictSnapshot,
 } from "./types";
@@ -54,15 +54,30 @@ type Step = TxStep<PredictSnapshot, PredictCtx>;
 
 export { STEP_ID };
 
-/** Options per transaction. Movies-r3's default, and like it, unmeasured against real Seer gas. */
-export const PREDICT_BATCH_SIZE = 10;
+/** Gas a predict batch spends besides its options, the parent split included; ~0.57M on a Gnosis fork. */
+export const BATCH_BASE_GAS = 700_000n;
+/** Gas each option adds to a batch: its split, legs and merge; ~1.25M on a Gnosis fork. */
+export const OPTION_GAS = 1_500_000n;
+/** Gas the credits leg adds to the first batch; ~0.53M on a Gnosis fork. */
+export const CREDITS_LEG_GAS = 700_000n;
+/** Of ten thousand, the share of the block gas limit one batch is sized to fill. */
+export const BATCH_GAS_SHARE_BPS = 5_000n;
+
+/** What a batch of `options` is sized to spend, the credits leg included when it carries one. */
+export const batchGas = (options: number, credits: boolean): bigint =>
+  BATCH_BASE_GAS + (credits ? CREDITS_LEG_GAS : 0n) + BigInt(options) * OPTION_GAS;
+
+/** The options one batch holds under `blockGasLimit`'s budget; never fewer than one. */
+export function optionsPerBatch(blockGasLimit: bigint, credits: boolean): number {
+  const room = (blockGasLimit * BATCH_GAS_SHARE_BPS) / 10_000n - batchGas(0, credits);
+  return room < OPTION_GAS ? 1 : Number(room / OPTION_GAS);
+}
 
 export interface PredictDeps {
   reader: PredictReader;
   quoter: SwapQuoter;
   /** Quotes the swap the credits manager makes; needed only by a run that spends credits. */
   creditsQuoter?: ExactInputQuoter;
-  optionsPerBatch?: number;
   /** Told about an option no route could be found for, which the batch `stepId` leaves out. */
   onLeftOut?: (option: PredictOption, reason: unknown, stepId: string) => void;
 }
@@ -506,11 +521,14 @@ function assertSlippage(slippage: PredictSlippage): void {
   }
 }
 
-export function planPredict(snapshot: PredictRequest, deps: PredictDeps): Step[] {
+export function planPredict(snapshot: PlannedRequest, deps: PredictDeps): Step[] {
   if (snapshot.options.length === 0) {
     throw new PredictConfigError("There are no estimates to predict.");
   }
   assertSlippage(snapshot.slippage);
+  if (!Number.isInteger(snapshot.optionsPerBatch) || snapshot.optionsPerBatch < 1) {
+    throw new PredictConfigError("A batch must hold at least one option.");
+  }
 
   const steps: Step[] = [
     {
@@ -539,7 +557,7 @@ export function planPredict(snapshot: PredictRequest, deps: PredictDeps): Step[]
     });
   }
 
-  const batches = batched(snapshot.options, deps.optionsPerBatch ?? PREDICT_BATCH_SIZE);
+  const batches = batched(snapshot.options, snapshot.optionsPerBatch);
 
   steps.push(
     ...batches.map((options, index): Step => {
@@ -588,7 +606,7 @@ export async function assertRoutes(ctx: PredictCtx, snapshot: PredictSnapshot, d
   const credits =
     snapshot.creditsToSpend > 0n ? await creditsLeg(ctx, snapshot.creditsToSpend, creditsBps, deps) : undefined;
   const mint = snapshot.collateralIn + (credits?.minted ?? 0n);
-  const batches = batched(snapshot.options, deps.optionsPerBatch ?? PREDICT_BATCH_SIZE);
+  const batches = batched(snapshot.options, snapshot.optionsPerBatch);
   let atEstimates = 0;
   for (const [index, options] of batches.entries()) {
     try {

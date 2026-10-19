@@ -8,6 +8,7 @@ import {
   ctx,
   fakeQuoter,
   fakeReader,
+  gasLimitFor,
   option,
   snapshot,
   WAD,
@@ -152,6 +153,7 @@ describe("createPredictRun when the wallet never answers a send that lands", () 
               : chainState({ underlying: WAD }),
       }),
       ...chain.reader,
+      blockGasLimit: () => Promise.resolve(gasLimitFor(1)),
     };
     const driver = createPredictRun({
       gateway: chain.gateway,
@@ -160,7 +162,6 @@ describe("createPredictRun when the wallet never answers a send that lands", () 
       flowId: "predict-lost-answer-retry",
       ctx: () => ctx(),
       snapshot: () => snapshot({ options: [first, second] }),
-      optionsPerBatch: 1,
       unansweredSend: { waitMs: 10, pollMs: 5 },
     });
     drivers.push(driver);

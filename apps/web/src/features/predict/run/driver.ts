@@ -26,6 +26,7 @@ import {
   CreditsUnavailableError,
   isTx,
   NoRouteError,
+  optionsPerBatch,
   planPredict,
   PredictConfigError,
   QuoteFailedError,
@@ -34,7 +35,7 @@ import {
   TxPendingError,
   type PredictDeps,
 } from "../flow/plan";
-import type { PredictCtx, PredictReader, PredictRequest, PredictSnapshot } from "../flow/types";
+import type { PlannedRequest, PredictCtx, PredictReader, PredictRequest, PredictSnapshot } from "../flow/types";
 
 /** The trade wallet, or the wallet's credits, hold less than the prediction was shown to draw on. */
 class TradeWalletShortError extends Error {}
@@ -90,7 +91,6 @@ export function createPredictRun(args: {
   ctx: () => PredictCtx;
   snapshot: () => PredictRequest;
   store?: FlowRunStore;
-  optionsPerBatch?: number;
   onComplete?: () => void;
   now?: () => number;
   /** How long, and how often, the chain is read for a send the wallet never answered. */
@@ -124,7 +124,6 @@ export function createPredictRun(args: {
     reader: args.reader,
     quoter: args.quoter,
     creditsQuoter: args.creditsQuoter,
-    optionsPerBatch: args.optionsPerBatch,
     onLeftOut: (option, _reason, stepId) => {
       const left = leavingOut.get(stepId) ?? [];
       if (!left.includes(option.childMarket)) leavingOut.set(stepId, [...left, option.childMarket]);
@@ -413,7 +412,7 @@ export function createPredictRun(args: {
   });
 
   /** Pins the trade wallet's balance before anything is signed, and checks a route exists. */
-  async function prepare(ctx: PredictCtx, requested: PredictRequest): Promise<PredictSnapshot> {
+  async function prepare(ctx: PredictCtx, requested: PlannedRequest): Promise<PredictSnapshot> {
     const [collateralAtStart, creditsAtStart, latest] = await Promise.all([
       args.reader.collateralBalance(ctx.executor),
       args.reader.creditsBalance(ctx.executor),
@@ -440,24 +439,31 @@ export function createPredictRun(args: {
     leavingOut.clear();
     moneyMoved = false;
 
-    const requested = args.snapshot();
+    const requested: PredictRequest = args.snapshot();
     const ctx = args.ctx();
     unansweredSends.clear();
-    const steps = checkingUnanswered(planPredict(requested, deps));
-    // The rows exist before the run does, so the popup opens on the list rather than on nothing.
-    planned = steps.map((step) => ({ id: step.id, label: step.label, state: "pending" }));
     const check = {};
     checking = check;
     notify();
 
-    const checked = await prepare(ctx, requested).then(
-      (snapshot) => ({ snapshot }),
+    const checked = await (async () => {
+      const gasLimit = await args.reader.blockGasLimit();
+      const sized = { ...requested, optionsPerBatch: optionsPerBatch(gasLimit, requested.creditsToSpend > 0n) };
+      const steps = checkingUnanswered(planPredict(sized, deps));
+      // The rows exist before the run does, so the popup shows the list while the routes are checked.
+      if (checking === check) {
+        planned = steps.map((step) => ({ id: step.id, label: step.label, state: "pending" }));
+        notify();
+      }
+      return { steps, snapshot: await prepare(ctx, sized) };
+    })().then(
+      (ready) => ready,
       (error: unknown) => ({ error }),
     );
     if (checking !== check) return;
     checking = undefined;
     if ("error" in checked) throw checked.error;
-    await orchestrator.start({ flowId: args.flowId, snapshot: checked.snapshot, ctx, steps });
+    await orchestrator.start({ flowId: args.flowId, snapshot: checked.snapshot, ctx, steps: checked.steps });
   });
 
   return {

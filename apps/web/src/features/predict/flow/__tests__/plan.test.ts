@@ -10,7 +10,9 @@ import { LEG_HEADROOM_BPS } from "../../utils/plan";
 import {
   AtEstimatesError,
   createPredictHooks,
-  PREDICT_BATCH_SIZE,
+  batchGas,
+  BATCH_GAS_SHARE_BPS,
+  optionsPerBatch,
   planPredict,
   PredictConfigError,
   QuoteFailedError,
@@ -85,7 +87,7 @@ describe("planPredict", () => {
   it("gives each batch of options its own transaction", () => {
     const options = Array.from({ length: 5 }, (_, index) => option(index + 1));
 
-    const steps = planPredict(snapshot({ options }), deps({ optionsPerBatch: 2 }));
+    const steps = planPredict(snapshot({ options, optionsPerBatch: 2 }), deps());
 
     expect(steps.map((step) => step.id)).toEqual([
       STEP_ID.createExecutor,
@@ -97,11 +99,38 @@ describe("planPredict", () => {
   });
 
   it("puts every option in one transaction up to the batch size", () => {
-    const options = Array.from({ length: PREDICT_BATCH_SIZE }, (_, index) => option(index + 1));
+    const options = Array.from({ length: 4 }, (_, index) => option(index + 1));
 
-    const steps = planPredict(snapshot({ options }), deps());
+    const steps = planPredict(snapshot({ options, optionsPerBatch: 4 }), deps());
 
     expect(steps.filter((step) => step.id.startsWith("predict-"))).toHaveLength(1);
+  });
+
+  it("refuses a batch size below one option", () => {
+    for (const size of [0, -1, 1.5]) {
+      expect(() => planPredict(snapshot({ optionsPerBatch: size }), deps())).toThrow(PredictConfigError);
+    }
+  });
+});
+
+describe("optionsPerBatch", () => {
+  const budget = (gasLimit: bigint) => (gasLimit * BATCH_GAS_SHARE_BPS) / 10_000n;
+
+  it("fits as many options as the block-gas budget holds, the credits leg counted", () => {
+    const gnosis = 17_000_000n;
+    for (const credits of [false, true]) {
+      const size = optionsPerBatch(gnosis, credits);
+      expect(batchGas(size, credits)).toBeLessThanOrEqual(budget(gnosis));
+      expect(batchGas(size + 1, credits)).toBeGreaterThan(budget(gnosis));
+    }
+  });
+
+  it("grows with the block gas limit", () => {
+    expect(optionsPerBatch(60_000_000n, false)).toBeGreaterThan(optionsPerBatch(17_000_000n, false));
+  });
+
+  it("still sends one option at a time where the budget holds none", () => {
+    expect(optionsPerBatch(1_000_000n, true)).toBe(1);
   });
 });
 
@@ -112,8 +141,8 @@ describe("the predict step", () => {
     batch = 1,
     optionsPerBatch?: number,
   ) => {
-    const resolved = deps({ ...overrides, ...(optionsPerBatch === undefined ? {} : { optionsPerBatch }) });
-    const steps = planPredict(snap, resolved);
+    const resolved = deps(overrides);
+    const steps = planPredict(optionsPerBatch === undefined ? snap : { ...snap, optionsPerBatch }, resolved);
     const step = steps.find((each) => each.id === STEP_ID.predict(batch))!;
     return { tx: await step.build(ctx(), snap), deps: resolved };
   };

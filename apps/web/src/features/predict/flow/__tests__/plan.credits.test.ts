@@ -231,8 +231,8 @@ describe("the first batch of a credits run", () => {
   it("spends credits in the first batch only", async () => {
     const options = [option(1), option(2)];
     // the first batch's parent split already gave every option its underlying
-    const used = deps({ optionsPerBatch: 1, reader: fakeReader({ state: () => chainState({ underlying: WAD }) }) });
-    const tx = await build(creditsRun({ options }), used, ctx(), 2);
+    const used = deps({ reader: fakeReader({ state: () => chainState({ underlying: WAD }) }) });
+    const tx = await build(creditsRun({ options, optionsPerBatch: 1 }), used, ctx(), 2);
 
     expect(decodeFunctionData({ abi: tradeExecutorAbi, data: tx.data! }).functionName).toBe("batchExecute");
     expect(valueCalls(tx.data!).some((call) => call.to === addresses.manager)).toBe(false);

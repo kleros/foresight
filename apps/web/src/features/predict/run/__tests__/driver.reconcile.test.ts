@@ -14,6 +14,7 @@ import {
   ctx,
   fakeQuoter,
   fakeReader,
+  gasLimitFor,
   option,
   snapshot,
   WAD,
@@ -60,10 +61,14 @@ function setup(gateway: TxGateway, store?: FlowRunStore, flowId = `predict-recon
   const driver = createPredictRun({
     gateway,
     store,
-    reader: fakeReader({ deployed: true, collateral: 0n, state: () => chainState({ underlying: WAD }) }),
+    reader: fakeReader({
+      deployed: true,
+      collateral: 0n,
+      state: () => chainState({ underlying: WAD }),
+      blockGasLimit: gasLimitFor(1),
+    }),
     quoter: fakeQuoter(),
     flowId,
-    optionsPerBatch: 1,
     ctx: () => ctx(),
     snapshot: () => snapshot({ options: [option(1), option(2)], deposit: WAD, collateralIn: WAD }),
   });
