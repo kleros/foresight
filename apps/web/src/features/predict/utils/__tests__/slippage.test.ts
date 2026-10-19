@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_SLIPPAGE, HIGH_SLIPPAGE_BPS, MAX_SLIPPAGE_BPS } from "../../oracle/tolerances";
+import { DEFAULT_SLIPPAGE, HIGH_SLIPPAGE_BPS, LOW_SLIPPAGE_BPS, MAX_SLIPPAGE_BPS } from "../../oracle/tolerances";
 import {
   isHighSlippage,
+  isLowSlippage,
   normalizeSlippageSettings,
   parseSlippagePercent,
   resolveSlippage,
@@ -17,7 +18,7 @@ describe("parseSlippagePercent", () => {
     [".3", 30],
     ["2.", 200],
     [" 1.25 % ", 125],
-    ["0", 0],
+    ["0.01", 1],
   ])("reads %j as %i basis points", (text, bps) => {
     expect(parseSlippagePercent(text)).toBe(bps);
   });
@@ -26,7 +27,7 @@ describe("parseSlippagePercent", () => {
     expect(parseSlippagePercent("  ")).toBeNull();
   });
 
-  it.each(["abc", "1.234", "-1", "1e2", "1.2.3"])("refuses %j", (text) => {
+  it.each(["abc", "1.234", "-1", "1e2", "1.2.3", "0", "0.00", ".0"])("refuses %j", (text) => {
     expect(parseSlippagePercent(text)).toBe("invalid");
   });
 
@@ -58,13 +59,14 @@ describe("resolveSlippage", () => {
 
 describe("normalizeSlippageSettings", () => {
   it("keeps whole basis points in range", () => {
-    expect(normalizeSlippageSettings({ tradeBps: 250, creditsBps: 0 })).toEqual({ tradeBps: 250, creditsBps: 0 });
+    expect(normalizeSlippageSettings({ tradeBps: 250, creditsBps: 1 })).toEqual({ tradeBps: 250, creditsBps: 1 });
   });
 
   it.each([
     ["a fraction", 1.5],
     ["a value over the cap", MAX_SLIPPAGE_BPS + 1],
     ["a negative value", -1],
+    ["zero, which no swap can fill at", 0],
     ["a string", "100"],
   ])("reads %s as Auto", (_label, value) => {
     expect(normalizeSlippageSettings({ tradeBps: value, creditsBps: 50 })).toEqual({ tradeBps: null, creditsBps: 50 });
@@ -80,5 +82,14 @@ describe("isHighSlippage", () => {
     expect(isHighSlippage("tradeBps", HIGH_SLIPPAGE_BPS.tradeBps)).toBe(false);
     expect(isHighSlippage("tradeBps", HIGH_SLIPPAGE_BPS.tradeBps + 1)).toBe(true);
     expect(isHighSlippage("creditsBps", HIGH_SLIPPAGE_BPS.creditsBps + 1)).toBe(true);
+  });
+});
+
+describe("isLowSlippage", () => {
+  it("warns only below each kind's threshold", () => {
+    expect(isLowSlippage("tradeBps", LOW_SLIPPAGE_BPS.tradeBps)).toBe(false);
+    expect(isLowSlippage("tradeBps", LOW_SLIPPAGE_BPS.tradeBps - 1)).toBe(true);
+    expect(isLowSlippage("creditsBps", LOW_SLIPPAGE_BPS.creditsBps)).toBe(false);
+    expect(isLowSlippage("creditsBps", LOW_SLIPPAGE_BPS.creditsBps - 1)).toBe(true);
   });
 });

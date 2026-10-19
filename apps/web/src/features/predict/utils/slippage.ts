@@ -1,5 +1,11 @@
 import type { PredictSlippage } from "../flow/types";
-import { DEFAULT_SLIPPAGE, HIGH_SLIPPAGE_BPS, MAX_SLIPPAGE_BPS } from "../oracle/tolerances";
+import {
+  DEFAULT_SLIPPAGE,
+  HIGH_SLIPPAGE_BPS,
+  LOW_SLIPPAGE_BPS,
+  MAX_SLIPPAGE_BPS,
+  MIN_SLIPPAGE_BPS,
+} from "../oracle/tolerances";
 
 export type SlippageKind = keyof PredictSlippage;
 
@@ -9,7 +15,7 @@ export type SlippageSettings = Record<SlippageKind, number | null>;
 export const AUTO_SLIPPAGE: SlippageSettings = { tradeBps: null, creditsBps: null };
 
 const isBps = (value: unknown): value is number =>
-  typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= MAX_SLIPPAGE_BPS;
+  typeof value === "number" && Number.isInteger(value) && value >= MIN_SLIPPAGE_BPS && value <= MAX_SLIPPAGE_BPS;
 
 /** Persisted settings are untrusted: a value that is not a whole number of basis points in range reads as Auto. */
 export function normalizeSlippageSettings(value: unknown): SlippageSettings {
@@ -29,7 +35,7 @@ export function resolveSlippage(settings: SlippageSettings): PredictSlippage {
 }
 
 /**
- * A typed percent as basis points: up to two decimals, a comma read as a point, 0 to the cap.
+ * A typed percent as basis points: up to two decimals, a comma read as a point, 0.01 to the cap.
  * Null for empty text, which is Auto; "invalid" for anything else.
  */
 export function parseSlippagePercent(text: string): number | null | "invalid" {
@@ -40,7 +46,7 @@ export function parseSlippagePercent(text: string): number | null | "invalid" {
   const whole = match[1] ?? "0";
   const fraction = (match[2] ?? match[3] ?? "").padEnd(2, "0");
   const bps = Number(whole) * 100 + Number(fraction);
-  return bps <= MAX_SLIPPAGE_BPS ? bps : "invalid";
+  return bps >= MIN_SLIPPAGE_BPS && bps <= MAX_SLIPPAGE_BPS ? bps : "invalid";
 }
 
 /** Basis points as a percent with no trailing zeros: 100 is `1`, 20 is `0.2`, 125 is `1.25`. */
@@ -50,3 +56,6 @@ export function slippagePercent(bps: number): string {
 
 /** A value above which a swap can lose far more than the pools usually move. */
 export const isHighSlippage = (kind: SlippageKind, bps: number): boolean => bps > HIGH_SLIPPAGE_BPS[kind];
+
+/** A value below which a swap is likely to revert on any move between its quote and its send. */
+export const isLowSlippage = (kind: SlippageKind, bps: number): boolean => bps < LOW_SLIPPAGE_BPS[kind];

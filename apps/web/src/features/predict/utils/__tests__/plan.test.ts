@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { PoolLiquidity } from "@/types/pool";
 
-import { MAX_BUY_BUDGET_SHARE_BPS, SLIPPAGE_BPS } from "../../oracle/tolerances";
+import { MAX_SLIPPAGE_BPS, SLIPPAGE_BPS } from "../../oracle/tolerances";
 import {
   buyBudgetShareBps,
   MIN_LEG_WEI,
@@ -323,12 +323,10 @@ describe("planBuys", () => {
 });
 
 describe("the buy budget's share of what the sells and merge return", () => {
-  it("stays below what the oracle's slippage leaves", () => {
-    expect(buyBudgetShareBps(SLIPPAGE_BPS)).toBeLessThan(BigInt(MAX_BUY_BUDGET_SHARE_BPS));
-  });
-
-  it("stays below what 3% slippage leaves", () => {
-    expect(buyBudgetShareBps(300)).toBeLessThan(10_000n - 300n);
+  it("stays below what every slippage setting leaves, from none to the cap", () => {
+    for (let slippageBps = 0; slippageBps <= MAX_SLIPPAGE_BPS; slippageBps += 1) {
+      expect(buyBudgetShareBps(slippageBps) + BigInt(slippageBps)).toBeLessThan(10_000n);
+    }
   });
 
   for (const slippageBps of [SLIPPAGE_BPS, 300]) {

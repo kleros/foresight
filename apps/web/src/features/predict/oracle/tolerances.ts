@@ -15,9 +15,6 @@ export const PRICE_TOLERANCE_TICKS = 1;
 /** Rounding allowed between an xDAI deposit's expected and minted sDAI, in wei. */
 export const DUST_WEI = 10n ** 6n;
 
-/** The buy budget's safety share must stay below what the slippage setting leaves. */
-export const MAX_BUY_BUDGET_SHARE_BPS = 10_000 - SLIPPAGE_BPS;
-
 /**
  * Hundredths of a percent the credits swap's output may fall below its quote, by default; the
  * surplus over this floor stays in the trade wallet as WXDAI.
@@ -30,5 +27,11 @@ export const DEFAULT_SLIPPAGE: PredictSlippage = { tradeBps: SLIPPAGE_BPS, credi
 /** The most slippage a run accepts on any swap, as CowSwap caps it: 50%. */
 export const MAX_SLIPPAGE_BPS = 5_000;
 
+/** The least custom slippage: a swap held to its exact quote reverts on a pool's rounding alone. */
+export const MIN_SLIPPAGE_BPS = 1;
+
 /** Custom slippage above these warns in the settings: 5% on trades, 1% on the credits swap's stable pair. */
 export const HIGH_SLIPPAGE_BPS: Readonly<PredictSlippage> = { tradeBps: 500, creditsBps: 100 };
+
+/** Custom slippage under these warns in the settings: 0.1% on trades, 0.05% on the credits swap. */
+export const LOW_SLIPPAGE_BPS: Readonly<PredictSlippage> = { tradeBps: 10, creditsBps: 5 };
