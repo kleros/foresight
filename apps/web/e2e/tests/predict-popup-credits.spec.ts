@@ -38,6 +38,8 @@ async function openCredits(page: Page, credits: string, theme: string) {
       element
         .getAnimations({ subtree: true })
         .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
+        // the cue's nudge ends where it starts, and waiting it out would end it
+        .filter((animation) => (animation as CSSAnimation).animationName !== "fsNudgeDown")
         .map((animation) => animation.finished.catch(() => undefined)),
     ),
   );

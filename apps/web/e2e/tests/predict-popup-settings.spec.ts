@@ -37,6 +37,8 @@ async function settle(dialog: Locator) {
       element
         .getAnimations({ subtree: true })
         .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
+        // the cue's nudge ends where it starts, and waiting it out would end it
+        .filter((animation) => (animation as CSSAnimation).animationName !== "fsNudgeDown")
         .filter((animation) => animation.timeline === document.timeline)
         .map((animation) => animation.finished.catch(() => undefined)),
     ),
