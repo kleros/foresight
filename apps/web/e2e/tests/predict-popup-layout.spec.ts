@@ -628,15 +628,23 @@ test.describe("the more-below cue's arrow", () => {
     }
   }
 
-  test("stops for good once the body is scrolled", async ({ page }) => {
+  test("keeps nudging through the body's own scrolls, and stops for good at the visitor's wheel", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 640 });
     const events = await recordNudges(page);
     const dialog = await openPopup(page, 10);
     const scroller = page.getByTestId("predict-body").locator("..");
+    const arrow = dialog.getByTestId("more-below-arrow");
     expect(await nudges(page)).toHaveLength(1);
 
     await scroller.evaluate((element) => element.scrollBy(0, 8));
-    await expect(dialog.getByTestId("more-below-arrow")).not.toHaveClass(/fs-nudge-down/);
+    await scroller.evaluate((element) => element.scrollTo(0, 0));
+    await page.waitForTimeout(300);
+    await expect(arrow).toHaveClass(/fs-nudge-down/);
+
+    const box = (await scroller.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(0, 8);
+    await expect(arrow).not.toHaveClass(/fs-nudge-down/);
     await scroller.evaluate((element) => element.scrollTo(0, 0));
     await page.waitForTimeout(500);
 
@@ -645,6 +653,36 @@ test.describe("the more-below cue's arrow", () => {
     const seen = await events();
     expect(seen.filter((event) => event.startsWith("animationstart"))).toHaveLength(1);
     expect(seen).not.toContain("animationiteration:fsNudgeDown");
+  });
+
+  test("nudges in a popup opened from its button that scrolls its body to a moved figure", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 640 });
+    await page.addInitScript(() => {
+      const scrolls: number[] = [];
+      (window as unknown as { bodyScrolls: number[] }).bodyScrolls = scrolls;
+      document.addEventListener(
+        "scroll",
+        (event) => {
+          const target = event.target as Element;
+          if (target.firstElementChild?.getAttribute("data-testid") === "predict-body") scrolls.push(target.scrollTop);
+        },
+        true,
+      );
+    });
+    await openHarness(page, `${harness.url}?options=10&state=moved&credits=enough&open=press`);
+    await page.getByRole("button", { name: "Open predict" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("button", { name: "Close" })).toBeVisible();
+    await expect(dialog).toBeFocused();
+
+    // the moved figure is scrolled to once Details has unfolded
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { bodyScrolls: number[] }).bodyScrolls.length))
+      .toBeGreaterThan(0);
+    await page.waitForTimeout(600);
+    await expect(dialog.getByTestId("more-below")).toHaveCSS("opacity", "1");
+    await expect(dialog.getByTestId("more-below-arrow")).toHaveClass(/fs-nudge-down/);
+    expect(await nudges(page)).toEqual([{ name: "fsNudgeDown", iterations: 3, properties: ["transform"] }]);
   });
 
   for (const theme of ["light", "dark"]) {
@@ -662,25 +700,38 @@ test.describe("the more-below cue's arrow", () => {
     });
   }
 
-  test("sits under a padded hairline, inside its strip at either end of the nudge", async ({ page }) => {
+  test("lifts 3px and drops 6px, under its hairline and clear of the status line", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 640 });
-    const dialog = await openPopup(page, 10);
+    // opened once the fonts are in, so the bursts are still running when they are measured
+    await openHarness(page, `${harness.url}?options=10&state=idle&leftOut=1&open=press`);
+    await page.getByRole("button", { name: "Open predict" }).click();
+    const dialog = page.getByRole("dialog");
     const cue = dialog.getByTestId("more-below");
     const arrow = dialog.getByTestId("more-below-arrow");
+    await expect(arrow).toHaveClass(/fs-nudge-down/);
+    await arrow.evaluate((element) => element.getAnimations().forEach((animation) => animation.pause()));
+    await settle(dialog);
     const strip = (await cue.boundingBox())!;
+    const status = (await dialog.getByRole("status").locator("span").boundingBox())!;
     expect(await cue.evaluate((element) => getComputedStyle(element).paddingTop)).toBe("6px");
 
     // the delay, then the lift's peak at 12.5% and the drop's at 25% of 2s
-    for (const at of [0, 500, 750]) {
-      await arrow.evaluate((element, time) => {
+    for (const [at, shift] of [
+      [0, 0],
+      [500, -3],
+      [750, 6],
+    ] as const) {
+      const moved = await arrow.evaluate((element, time) => {
         for (const animation of element.getAnimations()) {
           animation.pause();
           animation.currentTime = time;
         }
+        return new DOMMatrixReadOnly(getComputedStyle(element).transform).f;
       }, at);
+      expect.soft(moved, `${at}ms: moved by`).toBe(shift);
       const box = (await arrow.boundingBox())!;
       expect.soft(box.y, `${at}ms: below the hairline`).toBeGreaterThan(strip.y + 1);
-      expect.soft(box.y + box.height, `${at}ms: inside the strip`).toBeLessThanOrEqual(strip.y + strip.height);
+      expect.soft(box.y + box.height, `${at}ms: above the status text`).toBeLessThan(status.y);
     }
   });
 });
@@ -1413,6 +1464,100 @@ for (const viewport of [
           .map((element) => element.outerHTML.slice(0, 80));
       });
       expect(strays, "only the track paints along its line").toEqual([]);
+    });
+  }
+}
+
+for (const viewport of [
+  { width: 1280, height: 800 },
+  { width: 375, height: 812 },
+]) {
+  for (const theme of ["light", "dark"]) {
+    test(`the share slider's rail, fill and thumb are 3:1 against what they sit on, ${viewport.width} x ${viewport.height} ${theme}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      const dialog = await openPopup(page, 2, "idle", undefined, `&theme=${theme}`);
+      const slider = dialog.getByTestId("amount-slider");
+      const [track, fill, thumb] = await Promise.all([
+        slider.locator("#slider-track").boundingBox(),
+        slider.locator("#slider-fill").boundingBox(),
+        slider.locator("div:has(>#slider-label)").boundingBox(),
+      ]);
+      const shot = (await page.screenshot()).toString("base64");
+      // halfway along the unfilled rail, and along the fill clear of its rounded end and the thumb
+      const open = Math.round((thumb!.x + thumb!.width + track!.x + track!.width) / 2);
+      const centre = Math.floor(track!.y + track!.height / 2);
+      const points = {
+        panel: [open, Math.floor(track!.y) - 5],
+        edge: [open, Math.floor(track!.y)],
+        rail: [open, centre],
+        fillStart: [Math.round(fill!.x + 6), centre],
+        fillEnd: [Math.round(thumb!.x - 4), centre],
+        thumbPanel: [Math.round(thumb!.x + thumb!.width / 2), Math.floor(thumb!.y) - 3],
+        thumbRing: [Math.round(thumb!.x + thumb!.width / 2), Math.floor(thumb!.y) + 1],
+      };
+      const px = await page.evaluate(
+        async ({ shot, points }) => {
+          const bitmap = await createImageBitmap(await (await fetch(`data:image/png;base64,${shot}`)).blob());
+          const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+          const context = canvas.getContext("2d")!;
+          context.drawImage(bitmap, 0, 0);
+          const scale = bitmap.width / window.innerWidth;
+          return Object.fromEntries(
+            Object.entries(points).map(([name, [x, y]]) => [
+              name,
+              `rgb(${context
+                .getImageData(Math.floor(x! * scale), Math.floor(y! * scale), 1, 1)
+                .data.slice(0, 3)
+                .join(", ")})`,
+            ]),
+          );
+        },
+        { shot, points },
+      );
+
+      expect.soft(contrast(px.edge!, px.panel!), "the rail's edge on the panel").toBeGreaterThanOrEqual(3);
+      expect.soft(contrast(px.fillStart!, px.rail!), "the fill's start on the rail").toBeGreaterThanOrEqual(3);
+      expect.soft(contrast(px.fillEnd!, px.rail!), "the fill's end on the rail").toBeGreaterThanOrEqual(3);
+      expect.soft(contrast(px.thumbRing!, px.thumbPanel!), "the thumb's ring on the panel").toBeGreaterThanOrEqual(3);
+    });
+  }
+}
+
+/** Four-decimal credits from the visitor's wallet and a seven-figure xDAI deposit: the longest the funds step says. */
+const WORST_FUNDS = "&trades=worst&pay=native&credits=odd";
+
+for (const viewport of [
+  { width: 320, height: 568 },
+  { width: 375, height: 812 },
+  { width: 1280, height: 800 },
+]) {
+  for (const theme of ["light", "dark"]) {
+    test(`the Add funds step says credits and a seven-figure xDAI deposit whole, in a row of one height, ${viewport.width} x ${viewport.height} ${theme}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      const heights: number[] = [];
+      for (const state of ["idle", "signing", "failed"] as const) {
+        const dialog = await openPopup(page, 2, state, undefined, `${WORST_FUNDS}&theme=${theme}`);
+        const row = dialog.locator(".predict-steps > li").filter({ hasText: "Add funds" });
+        heights.push((await row.boundingBox())!.height);
+        if (state !== "idle") continue;
+
+        const value = row.locator("h2 + p");
+        await expect(value).toHaveText(/^16\.2588\scredits\s\+\s1,234,\d{3}\.\d{4}\sxDAI$/);
+        const fit = await value.evaluate((element) => {
+          const box = element.getBoundingClientRect();
+          const column = element.closest("li")!.querySelector(":scope > div:nth-child(2)")!.getBoundingClientRect();
+          return {
+            cut: element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1,
+            inside: box.left >= column.left - 1 && box.right <= column.right + 1 && box.bottom <= column.bottom + 1,
+          };
+        });
+        expect(fit).toEqual({ cut: false, inside: true });
+      }
+      expect(new Set(heights).size, `the row's heights across idle, signing and failed: ${heights}`).toBe(1);
     });
   }
 }

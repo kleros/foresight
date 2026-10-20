@@ -364,7 +364,7 @@ describe("the funds step names what the visitor pays", () => {
     await waitFor(() => expect(fundsSubtitle(popup)).toBe("5 sDAI"));
   });
 
-  it("names an xDAI payment in xDAI with the sDAI it becomes, held from Predict until the run stops", async () => {
+  it("names an xDAI payment in xDAI, held from Predict until the run stops", async () => {
     wallet.xDai = 8n * WAD + GAS_RESERVE_WEI;
     renderPage();
     const popup = await openPopup();
@@ -372,7 +372,7 @@ describe("the funds step names what the visitor pays", () => {
 
     await userEvent.type(amountField(popup), "5");
     // 5 xDAI is 4 sDAI at 1.25 xDAI per sDAI
-    await waitFor(() => expect(fundsSubtitle(popup)).toBe("5 xDAI (≈ 4 sDAI)"));
+    await waitFor(() => expect(fundsSubtitle(popup)).toBe("5 xDAI"));
 
     await userEvent.click(popup.getByRole("button", { name: "Predict" }));
     expect(driver.start).toHaveBeenCalledOnce();
@@ -380,10 +380,10 @@ describe("the funds step names what the visitor pays", () => {
     // 1 sDAI in the trade wallet leaves 3 sDAI, 3.75 xDAI, to add
     wallet.trade = WAD;
     act(() => run.set({ ...idle, stage: "signing" }));
-    expect(fundsSubtitle(popup)).toBe("5 xDAI (≈ 4 sDAI)");
+    expect(fundsSubtitle(popup)).toBe("5 xDAI");
 
     act(() => run.set(idle));
-    await waitFor(() => expect(fundsSubtitle(popup)).toBe("3.75 xDAI (≈ 3 sDAI)"));
+    await waitFor(() => expect(fundsSubtitle(popup)).toBe("3.75 xDAI"));
   });
 });
 

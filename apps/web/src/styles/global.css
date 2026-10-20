@@ -57,7 +57,6 @@
   --color-fs-popup-on-axis: var(--fs-popup-on-axis);
   --color-fs-popup-cta-disabled: var(--fs-popup-cta-disabled);
   --color-fs-popup-cta-disabled-text: var(--fs-popup-cta-disabled-text);
-  --color-fs-popup-track: var(--fs-popup-track);
   --radius-fs-popup: var(--fs-radius-popup);
   --radius-fs-panel: var(--fs-radius-panel);
   --radius-fs-control: var(--fs-radius-control);
@@ -463,23 +462,29 @@
   gap: 2px 12px;
 }
 .predict-steps h2 {
-  min-width: 0;
-  overflow: hidden;
+  flex: none;
   font: 600 14px/20px var(--font-sans);
   color: var(--fs-popup-text);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 .predict-steps h2 + p {
-  flex: none;
+  flex: 0 1 auto;
   min-width: 0;
-  max-width: 60%;
   overflow: hidden;
   font: 400 13px/18px var(--font-sans);
   font-variant-numeric: tabular-nums;
   color: var(--fs-popup-text-2);
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+/* the funds step's credits and deposit wrap between them onto a second line, 36px of its 40 */
+.predict-steps > li:nth-child(2) h2 + p {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  text-align: right;
 }
 .predict-steps li:has([data-bullet="running"]) h2 + p {
   color: var(--fs-popup-text);
@@ -511,8 +516,22 @@
     align-items: flex-start;
   }
   .predict-steps h2 + p {
-    max-width: 100%;
     line-height: 16px;
+  }
+  .predict-steps > li:nth-child(2) h2 + p {
+    display: block;
+    white-space: nowrap;
+    text-align: left;
+  }
+}
+/* under 18rem credits and a seven-figure deposit outgrow one line, so the funds step holds a second */
+@container (max-width: 18rem) {
+  .predict-steps > li:nth-child(2) > div:nth-child(2) {
+    height: 56px;
+  }
+  .predict-steps > li:nth-child(2) h2 + p {
+    display: -webkit-box;
+    white-space: normal;
   }
 }
 .predict-steps small {

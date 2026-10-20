@@ -116,18 +116,70 @@ describe("ScrollFade's cue arrow", () => {
     expect(arrow).not.toHaveClass("fs-nudge-down");
   });
 
-  it("stays still for good once the area is scrolled", () => {
+  it("keeps nudging through a scroll the page makes itself", () => {
     sized(340, 300);
     renderCue();
-    const arrow = screen.getByTestId("more-below-arrow");
     const scroller = screen.getByText("body").parentElement!;
 
     fireEvent.scroll(scroller);
+    expect(screen.getByTestId("more-below-arrow")).toHaveClass("fs-nudge-down");
+  });
+
+  const visitorScrolls: Array<[string, (scroller: HTMLElement) => void]> = [
+    ["a wheel", (scroller) => fireEvent.wheel(scroller, { deltaY: 40 })],
+    ["a touch drag", (scroller) => fireEvent.touchMove(scroller)],
+    ...["ArrowDown", "PageDown", "End", " "].map(
+      (key) =>
+        [`the ${JSON.stringify(key)} key`, (scroller: HTMLElement) => fireEvent.keyDown(scroller, { key })] as [
+          string,
+          (scroller: HTMLElement) => void,
+        ],
+    ),
+  ];
+  for (const [name, scroll] of visitorScrolls) {
+    it(`stays still for good once the visitor scrolls the area with ${name}`, () => {
+      sized(340, 300);
+      renderCue();
+      const arrow = screen.getByTestId("more-below-arrow");
+      const scroller = screen.getByText("body").parentElement!;
+
+      scroll(scroller);
+      fireEvent.scroll(scroller);
+      expect(arrow).not.toHaveClass("fs-nudge-down");
+      // still more below after the scroll, so the cue stays
+      expect(screen.getByTestId("more-below")).toHaveClass("opacity-100");
+      fireEvent(window, new Event("resize"));
+      expect(arrow).not.toHaveClass("fs-nudge-down");
+    });
+  }
+
+  it("stays still for good once the arrow keys scroll the area from a button in it, and not at its space", () => {
+    sized(340, 300);
+    render(
+      <ScrollFade cue="More below">
+        <button type="button">Details</button>
+      </ScrollFade>,
+    );
+    const button = screen.getByRole("button", { name: "Details" });
+    const arrow = screen.getByTestId("more-below-arrow");
+
+    fireEvent.keyDown(button, { key: " " });
+    expect(arrow).toHaveClass("fs-nudge-down");
+    fireEvent.keyDown(button, { key: "ArrowDown" });
     expect(arrow).not.toHaveClass("fs-nudge-down");
-    // still more below after the scroll, so the cue stays
-    expect(screen.getByTestId("more-below")).toHaveClass("opacity-100");
-    fireEvent(window, new Event("resize"));
-    expect(arrow).not.toHaveClass("fs-nudge-down");
+  });
+
+  it("keeps nudging while the arrow keys and space go to a field in the area", () => {
+    sized(340, 300);
+    render(
+      <ScrollFade cue="More below">
+        <input aria-label="Amount" />
+      </ScrollFade>,
+    );
+    const field = screen.getByRole("textbox", { name: "Amount" });
+
+    for (const key of ["ArrowDown", "PageDown", " "]) fireEvent.keyDown(field, { key });
+    expect(screen.getByTestId("more-below-arrow")).toHaveClass("fs-nudge-down");
   });
 
   it("does not nudge under reduced motion", () => {

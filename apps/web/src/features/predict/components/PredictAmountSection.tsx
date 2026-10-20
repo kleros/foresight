@@ -309,10 +309,12 @@ function AmountSlider({
             "relative mt-0 w-full",
             "[&>div:last-child]:hidden [&_#slider-label]:hidden",
             "[&_div:has(>#slider-track)]:-my-3.5 [&_div:has(>#slider-track)]:h-11",
-            "[&_#slider-fill]:h-1 [&_#slider-track]:h-1 [&_#slider-track]:bg-fs-popup-track",
+            "[&_#slider-fill]:h-1.5 [&_#slider-track]:h-1.5",
+            // an edge the panel can be told from, round a light rail the fill stands out on
+            "[&_#slider-track]:shadow-[inset_0_0_0_1px_var(--fs-popup-track-edge)]",
             "[&_#slider-fill]:[background:var(--fs-popup-axis)]",
             "[&_div:has(>#slider-label)]:size-4 [&_div:has(>#slider-label)]:border-2",
-            "[&_div:has(>#slider-label)]:border-(--fs-popup-axis-to) [&_div:has(>#slider-label)]:bg-fs-surface",
+            "[&_div:has(>#slider-label)]:bg-fs-surface",
             "[&_div:has(>#slider-label)[data-focus-visible]]:ring-fs-focus-ring",
             "[&_div:has(>#slider-label)[data-focus-visible]]:ring-2",
             "[&_div:has(>#slider-label)[data-focus-visible]]:ring-offset-fs-popup-panel",
@@ -325,6 +327,13 @@ function AmountSlider({
           rightLabel=""
           aria-label="Share of your balance"
           isDisabled={isDisabled}
+          // the library paints these inline, over any class
+          theme={{
+            sliderColor: "var(--fs-popup-axis-from)",
+            trackColor: "var(--fs-popup-track)",
+            thumbColor: "var(--fs-popup-axis-to)",
+            labelColor: "var(--fs-popup-text)",
+          }}
           callback={onChange}
           // without one the library renders a live <output> in the thumb
           formatter={(value) => `${value}%`}

@@ -73,25 +73,17 @@ const STAGE_COPY: Partial<Record<PredictProgress["stage"], string>> = {
   confirming: "Confirming…",
 };
 
-interface TokenAmount {
-  amount: bigint;
-  symbol: string;
-  decimals: number;
-}
-
 /** What the funds step adds, frozen when a run starts so a refreshed balance does not rewrite it. */
 export interface FundsToAdd {
   /** In the token the visitor pays with. */
   toAdd: bigint;
   symbol: string;
   decimals: number;
-  /** The collateral `toAdd` becomes, when the visitor pays in another token. */
-  collateral?: TokenAmount;
   /** Credits moved from the visitor's wallet to the trade wallet; absent when none move. */
   credits?: bigint;
 }
 
-/** An xDAI payment adds its deposit, which becomes `toAdd` collateral; a collateral payment adds `toAdd` itself. */
+/** An xDAI payment adds its deposit; a collateral payment adds `toAdd` itself. */
 export function fundsToAdd(
   funding: Funding | null,
   pay: { id: PayToken; symbol: string; decimals: number },
@@ -105,7 +97,6 @@ export function fundsToAdd(
     toAdd: funding?.deposit ?? 0n,
     symbol: pay.symbol,
     decimals: pay.decimals,
-    collateral: { amount: toAdd, ...collateral },
     ...credits,
   };
 }
@@ -120,7 +111,7 @@ export function predictSteps(
     progress: PredictProgress | null;
   },
 ): PredictSteps {
-  const { wallet, toAdd, symbol, decimals, collateral, credits = 0n, progress } = args;
+  const { wallet, toAdd, symbol, decimals, credits = 0n, progress } = args;
   // the driver reads a sent transaction's receipt under "confirming" with no step of its own running
   const reconciling =
     progress?.stage === "confirming" &&
@@ -155,10 +146,10 @@ export function predictSteps(
   const checking = progress?.stage === "quoting" && !runSteps.some((step) => step.state === "running");
   const predictRunning = runningBatch >= 0;
   const stageCopy = progress ? (STAGE_COPY[progress.stage] ?? "") : "";
-  const becomes = collateral && ` (≈ ${shownAmount(collateral.amount, collateral.decimals)} ${collateral.symbol})`;
   const adding = [
     ...(credits > 0n ? [`${shownAmount(credits, 18)} credits`] : []),
-    ...(toAdd > 0n ? [`${shownAmount(toAdd, decimals)} ${symbol}${becomes ?? ""}`] : []),
+    // the sDAI an xDAI deposit becomes is said under the amount and in Details
+    ...(toAdd > 0n ? [`${shownAmount(toAdd, decimals)} ${symbol}`] : []),
   ].join(" + ");
   // only a batch quotes, so the steps before one say only what the wallet is waiting on
   const txWait = progress?.stage === "signing" || progress?.stage === "confirming" ? stageCopy : "";

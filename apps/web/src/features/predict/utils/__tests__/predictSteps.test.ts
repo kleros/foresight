@@ -68,7 +68,7 @@ describe("predictSteps naming what the funds step adds", () => {
     expect(steps(fundsToAdd(funding, SDAI, SDAI)).rows[1]?.subtitle).toBe("10 sDAI");
   });
 
-  it("names an xDAI payment in xDAI, with the sDAI it becomes", () => {
+  it("names an xDAI payment in xDAI alone, as the summary under the amount names the sDAI", () => {
     const funding = planFunding({
       amount: 900n * WAD,
       ownWallet: 1000n * WAD,
@@ -76,7 +76,7 @@ describe("predictSteps naming what the funds step adds", () => {
       tokenPerCollateralWad: XDAI_PER_SDAI,
     });
 
-    expect(steps(fundsToAdd(funding, XDAI, SDAI)).rows[1]?.subtitle).toBe("900 xDAI (≈ 717.5466 sDAI)");
+    expect(steps(fundsToAdd(funding, XDAI, SDAI)).rows[1]?.subtitle).toBe("900 xDAI");
   });
 
   it("names only the xDAI the trade wallet does not already cover", () => {
@@ -87,7 +87,7 @@ describe("predictSteps naming what the funds step adds", () => {
       tokenPerCollateralWad: 1_250000000000000000n,
     });
 
-    expect(steps(fundsToAdd(funding, XDAI, SDAI)).rows[1]?.subtitle).toBe("775 xDAI (≈ 620 sDAI)");
+    expect(steps(fundsToAdd(funding, XDAI, SDAI)).rows[1]?.subtitle).toBe("775 xDAI");
   });
 
   it("says nothing is added when the trade wallet covers an xDAI payment", () => {
@@ -261,7 +261,7 @@ describe("predictSteps while adding funds", () => {
 });
 
 describe("the sDAI an xDAI payment becomes", () => {
-  it("reads the same in the summary under the amount and in the funds step", () => {
+  it("is said in the summary under the amount, and the funds step names the xDAI alone", () => {
     const xDai = { id: "native" as const, symbol: "xDAI", decimals: 18 };
     const sDai = { symbol: "sDAI", decimals: 18 };
     // 1.2543 xDAI per sDAI, so 1 xDAI is 0.79725... sDAI: truncating and rounding disagree in the 4th decimal
@@ -277,7 +277,7 @@ describe("the sDAI an xDAI payment becomes", () => {
       ?.subtitle;
 
     expect(summary?.text).toBe("≈ 0.7973 sDAI from your wallet");
-    expect(subtitle).toBe("1 xDAI (≈ 0.7973 sDAI)");
+    expect(subtitle).toBe("1 xDAI");
   });
 });
 
