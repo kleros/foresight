@@ -245,10 +245,20 @@ const preview = Object.fromEntries(
 );
 const progress = PROGRESS[state] ?? null;
 const isRunning = state === "quoting" || state === "signing" || state === "confirming";
+/** The stored run `state=recovered` resumes: 4 of the pay token, and 2 credits from the visitor's wallet with `credits=`. */
+const RECOVERED = { deposit: 4n * WAD, creditsFromEoa: heldCredits ? 2n * WAD : 0n };
+// a stored run's funds row is its own, as PredictRunner builds it, not the form's
 const stepsFor = (shown: typeof funding) =>
   predictSteps({
     wallet: { address: WALLET, deployed: !isFirstPrediction },
-    ...fundsToAdd(state === "over" ? null : shown, payToken, collateral),
+    ...(state === "recovered"
+      ? {
+          toAdd: RECOVERED.deposit,
+          symbol: payToken.symbol,
+          decimals: payToken.decimals,
+          ...(RECOVERED.creditsFromEoa > 0n ? { credits: RECOVERED.creditsFromEoa } : {}),
+        }
+      : fundsToAdd(state === "over" ? null : shown, payToken, collateral)),
     progress,
   });
 
@@ -324,7 +334,7 @@ function Harness() {
         recovered={
           state === "recovered"
             ? {
-                deposit: 4n * WAD,
+                deposit: RECOVERED.deposit,
                 token: payToken,
                 // 4 xDAI at the harness's 1.0937 xDAI an sDAI
                 ...(paysNative ? { deposited: parseUnits("3.6573", 18) } : {}),

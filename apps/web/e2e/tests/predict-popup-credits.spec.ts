@@ -227,3 +227,30 @@ for (const { credits, ticked } of FUNDS_STEP) {
     await expect(step).not.toContainText("credits");
   });
 }
+
+// the harness's stored run deposits 4 of the pay token and, with credits on, moves 2 from the visitor's wallet
+const RECOVERED_FUNDS = [
+  { query: "pay=native", adds: "4 xDAI" },
+  { query: "pay=native&credits=enough", adds: "2 credits + 4 xDAI" },
+  { query: "credits=enough", adds: "2 credits + 4 sDAI" },
+] as const;
+
+for (const { query, adds } of RECOVERED_FUNDS) {
+  test(`a stored run's Add funds step names its own deposit, ${query}`, async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    await openHarness(page, `${harness.url}?options=2&state=recovered&${query}`);
+    const dialog = page.getByRole("dialog");
+    const step = dialog.getByRole("listitem").filter({ hasText: "Add funds" });
+
+    await expect(step.getByText(adds, { exact: true })).toBeVisible();
+    await expect(dialog.getByLabel("Amount")).toHaveValue("4");
+    if (!query.includes("pay=native")) return;
+    // 4 xDAI at the harness's 1.0937 xDAI an sDAI
+    const note = dialog.getByText("Locked to what you started with; the deposit ≈ 3.6573 sDAI.", { exact: true });
+    const [height, lineHeight] = await note.evaluate((element) => [
+      element.getBoundingClientRect().height,
+      parseFloat(getComputedStyle(element).lineHeight),
+    ]);
+    expect(Math.round(height / lineHeight), "the note's lines at 320px").toBe(2);
+  });
+}
