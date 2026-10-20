@@ -251,6 +251,8 @@ const RECOVERED_FUNDS = [
   { query: "pay=native", adds: "4 xDAI" },
   { query: "pay=native&credits=enough", adds: "2 credits + 4 xDAI" },
   { query: "credits=enough", adds: "2 credits + 4 sDAI" },
+  // a stored run keeps the credits it started with after the manager empties
+  { query: "credits=empty", adds: "2 credits + 4 sDAI" },
 ] as const;
 
 for (const { query, adds } of RECOVERED_FUNDS) {
