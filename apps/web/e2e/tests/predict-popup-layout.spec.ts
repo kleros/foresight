@@ -724,14 +724,15 @@ test.describe("the more-below cue's nudge", () => {
     expect(await before()).toBe("2.4s");
   });
 
-  // a two-line status starts right under the strip, so the drop there is shorter
+  // a two-line status starts right under the strip, so the burst there is smaller
   const AMPLITUDES = [
-    { width: 1280, height: 720, state: "idle&leftOut=1", lines: 1, drop: 6 },
-    { width: 375, height: 640, state: "idle&leftOut=1", lines: 1, drop: 6 },
-    { width: 375, height: 640, state: "moved", lines: 2, drop: 4 },
+    { width: 1280, height: 720, state: "idle&leftOut=1", lines: 1, lift: 3, drop: 6 },
+    { width: 375, height: 640, state: "idle&leftOut=1", lines: 1, lift: 3, drop: 6 },
+    { width: 375, height: 640, state: "moved", lines: 2, lift: 2, drop: 3 },
+    { width: 320, height: 568, state: "moved", lines: 2, lift: 2, drop: 3 },
   ];
-  for (const { width, height, state, lines, drop } of AMPLITUDES) {
-    test(`lifts 3px and drops ${drop}px with its words, clear of a ${lines}-line status, at ${width} x ${height}`, async ({
+  for (const { width, height, state, lines, lift, drop } of AMPLITUDES) {
+    test(`lifts ${lift}px and drops ${drop}px with its words, clear of a ${lines}-line status, at ${width} x ${height}`, async ({
       page,
     }) => {
       await page.setViewportSize({ width, height });
@@ -770,7 +771,7 @@ test.describe("the more-below cue's nudge", () => {
       // the delay, then the lift's peak at 12.5% and the drop's at 25% of 2s
       for (const [time, shift] of [
         [0, 0],
-        [500, -3],
+        [500, -lift],
         [750, drop],
       ] as const) {
         const now = await at(time);
