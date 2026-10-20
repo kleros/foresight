@@ -141,9 +141,9 @@ function recoveryNote(
   recovered: NonNullable<PredictDialogProps["recovered"]>,
   collateral: { symbol: string; decimals: number },
 ): string {
-  if (recovered.deposited === undefined) return "Locked to the amount this prediction started with.";
+  if (recovered.deposited === undefined) return "Locked to this prediction's amount.";
   const deposited = shownAmount(recovered.deposited, collateral.decimals);
-  return `Locked to what you started with; the deposit ≈ ${deposited} ${collateral.symbol}.`;
+  return `Locked to this prediction's amount; the deposit ≈ ${deposited} ${collateral.symbol}.`;
 }
 
 /**

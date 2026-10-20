@@ -264,7 +264,7 @@ for (const { query, adds } of RECOVERED_FUNDS) {
     await expect(dialog.getByLabel("Amount")).toHaveValue("4");
     if (!query.includes("pay=native")) return;
     // 4 xDAI at the harness's 1.0937 xDAI an sDAI
-    const note = dialog.getByText("Locked to what you started with; the deposit ≈ 3.6573 sDAI.", { exact: true });
+    const note = dialog.getByText("Locked to this prediction's amount; the deposit ≈ 3.6573 sDAI.", { exact: true });
     expect(await lineBoxes(note), "the note's lines at 320px").toBeLessThanOrEqual(2);
   });
 }
@@ -280,7 +280,7 @@ for (const viewport of [
     await openHarness(page, `${harness.url}?options=2&state=recovered&pay=native&deposited=36680.1234`);
     const note = page
       .getByRole("dialog")
-      .getByText("Locked to what you started with; the deposit ≈ 36,680.1234 sDAI.", { exact: true });
+      .getByText("Locked to this prediction's amount; the deposit ≈ 36,680.1234 sDAI.", { exact: true });
 
     expect(await lineBoxes(note)).toBeLessThanOrEqual(2);
   });
