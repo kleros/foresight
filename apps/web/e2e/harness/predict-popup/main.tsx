@@ -127,7 +127,7 @@ const sDai = { id: "collateral" as const, symbol: "sDAI", decimals: 18 };
 /** `?tokens=2` offers xDAI beside sDAI, so the token select can open. */
 const xDai = { id: "native" as const, symbol: "xDAI", decimals: 18 };
 const tokens = params.get("tokens") === "2" ? [sDai, xDai] : [sDai];
-/** `?pay=native` pays in xDAI at 1.0937 xDAI an sDAI; the steps then say what the shown funding adds, credits included, as the app's do. */
+/** `?pay=native` pays in xDAI at 1.0937 xDAI an sDAI. */
 const paysNative = params.get("pay") === "native";
 const payToken = paysNative ? xDai : sDai;
 const collateral = { symbol: "sDAI", decimals: 18 };
@@ -251,7 +251,6 @@ const stepsFor = (shown: typeof funding) =>
     ...fundsToAdd(state === "over" ? null : shown, payToken, collateral),
     progress,
   });
-const steps = stepsFor(funding);
 
 const success = (
   <PredictSuccessView
@@ -317,7 +316,7 @@ function Harness() {
         optionNoun="city"
         isFirstPrediction={isFirstPrediction}
         isDisconnected={state === "disconnected"}
-        steps={paysNative ? stepsFor(shown) : steps}
+        steps={stepsFor(shown)}
         leftOut={leftOut}
         isRunning={isRunning}
         canRetry={state === "failed" || state === "pending" || state === "recovered"}
