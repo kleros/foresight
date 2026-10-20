@@ -106,9 +106,7 @@ for (const viewport of VIEWPORTS) {
             .toBeLessThanOrEqual(16.5);
           expect
             .soft(
-              await line
-                .getByTestId("credits-note")
-                .evaluate((element) => element.scrollWidth <= element.clientWidth),
+              await line.getByTestId("credits-note").evaluate((element) => element.scrollWidth <= element.clientWidth),
               `${credits}: the note is not cut`,
             )
             .toBe(true);
