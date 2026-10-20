@@ -1,10 +1,12 @@
-/* Three durations for one-shot motion, never a fourth; loops and nudges have their own tokens. */
+/* Three durations for one-shot motion, never a fourth; a loop, a spinner's turn, a nudge
+   and the reduced-motion fade each have their own token. */
 :root {
   --fs-dur-echo: 100ms; /* hover, press: a state echo */
   --fs-dur-enter: 250ms; /* enter, exit, expand */
   --fs-dur-structural: 400ms; /* structural moves: reorder, spawn, collapse */
   --fs-dur-loop: 1.6s; /* one cycle of an indeterminate loop */
   --fs-dur-nudge: 2s; /* one burst of an attention nudge and its hold */
+  --fs-dur-spin: 1s; /* one turn of a spinner */
   --fs-ease-enter: cubic-bezier(0, 0, 0.2, 1);
   --fs-ease-exit: cubic-bezier(0.4, 0, 1, 1);
   --fs-ease-structural: cubic-bezier(0.2, 0, 0, 1);
@@ -207,7 +209,7 @@
   animation: fsDraw var(--fs-dur-enter) var(--fs-ease-enter) both;
 }
 .fs-icon-pending {
-  animation: fsSpinDash 1s linear infinite;
+  animation: fsSpinDash var(--fs-dur-spin) linear infinite;
   transform-origin: 50% 50%;
 }
 /* A cue, three bursts of lift (--fs-nudge-lift), drop (--fs-nudge-drop) and settle, each followed by a hold.
@@ -239,16 +241,17 @@
     --fs-dur-enter: 1ms;
     --fs-dur-structural: 1ms;
     --fs-ease-spring: linear;
+    --fs-dur-reduced-fade: 150ms; /* the in-place fade that stands in for a move */
   }
   .fs-enter,
   .fs-spawn,
   .fs-rise,
   .fs-icon-draw path,
   .fs-icon-draw polyline {
-    animation: fsFadeIn 150ms linear both;
+    animation: fsFadeIn var(--fs-dur-reduced-fade) linear both;
   }
   .fs-exit {
-    animation: fsFadeOut 150ms linear both;
+    animation: fsFadeOut var(--fs-dur-reduced-fade) linear both;
   }
   .fs-spawn {
     transform: none;
