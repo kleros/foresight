@@ -193,13 +193,20 @@ for (const viewport of VIEWPORTS) {
       const line = page.getByRole("dialog").getByRole("status").locator("span");
 
       await expect(line).toHaveText("Credits swap loses ≈ 0.5 xDAI.");
-      const [height, lineHeight, fontSize, fits] = await line.evaluate((element) => [
-        element.getBoundingClientRect().height,
-        parseFloat(getComputedStyle(element).lineHeight),
-        parseFloat(getComputedStyle(element).fontSize),
-        element.scrollWidth <= element.clientWidth,
-      ]);
-      expect(height).toBe(lineHeight);
+      const [lines, height, lineHeight, fontSize, fits] = await line.evaluate((element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return [
+          new Set([...range.getClientRects()].map((box) => Math.round(box.top))).size,
+          element.getBoundingClientRect().height,
+          parseFloat(getComputedStyle(element).lineHeight),
+          parseFloat(getComputedStyle(element).fontSize),
+          element.scrollWidth <= element.clientWidth,
+        ];
+      });
+      expect(lines).toBe(1);
+      // layout heights carry sub-pixel error, so the box is compared to the computed line-height in whole pixels
+      expect(Math.round(height)).toBe(Math.round(lineHeight));
       expect(fontSize).toBe(12);
       expect(fits).toBe(true);
     });
