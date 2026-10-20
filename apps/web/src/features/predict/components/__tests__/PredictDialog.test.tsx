@@ -403,6 +403,27 @@ describe("predicting", () => {
     expect(onPredict).toHaveBeenCalled();
   });
 
+  it("names the sDAI a stored xDAI deposit becomes beside it, and no sDAI figure for an sDAI deposit", () => {
+    const xDai = { id: "native" as const, symbol: "xDAI", decimals: 18 };
+    const { rerender } = render(
+      <PredictDialog
+        {...props()}
+        recovered={{ deposit: 4_375n * 10n ** 15n, token: xDai, deposited: 4n * WAD, slippage: { tradeBps: 100 } }}
+        canRetry
+      />,
+    );
+
+    expect(screen.getByText("Locked to the amount this prediction started with, ≈ 4 sDAI.")).toBeInTheDocument();
+    rerender(
+      <PredictDialog
+        {...props()}
+        recovered={{ deposit: 4n * WAD, token: sDai, slippage: { tradeBps: 100 } }}
+        canRetry
+      />,
+    );
+    expect(screen.getByText("Locked to the amount this prediction started with.")).toBeInTheDocument();
+  });
+
   it("offers no remove on a stored run's estimates", () => {
     render(
       <PredictDialog {...props()} recovered={{ deposit: WAD, token: sDai, slippage: { tradeBps: 100 } }} canRetry />,

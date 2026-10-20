@@ -321,7 +321,17 @@ function Harness() {
         isRunning={isRunning}
         canRetry={state === "failed" || state === "pending" || state === "recovered"}
         isPending={state === "pending"}
-        recovered={state === "recovered" ? { deposit: 4n * WAD, token: sDai, slippage: { tradeBps: 100 } } : undefined}
+        recovered={
+          state === "recovered"
+            ? {
+                deposit: 4n * WAD,
+                token: payToken,
+                // 4 xDAI at the harness's 1.0937 xDAI an sDAI
+                ...(paysNative ? { deposited: parseUnits("3.6573", 18) } : {}),
+                slippage: { tradeBps: 100 },
+              }
+            : undefined
+        }
         notice={
           state === "disconnected"
             ? "Connect a wallet to predict."

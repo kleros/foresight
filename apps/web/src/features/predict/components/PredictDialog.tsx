@@ -69,7 +69,13 @@ interface PredictDialogProps {
    * A stored run under review: its own deposit fills the locked amount form, Resume replaces Predict, and Details
    * names its own slippage, the credits swap's only while that swap is still to sign.
    */
-  recovered?: { deposit: bigint; token: PayTokenChoice; slippage: { tradeBps: number; creditsBps?: number } };
+  recovered?: {
+    deposit: bigint;
+    token: PayTokenChoice;
+    /** The collateral an xDAI deposit becomes, said beside it; absent for a collateral deposit. */
+    deposited?: bigint;
+    slippage: { tradeBps: number; creditsBps?: number };
+  };
   /** What the visitor has to do before this prediction can be made, if anything. */
   notice?: string;
   /** The visitor's slippage, which the settings panel changes. */
@@ -129,6 +135,15 @@ const BUSY_COPY: Record<PredictSteps["rows"][number]["key"], string> = {
 function busyLabel(steps: PredictSteps): string {
   const running = steps.rows.find((row) => row.view === "running");
   return running?.subtitle.split(" · ").at(-1) || BUSY_COPY[running?.key ?? "predict"];
+}
+
+function recoveryNote(
+  recovered: NonNullable<PredictDialogProps["recovered"]>,
+  collateral: { symbol: string; decimals: number },
+): string {
+  const locked = "Locked to the amount this prediction started with";
+  if (recovered.deposited === undefined) return `${locked}.`;
+  return `${locked}, ≈ ${shownAmount(recovered.deposited, collateral.decimals)} ${collateral.symbol}.`;
 }
 
 /**
@@ -430,7 +445,7 @@ export function PredictDialog({
                 isFirstPrediction={isFirstPrediction}
                 isReadOnly={isLocked}
                 isDisconnected={isDisconnected}
-                note={recovered ? "Locked to the amount this prediction started with." : undefined}
+                note={recovered ? recoveryNote(recovered, collateral) : undefined}
                 credits={credits}
               />
               <PredictSummary
