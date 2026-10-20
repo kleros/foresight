@@ -17,8 +17,6 @@ type ScrollFadeProps = {
   fadeFrom?: string;
   /** The cue's text and top border colours, as `text-*` and `border-*` classes. */
   cueTone?: string;
-  /** How far, in px, the cue's words and arrow lift before each nudge's drop. */
-  cueLift?: number;
   /** How far, in px, the cue's words and arrow drop in each nudge. */
   cueDrop?: number;
 };
@@ -48,7 +46,6 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
   minOverflow = 16,
   fadeFrom = "from-fs-surface",
   cueTone = "border-fs-border text-fs-text-secondary",
-  cueLift = 3,
   cueDrop = 6,
 }) => {
   const ref = useRef<HTMLDivElement>(null);
@@ -172,7 +169,7 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
           <span
             data-testid="more-below-nudge"
             className={clsx("flex items-center gap-1", showBottom && !nudged && "fs-nudge-down")}
-            style={{ "--fs-nudge-lift": `${cueLift}px`, "--fs-nudge-drop": `${cueDrop}px` } as React.CSSProperties}
+            style={{ "--fs-nudge-drop": `${cueDrop}px` } as React.CSSProperties}
             onAnimationEnd={() => setNudged(true)}
           >
             <ArrowDown data-testid="more-below-arrow" className="size-3 [&_path]:fill-current" />
