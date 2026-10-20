@@ -9,7 +9,7 @@ const NOTES: Record<(typeof CREDIT_STATES)[number], string> = {
   partial: "4 credits available",
   short: "20 of 50 usable now",
   long: "81.7347 of 2,000 usable now",
-  empty: "None of your 120 usable now",
+  empty: "0 of 120 usable. Pay from your wallet.",
 };
 const TICK = "Use Foresight credits";
 const STEPS = ["Create a trade wallet", "Add funds", "Place prediction"];

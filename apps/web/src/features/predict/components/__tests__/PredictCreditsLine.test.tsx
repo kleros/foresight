@@ -105,13 +105,13 @@ describe("the credits line", () => {
     expect(onAmountChange).toHaveBeenLastCalledWith(20n * WAD);
   });
 
-  it("when the manager is empty, offers no tick and says none of them is usable", () => {
+  it("when the manager is empty, offers no tick, says none of them is usable and asks for the visitor's own money", () => {
     renderLine({ wallet: 5n * WAD, tradeWallet: 0n, manager: 0n });
 
     expect(screen.queryByRole("checkbox")).toBeNull();
     expect(useMax()).toBeDisabled();
     expect(screen.getByText("Foresight credits")).toBeInTheDocument();
-    expect(note()).toHaveTextContent("None of your 5 usable now");
+    expect(note().textContent).toBe("0 of 5 usable. Pay from your wallet.");
   });
 
   it("is locked with the rest of the form while a run holds it", () => {
