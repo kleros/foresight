@@ -93,6 +93,8 @@ const poolFee = BigInt(params.get("fee") ?? "0");
 const isShort = params.get("short") === "1";
 /** `?swapLoss=` with `credits`, what the credits swap loses against the vault's rate, in xDAI. */
 const swapLoss = params.get("swapLoss");
+/** `?deposited=` with `state=recovered&pay=native`, the sDAI the stored run's deposit becomes; 3.6573 by default. */
+const depositedParam = params.get("deposited") ?? "3.6573";
 
 /** `?credits=` the visitor's Foresight credits, as CREDITS names them; none by default. The tick starts on, as in the app. */
 const creditsState = params.get("credits") as keyof typeof CREDITS | null;
@@ -337,7 +339,7 @@ function Harness() {
                 deposit: RECOVERED.deposit,
                 token: payToken,
                 // 4 xDAI at the harness's 1.0937 xDAI an sDAI
-                ...(paysNative ? { deposited: parseUnits("3.6573", 18) } : {}),
+                ...(paysNative ? { deposited: parseUnits(depositedParam, 18) } : {}),
                 slippage: { tradeBps: 100 },
               }
             : undefined

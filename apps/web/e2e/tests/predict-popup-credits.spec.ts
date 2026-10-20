@@ -254,10 +254,32 @@ for (const { query, adds } of RECOVERED_FUNDS) {
     if (!query.includes("pay=native")) return;
     // 4 xDAI at the harness's 1.0937 xDAI an sDAI
     const note = dialog.getByText("Locked to what you started with; the deposit ≈ 3.6573 sDAI.", { exact: true });
-    const [height, lineHeight] = await note.evaluate((element) => [
-      element.getBoundingClientRect().height,
-      parseFloat(getComputedStyle(element).lineHeight),
-    ]);
-    expect(Math.round(height / lineHeight), "the note's lines at 320px").toBe(2);
+    expect(await lineBoxes(note), "the note's lines at 320px").toBeLessThanOrEqual(2);
+  });
+}
+
+for (const viewport of [
+  { width: 320, height: 568 },
+  { width: 375, height: 667 },
+]) {
+  test(`a stored xDAI run's note holds two lines with a 36,680.1234 sDAI deposit at ${viewport.width} x ${viewport.height}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await openHarness(page, `${harness.url}?options=2&state=recovered&pay=native&deposited=36680.1234`);
+    const note = page
+      .getByRole("dialog")
+      .getByText("Locked to what you started with; the deposit ≈ 36,680.1234 sDAI.", { exact: true });
+
+    expect(await lineBoxes(note)).toBeLessThanOrEqual(2);
+  });
+}
+
+/** The rendered lines of an element's text; its box alone can't tell, as the note reserves two lines. */
+async function lineBoxes(element: Locator): Promise<number> {
+  return element.evaluate((node) => {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    return new Set([...range.getClientRects()].map((box) => Math.round(box.top))).size;
   });
 }
