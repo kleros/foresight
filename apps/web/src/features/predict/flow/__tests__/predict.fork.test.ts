@@ -1182,6 +1182,8 @@ const VAULT_ABI = parseAbi([
 const MANAGER_EXECUTE_ABI = parseAbi(["function execute(address to, bytes data, uint256 amount, address outputToken)"]);
 const WXDAI_WITHDRAW_ABI = parseAbi(["function withdraw(uint256 wad)"]);
 const WXDAI_DEPOSIT_ABI = parseAbi(["function deposit() payable"]);
+const SDAI_ADAPTER_INTEREST_ABI = parseAbi(["function interestReceiver() view returns (address)"]);
+const INTEREST_RECEIVER_ABI = parseAbi(["function claim()"]);
 const POOL_FEE_ABI = parseAbi([
   "function globalState() view returns (uint160 price, int24 tick, uint16 fee, uint16 timepointIndex, uint8 communityFeeToken0, uint8 communityFeeToken1, bool unlocked)",
 ]);
@@ -1332,6 +1334,19 @@ describe("money kept by every predict run, against a gnosis fork", () => {
     }
   }
 
+  /**
+   * The adapter's depositXDAI claims the interest receiver's pending xDAI into the vault before it
+   * mints, which previewDeposit leaves out; claiming first makes the two agree.
+   */
+  async function claimVaultInterest(from: PrivateKeyAccount, adapter: Address) {
+    const receiver = await client.readContract({
+      address: adapter,
+      abi: SDAI_ADAPTER_INTEREST_ABI,
+      functionName: "interestReceiver",
+    });
+    await sendFrom(from, receiver, encodeFunctionData({ abi: INTEREST_RECEIVER_ABI, functionName: "claim" }));
+  }
+
   const grantCredits = (to: Address, amount: bigint) =>
     asGovernor(route.token, encodeFunctionData({ abi: CREDITS_ADMIN_ABI, functionName: "mint", args: [to, amount] }));
 
@@ -1461,6 +1476,7 @@ describe("money kept by every predict run, against a gnosis fork", () => {
 
     // what the popup reads, and the funding it shows
     const native = scenario.pay === "native";
+    if (native) await claimVaultInterest(owner, deposit.sDaiAdapter);
     const rate = await client.readContract({
       address: deposit.sDai,
       abi: VAULT_ABI,
