@@ -3,13 +3,16 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { openHarness, startHarness } from "../utils/component-harness";
 
 /** `?credits=` in e2e/harness/predict-popup/main.tsx. */
-const CREDIT_STATES = ["enough", "partial", "short", "long", "empty"] as const;
+const CREDIT_STATES = ["enough", "partial", "short", "long", "empty", "whale"] as const;
+/** The states with nothing usable, which offer no tick. */
+const NONE_USABLE: readonly string[] = ["empty", "whale"];
 const NOTES: Record<(typeof CREDIT_STATES)[number], string> = {
   enough: "15 credits available",
   partial: "4 credits available",
   short: "20 of 50 usable now",
   long: "81.7347 of 2,000 usable now",
-  empty: "0 of 120 usable. Pay from your wallet.",
+  empty: "None usable now. Use your own funds.",
+  whale: "None usable now. Use your own funds.",
 };
 const TICK = "Use Foresight credits";
 const STEPS = ["Create a trade wallet", "Add funds", "Place prediction"];
@@ -103,6 +106,14 @@ for (const viewport of VIEWPORTS) {
             .toBeLessThanOrEqual(16.5);
           expect
             .soft(
+              await line
+                .getByTestId("credits-note")
+                .evaluate((element) => element.scrollWidth <= element.clientWidth),
+              `${credits}: the note is not cut`,
+            )
+            .toBe(true);
+          expect
+            .soft(
               await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
               `${credits}: no sideways scroll`,
             )
@@ -110,10 +121,10 @@ for (const viewport of VIEWPORTS) {
 
           // the tick starts on wherever credits are usable, and Predict stays free
           const tick = dialog.getByRole("checkbox", { name: TICK });
-          await expect.soft(tick).toHaveCount(credits === "empty" ? 0 : 1);
-          if (credits !== "empty") await expect.soft(tick).toBeChecked();
+          await expect.soft(tick).toHaveCount(NONE_USABLE.includes(credits) ? 0 : 1);
+          if (!NONE_USABLE.includes(credits)) await expect.soft(tick).toBeChecked();
           const max = dialog.getByRole("button", { name: "Max credits" });
-          if (credits === "empty") await expect.soft(max).toBeHidden();
+          if (NONE_USABLE.includes(credits)) await expect.soft(max).toBeHidden();
           else await expect.soft(max).toBeVisible();
           await expect.soft(dialog.getByRole("status")).toBeEmpty();
           await expect.soft(dialog.getByRole("button", { name: "Predict", exact: true })).toBeEnabled();

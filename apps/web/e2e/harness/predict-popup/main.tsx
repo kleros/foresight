@@ -103,6 +103,8 @@ const CREDITS = {
   partial: { wallet: 3n * WAD, tradeWallet: 1n * WAD, manager: 1000n * WAD },
   short: { wallet: 50n * WAD, tradeWallet: 0n, manager: 20n * WAD },
   empty: { wallet: 120n * WAD, tradeWallet: 0n, manager: 0n },
+  /** the holding the credits supply reached, with the manager empty */
+  whale: { wallet: parseUnits("36680.1234", 18), tradeWallet: 0n, manager: 0n },
   /** a four-decimal manager balance, short of a larger holding and under the per-run cap */
   long: { wallet: 2000n * WAD, tradeWallet: 0n, manager: parseUnits("81.7347", 18) },
   /** four-decimal credits, all in the visitor's wallet, so the funds step moves them */
