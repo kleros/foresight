@@ -76,6 +76,7 @@ vi.mock("@/features/predict/components/PredictDialog", () => ({
       <p data-testid="running">{String(props.isRunning)}</p>
       <p data-testid="can-retry">{String(props.canRetry)}</p>
       <p data-testid="funds">{props.steps.rows.find((row) => row.key === "funds")?.subtitle}</p>
+      <p data-testid="recovered-deposited">{props.recovered?.deposited?.toString() ?? "none"}</p>
       <p data-testid="token">{props.token.symbol}</p>
       <p data-testid="listed">{props.selected.length}</p>
       <button onClick={() => props.onRemove(props.selected[0]!.scale.market)}>remove</button>
@@ -572,6 +573,18 @@ describe("PredictRunner, the dialog's controls", () => {
     mount();
 
     expect(screen.getByTestId("funds")).toHaveTextContent(/^7\.25 /);
+  });
+
+  it("hands the popup the sDAI a stored xDAI deposit becomes, less the trade wallet's share, and none for sDAI", () => {
+    const run = { collateralIn: 9n * 10n ** 18n, collateralBefore: 6n * 10n ** 18n, deposit: 4n * 10n ** 18n };
+    progress = { ...progressAt("review"), recovered: snapshot({ ...run, depositNative: true }) };
+    const { unmount } = mount();
+    expect(screen.getByTestId("recovered-deposited")).toHaveTextContent(String(3n * 10n ** 18n));
+    unmount();
+
+    progress = { ...progressAt("review"), recovered: snapshot({ ...run, depositNative: false }) };
+    mount();
+    expect(screen.getByTestId("recovered-deposited")).toHaveTextContent("none");
   });
 
   it("resumes a stored run under review instead of starting one from the form", () => {

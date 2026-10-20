@@ -544,9 +544,9 @@ test.describe("the popup's scroll area", () => {
   });
 });
 
-/** The cue arrow's animations, with what each keyframe sets besides its own timing. */
+/** The cue nudge's animations, with what each keyframe sets besides its own timing. */
 function nudges(page: Page) {
-  return page.getByTestId("more-below-arrow").evaluate((arrow) =>
+  return page.getByTestId("more-below-nudge").evaluate((arrow) =>
     arrow.getAnimations().map((animation) => ({
       name: (animation as CSSAnimation).animationName,
       iterations: animation.effect!.getTiming().iterations,
@@ -563,7 +563,7 @@ function nudges(page: Page) {
   );
 }
 
-/** Records the cue arrow's animation events from the page's first script. */
+/** Records the cue nudge's animation events from the page's first script. */
 async function recordNudges(page: Page) {
   await page.addInitScript(() => {
     const seen: string[] = [];
@@ -573,7 +573,7 @@ async function recordNudges(page: Page) {
         type,
         (event) => {
           const target = event.target as Element;
-          if (target.getAttribute?.("data-testid") === "more-below-arrow") {
+          if (target.getAttribute?.("data-testid") === "more-below-nudge") {
             seen.push(`${type}:${(event as AnimationEvent).animationName}`);
           }
         },
@@ -584,7 +584,7 @@ async function recordNudges(page: Page) {
   return () => page.evaluate(() => (window as unknown as { nudges: string[] }).nudges);
 }
 
-test.describe("the more-below cue's arrow", () => {
+test.describe("the more-below cue's nudge", () => {
   // 375 x 667 opens with every step in view; its cue shows once Details opens
   const CASES = [
     { width: 1280, height: 720, options: 10, details: false },
@@ -600,7 +600,7 @@ test.describe("the more-below cue's arrow", () => {
         await page.setViewportSize({ width, height });
         const events = await recordNudges(page);
         const dialog = await openPopup(page, options, "idle", undefined, `&theme=${theme}`);
-        const arrow = dialog.getByTestId("more-below-arrow");
+        const arrow = dialog.getByTestId("more-below-nudge");
         if (details) {
           await expect(arrow).not.toHaveClass(/fs-nudge-down/);
           await openSummary(dialog);
@@ -633,7 +633,7 @@ test.describe("the more-below cue's arrow", () => {
     const events = await recordNudges(page);
     const dialog = await openPopup(page, 10);
     const scroller = page.getByTestId("predict-body").locator("..");
-    const arrow = dialog.getByTestId("more-below-arrow");
+    const arrow = dialog.getByTestId("more-below-nudge");
     expect(await nudges(page)).toHaveLength(1);
 
     await scroller.evaluate((element) => element.scrollBy(0, 8));
@@ -681,7 +681,7 @@ test.describe("the more-below cue's arrow", () => {
       .toBeGreaterThan(0);
     await page.waitForTimeout(600);
     await expect(dialog.getByTestId("more-below")).toHaveCSS("opacity", "1");
-    await expect(dialog.getByTestId("more-below-arrow")).toHaveClass(/fs-nudge-down/);
+    await expect(dialog.getByTestId("more-below-nudge")).toHaveClass(/fs-nudge-down/);
     expect(await nudges(page)).toEqual([{ name: "fsNudgeDown", iterations: 3, properties: ["transform"] }]);
   });
 
@@ -695,46 +695,112 @@ test.describe("the more-below cue's arrow", () => {
       await page.waitForTimeout(500);
 
       expect(await nudges(page)).toEqual([]);
-      await expect(dialog.getByTestId("more-below-arrow")).toHaveCSS("animation-name", "none");
+      await expect(dialog.getByTestId("more-below-nudge")).toHaveCSS("animation-name", "none");
       expect(await events()).toEqual([]);
     });
   }
 
-  test("lifts 3px and drops 6px, under its hairline and clear of the status line", async ({ page }) => {
+  test("runs on the nudge duration token, and the pricing sweep on the loop token", async ({ page }) => {
+    const root = (name: string) =>
+      page.evaluate((token) => getComputedStyle(document.documentElement).getPropertyValue(token).trim(), name);
+    const retune = (name: string, value: string) =>
+      page.evaluate(([token, to]) => document.documentElement.style.setProperty(token!, to!), [name, value]);
     await page.setViewportSize({ width: 375, height: 640 });
-    // opened once the fonts are in, so the bursts are still running when they are measured
-    await openHarness(page, `${harness.url}?options=10&state=idle&leftOut=1&open=press`);
-    await page.getByRole("button", { name: "Open predict" }).click();
-    const dialog = page.getByRole("dialog");
-    const cue = dialog.getByTestId("more-below");
-    const arrow = dialog.getByTestId("more-below-arrow");
-    await expect(arrow).toHaveClass(/fs-nudge-down/);
-    await arrow.evaluate((element) => element.getAnimations().forEach((animation) => animation.pause()));
-    await settle(dialog);
-    const strip = (await cue.boundingBox())!;
-    const status = (await dialog.getByRole("status").locator("span").boundingBox())!;
-    expect(await cue.evaluate((element) => getComputedStyle(element).paddingTop)).toBe("6px");
+    const dialog = await openPopup(page, 10);
+    const nudging = dialog.locator(".fs-nudge-down");
+    await expect(nudging).toHaveCount(1);
+    expect(await root("--fs-dur-nudge")).toBe("2s");
+    await expect(nudging).toHaveCSS("animation-duration", "2s");
+    await retune("--fs-dur-nudge", "3s");
+    await expect(nudging).toHaveCSS("animation-duration", "3s");
 
-    // the delay, then the lift's peak at 12.5% and the drop's at 25% of 2s
-    for (const [at, shift] of [
-      [0, 0],
-      [500, -3],
-      [750, 6],
-    ] as const) {
-      const moved = await arrow.evaluate((element, time) => {
-        for (const animation of element.getAnimations()) {
-          animation.pause();
-          animation.currentTime = time;
-        }
-        return new DOMMatrixReadOnly(getComputedStyle(element).transform).f;
-      }, at);
-      expect.soft(moved, `${at}ms: moved by`).toBe(shift);
-      const box = (await arrow.boundingBox())!;
-      expect.soft(box.y, `${at}ms: below the hairline`).toBeGreaterThan(strip.y + 1);
-      expect.soft(box.y + box.height, `${at}ms: above the status text`).toBeLessThan(status.y);
-    }
+    const sweep = (await openPopup(page, 2, "quoting")).locator("[data-testid=pricing-sweep] > i");
+    const before = () => sweep.evaluate((node) => getComputedStyle(node, "::before").animationDuration);
+    expect(await root("--fs-dur-loop")).toBe("1.6s");
+    await expect(sweep).toHaveCSS("animation-duration", "1.6s");
+    expect(await before()).toBe("1.6s");
+    await retune("--fs-dur-loop", "2.4s");
+    await expect(sweep).toHaveCSS("animation-duration", "2.4s");
+    expect(await before()).toBe("2.4s");
   });
+
+  // a two-line status starts right under the strip, so the drop there is shorter
+  const AMPLITUDES = [
+    { width: 1280, height: 720, state: "idle&leftOut=1", lines: 1, drop: 6 },
+    { width: 375, height: 640, state: "idle&leftOut=1", lines: 1, drop: 6 },
+    { width: 375, height: 640, state: "moved", lines: 2, drop: 4 },
+  ];
+  for (const { width, height, state, lines, drop } of AMPLITUDES) {
+    test(`lifts 3px and drops ${drop}px with its words, clear of a ${lines}-line status, at ${width} x ${height}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height });
+      // opened once the fonts are in, so the bursts are still running when they are measured
+      await openHarness(page, `${harness.url}?options=10&state=${state}&open=press`);
+      await page.getByRole("button", { name: "Open predict" }).click();
+      const dialog = page.getByRole("dialog");
+      const cue = dialog.getByTestId("more-below");
+      const nudge = dialog.getByTestId("more-below-nudge");
+      await expect(nudge).toHaveClass(/fs-nudge-down/);
+      await nudge.evaluate((element) => element.getAnimations().forEach((animation) => animation.pause()));
+      await settle(dialog);
+      const strip = (await cue.boundingBox())!;
+      expect(await cue.evaluate((element) => getComputedStyle(element).paddingTop)).toBe("6px");
+      const status = await dialog.getByRole("status").locator("span").evaluate(inkOf);
+      expect(status.lines, "the status line's lines").toBe(lines);
+
+      const at = (time: number) =>
+        nudge.evaluate(
+          (element, [time, measure]) => {
+            for (const animation of element.getAnimations()) {
+              animation.pause();
+              animation.currentTime = time as number;
+            }
+            const arrow = element.querySelector("[data-testid=more-below-arrow]")!.getBoundingClientRect();
+            const words = new Function(`return ${measure}`)()(element);
+            return {
+              shift: new DOMMatrixReadOnly(getComputedStyle(element).transform).f,
+              arrow: { top: arrow.top, bottom: arrow.bottom },
+              words,
+            };
+          },
+          [time, inkOf.toString()] as const,
+        );
+      const still = await at(0);
+      // the delay, then the lift's peak at 12.5% and the drop's at 25% of 2s
+      for (const [time, shift] of [
+        [0, 0],
+        [500, -3],
+        [750, drop],
+      ] as const) {
+        const now = await at(time);
+        expect.soft(now.shift, `${time}ms: moved by`).toBe(shift);
+        expect.soft(now.arrow.top - still.arrow.top, `${time}ms: the arrow moved by`).toBeCloseTo(shift, 3);
+        expect.soft(now.words.top - still.words.top, `${time}ms: the words moved by`).toBeCloseTo(shift, 3);
+        expect.soft(now.arrow.top, `${time}ms: below the hairline`).toBeGreaterThan(strip.y + 1);
+        expect.soft(now.arrow.bottom, `${time}ms: the arrow clear of the status text`).toBeLessThan(status.top);
+        expect.soft(now.words.bottom, `${time}ms: the words clear of the status text`).toBeLessThan(status.top);
+      }
+    });
+  }
 });
+
+/** The ink of an element's own text, from its first line box and the font's measure of the words, and its line count. */
+function inkOf(element: Element): { top: number; bottom: number; lines: number } {
+  const text = [...element.childNodes].find((node) => node.nodeType === Node.TEXT_NODE)!;
+  const range = document.createRange();
+  range.selectNodeContents(text);
+  const boxes = [...range.getClientRects()];
+  const context = document.createElement("canvas").getContext("2d")!;
+  context.font = getComputedStyle(element).font;
+  const metrics = context.measureText(text.textContent ?? "");
+  const baseline = boxes[0]!.top + metrics.fontBoundingBoxAscent;
+  return {
+    top: baseline - metrics.actualBoundingBoxAscent,
+    bottom: baseline + metrics.actualBoundingBoxDescent,
+    lines: new Set(boxes.map((box) => Math.round(box.top))).size,
+  };
+}
 
 for (const viewport of [
   { width: 375, height: 667 },

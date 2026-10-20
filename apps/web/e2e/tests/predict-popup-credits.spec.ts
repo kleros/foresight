@@ -205,3 +205,25 @@ for (const viewport of VIEWPORTS) {
     });
   });
 }
+
+// the trade wallet holds 6 sDAI and the amount is 10; credits are spent trade wallet first, then the wallet's
+const FUNDS_STEP = [
+  { credits: "enough", ticked: "10 credits" },
+  { credits: "partial", ticked: "3 credits" },
+] as const;
+
+for (const { credits, ticked } of FUNDS_STEP) {
+  test(`the Add funds step names the ${credits} credits the tick moves, and the sDAI once unticked`, async ({
+    page,
+  }) => {
+    const dialog = await openCredits(page, credits, "light");
+    const step = dialog.getByRole("listitem").filter({ hasText: "Add funds" });
+
+    await expect(step).toContainText(ticked);
+    await expect(step).not.toContainText("sDAI");
+
+    await tickLabel(dialog).click();
+    await expect(step).toContainText("4 sDAI");
+    await expect(step).not.toContainText("credits");
+  });
+}

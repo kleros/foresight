@@ -700,7 +700,7 @@
   inset: 0;
   border-radius: inherit;
   transform: translateX(-60%);
-  animation: predict-sweep-travel 1.6s linear 250ms infinite;
+  animation: predict-sweep-travel var(--fs-dur-loop) linear 250ms infinite;
 }
 .predict-sweep > i::before {
   content: "";
@@ -709,7 +709,7 @@
   border-radius: inherit;
   background: var(--fs-popup-axis);
   transform: scaleX(0.08);
-  animation: predict-sweep-stretch 1.6s linear 250ms infinite;
+  animation: predict-sweep-stretch var(--fs-dur-loop) linear 250ms infinite;
 }
 /* at 8% wide the bar is off the line at ±60%, so the loop's seam and the delay show nothing */
 @keyframes predict-sweep-travel {
@@ -742,7 +742,7 @@
   }
   .predict-sweep > i {
     opacity: 0.35;
-    animation: predict-sweep-pulse 1.6s linear infinite alternate;
+    animation: predict-sweep-pulse var(--fs-dur-loop) linear infinite alternate;
   }
 }
 @keyframes predict-sweep-pulse {

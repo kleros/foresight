@@ -8,6 +8,7 @@ import { useAccount } from "wagmi";
 import type { PayTokenChoice } from "@/features/predict/components/PredictAmountSection";
 import { PredictDialog } from "@/features/predict/components/PredictDialog";
 import type { PriceMove } from "@/features/predict/components/PredictList";
+import { tradeWalletShare } from "@/features/predict/flow/plan";
 import { STEP_ID } from "@/features/predict/flow/stepIds";
 import type { HeldTo, ShownPlans } from "@/features/predict/run/types";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
@@ -281,6 +282,9 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
         recovered && {
           deposit: recovered.deposit,
           token: runToken,
+          ...(recovered.depositNative && recovered.deposit > 0n
+            ? { deposited: recovered.collateralIn - tradeWalletShare(recovered) }
+            : {}),
           slippage: {
             tradeBps: recovered.slippage.tradeBps,
             ...(recovered.creditsToSpend > 0n && !creditsLanded ? { creditsBps: recovered.slippage.creditsBps } : {}),

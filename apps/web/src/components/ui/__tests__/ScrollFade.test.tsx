@@ -82,7 +82,7 @@ describe("ScrollFade's cue", () => {
   });
 });
 
-describe("ScrollFade's cue arrow", () => {
+describe("ScrollFade's cue nudge", () => {
   /** jsdom has no matchMedia; this one answers only the reduced-motion query, as `reduce` says. */
   const prefersReducedMotion = (reduce: boolean) =>
     vi.stubGlobal("matchMedia", (query: string) => ({
@@ -101,13 +101,29 @@ describe("ScrollFade's cue arrow", () => {
     sized(340, 300);
     renderCue();
 
-    expect(screen.getByTestId("more-below-arrow")).toHaveClass("fs-nudge-down");
+    expect(screen.getByTestId("more-below-nudge")).toHaveClass("fs-nudge-down");
+  });
+
+  it("moves the arrow and the words together, dropping 6px unless told less", () => {
+    sized(340, 300);
+    const { rerender } = renderCue();
+    const nudge = screen.getByTestId("more-below-nudge");
+
+    expect(nudge).toContainElement(screen.getByTestId("more-below-arrow"));
+    expect(nudge).toHaveTextContent("More below");
+    expect(nudge.style.getPropertyValue("--fs-nudge-drop")).toBe("6px");
+    rerender(
+      <ScrollFade cue="More below" cueDrop={4}>
+        <p>body</p>
+      </ScrollFade>,
+    );
+    expect(nudge.style.getPropertyValue("--fs-nudge-drop")).toBe("4px");
   });
 
   it("stays still once its bursts have run, through a later re-measure", () => {
     sized(340, 300);
     renderCue();
-    const arrow = screen.getByTestId("more-below-arrow");
+    const arrow = screen.getByTestId("more-below-nudge");
 
     // jsdom has no AnimationEvent, so React listens for the prefixed name
     fireEvent(arrow, new Event("webkitAnimationEnd", { bubbles: true }));
@@ -122,7 +138,7 @@ describe("ScrollFade's cue arrow", () => {
     const scroller = screen.getByText("body").parentElement!;
 
     fireEvent.scroll(scroller);
-    expect(screen.getByTestId("more-below-arrow")).toHaveClass("fs-nudge-down");
+    expect(screen.getByTestId("more-below-nudge")).toHaveClass("fs-nudge-down");
   });
 
   const visitorScrolls: Array<[string, (scroller: HTMLElement) => void]> = [
@@ -140,7 +156,7 @@ describe("ScrollFade's cue arrow", () => {
     it(`stays still for good once the visitor scrolls the area with ${name}`, () => {
       sized(340, 300);
       renderCue();
-      const arrow = screen.getByTestId("more-below-arrow");
+      const arrow = screen.getByTestId("more-below-nudge");
       const scroller = screen.getByText("body").parentElement!;
 
       scroll(scroller);
@@ -161,7 +177,7 @@ describe("ScrollFade's cue arrow", () => {
       </ScrollFade>,
     );
     const button = screen.getByRole("button", { name: "Details" });
-    const arrow = screen.getByTestId("more-below-arrow");
+    const arrow = screen.getByTestId("more-below-nudge");
 
     fireEvent.keyDown(button, { key: " " });
     expect(arrow).toHaveClass("fs-nudge-down");
@@ -179,7 +195,7 @@ describe("ScrollFade's cue arrow", () => {
     const field = screen.getByRole("textbox", { name: "Amount" });
 
     for (const key of ["ArrowDown", "PageDown", " "]) fireEvent.keyDown(field, { key });
-    expect(screen.getByTestId("more-below-arrow")).toHaveClass("fs-nudge-down");
+    expect(screen.getByTestId("more-below-nudge")).toHaveClass("fs-nudge-down");
   });
 
   it("does not nudge under reduced motion", () => {
@@ -188,13 +204,13 @@ describe("ScrollFade's cue arrow", () => {
     renderCue();
 
     expect(screen.getByTestId("more-below")).toHaveClass("opacity-100");
-    expect(screen.getByTestId("more-below-arrow")).not.toHaveClass("fs-nudge-down");
+    expect(screen.getByTestId("more-below-nudge")).not.toHaveClass("fs-nudge-down");
   });
 
   it("does not nudge while nothing is out of view", () => {
     sized(300, 300);
     renderCue();
 
-    expect(screen.getByTestId("more-below-arrow")).not.toHaveClass("fs-nudge-down");
+    expect(screen.getByTestId("more-below-nudge")).not.toHaveClass("fs-nudge-down");
   });
 });
