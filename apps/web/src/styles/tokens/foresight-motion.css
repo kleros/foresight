@@ -1,8 +1,10 @@
-/* Three durations, never a fourth.*/
+/* Three durations for one-shot motion, never a fourth; loops and nudges have their own tokens. */
 :root {
   --fs-dur-echo: 100ms; /* hover, press: a state echo */
   --fs-dur-enter: 250ms; /* enter, exit, expand */
   --fs-dur-structural: 400ms; /* structural moves: reorder, spawn, collapse */
+  --fs-dur-loop: 1.6s; /* one cycle of an indeterminate loop */
+  --fs-dur-nudge: 2s; /* one burst of an attention nudge and its hold */
   --fs-ease-enter: cubic-bezier(0, 0, 0.2, 1);
   --fs-ease-exit: cubic-bezier(0.4, 0, 1, 1);
   --fs-ease-structural: cubic-bezier(0.2, 0, 0, 1);
@@ -229,7 +231,7 @@
   }
 }
 .fs-nudge-down {
-  animation: fsNudgeDown 2s linear var(--fs-dur-enter) 3;
+  animation: fsNudgeDown var(--fs-dur-nudge) linear var(--fs-dur-enter) 3;
 }
 @media (prefers-reduced-motion: reduce) {
   :root {

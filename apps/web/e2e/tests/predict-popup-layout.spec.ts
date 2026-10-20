@@ -700,6 +700,30 @@ test.describe("the more-below cue's arrow", () => {
     });
   }
 
+  test("runs on the nudge duration token, and the pricing sweep on the loop token", async ({ page }) => {
+    const root = (name: string) =>
+      page.evaluate((token) => getComputedStyle(document.documentElement).getPropertyValue(token).trim(), name);
+    const retune = (name: string, value: string) =>
+      page.evaluate(([token, to]) => document.documentElement.style.setProperty(token!, to!), [name, value]);
+    await page.setViewportSize({ width: 375, height: 640 });
+    const dialog = await openPopup(page, 10);
+    const nudging = dialog.locator(".fs-nudge-down");
+    await expect(nudging).toHaveCount(1);
+    expect(await root("--fs-dur-nudge")).toBe("2s");
+    await expect(nudging).toHaveCSS("animation-duration", "2s");
+    await retune("--fs-dur-nudge", "3s");
+    await expect(nudging).toHaveCSS("animation-duration", "3s");
+
+    const sweep = (await openPopup(page, 2, "quoting")).locator("[data-testid=pricing-sweep] > i");
+    const before = () => sweep.evaluate((node) => getComputedStyle(node, "::before").animationDuration);
+    expect(await root("--fs-dur-loop")).toBe("1.6s");
+    await expect(sweep).toHaveCSS("animation-duration", "1.6s");
+    expect(await before()).toBe("1.6s");
+    await retune("--fs-dur-loop", "2.4s");
+    await expect(sweep).toHaveCSS("animation-duration", "2.4s");
+    expect(await before()).toBe("2.4s");
+  });
+
   test("lifts 3px and drops 6px, under its hairline and clear of the status line", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 640 });
     // opened once the fonts are in, so the bursts are still running when they are measured
