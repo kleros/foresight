@@ -340,7 +340,7 @@ function Harness() {
             ? {
                 deposit: RECOVERED.deposit,
                 token: payToken,
-                // 4 xDAI at the harness's 1.0937 xDAI an sDAI
+                // by default, 4 xDAI at the harness's 1.0937 xDAI an sDAI
                 ...(paysNative ? { deposited: parseUnits(depositedParam, 18) } : {}),
                 slippage: { tradeBps: 100 },
               }
