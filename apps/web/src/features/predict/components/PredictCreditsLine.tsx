@@ -21,7 +21,8 @@ function creditsNote(offer: CreditsOffer): string {
   const count = (value: bigint) => ownedAmount(value, CREDIT_DECIMALS);
   if (offer.state === "usable") return `${count(offer.usable)} credits available`;
   if (offer.state === "short") return `${count(offer.usable)} of ${count(offer.held)} usable now`;
-  return `None of your ${count(offer.held)} usable now`;
+  // no figure, so the instruction fits whole at 320px for any holding
+  return "None usable now. Use your own funds.";
 }
 
 /**

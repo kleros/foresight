@@ -3,13 +3,16 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { openHarness, startHarness } from "../utils/component-harness";
 
 /** `?credits=` in e2e/harness/predict-popup/main.tsx. */
-const CREDIT_STATES = ["enough", "partial", "short", "long", "empty"] as const;
+const CREDIT_STATES = ["enough", "partial", "short", "long", "empty", "whale"] as const;
+/** The states with nothing usable, which offer no tick. */
+const NONE_USABLE: readonly string[] = ["empty", "whale"];
 const NOTES: Record<(typeof CREDIT_STATES)[number], string> = {
   enough: "15 credits available",
   partial: "4 credits available",
   short: "20 of 50 usable now",
   long: "81.7347 of 2,000 usable now",
-  empty: "None of your 120 usable now",
+  empty: "None usable now. Use your own funds.",
+  whale: "None usable now. Use your own funds.",
 };
 const TICK = "Use Foresight credits";
 const STEPS = ["Create a trade wallet", "Add funds", "Place prediction"];
@@ -103,6 +106,12 @@ for (const viewport of VIEWPORTS) {
             .toBeLessThanOrEqual(16.5);
           expect
             .soft(
+              await line.getByTestId("credits-note").evaluate((element) => element.scrollWidth <= element.clientWidth),
+              `${credits}: the note is not cut`,
+            )
+            .toBe(true);
+          expect
+            .soft(
               await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
               `${credits}: no sideways scroll`,
             )
@@ -110,10 +119,10 @@ for (const viewport of VIEWPORTS) {
 
           // the tick starts on wherever credits are usable, and Predict stays free
           const tick = dialog.getByRole("checkbox", { name: TICK });
-          await expect.soft(tick).toHaveCount(credits === "empty" ? 0 : 1);
-          if (credits !== "empty") await expect.soft(tick).toBeChecked();
+          await expect.soft(tick).toHaveCount(NONE_USABLE.includes(credits) ? 0 : 1);
+          if (!NONE_USABLE.includes(credits)) await expect.soft(tick).toBeChecked();
           const max = dialog.getByRole("button", { name: "Max credits" });
-          if (credits === "empty") await expect.soft(max).toBeHidden();
+          if (NONE_USABLE.includes(credits)) await expect.soft(max).toBeHidden();
           else await expect.soft(max).toBeVisible();
           await expect.soft(dialog.getByRole("status")).toBeEmpty();
           await expect.soft(dialog.getByRole("button", { name: "Predict", exact: true })).toBeEnabled();
@@ -193,13 +202,20 @@ for (const viewport of VIEWPORTS) {
       const line = page.getByRole("dialog").getByRole("status").locator("span");
 
       await expect(line).toHaveText("Credits swap loses ≈ 0.5 xDAI.");
-      const [height, lineHeight, fontSize, fits] = await line.evaluate((element) => [
-        element.getBoundingClientRect().height,
-        parseFloat(getComputedStyle(element).lineHeight),
-        parseFloat(getComputedStyle(element).fontSize),
-        element.scrollWidth <= element.clientWidth,
-      ]);
-      expect(height).toBe(lineHeight);
+      const [lines, height, lineHeight, fontSize, fits] = await line.evaluate((element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return [
+          new Set([...range.getClientRects()].map((box) => Math.round(box.top))).size,
+          element.getBoundingClientRect().height,
+          parseFloat(getComputedStyle(element).lineHeight),
+          parseFloat(getComputedStyle(element).fontSize),
+          element.scrollWidth <= element.clientWidth,
+        ];
+      });
+      expect(lines).toBe(1);
+      // layout heights carry sub-pixel error, so the box is compared to the computed line-height in whole pixels
+      expect(Math.round(height)).toBe(Math.round(lineHeight));
       expect(fontSize).toBe(12);
       expect(fits).toBe(true);
     });
@@ -225,5 +241,56 @@ for (const { credits, ticked } of FUNDS_STEP) {
     await tickLabel(dialog).click();
     await expect(step).toContainText("4 sDAI");
     await expect(step).not.toContainText("credits");
+  });
+}
+
+// the harness's stored run deposits 4 of the pay token and, with credits on, moves 2 from the visitor's wallet
+const RECOVERED_FUNDS = [
+  { query: "pay=native", adds: "4 xDAI" },
+  { query: "pay=native&credits=enough", adds: "2 credits + 4 xDAI" },
+  { query: "credits=enough", adds: "2 credits + 4 sDAI" },
+  // a stored run keeps the credits it started with after the manager empties
+  { query: "credits=empty", adds: "2 credits + 4 sDAI" },
+] as const;
+
+for (const { query, adds } of RECOVERED_FUNDS) {
+  test(`a stored run's Add funds step names its own deposit, ${query}`, async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    await openHarness(page, `${harness.url}?options=2&state=recovered&${query}`);
+    const dialog = page.getByRole("dialog");
+    const step = dialog.getByRole("listitem").filter({ hasText: "Add funds" });
+
+    await expect(step.getByText(adds, { exact: true })).toBeVisible();
+    await expect(dialog.getByLabel("Amount")).toHaveValue("4");
+    if (!query.includes("pay=native")) return;
+    // 4 xDAI at the harness's 1.0937 xDAI an sDAI
+    const note = dialog.getByText("Locked to this prediction's amount; the deposit ≈ 3.6573 sDAI.", { exact: true });
+    expect(await lineBoxes(note), "the note's lines at 320px").toBeLessThanOrEqual(2);
+  });
+}
+
+for (const viewport of [
+  { width: 320, height: 568 },
+  { width: 375, height: 667 },
+]) {
+  test(`a stored xDAI run's note holds two lines with a 36,680.1234 sDAI deposit at ${viewport.width} x ${viewport.height}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await openHarness(page, `${harness.url}?options=2&state=recovered&pay=native&deposited=36680.1234`);
+    const note = page
+      .getByRole("dialog")
+      .getByText("Locked to this prediction's amount; the deposit ≈ 36,680.1234 sDAI.", { exact: true });
+
+    expect(await lineBoxes(note)).toBeLessThanOrEqual(2);
+  });
+}
+
+/** The rendered lines of an element's text; its box alone can't tell, as the note reserves two lines. */
+async function lineBoxes(element: Locator): Promise<number> {
+  return element.evaluate((node) => {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    return new Set([...range.getClientRects()].map((box) => Math.round(box.top))).size;
   });
 }

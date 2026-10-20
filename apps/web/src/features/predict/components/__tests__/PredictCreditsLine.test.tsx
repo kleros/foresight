@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { parseUnits } from "viem";
 import { describe, expect, it, vi } from "vitest";
 
 import type { CreditsHeld } from "@/lib/trade-executor/credits";
@@ -105,13 +106,19 @@ describe("the credits line", () => {
     expect(onAmountChange).toHaveBeenLastCalledWith(20n * WAD);
   });
 
-  it("when the manager is empty, offers no tick and says none of them is usable", () => {
+  it("when the manager is empty, offers no tick, says none of them is usable and asks for the visitor's own money", () => {
     renderLine({ wallet: 5n * WAD, tradeWallet: 0n, manager: 0n });
 
     expect(screen.queryByRole("checkbox")).toBeNull();
     expect(useMax()).toBeDisabled();
     expect(screen.getByText("Foresight credits")).toBeInTheDocument();
-    expect(note()).toHaveTextContent("None of your 5 usable now");
+    expect(note().textContent).toBe("None usable now. Use your own funds.");
+  });
+
+  it("when the manager is empty, says the same words for any holding, so a large one is not cut", () => {
+    renderLine({ wallet: parseUnits("36680.1234", 18), tradeWallet: 0n, manager: 0n });
+
+    expect(note().textContent).toBe("None usable now. Use your own funds.");
   });
 
   it("is locked with the rest of the form while a run holds it", () => {

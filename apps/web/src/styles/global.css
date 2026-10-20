@@ -700,7 +700,7 @@
   inset: 0;
   border-radius: inherit;
   transform: translateX(-60%);
-  animation: predict-sweep-travel var(--fs-dur-loop) linear 250ms infinite;
+  animation: predict-sweep-travel var(--fs-dur-loop) linear var(--fs-dur-enter) infinite;
 }
 .predict-sweep > i::before {
   content: "";
@@ -709,7 +709,7 @@
   border-radius: inherit;
   background: var(--fs-popup-axis);
   transform: scaleX(0.08);
-  animation: predict-sweep-stretch var(--fs-dur-loop) linear 250ms infinite;
+  animation: predict-sweep-stretch var(--fs-dur-loop) linear var(--fs-dur-enter) infinite;
 }
 /* at 8% wide the bar is off the line at ±60%, so the loop's seam and the delay show nothing */
 @keyframes predict-sweep-travel {
@@ -840,7 +840,7 @@ button.predict-cta.predict-cta[data-busy]:has(> .button-text) > .button-text {
   border-right-color: transparent;
   border-radius: 999px;
   color: var(--fs-popup-text-2);
-  animation: predict-spin 1s linear infinite;
+  animation: predict-spin var(--fs-dur-spin) linear infinite;
 }
 @keyframes predict-spin {
   to {
@@ -886,6 +886,6 @@ button.predict-cta.predict-cta[data-busy]:has(> .button-text) > .button-text {
 }
 @media (prefers-reduced-motion: reduce) {
   .predict-success-mark {
-    animation: fsFadeIn 150ms linear both;
+    animation: fsFadeIn var(--fs-dur-reduced-fade) linear both;
   }
 }

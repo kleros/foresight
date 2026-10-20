@@ -724,6 +724,53 @@ test.describe("the more-below cue's nudge", () => {
     expect(await before()).toBe("2.4s");
   });
 
+  test("delays the pricing sweep by the enter token, and turns both spinners on the spin token", async ({ page }) => {
+    const root = (name: string) =>
+      page.evaluate((token) => getComputedStyle(document.documentElement).getPropertyValue(token).trim(), name);
+    const retune = (name: string, value: string) =>
+      page.evaluate(([token, to]) => document.documentElement.style.setProperty(token!, to!), [name, value]);
+    const dialog = await openPopup(page, 2, "signing");
+    const busy = dialog.getByTestId("predict-spinner");
+    // the market page's pending status icon, drawn here on its own
+    await page.evaluate(() => {
+      const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      icon.setAttribute("class", "fs-icon-pending");
+      icon.setAttribute("data-testid", "pending-icon");
+      document.body.append(icon);
+    });
+    const pending = page.getByTestId("pending-icon");
+    expect(await root("--fs-dur-spin")).toBe("1s");
+    // declared with the other durations, so it reads the same with motion on
+    expect(await root("--fs-dur-reduced-fade")).toBe("150ms");
+    await expect(busy).toHaveCSS("animation-duration", "1s");
+    await expect(pending).toHaveCSS("animation-duration", "1s");
+    await retune("--fs-dur-spin", "1.5s");
+    await expect(busy).toHaveCSS("animation-duration", "1.5s");
+    await expect(pending).toHaveCSS("animation-duration", "1.5s");
+
+    const sweep = (await openPopup(page, 2, "quoting")).locator("[data-testid=pricing-sweep] > i");
+    const before = () => sweep.evaluate((node) => getComputedStyle(node, "::before").animationDelay);
+    await expect(sweep).toHaveCSS("animation-delay", "0.25s");
+    await retune("--fs-dur-enter", "400ms");
+    await expect(sweep).toHaveCSS("animation-delay", "0.4s");
+    expect(await before()).toBe("0.4s");
+  });
+
+  test("fades in place on the reduced-fade token under reduced motion", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await openHarness(page, `${harness.url}?dialog=success`);
+    const mark = page.locator(".predict-success-mark");
+    await expect(mark).toHaveCSS("animation-name", "fsFadeIn");
+    expect(
+      await page.evaluate(() =>
+        getComputedStyle(document.documentElement).getPropertyValue("--fs-dur-reduced-fade").trim(),
+      ),
+    ).toBe("150ms");
+    await expect(mark).toHaveCSS("animation-duration", "0.15s");
+    await page.evaluate(() => document.documentElement.style.setProperty("--fs-dur-reduced-fade", "90ms"));
+    await expect(mark).toHaveCSS("animation-duration", "0.09s");
+  });
+
   // a two-line status starts right under the strip, so the drop there is shorter
   const AMPLITUDES = [
     { width: 1280, height: 720, state: "idle&leftOut=1", lines: 1, drop: 6 },

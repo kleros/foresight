@@ -393,7 +393,7 @@ describe("predicting", () => {
     );
 
     expect(screen.getByLabelText("Amount")).toHaveValue("7.250000000000000001");
-    expect(screen.getByText("Locked to the amount this prediction started with.")).toBeInTheDocument();
+    expect(screen.getByText("Locked to this prediction's amount.")).toBeInTheDocument();
     // the form's balance is in the form's token, not necessarily the stored run's
     expect(screen.queryByTitle(/^Balance: /)).toBeNull();
     expect(screen.getByText("410 $M")).toBeInTheDocument();
@@ -413,7 +413,7 @@ describe("predicting", () => {
       />,
     );
 
-    expect(screen.getByText("Locked to the amount this prediction started with, ≈ 4 sDAI.")).toBeInTheDocument();
+    expect(screen.getByText("Locked to this prediction's amount; the deposit ≈ 4 sDAI.")).toBeInTheDocument();
     rerender(
       <PredictDialog
         {...props()}
@@ -421,7 +421,7 @@ describe("predicting", () => {
         canRetry
       />,
     );
-    expect(screen.getByText("Locked to the amount this prediction started with.")).toBeInTheDocument();
+    expect(screen.getByText("Locked to this prediction's amount.")).toBeInTheDocument();
   });
 
   it("offers no remove on a stored run's estimates", () => {

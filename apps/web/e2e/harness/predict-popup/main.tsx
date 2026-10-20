@@ -93,6 +93,8 @@ const poolFee = BigInt(params.get("fee") ?? "0");
 const isShort = params.get("short") === "1";
 /** `?swapLoss=` with `credits`, what the credits swap loses against the vault's rate, in xDAI. */
 const swapLoss = params.get("swapLoss");
+/** `?deposited=` with `state=recovered&pay=native`, the sDAI the stored run's deposit becomes; 3.6573 by default. */
+const depositedParam = params.get("deposited") ?? "3.6573";
 
 /** `?credits=` the visitor's Foresight credits, as CREDITS names them; none by default. The tick starts on, as in the app. */
 const creditsState = params.get("credits") as keyof typeof CREDITS | null;
@@ -101,6 +103,8 @@ const CREDITS = {
   partial: { wallet: 3n * WAD, tradeWallet: 1n * WAD, manager: 1000n * WAD },
   short: { wallet: 50n * WAD, tradeWallet: 0n, manager: 20n * WAD },
   empty: { wallet: 120n * WAD, tradeWallet: 0n, manager: 0n },
+  /** the holding the credits supply reached, with the manager empty */
+  whale: { wallet: parseUnits("36680.1234", 18), tradeWallet: 0n, manager: 0n },
   /** a four-decimal manager balance, short of a larger holding and under the per-run cap */
   long: { wallet: 2000n * WAD, tradeWallet: 0n, manager: parseUnits("81.7347", 18) },
   /** four-decimal credits, all in the visitor's wallet, so the funds step moves them */
@@ -245,10 +249,20 @@ const preview = Object.fromEntries(
 );
 const progress = PROGRESS[state] ?? null;
 const isRunning = state === "quoting" || state === "signing" || state === "confirming";
+/** The stored run `state=recovered` resumes: 4 of the pay token, and 2 credits from the visitor's wallet with `credits=`. */
+const RECOVERED = { deposit: 4n * WAD, creditsFromEoa: heldCredits ? 2n * WAD : 0n };
+// a stored run's funds row is its own, as PredictRunner builds it, not the form's
 const stepsFor = (shown: typeof funding) =>
   predictSteps({
     wallet: { address: WALLET, deployed: !isFirstPrediction },
-    ...fundsToAdd(state === "over" ? null : shown, payToken, collateral),
+    ...(state === "recovered"
+      ? {
+          toAdd: RECOVERED.deposit,
+          symbol: payToken.symbol,
+          decimals: payToken.decimals,
+          ...(RECOVERED.creditsFromEoa > 0n ? { credits: RECOVERED.creditsFromEoa } : {}),
+        }
+      : fundsToAdd(state === "over" ? null : shown, payToken, collateral)),
     progress,
   });
 
@@ -324,10 +338,10 @@ function Harness() {
         recovered={
           state === "recovered"
             ? {
-                deposit: 4n * WAD,
+                deposit: RECOVERED.deposit,
                 token: payToken,
-                // 4 xDAI at the harness's 1.0937 xDAI an sDAI
-                ...(paysNative ? { deposited: parseUnits("3.6573", 18) } : {}),
+                // by default, 4 xDAI at the harness's 1.0937 xDAI an sDAI
+                ...(paysNative ? { deposited: parseUnits(depositedParam, 18) } : {}),
                 slippage: { tradeBps: 100 },
               }
             : undefined
