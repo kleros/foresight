@@ -413,7 +413,7 @@ describe("predicting", () => {
       />,
     );
 
-    expect(screen.getByText("Locked to the amount this prediction started with, ≈ 4 sDAI.")).toBeInTheDocument();
+    expect(screen.getByText("Locked to what you started with; the deposit ≈ 4 sDAI.")).toBeInTheDocument();
     rerender(
       <PredictDialog
         {...props()}
