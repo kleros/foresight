@@ -740,6 +740,8 @@ test.describe("the more-below cue's nudge", () => {
     });
     const pending = page.getByTestId("pending-icon");
     expect(await root("--fs-dur-spin")).toBe("1s");
+    // declared with the other durations, so it reads the same with motion on
+    expect(await root("--fs-dur-reduced-fade")).toBe("150ms");
     await expect(busy).toHaveCSS("animation-duration", "1s");
     await expect(pending).toHaveCSS("animation-duration", "1s");
     await retune("--fs-dur-spin", "1.5s");

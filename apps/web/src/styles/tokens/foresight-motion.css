@@ -7,6 +7,7 @@
   --fs-dur-loop: 1.6s; /* one cycle of an indeterminate loop */
   --fs-dur-nudge: 2s; /* one burst of an attention nudge and its hold */
   --fs-dur-spin: 1s; /* one turn of a spinner */
+  --fs-dur-reduced-fade: 150ms; /* the in-place fade that stands in for a move under reduced motion */
   --fs-ease-enter: cubic-bezier(0, 0, 0.2, 1);
   --fs-ease-exit: cubic-bezier(0.4, 0, 1, 1);
   --fs-ease-structural: cubic-bezier(0.2, 0, 0, 1);
@@ -241,7 +242,6 @@
     --fs-dur-enter: 1ms;
     --fs-dur-structural: 1ms;
     --fs-ease-spring: linear;
-    --fs-dur-reduced-fade: 150ms; /* the in-place fade that stands in for a move */
   }
   .fs-enter,
   .fs-spawn,
