@@ -17,6 +17,8 @@ type ScrollFadeProps = {
   fadeFrom?: string;
   /** The cue's text and top border colours, as `text-*` and `border-*` classes. */
   cueTone?: string;
+  /** How far, in px, the cue's words and arrow drop in each nudge. */
+  cueDrop?: number;
 };
 
 // measured before paint, so the cue's strip is laid out by the next frame, when a child may scroll the area
@@ -44,13 +46,14 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
   minOverflow = 16,
   fadeFrom = "from-fs-surface",
   cueTone = "border-fs-border text-fs-text-secondary",
+  cueDrop = 6,
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const cueRef = useRef<HTMLSpanElement>(null);
   const [showTop, setShowTop] = useState(false);
   const [showBottom, setShowBottom] = useState(false);
   const [hasOverflow, setHasOverflow] = useState(false);
-  // once the arrow's bursts end or the visitor scrolls the area, the arrow stays still; reduced motion skips them
+  // once the cue's bursts end or the visitor scrolls the area, the cue stays still; reduced motion skips them
   const [nudged, setNudged] = useState(
     () => typeof window !== "undefined" && Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches),
   );
@@ -82,7 +85,7 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
 
     el.addEventListener("scroll", update);
     window.addEventListener("resize", update);
-    // the visitor's own scroll settles the arrow; a scroll the page makes (focus, scrollIntoView) does not
+    // the visitor's own scroll settles the cue; a scroll the page makes (focus, scrollIntoView) does not
     const settle = () => setNudged(true);
     const settleOnKey = (event: KeyboardEvent) => {
       if (SCROLL_KEYS.has(event.key) && !usesScrollKey(event.target, event.key)) settle();
@@ -154,7 +157,7 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
           data-testid="more-below"
           aria-hidden
           className={clsx(
-            "pointer-events-none h-5.5 shrink-0 items-center justify-center gap-1 pt-1.5",
+            "pointer-events-none h-5.5 shrink-0 items-center justify-center pt-1.5",
             "bg-fs-surface type-caption border-t",
             cueTone,
             "transition-opacity duration-(--fs-dur-enter) ease-(--fs-ease-enter)",
@@ -162,12 +165,16 @@ export const ScrollFade: React.FC<ScrollFadeProps> = ({
             showBottom ? "opacity-100" : "opacity-0",
           )}
         >
-          <ArrowDown
-            data-testid="more-below-arrow"
-            className={clsx("size-3 [&_path]:fill-current", showBottom && !nudged && "fs-nudge-down")}
+          {/* the hairline stays put; the words and the arrow nudge together */}
+          <span
+            data-testid="more-below-nudge"
+            className={clsx("flex items-center gap-1", showBottom && !nudged && "fs-nudge-down")}
+            style={{ "--fs-nudge-drop": `${cueDrop}px` } as React.CSSProperties}
             onAnimationEnd={() => setNudged(true)}
-          />
-          {cue}
+          >
+            <ArrowDown data-testid="more-below-arrow" className="size-3 [&_path]:fill-current" />
+            {cue}
+          </span>
         </span>
       ) : null}
     </div>

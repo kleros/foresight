@@ -250,6 +250,18 @@ export function PredictDialog({
     );
     return () => cancelAnimationFrame(frame);
   }, [isOpen, statusText, isRunning]);
+  // a status on two lines starts right under the more-below cue, so the cue drops less
+  const [isStatusTall, setIsStatusTall] = useState(false);
+  useEffect(() => {
+    const line = statusRef.current?.firstElementChild;
+    if (!line) return setIsStatusTall(false);
+    const measure = () =>
+      setIsStatusTall(line.getBoundingClientRect().height > parseFloat(getComputedStyle(line).lineHeight) * 1.5);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(line);
+    return () => observer.disconnect();
+  }, [isOpen, statusText]);
 
   return (
     <Modal
@@ -402,6 +414,7 @@ export function PredictDialog({
             className="landscape-phone:min-h-0 landscape-phone:flex-none min-h-32 w-full"
             cue="More below"
             cueTone="border-(--fs-popup-line) text-fs-popup-text-2"
+            cueDrop={isStatusTall ? 4 : 6}
             minOverflow={1}
             fadeSize={40}
           >
