@@ -865,6 +865,40 @@ for (const viewport of [
       await expect(dialog.getByTestId("amount-slider")).toBeVisible();
       expect((await dialog.getByRole("status").boundingBox())!.height).toBeLessThanOrEqual(40);
     });
+
+    for (const extra of ["", "&credits=enough"]) {
+      test(`gives the slider its own row and every control beside it its own pixels${extra}`, async ({ page }) => {
+        await openHarness(page, `${harness.url}?options=2&state=idle${extra}`);
+        const dialog = page.getByRole("dialog");
+        await expect(dialog.getByTestId("amount-slider")).toBeVisible();
+        await settle(dialog);
+        const probe = await dialog.evaluate((element) => {
+          const slider = element.querySelector("[data-testid=amount-slider]")!;
+          slider.scrollIntoView({ block: "center" });
+          const hit = element.querySelector("div:has(> #slider-track)")!.getBoundingClientRect();
+          const x = hit.left + hit.width / 2;
+          // the run of pixels down the track's middle that land on the slider
+          let target = 0;
+          for (let y = Math.ceil(hit.top); y < hit.bottom; y++) {
+            if (slider.contains(document.elementFromPoint(x, y))) target++;
+          }
+          const neighbours = [
+            element.querySelector("[data-testid=predict-summary] button"),
+            element.querySelector("[data-testid=credits-line] label"),
+            element.querySelector("[data-testid=credits-line] button"),
+          ].filter((control): control is Element => control !== null);
+          const lost = neighbours.filter((control) => {
+            const box = control.getBoundingClientRect();
+            const y = box.top < hit.bottom && box.bottom > hit.bottom ? box.top + 1 : box.bottom - 1;
+            if (y < hit.top || y > hit.bottom) return false;
+            return slider.contains(document.elementFromPoint(box.left + Math.min(8, box.width / 2), y));
+          });
+          return { target, lost: lost.map((control) => control.textContent) };
+        });
+        expect(probe.lost, "controls whose edge the slider takes").toEqual([]);
+        expect(probe.target, "pixels down the track that move the slider").toBeGreaterThanOrEqual(32);
+      });
+    }
   });
 }
 

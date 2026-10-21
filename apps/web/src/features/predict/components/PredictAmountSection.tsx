@@ -296,7 +296,7 @@ function AmountSlider({
     <div
       data-testid="amount-slider"
       className={clsx(
-        // a 44px hit area on a 16px row: the track overhangs into these margins, never into the summary
+        // a 44px hit area on a 16px row: it overhangs the margins and the status text, under the credits line's targets
         "mt-3.5 flex h-4 items-center gap-3 short:mt-2.5 landscape-phone:mt-1.5",
         "transition-opacity duration-(--fs-dur-enter) ease-(--fs-ease-enter)",
         isDisabled && "opacity-50",
