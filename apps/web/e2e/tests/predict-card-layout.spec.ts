@@ -284,9 +284,16 @@ for (const theme of ["light", "dark"]) {
         const leaving = await page.evaluate(async () => {
           (window as unknown as { clearPicks: () => void }).clearPicks();
           await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
-          return document.querySelector("[data-predict-dock]")?.getAttribute("data-leaving") ?? null;
+          const dock = document.querySelector<HTMLElement>("[data-predict-dock]");
+          const panel = dock?.firstElementChild as HTMLElement | undefined;
+          return {
+            phase: dock?.getAttribute("data-leaving") ?? null,
+            height: panel?.getBoundingClientRect().height,
+            text: panel?.innerText.replace(/\s+/g, " ").trim(),
+          };
         });
-        expect(leaving).toBe("");
+        // the bar sinks as it was, not as the card it leaves behind
+        expect(leaving).toEqual({ phase: "", height: 77, text: "Place your estimates Berlin 400 +2 Predict" });
         await expect(page.locator("[data-predict-dock]")).toHaveCount(0);
         await expect(page.locator("[data-stuck]")).toHaveCount(0);
       });
