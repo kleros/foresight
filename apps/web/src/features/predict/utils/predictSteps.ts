@@ -270,16 +270,17 @@ export interface MovedStatus {
   bySlippage?: true;
 }
 
-/** A market name longer than this is not quoted on the two-line status line. */
-const NAMED_MAX = 24;
+/** The longest named moved line that keeps to the callout's two lines at 320px wide; measured on real names to 63. */
+const NAMED_LINE_MAX = 62;
 
 /** Said when the pools moved since Details was read, before anything more is signed. */
 function movedText({ markets, credits, only, bySlippage }: MovedStatus): string {
   if (bySlippage) return "Your new slippage changes the trades. Check Details, then confirm.";
-  if (!credits && markets === 1 && only && only.name.length <= NAMED_MAX) {
+  if (!credits && markets === 1 && only) {
     // a figure and its unit wrap as one
     const whole = (value: string) => value.replaceAll(" ", "\u00a0");
-    return `${only.name} now goes to ${whole(only.to)}, not ${whole(only.was)}. Confirm to go on.`;
+    const named = `${only.name} now goes to ${whole(only.to)}, not ${whole(only.was)}. Confirm to go on.`;
+    if (named.length <= NAMED_LINE_MAX) return named;
   }
   const count = `${markets} ${markets === 1 ? "market" : "markets"}`;
   if (credits && markets > 0) return `Prices moved on ${count} and the credits swap. Confirm to go on.`;
