@@ -275,7 +275,9 @@ const NAMED_MAX = 24;
 function movedText({ markets, credits, only, bySlippage }: MovedStatus): string {
   if (bySlippage) return "Your new slippage changes the trades. Check Details, then confirm.";
   if (!credits && markets === 1 && only && only.name.length <= NAMED_MAX) {
-    return `${only.name} now goes to ${only.to}, not ${only.was}. Confirm to go on.`;
+    // a figure and its unit wrap as one
+    const whole = (value: string) => value.replaceAll(" ", "\u00a0");
+    return `${only.name} now goes to ${whole(only.to)}, not ${whole(only.was)}. Confirm to go on.`;
   }
   const count = `${markets} ${markets === 1 ? "market" : "markets"}`;
   const what = credits
