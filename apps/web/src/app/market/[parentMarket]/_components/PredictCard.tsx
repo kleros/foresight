@@ -344,7 +344,7 @@ function Picks({ selected }: { selected: SelectedEstimate[] }) {
                   strokeLinejoin="round"
                 />
               </svg>
-              {formatEstimate(estimate.value, estimate.scale.unit)}
+              <span className="predict-chip-figure">{formatEstimate(estimate.value, estimate.scale.unit)}</span>
             </span>
           </li>
         );

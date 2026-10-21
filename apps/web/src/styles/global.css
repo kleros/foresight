@@ -1043,6 +1043,12 @@ button.predict-cta.predict-cta[data-busy]:has(> .button-text) > .button-text {
   .predict-dock[data-stuck] .predict-pin-pill {
     display: inline-flex;
   }
+  /* under 360px the pinned chip keeps the name and its side; the card below still shows the figure */
+  @media (max-width: 359px) {
+    .predict-dock[data-stuck] .predict-chip-figure {
+      display: none;
+    }
+  }
   .predict-dock .predict-dock-panel {
     transition:
       margin var(--fs-dur-enter) var(--fs-ease-structural),
