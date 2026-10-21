@@ -15,13 +15,25 @@ function flowTop(dock: HTMLElement): number {
     : parent.getBoundingClientRect().top + parseFloat(style.paddingTop);
 }
 
+/** The dock's height docked into the page, read off a hidden copy so a pinned dock need not unpin to be measured. */
+function dockedHeight(dock: HTMLElement): number {
+  const copy = dock.cloneNode(true) as HTMLElement;
+  for (const name of ["data-stuck", "data-entering", "data-leaving", "style"]) copy.removeAttribute(name);
+  Object.assign(copy.style, { position: "absolute", visibility: "hidden", width: `${dock.offsetWidth}px` });
+  dock.after(copy);
+  const height = copy.offsetHeight;
+  copy.remove();
+  return height;
+}
+
 /**
  * The phone dock around the Predict card: pinned to the bottom edge while Predict is live and the card's own
  * place is below the fold, docked back into the page once the visitor reaches it.
  */
-export function usePredictDock(isLive: boolean) {
+export function usePredictDock(isLive: boolean, content: string) {
   const ref = useRef<HTMLDivElement>(null);
   const docked = useRef(0);
+  const remeasure = useRef<() => void>(undefined);
   const [isStuck, setIsStuck] = useState(false);
   // the card's height in the page, measured docked and held while pinned, so the page keeps one length
   const [height, setHeight] = useState<number>();
@@ -38,7 +50,8 @@ export function usePredictDock(isLive: boolean) {
       return;
     }
     let frame = 0;
-    const check = () => {
+    let isResized = false;
+    const check = (measure: boolean) => {
       frame = 0;
       const dock = ref.current;
       if (!dock) return;
@@ -47,8 +60,8 @@ export function usePredictDock(isLive: boolean) {
         setIsStuck(false);
         return;
       }
-      if (!dock.hasAttribute("data-stuck")) {
-        docked.current = dock.offsetHeight;
+      if (measure) {
+        docked.current = dockedHeight(dock);
         setHeight(docked.current);
       }
       const stuck = flowTop(dock) + docked.current > window.innerHeight + 0.5;
@@ -56,17 +69,30 @@ export function usePredictDock(isLive: boolean) {
       if (!stuck) setPhase((current) => (current === "entering" ? "idle" : current));
     };
     const schedule = () => {
-      if (!frame) frame = requestAnimationFrame(check);
+      if (!frame)
+        frame = requestAnimationFrame(() => {
+          check(isResized);
+          isResized = false;
+        });
     };
-    check();
+    const onResize = () => {
+      isResized = true;
+      schedule();
+    };
+    remeasure.current = () => check(true);
+    check(true);
     window.addEventListener("scroll", schedule, { passive: true });
-    window.addEventListener("resize", schedule);
+    window.addEventListener("resize", onResize);
     return () => {
+      remeasure.current = undefined;
       cancelAnimationFrame(frame);
       window.removeEventListener("scroll", schedule);
-      window.removeEventListener("resize", schedule);
+      window.removeEventListener("resize", onResize);
     };
   }, [isLive]);
+
+  // what the card carries changed, and with it the height it takes docked
+  useMeasureEffect(() => remeasure.current?.(), [content]);
 
   // React has no onAnimationCancel; a dock widened past md mid-exit drops its animation without an end
   useEffect(() => {

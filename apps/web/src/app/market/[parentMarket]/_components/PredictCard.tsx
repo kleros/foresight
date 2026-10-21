@@ -153,7 +153,10 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
     return address ? <EnsureChain className={CTA}>{button}</EnsureChain> : button;
   };
   // the phone dock carries only a live Predict; otherwise the card stays in the page and says why
-  const dock = usePredictDock(!isDisabled && blocker === null && interrupted === null);
+  const dock = usePredictDock(
+    !isDisabled && blocker === null && interrupted === null,
+    toPredict.map((estimate) => `${estimate.scale.market}:${estimate.value}`).join(),
+  );
   const isDocked = dock.isDocked;
 
   return (
@@ -189,7 +192,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
         </div>
         <div className={isDocked ? "max-md:flex max-md:items-center max-md:gap-3 md:contents" : "contents"}>
           {toPredict.length > 0 && interrupted === null ? (
-            <Picks selected={toPredict} isCompact={dock.isStuck} />
+            <Picks selected={toPredict} />
           ) : null}
           <div className="shrink-0 md:max-lg:order-first">
             {interrupted ? (
@@ -280,8 +283,11 @@ const SHOWN_WIDE = 3;
 const SHOWN_NARROW = 2;
 const SHOWN_PINNED = 1;
 
-/** The picks Predict would send, as chips: three from lg up, two below, one in the pinned phone bar, and a count of the rest. */
-function Picks({ selected, isCompact }: { selected: SelectedEstimate[]; isCompact: boolean }) {
+/**
+ * The picks Predict would send, as chips: three from lg up, two below, and a count of the rest. The pinned phone bar
+ * keeps one chip by CSS alone, so the markup, and the height it takes docked, is the same pinned or not.
+ */
+function Picks({ selected }: { selected: SelectedEstimate[] }) {
   const more = (shown: number) => selected.length - shown;
   const morePill = (shown: number, className: string) =>
     more(shown) > 0 ? (
@@ -300,10 +306,7 @@ function Picks({ selected, isCompact }: { selected: SelectedEstimate[]; isCompac
   return (
     <ul
       aria-label="Your estimates"
-      className={clsx(
-        "flex min-w-0 flex-[1_1_100%] flex-wrap gap-2 lg:flex-1 lg:justify-end",
-        isCompact && "max-md:flex-nowrap max-md:overflow-hidden",
-      )}
+      className="predict-picks flex min-w-0 flex-[1_1_100%] flex-wrap gap-2 lg:flex-1 lg:justify-end"
     >
       {selected.map((estimate, index) => {
         const higher = estimate.direction === "higher";
@@ -317,10 +320,9 @@ function Picks({ selected, isCompact }: { selected: SelectedEstimate[]; isCompac
                 ? "hidden"
                 : index >= SHOWN_NARROW
                   ? "inline-flex max-lg:hidden"
-                  : index >= (isCompact ? SHOWN_PINNED : SHOWN_NARROW)
-                    ? "inline-flex max-md:hidden"
+                  : index >= SHOWN_PINNED
+                    ? "predict-pin-hide inline-flex"
                     : "inline-flex",
-              isCompact && "max-md:min-w-0",
             )}
           >
             <span className="min-w-0 truncate" title={estimate.scale.name}>
@@ -348,8 +350,8 @@ function Picks({ selected, isCompact }: { selected: SelectedEstimate[]; isCompac
         );
       })}
       {morePill(SHOWN_WIDE, "inline-flex max-lg:hidden")}
-      {morePill(SHOWN_NARROW, clsx("inline-flex lg:hidden", isCompact && "max-md:hidden"))}
-      {isCompact ? morePill(SHOWN_PINNED, "inline-flex md:hidden") : null}
+      {morePill(SHOWN_NARROW, "predict-pin-hide inline-flex lg:hidden")}
+      {morePill(SHOWN_PINNED, "predict-pin-pill")}
     </ul>
   );
 }

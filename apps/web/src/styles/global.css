@@ -986,6 +986,9 @@ button.predict-cta.predict-cta[data-busy]:has(> .button-text) > .button-text {
 .predict-dock-fold {
   display: contents;
 }
+.predict-pin-pill {
+  display: none;
+}
 @media (max-width: 767px) {
   .predict-dock {
     position: sticky;
@@ -1022,6 +1025,23 @@ button.predict-cta.predict-cta[data-busy]:has(> .button-text) > .button-text {
   }
   .predict-dock[data-stuck] .predict-dock-fold > div > * {
     opacity: 0;
+  }
+  /* pinned, the picks keep one chip and the count of the rest */
+  .predict-dock[data-stuck] .predict-picks {
+    position: relative;
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+  .predict-dock[data-stuck] .predict-picks > li {
+    min-width: 0;
+  }
+  /* out of the row without display:none, which would replay the chip's entrance on docking */
+  .predict-dock[data-stuck] .predict-pin-hide {
+    position: absolute;
+    visibility: hidden;
+  }
+  .predict-dock[data-stuck] .predict-pin-pill {
+    display: inline-flex;
   }
   .predict-dock .predict-dock-panel {
     transition:

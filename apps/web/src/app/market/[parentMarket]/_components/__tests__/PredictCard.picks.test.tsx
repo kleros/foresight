@@ -72,7 +72,9 @@ describe("the predict card's picks", () => {
     pick(detail);
     renderCard(detail);
 
-    const chips = within(screen.getByRole("list", { name: "Your estimates" })).getAllByRole("listitem");
+    const chips = within(screen.getByRole("list", { name: "Your estimates" }))
+      .getAllByRole("listitem")
+      .filter((item) => !item.hasAttribute("aria-label"));
     expect(chips.map((chip) => chip.textContent)).toEqual(["Berlin400 $M", "Lisbon120 $M"]);
     expect(within(chips[0]!).getByRole("img", { name: "above the market" })).toBeInTheDocument();
     expect(within(chips[1]!).getByRole("img", { name: "below the market" })).toBeInTheDocument();
