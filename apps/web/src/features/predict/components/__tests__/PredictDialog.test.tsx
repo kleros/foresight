@@ -793,7 +793,8 @@ describe("what a run shows while it goes", () => {
 
     view.rerender(<PredictDialog {...props()} steps={{ ...steps, failure: "You declined in your wallet." }} />);
 
-    expect(within(screen.getByRole("status")).getByText("You declined in your wallet.")).toHaveClass("fs-enter");
+    expect(within(screen.getByRole("status")).getByText("You declined in your wallet.")).toBeInTheDocument();
+    expect(within(screen.getByRole("status")).getByTestId("status-box")).toHaveClass("fs-enter");
   });
 });
 
@@ -1264,7 +1265,7 @@ describe("a credits swap that loses much", () => {
     render(<PredictDialog {...props()} {...withCredits} creditsSwap={lossySwap} />);
 
     expect(screen.getByRole("status")).toHaveTextContent(/^Credits swap loses ≈ 38 xDAI\.$/);
-    expect(within(screen.getByRole("status")).getByText(/loses/)).toHaveClass("text-xs");
+    expect(within(screen.getByRole("status")).getByTestId("status-box")).toHaveAttribute("data-small");
     expect(screen.getByRole("button", { name: "Predict" })).toBeEnabled();
   });
 

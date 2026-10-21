@@ -22,6 +22,7 @@ import { PredictList, type ListedEstimate, type PriceMove } from "./PredictList"
 import { PredictSettings, reachable } from "./PredictSettings";
 import { PredictStepsTimeline } from "./PredictStepsTimeline";
 import { PredictSummary, type CreditsSwapShown } from "./PredictSummary";
+import { StatusGlyph } from "./StatusGlyph";
 import { HIGH_SLIPPAGE_BPS } from "../oracle/tolerances";
 import { shownAmount, type Funding } from "../utils/funding";
 import {
@@ -31,7 +32,6 @@ import {
   statusLine,
   type MovedStatus,
   type PredictSteps,
-  type StatusLine,
 } from "../utils/predictSteps";
 import { resolveSlippage, type SlippageKind, type SlippageSettings } from "../utils/slippage";
 
@@ -96,11 +96,13 @@ interface PredictDialogProps {
   onPredict: () => void;
 }
 
-const STATUS_TONE: Record<StatusLine["tone"], string> = {
-  neutral: "text-fs-popup-text-2",
-  warning: "text-fs-tone-warning-text",
-  error: "text-fs-tone-error-text",
-};
+/** The lines an element's text wraps onto. */
+function lineCount(element: Element): number {
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  return new Set([...(range.getClientRects?.() ?? [])].filter((box) => box.width > 0).map((box) => Math.round(box.top)))
+    .size;
+}
 
 /** What `value` was when `lock` last took a new key, held until it is null. */
 function useHeldWhile<T>(value: T, lock: string | null): T {
@@ -277,10 +279,9 @@ export function PredictDialog({
   // a status on two lines starts right under the more-below cue, so the cue's nudge is smaller
   const [isStatusTall, setIsStatusTall] = useState(false);
   useEffect(() => {
-    const line = statusRef.current?.firstElementChild;
+    const line = statusRef.current?.querySelector("[data-testid=status-text]");
     if (!line) return setIsStatusTall(false);
-    const measure = () =>
-      setIsStatusTall(line.getBoundingClientRect().height > parseFloat(getComputedStyle(line).lineHeight) * 1.5);
+    const measure = () => setIsStatusTall(lineCount(line) > 1);
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(line);
@@ -317,8 +318,8 @@ export function PredictDialog({
           "relative flex min-h-0 w-full flex-col",
           // under the settings only the panel scrolls
           settingsOpen ? "landscape-phone:overflow-hidden" : "landscape-phone:overflow-y-auto",
-          "landscape-phone:scroll-pt-10 landscape-phone:scroll-pb-16",
-          "short:landscape-phone:scroll-pb-14",
+          "landscape-phone:scroll-pt-10 landscape-phone:scroll-pb-17",
+          "short:landscape-phone:scroll-pb-15",
           "landscape-phone:-mr-3 landscape-phone:pr-3 landscape-phone:-ml-1 landscape-phone:pl-1",
           "landscape-phone:w-[calc(100%+16px)]",
         )}
@@ -416,7 +417,7 @@ export function PredictDialog({
         <div className="contents" {...(settingsOpen ? INERT : {})}>
           <section
             data-panel="estimates"
-            className="rounded-fs-panel bg-fs-popup-panel shrink-0 px-4 pt-3 pb-1.5 short:pt-2.5 short:pb-1"
+            className="rounded-fs-panel bg-fs-popup-panel shrink-0 px-4 pt-3 pb-1.5 short:pt-1.5 short:pb-0.5"
           >
             <h3 className="type-label text-fs-popup-text-2 font-medium tabular-nums">
               {`${selected.length} ${selected.length === 1 ? "estimate" : "estimates"}`}
@@ -489,22 +490,23 @@ export function PredictDialog({
             </div>
           </ScrollFade>
 
-          {/* outside the body's scroll area, so the reason a run stopped shows with the button; two lines held empty or not */}
+          {/* outside the body's scroll area, so the reason a run stopped shows with the button; its slot is held empty or not */}
           <p
             ref={statusRef}
             role="status"
             aria-live="polite"
-            className={clsx(
-              "type-label flex h-10 shrink-0 items-center text-left text-[13px] leading-[18px] text-pretty",
-              status && STATUS_TONE[status.tone],
-            )}
+            data-tone={status?.tone}
+            className="predict-status text-left"
           >
             {status ? (
               <span
                 key={status.text}
-                className={clsx(status.tone !== "neutral" && "fs-enter", status.small && "truncate text-xs leading-4")}
+                data-testid="status-box"
+                data-small={status.small}
+                className={clsx("predict-status-box", status.tone !== "neutral" && "fs-enter")}
               >
-                {status.text}
+                <StatusGlyph status={status} />
+                <span data-testid="status-text">{status.text}</span>
               </span>
             ) : null}
           </p>
@@ -512,7 +514,7 @@ export function PredictDialog({
           {/* under 375px Go back and Confirm new prices outgrow one row, so Confirm stacks over Go back */}
           <div
             className={clsx(
-              "predict-footer bg-fs-surface landscape-phone:pb-2 sticky bottom-0 flex gap-2 pt-1 pb-4 short:pb-3",
+              "predict-footer bg-fs-surface landscape-phone:pb-2 sticky bottom-0 flex gap-2 pt-2 pb-4 short:pb-3",
               "[@media(max-width:374px)]:flex-col",
             )}
           >

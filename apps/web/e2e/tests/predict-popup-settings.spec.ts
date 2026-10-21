@@ -373,7 +373,7 @@ test.describe("prices that moved at 320 x 568", () => {
       expect(await isWhole(back)).toBe(true);
       const footer = dialog.locator(".predict-footer");
       expect(await footer.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-      expect(await isWhole(dialog.getByRole("status").locator("span"))).toBe(true);
+      expect(await isWhole(dialog.getByTestId("status-text"))).toBe(true);
       await expect(page).toHaveScreenshot(`moved-320x568-${theme}.png`, { animations: "disabled" });
     });
   }
@@ -446,7 +446,7 @@ for (const viewport of VIEWPORTS) {
         expect([moved.footer[1], moved.footer[3]]).toEqual([idle.footer[1], idle.footer[3]]);
         const status = dialog.getByRole("status");
         await expect(status).toHaveText(/^\S.* now goes to .+, not .+\. Confirm to go on\.$/);
-        expect(await isWhole(status.locator("span"))).toBe(true);
+        expect(await isWhole(status.getByTestId("status-text"))).toBe(true);
         await expect(dialog.getByRole("button", { name: "Confirm new prices" })).toBeEnabled();
         expect(await isWhole(dialog.getByRole("button", { name: "Go back" }))).toBe(true);
       });

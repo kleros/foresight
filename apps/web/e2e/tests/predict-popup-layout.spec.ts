@@ -794,7 +794,7 @@ test.describe("the more-below cue's nudge", () => {
       await settle(dialog);
       const strip = (await cue.boundingBox())!;
       expect(await cue.evaluate((element) => getComputedStyle(element).paddingTop)).toBe("6px");
-      const status = await dialog.getByRole("status").locator("span").evaluate(inkOf);
+      const status = await dialog.getByTestId("status-text").evaluate(inkOf);
       expect(status.lines, "the status line's lines").toBe(lines);
 
       const at = (time: number) =>
@@ -859,11 +859,11 @@ for (const viewport of [
   test.describe(`a popup on a short screen at ${viewport.width} x ${viewport.height}`, () => {
     test.use({ viewport });
 
-    test("keeps the share slider and a two-line status slot", async ({ page }) => {
+    test("keeps the share slider and a 44px status slot", async ({ page }) => {
       const dialog = await openPopup(page, 2, "failed", "funds");
 
       await expect(dialog.getByTestId("amount-slider")).toBeVisible();
-      expect((await dialog.getByRole("status").boundingBox())!.height).toBeLessThanOrEqual(40);
+      expect((await dialog.getByRole("status").boundingBox())!.height).toBe(44);
     });
 
     for (const extra of ["", "&credits=enough"]) {
@@ -928,7 +928,7 @@ for (const viewport of [
   test.describe(`every failure at ${viewport.width} x ${viewport.height}`, () => {
     test.use({ viewport });
 
-    test("fits its words in a two-line status slot, left-aligned under the title, without moving the footer", async ({
+    test("fits its words in its 44px status slot, its callout under the title, without moving the footer", async ({
       page,
     }) => {
       const idle = await footprint(page, await openPopup(page, 10, "idle"));
@@ -936,13 +936,21 @@ for (const viewport of [
         const dialog = await openPopup(page, 10, "failed", reason);
         const status = dialog.getByRole("status");
         const [text, title] = await Promise.all([
-          status.locator("span").boundingBox(),
+          status.getByTestId("status-box").boundingBox(),
           dialog.getByRole("heading", { name: "Predict", exact: true }).boundingBox(),
         ]);
 
         expect.soft(await status.evaluate((element) => getComputedStyle(element).textAlign), reason).toBe("left");
         expect.soft(Math.abs(text!.x - title!.x), `${reason} starts under the title`).toBeLessThanOrEqual(1);
-        expect.soft((await status.boundingBox())!.height, `${reason}: a two-line slot`).toBeLessThanOrEqual(40);
+        expect.soft((await status.boundingBox())!.height, `${reason}: the slot`).toBe(44);
+        expect
+          .soft(
+            await status
+              .getByTestId("status-box")
+              .evaluate((element) => element.scrollHeight <= element.clientHeight + 1),
+            `${reason}: the words fit the callout`,
+          )
+          .toBe(true);
 
         expect.soft(await footprint(page, dialog), `${reason} has the idle popup's footprint`).toEqual(idle);
         expect
@@ -969,7 +977,7 @@ for (const viewport of [
       for (const state of ["disconnected", "failed", "pending"] as const) {
         for (const options of [2, 10]) {
           const dialog = await openPopup(page, options, state);
-          const status = dialog.getByRole("status").locator("span");
+          const status = dialog.getByTestId("status-text");
           await expect(status).not.toBeEmpty();
           // both scrolls wait a frame
           await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
@@ -1879,10 +1887,104 @@ test.describe("the popup's tones", () => {
       "rgb(255, 255, 255)",
     );
     expect(await done.evaluate((bullet) => getComputedStyle(bullet, "::before").opacity)).toBe("1");
-    expect(await dialog.getByRole("status").evaluate((status) => getComputedStyle(status).color)).toBe(
-      "rgb(196, 0, 42)",
-    );
+    expect(
+      await dialog.getByTestId("status-glyph").evaluate((glyph) => getComputedStyle(glyph).color),
+      "the failure's glyph",
+    ).toBe("rgb(196, 0, 42)");
   });
+});
+
+/** The callout's surface, glyph and sentence as opaque rgb, read through a canvas so color-mix() resolves. */
+function calloutColours(dialog: Locator) {
+  return dialog.getByRole("status").evaluate((status) => {
+    const box = status.querySelector<HTMLElement>("[data-testid=status-box]")!;
+    const glyph = status.querySelector<SVGElement>("[data-testid=status-glyph]")!;
+    const text = status.querySelector<HTMLElement>("[data-testid=status-text]")!;
+    const context = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
+    const rgb = (css: string, under = "#ffffff") => {
+      context.fillStyle = under;
+      context.fillRect(0, 0, 1, 1);
+      context.fillStyle = css;
+      context.fillRect(0, 0, 1, 1);
+      const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
+      return `rgb(${r}, ${g}, ${b})`;
+    };
+    const sheet = rgb(getComputedStyle(status.closest("[role=dialog]")!).backgroundColor);
+    const surface = getComputedStyle(box).backgroundColor;
+    const glyphBox = glyph.getBoundingClientRect();
+    return {
+      surface: surface === "rgba(0, 0, 0, 0)" ? "transparent" : rgb(surface, sheet),
+      under: rgb(surface, sheet),
+      glyph: rgb(getComputedStyle(glyph).color),
+      text: rgb(getComputedStyle(text).color),
+      glyphSize: [glyphBox.width, glyphBox.height],
+      radius: getComputedStyle(box).borderTopLeftRadius,
+      enters: box.classList.contains("fs-enter"),
+    };
+  });
+}
+
+test.describe("the status callout", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  for (const { width, height, size } of [
+    { width: 1280, height: 800, size: ["13px", "17px"] },
+    { width: 375, height: 812, size: ["13px", "17px"] },
+    { width: 375, height: 667, size: ["12px", "16px"] },
+    { width: 320, height: 568, size: ["12px", "16px"] },
+  ]) {
+    test(`sets its sentence at ${size.join("/")} at ${width} x ${height}`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      const dialog = await openPopup(page, 2, "failed", "reverted");
+      const text = dialog.getByTestId("status-text");
+      await expect(text).not.toBeEmpty();
+      expect(
+        await text.evaluate((element) => [getComputedStyle(element).fontSize, getComputedStyle(element).lineHeight]),
+      ).toEqual(size);
+    });
+  }
+
+  for (const theme of ["light", "dark"] as const) {
+    const TONES = [
+      { tone: "error", extra: "&state=failed&reason=reverted", surface: true, enters: true },
+      { tone: "warning", extra: "&state=moved", surface: true, enters: true },
+      { tone: "neutral", extra: "&leftOut=2", surface: false, enters: false },
+    ] as const;
+    for (const { tone, extra, surface, enters } of TONES) {
+      test(`says ${tone === "error" ? "an" : "a"} ${tone} line in ink beside a 16px glyph in its tone, ${surface ? "on a tinted surface" : "on the sheet"}, in the ${theme} theme`, async ({
+        page,
+      }) => {
+        await page.emulateMedia({ reducedMotion: "reduce" });
+        await openHarness(page, `${harness.url}?options=2&theme=${theme}${extra}`);
+        const dialog = page.getByRole("dialog");
+        await expect(dialog.getByTestId("status-text")).not.toBeEmpty();
+        const colours = await calloutColours(dialog);
+        const [ink, tint, ink2] = await Promise.all([
+          tokenValue(page, "color", "var(--fs-popup-text)"),
+          tokenValue(
+            page,
+            "color",
+            `var(--fs-tone-${tone === "neutral" ? "neutral" : tone}-text, var(--fs-popup-text-3))`,
+          ),
+          tokenValue(page, "color", "var(--fs-popup-text-2)"),
+        ]);
+
+        expect.soft(colours.glyphSize, "the glyph's box").toEqual([16, 16]);
+        expect.soft(colours.radius, "the control radius").toBe("10px");
+        expect.soft(colours.enters, "enters with fs-enter").toBe(enters);
+        if (surface) {
+          expect.soft(colours.surface, "a tinted surface").not.toBe("transparent");
+          expect.soft(colours.text, "the sentence in ink").toBe(ink);
+          expect.soft(colours.glyph, "the glyph in the tone's text colour").toBe(tint);
+          expect.soft(contrast(colours.glyph, colours.under), "the glyph on its surface").toBeGreaterThanOrEqual(3);
+        } else {
+          expect.soft(colours.surface, "no surface").toBe("transparent");
+          expect.soft(colours.text, "the note in the secondary text").toBe(ink2);
+        }
+        expect.soft(contrast(colours.text, colours.under), "the sentence on its surface").toBeGreaterThanOrEqual(4.5);
+      });
+    }
+  }
 });
 
 test.describe("the running step", () => {
@@ -2274,15 +2376,6 @@ test.describe("the popup's type roles", () => {
     await expect(settings.getByRole("button", { name: "Done" })).toBeVisible();
     expect.soft(await weightOf(settings.getByRole("heading", { name: "Max slippage" })), "Max slippage").toBe("500");
     expect.soft(await weightOf(settings.getByRole("button", { name: "Done" })), "Done").toBe("600");
-  });
-
-  test("give way to a size and leading utility beside them, on the status line", async ({ page }) => {
-    const dialog = await openPopup(page, 2, "failed", "reverted");
-    const status = dialog.getByRole("status");
-    await expect(status).not.toBeEmpty();
-    expect(
-      await status.evaluate((element) => [getComputedStyle(element).fontSize, getComputedStyle(element).lineHeight]),
-    ).toEqual(["13px", "18px"]);
   });
 });
 
