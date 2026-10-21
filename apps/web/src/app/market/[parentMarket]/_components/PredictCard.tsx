@@ -146,18 +146,26 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
   // with nothing changed, the same estimates can still be backed with more funds
   const toPredict = changed.length > 0 ? changed : selected;
 
-  const count = `${toPredict.length} ${toPredict.length === 1 ? "estimate" : "estimates"}`;
+  // the phone dock carries only a live Predict; otherwise the card stays in the page and says why
+  const isLive = !isDisabled && blocker === null && interrupted === null;
+  const content = toPredict.map((estimate) => `${estimate.scale.market}:${estimate.value}`).join();
+  const dock = usePredictDock(isLive, content);
+  const isDocked = dock.isDocked;
+  // a leaving bar sinks as it was while live, not as the card it leaves behind
+  const [lastLive, setLastLive] = useState<{ content: string; picks: SelectedEstimate[] }>();
+  if (isLive && lastLive?.content !== content) setLastLive({ content, picks: toPredict });
+  const isLeaving = dock.phase === "leaving";
+  const shown = isLeaving ? (lastLive?.picks ?? []) : toPredict;
+  const pausedRun = isLeaving ? null : interrupted;
+
+  const count = `${shown.length} ${shown.length === 1 ? "estimate" : "estimates"}`;
   const predict = (text: string) => {
-    const button = <Button className={CTA} text={text} isDisabled={isDisabled} onPress={() => setOpened(toPredict)} />;
+    const button = (
+      <Button className={CTA} text={text} isDisabled={isDisabled && !isLeaving} onPress={() => setOpened(toPredict)} />
+    );
     // without a wallet the button stays put and disabled; the blocker line says to connect
     return address ? <EnsureChain className={CTA}>{button}</EnsureChain> : button;
   };
-  // the phone dock carries only a live Predict; otherwise the card stays in the page and says why
-  const dock = usePredictDock(
-    !isDisabled && blocker === null && interrupted === null,
-    toPredict.map((estimate) => `${estimate.scale.market}:${estimate.value}`).join(),
-  );
-  const isDocked = dock.isDocked;
 
   return (
     <div
@@ -191,32 +199,30 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
           </div>
         </div>
         <div className={isDocked ? "max-md:flex max-md:items-center max-md:gap-3 md:contents" : "contents"}>
-          {toPredict.length > 0 && interrupted === null ? (
-            <Picks selected={toPredict} />
-          ) : null}
+          {shown.length > 0 && pausedRun === null ? <Picks selected={shown} /> : null}
           <div className="shrink-0 md:max-lg:order-first">
-            {interrupted ? (
+            {pausedRun ? (
               <Button className={CTA} text="Resume" onPress={() => setOpened(toPredict)} />
             ) : (
               <>
                 <div className="md:hidden">{predict("Predict")}</div>
                 <div className="max-md:hidden">
-                  {predict(toPredict.length > 0 ? `Predict ${count}` : "Predict estimates")}
+                  {predict(shown.length > 0 ? `Predict ${count}` : "Predict estimates")}
                 </div>
               </>
             )}
           </div>
         </div>
-        {blocker && blocker !== "unfinished" ? (
+        {blocker && blocker !== "unfinished" && !isLeaving ? (
           <p className="text-fs-text-secondary w-full text-sm">
             {blockerText(blocker, optionNoun(session.itemNamePlural))}
           </p>
         ) : null}
 
-        {interrupted ? (
+        {pausedRun ? (
           <div className="flex w-full flex-wrap items-center justify-between gap-3">
             <p className="text-fs-text-secondary text-sm">
-              {runShown(interrupted)}
+              {runShown(pausedRun)}
               {isPending ? " A transaction from it may still be pending." : null}
               {/* a run whose transaction awaits a receipt offers no Discard */}
               {blocker === "unfinished"

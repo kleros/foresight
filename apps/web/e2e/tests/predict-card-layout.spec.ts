@@ -293,7 +293,8 @@ for (const theme of ["light", "dark"]) {
           };
         });
         // the bar sinks as it was, not as the card it leaves behind
-        expect(leaving).toEqual({ phase: "", height: 77, text: "Place your estimates Berlin 400 +2 Predict" });
+        const chip = viewport.width < 360 ? "Berlin" : "Berlin 400";
+        expect(leaving).toEqual({ phase: "", height: 77, text: `Place your estimates ${chip} +2 Predict` });
         await expect(page.locator("[data-predict-dock]")).toHaveCount(0);
         await expect(page.locator("[data-stuck]")).toHaveCount(0);
       });
