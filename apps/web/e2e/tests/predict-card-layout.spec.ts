@@ -442,6 +442,29 @@ test.describe("the phone bar's motion", () => {
     expect(await dock.evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
   });
 
+  test("docks without replaying the second chip's entrance", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await openHarness(page, `${harness.url}?set=normal&rows=14`);
+    await expect(page.locator("[data-stuck]")).toHaveCount(1);
+    // the docked card's second chip, as it was when its entrance ran on the first pick
+    const running = () =>
+      page.evaluate(
+        () =>
+          document
+            .querySelectorAll('[aria-label="Your estimates"] > li')[1]!
+            .getAnimations()
+            .filter((animation) => animation.playState === "running").length,
+      );
+    await expect.poll(running).toBe(0);
+    await page.evaluate(async () => {
+      window.scrollTo(0, document.documentElement.scrollHeight);
+      await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+    });
+    const replayed = await running();
+    await expect(page.locator("[data-stuck]")).toHaveCount(0);
+    expect(replayed).toBe(0);
+  });
+
   test("lets go of a leaving bar whose exit is cut short by the window widening past md", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await openHarness(page, `${harness.url}?set=normal&rows=14`);
