@@ -67,6 +67,8 @@ const signingIn = params.get("signin") === "busy";
 const pricesLoading = params.get("prices") === "loading";
 /** `?prices=failed` the pools could not be read, so the button offers to read them again. */
 const pricesFailed = params.get("prices") === "failed";
+/** `&moved=N` with `state=moved`: the option whose plan changed, the first by default; the second has a 24-character name. */
+const movedIndex = Number(params.get("moved") ?? "0");
 /** `&movedBy=slippage` with `state=moved`: the plans changed with the visitor's new slippage. */
 const movedBySlippage = params.get("movedBy") === "slippage";
 /** `?open=press` the popup starts closed and opens from a button, as the market page opens it. */
@@ -244,8 +246,8 @@ const preview = Object.fromEntries(
         from: priceWadToEstimate(from, estimate.scale),
         to: shownTo,
         plan: { ...plan, held: plan.split > 0n ? HELD_UNDERLYING : 0n },
-        // the first option's plan changed: it was shown going 20 further
-        ...(state === "moved" && index === 0 ? { was: { from: 250, to: shownTo + 20 } } : {}),
+        // the moved option's plan changed: it was shown going 20 further
+        ...(state === "moved" && index === movedIndex ? { was: { from: 250, to: shownTo + 20 } } : {}),
       },
     ];
   }),

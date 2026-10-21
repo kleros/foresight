@@ -332,14 +332,26 @@ describe("statusLine", () => {
     expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 1, credits: false, only } })?.text).toBe(
       "Berlin now goes to 400\u00a0$M, not 420\u00a0$M. Confirm to go on.",
     );
-    const city = { name: "New York", to: "1,200 k people", was: "1,150 k people" };
+    const city = { name: "Oslo", to: "1,200 k", was: "1,150 k" };
     expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 1, credits: false, only: city } })?.text).toBe(
-      "New York now goes to 1,200\u00a0k\u00a0people, not 1,150\u00a0k\u00a0people. Confirm to go on.",
+      "Oslo now goes to 1,200\u00a0k, not 1,150\u00a0k. Confirm to go on.",
     );
     const long = { ...only, name: "A market name far too long to quote" };
     expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 1, credits: false, only: long } })?.text).toBe(
       "Prices moved on 1 market. Check Details, then confirm.",
     );
+  });
+
+  it("names the market only while the whole sentence keeps to two lines at 320px wide", () => {
+    for (const only of [
+      { name: "Lisbon metropolitan area", to: "400 $M", was: "420 $M" },
+      { name: "New York", to: "1,200 k people", was: "1,150 k people" },
+      { name: "Montevideo", to: "1,234,567 $M", was: "1,234,587 $M" },
+    ]) {
+      expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 1, credits: false, only } })?.text).toBe(
+        "Prices moved on 1 market. Check Details, then confirm.",
+      );
+    }
   });
 
   it("puts a notice before the moved pools", () => {

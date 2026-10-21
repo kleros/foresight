@@ -928,6 +928,14 @@ for (const viewport of [
   test.describe(`every failure at ${viewport.width} x ${viewport.height}`, () => {
     test.use({ viewport });
 
+    test("fits a moved line about a long-named option in its callout", async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await openHarness(page, `${harness.url}?options=4&state=moved&moved=1`);
+      const box = page.getByRole("dialog").getByRole("status").getByTestId("status-box");
+      await expect(box).not.toBeEmpty();
+      expect(await box.evaluate((element) => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
+    });
+
     test("fits its words in its 44px status slot, its callout under the title, without moving the footer", async ({
       page,
     }) => {
