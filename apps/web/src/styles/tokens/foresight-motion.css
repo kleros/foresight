@@ -120,6 +120,20 @@
 .fs-rise {
   animation: fsRise var(--fs-dur-enter) var(--fs-ease-enter) both;
 }
+/* A bar sliding out from under the sticky header above it. */
+@keyframes fsDropIn {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fs-drop-in {
+  animation: fsDropIn var(--fs-dur-enter) var(--fs-ease-enter) both;
+}
 /* A disclosure opens by grid rows, the one height-class animation allowed, as its content rises in;
    closing, the content fades first and the rows then fold. Markup: .fs-disclosure > div (min-h-0, overflow hidden) > content. */
 .fs-disclosure {
@@ -246,6 +260,7 @@
   .fs-enter,
   .fs-spawn,
   .fs-rise,
+  .fs-drop-in,
   .fs-icon-draw path,
   .fs-icon-draw polyline {
     animation: fsFadeIn var(--fs-dur-reduced-fade) linear both;

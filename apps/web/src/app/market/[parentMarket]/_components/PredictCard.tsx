@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { Button } from "@kleros/ui-components-library";
 import clsx from "clsx";
@@ -19,9 +20,11 @@ import { optionNoun } from "@/features/sessions/utils/optionNoun";
 import { SectionCard } from "@/components/ui/SectionCard";
 import EnsureChain from "@/components/wallet/EnsureChain";
 
-import CheckOutline from "@/assets/svg/check-outline-button.svg";
+import ArrowDown from "@/assets/svg/long-arrow-down.svg";
+import ArrowUp from "@/assets/svg/long-arrow-up.svg";
 
 import { ownedAmount } from "@/utils/amount";
+import { formatEstimate } from "@/utils/formatEstimate";
 
 import { createRunStore } from "@/lib/flowRunStore";
 
@@ -51,9 +54,14 @@ interface PredictCardProps {
   marketEstimates: Record<string, number | undefined>;
   /** True while the market numbers are loading or failed; an empty `marketEstimates` says nothing then. */
   isMarketUnknown?: boolean;
+  /** Where the page holds the phone bar under its header; without one there is no bar. */
+  barSlot?: HTMLElement | null;
 }
 
-export function PredictCard({ session, status, marketEstimates, isMarketUnknown = false }: PredictCardProps) {
+/** The page's slot for the phone bar: sticky under the header (64px and a 1px rule), over fs-page's gutters and 40px top padding. */
+export const PREDICT_BAR_SLOT = "sticky top-[65px] z-20 -mx-6 -mt-10 mb-10 md:hidden [@media(max-width:640px)]:-mx-4";
+
+export function PredictCard({ session, status, marketEstimates, isMarketUnknown = false, barSlot }: PredictCardProps) {
   // what the popup lists, held from the press so a market refresh cannot empty it under the visitor
   const [opened, setOpened] = useState<SelectedEstimate[]>();
   const isOpen = opened !== undefined;
@@ -110,30 +118,47 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
   // with nothing changed, the same estimates can still be backed with more funds
   const toPredict = changed.length > 0 ? changed : selected;
 
-  const predictButton = (
-    <Button
-      icon={<CheckOutline className="[&_path]:fill-klerosUIComponentsWhiteBackground mr-2 size-4" />}
-      text={
-        selected.length > 0
-          ? `Predict ${selected.length} ${selected.length === 1 ? "estimate" : "estimates"}`
-          : "Predict estimates"
-      }
-      isDisabled={isDisabled}
-      onPress={() => setOpened(toPredict)}
-    />
-  );
+  const count = `${selected.length} ${selected.length === 1 ? "estimate" : "estimates"}`;
+  const predict = (text: string) => {
+    const button = (
+      <Button
+        className="predict-cta predict-card-cta"
+        text={text}
+        isDisabled={isDisabled}
+        onPress={() => setOpened(toPredict)}
+      />
+    );
+    // without a wallet the button stays put and disabled; the blocker line says to connect
+    return address ? <EnsureChain>{button}</EnsureChain> : button;
+  };
+  const hasBar = Boolean(barSlot) && selected.length > 0;
+  const names = selected.map((estimate) => estimate.scale.name);
 
   return (
     <SectionCard
       className={clsx(
         "p-4 md:px-8",
-        "flex flex-wrap items-start justify-start gap-x-8 gap-y-4",
+        "flex flex-wrap items-start justify-start gap-x-6 gap-y-4",
         "md:flex-row md:items-center md:justify-between",
       )}
     >
       <h3 className="text-fs-text-primary text-base font-semibold">Place your estimates</h3>
-      {/* without a wallet the button stays put and disabled; the blocker line says to connect */}
-      {address ? <EnsureChain>{predictButton}</EnsureChain> : predictButton}
+      {selected.length > 0 ? <Picks selected={selected} /> : null}
+      {/* where the phone bar carries Predict, the card shows it from md up */}
+      <div className={clsx("shrink-0", hasBar && "max-md:hidden")}>
+        {predict(selected.length > 0 ? `Predict ${count}` : "Predict estimates")}
+      </div>
+      {hasBar && barSlot
+        ? createPortal(
+            <div className="fs-drop-in bg-fs-popup-panel border-b border-(--fs-popup-line) flex items-center gap-3 px-4 py-2">
+              <span className="text-fs-popup-text min-w-0 flex-1 truncate text-[13px] leading-[18px] font-medium tabular-nums">
+                {`${count} · ${names.slice(0, 2).join(", ")}${names.length > 2 ? ` +${names.length - 2}` : ""}`}
+              </span>
+              {predict("Predict")}
+            </div>,
+            barSlot,
+          )
+        : null}
       {blocker ? (
         <p className="text-fs-text-secondary w-full text-sm">
           {blockerText(blocker, optionNoun(session.itemNamePlural))}
@@ -185,5 +210,59 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
         <PredictSuccessDialog isOpen placed={placedRun} leftOut={leftOut} onClose={() => setIsSuccessOpen(false)} />
       ) : null}
     </SectionCard>
+  );
+}
+
+const SHOWN_WIDE = 3;
+const SHOWN_PHONE = 2;
+
+/** The picks Predict would send, as chips: three from md up, two below, and a count of the rest. */
+function Picks({ selected }: { selected: SelectedEstimate[] }) {
+  const more = (shown: number) => selected.length - shown;
+  const morePill = (shown: number, className: string) =>
+    more(shown) > 0 ? (
+      <li
+        aria-label={`${more(shown)} more ${more(shown) === 1 ? "estimate" : "estimates"}`}
+        className={clsx(
+          "text-fs-popup-text-2 h-7 items-center rounded-full border border-(--fs-popup-line-strong) px-2.5",
+          "text-[13px] leading-[18px] font-medium tabular-nums",
+          className,
+        )}
+      >
+        {`+${more(shown)}`}
+      </li>
+    ) : null;
+
+  return (
+    <ul aria-label="Your estimates" className="flex min-w-0 flex-[1_1_100%] flex-wrap gap-2 md:flex-1 md:justify-end">
+      {selected.map((estimate, index) => {
+        const higher = estimate.direction === "higher";
+        const Arrow = higher ? ArrowUp : ArrowDown;
+        return (
+          <li
+            key={estimate.scale.market}
+            className={clsx(
+              "fs-rise bg-fs-popup-chip text-fs-popup-text h-7 max-w-[150px] items-center gap-1.5 rounded-full px-2.5",
+              "text-[13px] leading-[18px] font-medium whitespace-nowrap tabular-nums md:max-w-[200px]",
+              index >= SHOWN_WIDE ? "hidden" : index >= SHOWN_PHONE ? "inline-flex max-md:hidden" : "inline-flex",
+            )}
+          >
+            <span className="min-w-0 truncate" title={estimate.scale.name}>
+              {estimate.scale.name}
+            </span>
+            <span className="text-fs-popup-text-2 inline-flex shrink-0 items-center gap-1">
+              <Arrow
+                role="img"
+                aria-label={higher ? "above the market" : "below the market"}
+                className="size-3 shrink-0 [&_path]:fill-current"
+              />
+              {formatEstimate(estimate.value, estimate.scale.unit)}
+            </span>
+          </li>
+        );
+      })}
+      {morePill(SHOWN_WIDE, "inline-flex max-md:hidden")}
+      {morePill(SHOWN_PHONE, "inline-flex md:hidden")}
+    </ul>
   );
 }

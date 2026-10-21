@@ -878,6 +878,16 @@ button.predict-cta.predict-cta[data-busy]:has(> .button-text) > .button-text {
 .predict-success-panel .predict-cta .button-text {
   font-size: 15px;
 }
+/* the market page's Predict, on the card and the phone bar: sized to its label, at the control step */
+.predict-cta.predict-card-cta {
+  width: auto;
+  height: 44px;
+  padding: 0 18px;
+  border-radius: var(--fs-radius-control);
+}
+.predict-card-cta .button-text {
+  font-size: 15px;
+}
 @keyframes predict-success-pop {
   from {
     opacity: 0;
