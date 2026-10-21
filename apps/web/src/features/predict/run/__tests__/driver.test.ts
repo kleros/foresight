@@ -299,7 +299,10 @@ describe("createPredictRun's steps once settled", () => {
         { stepId: STEP_ID.predict(1), label: "Making your prediction", outcome: { status: "pending" } },
       ],
     });
-    const deposit = depositTx({ executor: addresses.executor, asset: { token: addresses.collateral, amount: WAD * 3n } });
+    const deposit = depositTx({
+      executor: addresses.executor,
+      asset: { token: addresses.collateral, amount: WAD * 3n },
+    });
     const driver = createPredictRun({
       gateway: fakeGateway(),
       reader: fakeReader({ deployed: true, collateral: WAD * 5n, landed: [landedTx(deposit)] }),
