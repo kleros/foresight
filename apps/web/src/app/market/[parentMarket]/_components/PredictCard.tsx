@@ -10,7 +10,12 @@ import type { Address } from "viem";
 import { useAccount } from "wagmi";
 
 import type { PredictSnapshot } from "@/features/predict/flow/types";
-import { discardRun, findInterruptedRun, hasPendingTransaction, predictFlowId } from "@/features/predict/run/interrupted";
+import {
+  discardRun,
+  findInterruptedRun,
+  hasPendingTransaction,
+  predictFlowId,
+} from "@/features/predict/run/interrupted";
 import { useSessionEstimates } from "@/features/predict/stores/estimateStore";
 import type { SelectedEstimate } from "@/features/predict/types";
 import { selectedEstimates } from "@/features/predict/utils/estimates";
@@ -40,11 +45,10 @@ const PredictSuccessDialog = dynamic(
 
 const CTA = "predict-cta predict-card-cta";
 
-const blockerText = (blocker: PredictBlocker, noun: string, isPending: boolean): string =>
+// a stored run's reason is said in the run's own row, beside its Resume
+const blockerText = (blocker: Exclude<PredictBlocker, "unfinished">, noun: string): string =>
   ({
     closed: "Trading has closed.",
-    // a run whose transaction awaits a receipt offers no Discard
-    unfinished: isPending ? "Resume the one below first." : "Resume or discard the one below.",
     "no-liquidity": `None of the ${noun} can be traded yet.`,
     "no-move": "Set an estimate above or below the market to predict.",
     disconnected: "Connect a wallet to predict.",
@@ -224,9 +228,9 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
             barSlot,
           )
         : null}
-      {blocker ? (
+      {blocker && blocker !== "unfinished" ? (
         <p className="text-fs-text-secondary w-full text-sm">
-          {blockerText(blocker, optionNoun(session.itemNamePlural), isPending)}
+          {blockerText(blocker, optionNoun(session.itemNamePlural))}
         </p>
       ) : null}
 
@@ -235,6 +239,12 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
           <p className="text-fs-text-secondary text-sm">
             {runShown(interrupted)}
             {isPending ? " A transaction from it may still be pending." : null}
+            {/* a run whose transaction awaits a receipt offers no Discard */}
+            {blocker === "unfinished"
+              ? isPending
+                ? " Resume it before starting a new one."
+                : " Resume or discard it before starting a new one."
+              : null}
           </p>
           <div className="flex gap-3">
             {isPending ? null : <Button small variant="secondary" text="Discard" onPress={discard} />}
