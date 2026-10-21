@@ -58,8 +58,11 @@ interface PredictCardProps {
   barSlot?: HTMLElement | null;
 }
 
-/** The page's slot for the phone bar: sticky under the header (64px and a 1px rule), over fs-page's gutters and 40px top padding. */
-export const PREDICT_BAR_SLOT = "sticky top-[65px] z-20 -mx-6 -mt-10 mb-10 md:hidden [@media(max-width:640px)]:-mx-4";
+/**
+ * The page's slot for the phone bar: sticky under the header (64px and a 1px rule), over fs-page's gutters and
+ * 40px top padding. Below the library's z-20 modal overlay, so an open dialog covers it.
+ */
+export const PREDICT_BAR_SLOT = "sticky top-[65px] z-10 -mx-6 -mt-10 mb-10 md:hidden [@media(max-width:640px)]:-mx-4";
 
 export function PredictCard({ session, status, marketEstimates, isMarketUnknown = false, barSlot }: PredictCardProps) {
   // what the popup lists, held from the press so a market refresh cannot empty it under the visitor
