@@ -412,6 +412,17 @@ test.describe("the phone bar's motion", () => {
     expect(await dock.evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
   });
 
+  test("lets go of a leaving bar whose exit is cut short by the window widening past md", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await openHarness(page, `${harness.url}?set=normal&rows=14`);
+    await expect(page.locator("[data-stuck]")).toHaveCount(1);
+    await page.evaluate(() => (window as unknown as { clearPicks: () => void }).clearPicks());
+    await expect(page.locator("[data-leaving]")).toHaveCount(1);
+    await page.setViewportSize({ width: 800, height: 812 });
+    await expect(page.locator("[data-predict-dock]")).toHaveCount(0);
+    await expect(page.locator("[inert]")).toHaveCount(0);
+  });
+
   test("fades in place under reduced motion", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await openHarness(page, `${harness.url}?set=none&rows=14`);
