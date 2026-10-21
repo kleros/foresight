@@ -1987,6 +1987,44 @@ test.describe("the status callout", () => {
   }
 });
 
+test.describe("the bottom half's spacing", () => {
+  for (const { width, height, title, detail, row } of [
+    { width: 1280, height: 800, title: "600 13px/18px", detail: "400 12px/16px", row: 36 },
+    { width: 375, height: 812, title: "600 13px/16px", detail: "400 12px/16px", row: 40 },
+    { width: 375, height: 667, title: "600 13px/16px", detail: "400 12px/16px", row: 40 },
+  ]) {
+    test(`sets the steps in ${title} over ${detail} in ${row}px rows, and the callout 8px over the button, at ${width} x ${height}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height });
+      const dialog = await openPopup(page, 2, "failed", "reverted");
+      await expect(dialog.getByTestId("status-text")).not.toBeEmpty();
+      const measured = await dialog.evaluate((element) => {
+        const font = (node: Element) => {
+          const style = getComputedStyle(node);
+          return `${style.fontWeight} ${style.fontSize}/${style.lineHeight}`;
+        };
+        const rows = [...element.querySelectorAll(".predict-steps > li")];
+        const box = element.querySelector("[data-testid=status-box]")!.getBoundingClientRect();
+        const cta = element.querySelector(".predict-footer > .predict-cta")!.getBoundingClientRect();
+        return {
+          titles: [...new Set(rows.map((row) => font(row.querySelector("h2")!)))],
+          details: [...new Set(rows.map((row) => font(row.querySelector("h2 + p")!)))],
+          rows: [rows[0], rows[2]].map(
+            (row) => row!.querySelector(":scope > div:nth-child(2)")!.getBoundingClientRect().height,
+          ),
+          calloutToButton: Math.round(cta.top - box.bottom),
+        };
+      });
+
+      expect.soft(measured.titles, "step titles").toEqual([title]);
+      expect.soft(measured.details, "step details").toEqual([detail]);
+      expect.soft(measured.rows, "the first and last rows").toEqual([row, row]);
+      expect.soft(measured.calloutToButton, "the callout to the button").toBe(8);
+    });
+  }
+});
+
 test.describe("the running step", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
