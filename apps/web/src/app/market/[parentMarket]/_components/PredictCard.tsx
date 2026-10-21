@@ -78,16 +78,16 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
   const [isPending, setIsPending] = useState(false);
   const [reads, setReads] = useState(0);
 
-  const readStored = (isPopupOpen: boolean) => {
+  const readStored = () => {
     const store = createRunStore();
-    const isRead = address !== undefined && !isPopupOpen;
-    setStored({ owner: address, run: isRead ? findInterruptedRun(store, session.id, address) : null });
-    setIsPending(isRead ? hasPendingTransaction(store, session.id, address) : false);
+    setStored({ owner: address, run: address ? findInterruptedRun(store, session.id, address) : null });
+    setIsPending(address ? hasPendingTransaction(store, session.id, address) : false);
   };
 
-  // read after mount: the stored run lives in this browser, and the popup may have finished or discarded it
+  // read after mount and after the popup, which may have finished or discarded the run; while it is open the card
+  // keeps the run as last read, so Resume does not light up Predict behind it
   useEffect(() => {
-    readStored(isOpen);
+    if (!isOpen) readStored();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- readStored reads only address and session.id
   }, [address, isOpen, session.id, reads]);
 
@@ -108,9 +108,9 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
     setReads((count) => count + 1);
   };
 
-  // read in the same commit that closes the popup, so the card never shows the popup's null as current
+  // read in the same commit that closes the popup, so the card never shows the run as it was before it
   const closePopup = () => {
-    readStored(false);
+    readStored();
     setOpened(undefined);
   };
 
