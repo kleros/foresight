@@ -2688,7 +2688,7 @@ for (const viewport of [
       test(`keeps every step's title on one line beside its links (${run})`, async ({ page }) => {
         await openHarness(page, `${harness.url}?options=4&state=success&dialog=success&run=${run}`);
         const titles = page.getByRole("list", { name: "Transactions" }).locator("li span.font-semibold");
-        for (const title of await titles.all()) expect((await title.boundingBox())!.height).toBe(20);
+        for (const title of await titles.all()) expect(Math.round((await title.boundingBox())!.height)).toBe(20);
       });
     }
 

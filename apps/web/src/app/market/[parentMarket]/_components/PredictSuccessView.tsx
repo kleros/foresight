@@ -53,13 +53,17 @@ function TxLink({ link }: { link: ReceiptLink }) {
       title={link.hash}
       className={clsx(
         "text-fs-popup-text-2 rounded-fs-control inline-flex h-8 min-w-8 items-center justify-center gap-0.5 px-1",
+        // under 360px three batch links leave a step's title its one line
+        "max-[359px]:min-w-7 max-[359px]:px-0.5",
+        // a 44px tall target over the 32px it draws; neighbours sit side by side, so it grows only up and down
+        "relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']",
         "text-[13px] font-medium tabular-nums",
         "transition-colors duration-(--fs-dur-echo) ease-(--fs-ease-enter)",
         "[@media(hover:hover)]:hover:text-fs-popup-accent-text [@media(hover:hover)]:hover:bg-fs-popup-hover",
       )}
     >
       {link.text}
-      <ExternalArrow className="size-4 shrink-0 [&_path]:fill-current" aria-hidden />
+      <ExternalArrow className="size-4 shrink-0 max-[359px]:size-3.5 [&_path]:fill-current" aria-hidden />
     </a>
   );
 }
@@ -79,7 +83,8 @@ function Receipt({ rows }: { rows: ReceiptRow[] }) {
           <div className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3">
             <span className="text-fs-popup-text text-sm leading-5 font-semibold">{row.title}</span>
             {row.detail ? (
-              <span className="text-fs-popup-text-2 text-[13px] leading-[18px] tabular-nums">{row.detail}</span>
+              // ml-auto keeps a detail that wraps under its title on the figures' column
+              <span className="text-fs-popup-text-2 ml-auto text-[13px] leading-[18px] tabular-nums">{row.detail}</span>
             ) : null}
           </div>
           {row.links.length > 0 ? (
@@ -90,7 +95,7 @@ function Receipt({ rows }: { rows: ReceiptRow[] }) {
             </span>
           ) : anyLinked ? (
             // an unlinked row keeps the link's slot, so every figure ends on one column
-            <span className="-mr-1.5 size-8 shrink-0" aria-hidden />
+            <span className="-mr-1.5 size-8 shrink-0 max-[359px]:w-7" aria-hidden />
           ) : null}
         </li>
       ))}
@@ -194,23 +199,24 @@ export function PredictSuccessView({
         )}
       </section>
 
-      {subscribed ? (
-        <div className="mt-4">
-          {/* nothing is at stake here, so Close stays in the panel's tone */}
+      {/* on a phone on its side Close holds the dialog's foot, as the popup's button does */}
+      <div className="predict-success-foot mt-4 flex flex-col">
+        {subscribed ? (
+          // nothing is at stake here, so Close stays in the panel's tone
           <PredictButton text="Close" quiet isDisabled={false} onPress={onClose} />
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={onClose}
-          className={clsx(
-            "text-fs-popup-text-2 rounded-fs-control mt-4 h-11 cursor-pointer self-center px-4 text-sm font-semibold",
-            "transition-colors duration-(--fs-dur-echo) ease-(--fs-ease-enter) [@media(hover:hover)]:hover:bg-fs-popup-hover",
-          )}
-        >
-          Close
-        </button>
-      )}
+        ) : (
+          <button
+            type="button"
+            onClick={onClose}
+            className={clsx(
+              "text-fs-popup-text-2 rounded-fs-control h-11 cursor-pointer self-center px-4 text-sm font-semibold",
+              "transition-colors duration-(--fs-dur-echo) ease-(--fs-ease-enter) [@media(hover:hover)]:hover:bg-fs-popup-hover",
+            )}
+          >
+            Close
+          </button>
+        )}
+      </div>
     </Modal>
   );
 }

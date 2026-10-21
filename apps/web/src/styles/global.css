@@ -972,6 +972,32 @@ button.predict-cta.predict-cta[data-busy]:has(> .button-text) > .button-text {
 .predict-receipt > li:only-child::before {
   display: none;
 }
+/* the success dialog's foot: sticky over its own bottom padding, with a fade where the rest scrolls under it */
+@media (max-height: 480px) {
+  .predict-success-foot {
+    position: sticky;
+    bottom: -20px;
+    margin-bottom: -20px;
+    padding: 8px 0 20px;
+    background: var(--fs-surface);
+  }
+  .predict-success-foot::before {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    bottom: 100%;
+    height: 16px;
+    background: linear-gradient(to bottom, transparent, var(--fs-surface));
+    pointer-events: none;
+  }
+  @media (min-width: 640px) {
+    .predict-success-foot {
+      bottom: -24px;
+      margin-bottom: -24px;
+      padding-bottom: 24px;
+    }
+  }
+}
 /* the sign-in is the panel's own control, a step below the popup's wide button */
 .predict-success-panel .predict-cta {
   height: 44px;
