@@ -29,7 +29,6 @@ export function Dialog({ isOpen, onClose, title, hint, children, className, isDi
       onOpenChange={(open) => (open || !isDismissable ? undefined : onClose())}
       className={cn(
         "relative flex h-fit w-max max-w-[calc(100vw-2rem)] flex-col overflow-hidden",
-        // centred, with 4.5rem clear above and below
         "max-h-[calc(100dvh-9rem)]",
         "shadow-default rounded-fs border-fs-border bg-fs-surface border",
         className,
