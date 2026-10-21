@@ -230,6 +230,8 @@ export interface StatusLine {
   tone: "neutral" | "warning" | "error";
   /** Said for the visitor's information only, in the popup's small type on one line. */
   small?: true;
+  /** A run is checking something before it goes on. */
+  waiting?: true;
 }
 
 /**
@@ -249,7 +251,7 @@ export function statusLine(args: {
   if (notice) return { text: notice, tone: "warning" };
   if (steps.failure) return { text: steps.failure, tone: steps.pending ? "warning" : "error" };
   if (moved !== undefined) return { text: movedText(moved), tone: "warning" };
-  if (steps.note) return { text: steps.note, tone: "neutral" };
+  if (steps.note) return { text: steps.note, tone: "neutral", waiting: true };
   if (creditsLoss !== undefined && !steps.started) {
     return { text: `Credits swap loses ${creditsLoss}.`, tone: "warning", small: true };
   }
