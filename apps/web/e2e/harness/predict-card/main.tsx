@@ -107,9 +107,13 @@ const marketEstimates = Object.fromEntries(
 const picked = Object.fromEntries(
   options.slice(0, picks.length).map((option, index) => [option.market.toLowerCase(), picks[index]![2]]),
 );
-/** For specs: put the first pick in, or take every pick out, as a slider would. */
+/** For specs: put the first pick in, pick every option, or take every pick out, as a slider would. */
 Object.assign(window, {
   pickFirst: () => useEstimateStore.getState().setEstimate(PARENT, options[0]!.market, picks[0]![2]),
+  pickAll: () =>
+    options.forEach((option, index) =>
+      useEstimateStore.getState().setEstimate(PARENT, option.market, 900 + index * 37),
+    ),
   clearPicks: () => useEstimateStore.getState().resetEstimates(PARENT),
 });
 useEstimateStore.setState({

@@ -180,6 +180,36 @@ for (const theme of ["light", "dark"]) {
         await expect(page.getByRole("button", { name: /^Predict/ }).locator("visible=true")).toHaveCount(1);
       });
 
+      test("keeps one footprint when picks change while the bar is pinned", async ({ page }) => {
+        await openCard(page, `set=none&rows=14&theme=${theme}`);
+        await page.evaluate(() => (window as unknown as { pickFirst: () => void }).pickFirst());
+        await expect(page.locator("[data-stuck]")).toHaveCount(1);
+        await page.evaluate(() => (window as unknown as { pickAll: () => void }).pickAll());
+        const held = await page.evaluate(() => document.documentElement.scrollHeight);
+        // every scroll position, step by step down to the end: the bar docks once, into the card's own place
+        const { misplaced, flips } = await page.evaluate(async () => {
+          const dock = document.querySelector<HTMLElement>("[data-predict-dock]")!;
+          const found: string[] = [];
+          let changes = 0;
+          const watch = new MutationObserver((records) => (changes += records.length));
+          watch.observe(dock, { attributes: true, attributeFilter: ["data-stuck"] });
+          for (let y = 0; y <= document.documentElement.scrollHeight; y += 6) {
+            window.scrollTo(0, y);
+            await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+            if (dock.hasAttribute("data-stuck")) continue;
+            const above = dock.previousElementSibling!.getBoundingClientRect().bottom;
+            if (dock.getBoundingClientRect().top < above)
+              found.push(`${y}: ${above - dock.getBoundingClientRect().top}px`);
+          }
+          watch.disconnect();
+          return { misplaced: found, flips: changes };
+        });
+        expect(misplaced).toEqual([]);
+        expect(flips).toBe(1);
+        await expect(page.locator("[data-stuck]")).toHaveCount(0);
+        expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(held);
+      });
+
       test("leaves every option clear of the bar at the end of the page", async ({ page }) => {
         await openCard(page, `set=normal&rows=14&theme=${theme}`);
         await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
