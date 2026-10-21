@@ -58,6 +58,14 @@ for (const theme of ["light", "dark"]) {
       await expect(name).toHaveAttribute("title", "Greater Lisbon and Setúbal Peninsula metropolitan area");
     });
 
+    test("lets go of the hidden phone bar as soon as the last pick goes", async ({ page }) => {
+      await openCard(page, `set=normal&theme=${theme}`);
+      await expect(page.locator("[data-predict-bar]")).toHaveCount(1);
+      await page.evaluate(() => (window as unknown as { clearPicks: () => void }).clearPicks());
+      await page.waitForTimeout(500);
+      await expect(page.locator("[data-predict-bar]")).toHaveCount(0);
+    });
+
     test("offers a disabled Predict and no chips while nothing is picked", async ({ page }) => {
       await openCard(page, `set=none&theme=${theme}`);
       await expect(page.getByRole("list", { name: "Your estimates" })).toHaveCount(0);

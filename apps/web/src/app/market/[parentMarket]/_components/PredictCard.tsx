@@ -79,14 +79,16 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
   const { address } = useAccount();
   // what this page last placed, by owner and lower-case market
   const [placed, setPlaced] = useState<{ owner: Address; values: Record<string, number> }>();
-  const [interrupted, setInterrupted] = useState<PredictSnapshot | null>(null);
+  // the stored run as last read, and for which wallet; unread until the effect below runs for this one
+  const [stored, setStored] = useState<{ owner: Address | undefined; run: PredictSnapshot | null }>();
+  const interrupted = stored && stored.owner === address ? stored.run : undefined;
   const [isPending, setIsPending] = useState(false);
   const [discards, setDiscards] = useState(0);
 
   // read after mount: the stored run lives in this browser, and the popup may have finished or discarded it
   useEffect(() => {
     const store = createRunStore();
-    setInterrupted(address && !isOpen ? findInterruptedRun(store, session.id, address) : null);
+    setStored({ owner: address, run: address && !isOpen ? findInterruptedRun(store, session.id, address) : null });
     setIsPending(address && !isOpen ? hasPendingTransaction(store, session.id, address) : false);
   }, [address, isOpen, session.id, discards]);
 
@@ -140,7 +142,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
     return address ? <EnsureChain className={CTA}>{button}</EnsureChain> : button;
   };
   // the bar carries only a live Predict; otherwise the card keeps its button and says why
-  const hasBar = Boolean(barSlot) && !isDisabled && blocker === null && !interrupted;
+  const hasBar = Boolean(barSlot) && !isDisabled && blocker === null && interrupted === null;
   const names = toPredict.map((estimate) => estimate.scale.name);
   const barText = hasBar
     ? `${count} · ${names.slice(0, 2).join(", ")}${names.length > 2 ? ` +${names.length - 2}` : ""}`
@@ -149,7 +151,9 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
   const [leavingText, setLeavingText] = useState<string>();
   const [shownText, setShownText] = useState<string>();
   if (barText !== shownText) {
-    if (barText === undefined && shownText !== undefined) setLeavingText(shownText);
+    // a slot that is not displayed runs no exit, whose end would unmount the bar
+    const isSlotShown = (barSlot?.getClientRects().length ?? 0) > 0;
+    if (barText === undefined && shownText !== undefined && isSlotShown) setLeavingText(shownText);
     if (barText !== undefined) setLeavingText(undefined);
     setShownText(barText);
   }
@@ -165,7 +169,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
     >
       {/* from md to lg the heading and button share a row, the picks one of their own under them */}
       <h3 className="text-fs-text-primary text-base font-semibold md:max-lg:order-first">Place your estimates</h3>
-      {toPredict.length > 0 && !interrupted ? <Picks selected={toPredict} /> : null}
+      {toPredict.length > 0 && interrupted === null ? <Picks selected={toPredict} /> : null}
       {/* where the phone bar carries Predict, the card shows it from md up and on a phone on its side */}
       <div className={clsx("shrink-0 md:max-lg:order-first", hasBar && "max-md:[@media(min-height:481px)]:hidden")}>
         {predict(toPredict.length > 0 ? `Predict ${count}` : "Predict estimates")}

@@ -90,7 +90,6 @@ describe("what the predict card shows against what Predict sends", () => {
 
     await screen.findByRole("button", { name: "Resume" });
     expect(screen.queryByRole("list", { name: "Your estimates" })).toBeNull();
-    // the stored run is read after mount, so a bar drawn on the first render is on its way out
-    expect(slot.querySelector("[data-predict-bar]:not([data-leaving])")).toBeNull();
+    expect(slot).toBeEmptyDOMElement();
   });
 });
