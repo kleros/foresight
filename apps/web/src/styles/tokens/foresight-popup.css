@@ -44,6 +44,9 @@
   );
   --fs-popup-shadow: 0 20px 48px rgb(40 20 90 / 0.18), 0 1px 2px rgb(40 20 90 / 0.08);
   --fs-popup-edge: transparent;
+  /* the status callout's surfaces: the tone into the panel, declared per theme so each mixes its own panel */
+  --fs-popup-tone-warning-bg: color-mix(in srgb, var(--fs-tone-warning) 14%, var(--fs-popup-panel));
+  --fs-popup-tone-error-bg: color-mix(in srgb, var(--fs-tone-error) 11%, var(--fs-popup-panel));
 }
 :root.dark,
 .dark {
@@ -79,6 +82,8 @@
   /* a shadow is invisible on #1b003f, so a hairline marks the edge instead */
   --fs-popup-shadow: 0 24px 60px rgb(0 0 0 / 0.55);
   --fs-popup-edge: rgba(218, 240, 255, 0.1);
+  --fs-popup-tone-warning-bg: color-mix(in srgb, var(--fs-tone-warning) 14%, var(--fs-popup-panel));
+  --fs-popup-tone-error-bg: color-mix(in srgb, var(--fs-tone-error) 11%, var(--fs-popup-panel));
 }
 
 /* the popup, its success dialog, the option cards and the pay token's menu ring a focused control in the violet */

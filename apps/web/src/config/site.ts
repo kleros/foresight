@@ -18,7 +18,13 @@ export const siteConfig = {
 export const seerMarketUrl = (parentMarket: string, chainId: number) =>
   chainId === gnosis.id ? `https://app.seer.pm/markets/${chainId}/${parentMarket}` : undefined;
 
-export const explorerAddressUrl = (address: string, chain: { blockExplorers?: { default: { url: string } } }) => {
+type ExplorerChain = { blockExplorers?: { default: { url: string } } };
+
+const explorerUrl = (chain: ExplorerChain, path: string) => {
   const explorer = chain.blockExplorers?.default.url;
-  return explorer ? `${explorer.replace(/\/+$/, "")}/address/${address}` : undefined;
+  return explorer ? `${explorer.replace(/\/+$/, "")}/${path}` : undefined;
 };
+
+export const explorerAddressUrl = (address: string, chain: ExplorerChain) => explorerUrl(chain, `address/${address}`);
+
+export const explorerTxUrl = (hash: string, chain: ExplorerChain) => explorerUrl(chain, `tx/${hash}`);

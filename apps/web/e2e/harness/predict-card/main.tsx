@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -12,13 +11,14 @@ import { predictFlowId } from "@/features/predict/run/interrupted";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import type { SessionDetail, SessionOption, SessionStatus } from "@/features/sessions/types";
 
+import { Dialog } from "@/components/ui/Dialog";
 import { SectionCard } from "@/components/ui/SectionCard";
 
 import { createRunStore } from "@/lib/flowRunStore";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
-import { predictBarSlot, PredictCard } from "@/app/market/[parentMarket]/_components/PredictCard";
+import { PredictCard } from "@/app/market/[parentMarket]/_components/PredictCard";
 
 import "@/styles/global.css";
 import "../inter.css";
@@ -32,6 +32,10 @@ const isConnected = params.get("wallet") !== "0";
 const status = (params.get("status") ?? "trading") as SessionStatus;
 /** `?run=stored` an unfinished run of 3 sDAI is stored for the wallet, `pending` one whose deposit awaits a receipt. */
 const run = params.get("run");
+/** `?rows=N` options in all, the unpicked ones after the picks, so the card sits below a phone's fold. */
+const rows = Number(params.get("rows") ?? "0");
+/** `?dialog=1` a dialog open over the page. */
+const isDialogOpen = params.get("dialog") === "1";
 if (params.get("theme") === "dark") document.documentElement.classList.add("dark");
 
 const WALLET = "0xdcee0000000000000000000000000000000c664f";
@@ -53,12 +57,14 @@ const PICKS: Record<string, [name: string, market: number, estimate: number][]> 
   ],
 };
 const picks = PICKS[set] ?? PICKS.normal!;
+const MORE = ["Kraków", "Medellín", "Osaka", "Tbilisi", "Quito", "Perth", "Tunis", "Oslo", "Lima", "Pune", "Hobart"];
+const names = [...picks.map(([name]) => name), ...MORE].slice(0, Math.max(picks.length, rows));
 
-const options: SessionOption[] = picks.map(([name], index) => ({
-  market: getAddress(`0x${String(index + 1).repeat(40)}`.slice(0, 42)) as Address,
+const options: SessionOption[] = names.map((name, index) => ({
+  market: getAddress(`0x${(index + 1).toString(16).padStart(2, "0").repeat(20)}`) as Address,
   outcomeIndex: index,
   name,
-  color: ["#009aff", "#7e1bd4", "#18a957", "#f59e0b", "#ef4444", "#14b8a6"][index]!,
+  color: ["#009aff", "#7e1bd4", "#18a957", "#f59e0b", "#ef4444", "#14b8a6"][index % 6]!,
   unit: null,
   lowerBound: 0,
   upperBound: 2_000_000,
@@ -96,12 +102,18 @@ const session: SessionDetail = {
 };
 
 const marketEstimates = Object.fromEntries(
-  options.map((option, index) => [option.market.toLowerCase(), picks[index]![1]]),
+  options.map((option, index) => [option.market.toLowerCase(), picks[index]?.[1] ?? 500]),
 );
-const picked = Object.fromEntries(options.map((option, index) => [option.market.toLowerCase(), picks[index]![2]]));
-/** For specs: put the first pick in, or take every pick out, as a slider would. */
+const picked = Object.fromEntries(
+  options.slice(0, picks.length).map((option, index) => [option.market.toLowerCase(), picks[index]![2]]),
+);
+/** For specs: put the first pick in, pick every option, or take every pick out, as a slider would. */
 Object.assign(window, {
   pickFirst: () => useEstimateStore.getState().setEstimate(PARENT, options[0]!.market, picks[0]![2]),
+  pickAll: () =>
+    options.forEach((option, index) =>
+      useEstimateStore.getState().setEstimate(PARENT, option.market, 900 + index * 37),
+    ),
   clearPicks: () => useEstimateStore.getState().resetEstimates(PARENT),
 });
 useEstimateStore.setState({
@@ -149,9 +161,8 @@ const config = createConfig({
 });
 const queryClient = new QueryClient();
 
-/** MarketPage's frame around the card: the bar's slot first in the column, the option cards above the card. */
+/** MarketPage's frame around the card: the option cards above the card, the trade wallet under it. */
 function Harness() {
-  const [bar, setBar] = useState<HTMLDivElement | null>(null);
   return (
     <>
       {/* Header's own frame; its menus need Next's app router */}
@@ -160,7 +171,6 @@ function Harness() {
       </header>
       <main className="fs-page flex-1 py-10">
         <div className="mx-auto flex w-full max-w-294 flex-col">
-          <div ref={setBar} className={predictBarSlot(status)} />
           <h1 className="text-fs-text-primary text-2xl font-semibold">{session.name}</h1>
           <section className="mt-12 flex flex-col gap-4">
             {options.map((option) => (
@@ -168,11 +178,14 @@ function Harness() {
                 <SectionCard className="text-fs-text-secondary h-14 p-4 text-sm">{option.name}</SectionCard>
               </div>
             ))}
-            <PredictCard session={session} status={status} marketEstimates={marketEstimates} barSlot={bar} />
-            <div className="h-[600px]" />
+            <PredictCard session={session} status={status} marketEstimates={marketEstimates} />
+            <SectionCard className="text-fs-text-secondary h-28 p-4 text-sm">Trade wallet</SectionCard>
           </section>
         </div>
       </main>
+      <Dialog isOpen={isDialogOpen} onClose={() => {}} title="A dialog" hint="Open over the page.">
+        <div className="h-40 w-72" />
+      </Dialog>
     </>
   );
 }

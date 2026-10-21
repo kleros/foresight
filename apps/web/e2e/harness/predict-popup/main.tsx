@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
-import { parseUnits } from "viem";
+import { parseUnits, type Hash } from "viem";
+import { gnosis } from "viem/chains";
 
 import { PredictButton } from "@/features/predict/components/PredictButton";
 import { PredictDialog } from "@/features/predict/components/PredictDialog";
@@ -16,6 +17,8 @@ import { fundsToAdd, predictSteps } from "@/features/predict/utils/predictSteps"
 import { normalizeSlippageSettings, type SlippageSettings } from "@/features/predict/utils/slippage";
 
 import { estimateToPriceWad, priceWadToEstimate } from "@/utils/optionPrice";
+
+import { explorerTxUrl } from "@/config/site";
 
 import { PredictSuccessView } from "@/app/market/[parentMarket]/_components/PredictSuccessView";
 import type { PoolLiquidity } from "@/types/pool";
@@ -64,6 +67,8 @@ const signingIn = params.get("signin") === "busy";
 const pricesLoading = params.get("prices") === "loading";
 /** `?prices=failed` the pools could not be read, so the button offers to read them again. */
 const pricesFailed = params.get("prices") === "failed";
+/** `&moved=N` with `state=moved`: the option whose plan changed, the first by default; the second has a 24-character name. */
+const movedIndex = Number(params.get("moved") ?? "0");
 /** `&movedBy=slippage` with `state=moved`: the plans changed with the visitor's new slippage. */
 const movedBySlippage = params.get("movedBy") === "slippage";
 /** `?open=press` the popup starts closed and opens from a button, as the market page opens it. */
@@ -241,8 +246,8 @@ const preview = Object.fromEntries(
         from: priceWadToEstimate(from, estimate.scale),
         to: shownTo,
         plan: { ...plan, held: plan.split > 0n ? HELD_UNDERLYING : 0n },
-        // the first option's plan changed: it was shown going 20 further
-        ...(state === "moved" && index === 0 ? { was: { from: 250, to: shownTo + 20 } } : {}),
+        // the moved option's plan changed: it was shown going 20 further
+        ...(state === "moved" && index === movedIndex ? { was: { from: 250, to: shownTo + 20 } } : {}),
       },
     ];
   }),
@@ -266,10 +271,61 @@ const stepsFor = (shown: typeof funding) =>
     progress,
   });
 
+/** `?run=` the finished run the receipt lists; `?chain=local` a chain with no explorer. */
+const runKind = params.get("run") ?? "single";
+const fakeHash = (n: number) => `0x${n.toString(16).padStart(2, "0").repeat(32)}` as Hash;
+const RECEIPT_STEPS: Record<string, { id: string; hash?: Hash }[]> = {
+  single: [
+    { id: "create-wallet", hash: fakeHash(1) },
+    { id: "deposit", hash: fakeHash(2) },
+    { id: "predict-1", hash: fakeHash(3) },
+  ],
+  batches: [
+    { id: "create-wallet", hash: fakeHash(1) },
+    { id: "deposit", hash: fakeHash(2) },
+    { id: "predict-1", hash: fakeHash(3) },
+    { id: "predict-2", hash: fakeHash(4) },
+    { id: "predict-3", hash: fakeHash(5) },
+  ],
+  credits: [
+    { id: "create-wallet", hash: fakeHash(1) },
+    { id: "add-credits", hash: fakeHash(6) },
+    { id: "deposit", hash: fakeHash(2) },
+    { id: "predict-1", hash: fakeHash(3) },
+  ],
+  recovered: [{ id: "create-wallet", hash: fakeHash(1) }, { id: "deposit" }, { id: "predict-1", hash: fakeHash(3) }],
+  returning: [{ id: "create-wallet" }, { id: "deposit", hash: fakeHash(2) }, { id: "predict-1", hash: fakeHash(3) }],
+  worst: [
+    { id: "create-wallet", hash: fakeHash(1) },
+    { id: "add-credits", hash: fakeHash(6) },
+    { id: "deposit", hash: fakeHash(2) },
+    { id: "predict-1", hash: fakeHash(3) },
+    { id: "predict-2", hash: fakeHash(4) },
+    { id: "predict-3", hash: fakeHash(5) },
+  ],
+};
+const receiptFunds =
+  runKind === "recovered"
+    ? { toAdd: 4n * WAD, symbol: "xDAI", decimals: 18 }
+    : runKind === "credits" || runKind === "worst"
+      ? { toAdd: 8n * WAD, symbol: "sDAI", decimals: 18, credits: 2n * WAD }
+      : { toAdd: 10n * WAD, symbol: "sDAI", decimals: 18 };
+const receiptChain = params.get("chain") === "local" ? {} : gnosis;
+
 const success = (
   <PredictSuccessView
     isOpen
-    placed={{ estimates: Math.min(count, 2), amount: 10n * WAD, symbol: "sDAI", decimals: 18 }}
+    placed={{
+      estimates: Math.min(count, 2),
+      amount: 10n * WAD,
+      symbol: "sDAI",
+      decimals: 18,
+      steps: RECEIPT_STEPS[runKind] ?? RECEIPT_STEPS.single,
+      funds: receiptFunds,
+      wallet: WALLET,
+    }}
+    optionNoun="city"
+    txUrl={(hash) => explorerTxUrl(hash, receiptChain)}
     leftOut={count > 2 ? CITIES.slice(2, count) : []}
     onClose={() => {}}
     subscribed={params.get("subscribed") !== "0"}

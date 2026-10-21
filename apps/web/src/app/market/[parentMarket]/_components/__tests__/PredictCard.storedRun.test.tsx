@@ -81,14 +81,14 @@ function saveRun(deposit: "pending" | "submitted" = "pending") {
   });
 }
 
-function card(barSlot?: HTMLElement) {
+function card() {
   const detail = session();
   const marketEstimates = moveEveryEstimate(detail);
-  return <PredictCard session={detail} status="trading" marketEstimates={marketEstimates} barSlot={barSlot} />;
+  return <PredictCard session={detail} status="trading" marketEstimates={marketEstimates} />;
 }
 
-function renderCard(barSlot?: HTMLElement) {
-  render(card(barSlot));
+function renderCard() {
+  render(card());
   return () => screen.getByRole("button", { name: "Predict 2 estimates" });
 }
 
@@ -126,12 +126,21 @@ describe("the predict card with an unfinished run stored", () => {
 
   it("draws no phone bar while the run is stored", async () => {
     saveRun();
-    const slot = document.body.appendChild(document.createElement("div"));
-    renderCard(slot);
+    renderCard();
 
     await screen.findByText(RESUME_OR_DISCARD);
-    expect(slot.querySelector("[data-predict-bar]")).toBeNull();
-    slot.remove();
+    expect(document.querySelector("[data-predict-dock]")).toBeNull();
+  });
+
+  it("makes Resume the card's main button and holds Predict as the secondary one", async () => {
+    saveRun();
+    const predict = renderCard();
+
+    const resume = await screen.findByRole("button", { name: "Resume" });
+    expect(resume).toHaveClass("predict-cta");
+    expect(predict()).not.toHaveClass("predict-cta");
+    expect(predict()).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Predict" })).toBeDisabled();
   });
 
   it("lets Predict go once the run is discarded", async () => {
@@ -171,6 +180,16 @@ describe("the predict card before it has read the stored run", () => {
     await screen.findByRole("button", { name: "Resume" });
     expect(commits[0]).toBe("held");
     expect(commits).not.toContain("live");
+  });
+
+  it("keeps Predict held and draws no phone bar while Resume's popup is open", async () => {
+    saveRun();
+    const commits = renderCounted();
+    await userEvent.click(await screen.findByRole("button", { name: "Resume" }));
+    await screen.findByRole("dialog");
+
+    expect(commits).not.toContain("live");
+    expect(document.querySelector("[data-predict-dock]")).toBeNull();
   });
 
   it("never commits a live Predict when the popup closes over a stored run", async () => {

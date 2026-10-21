@@ -759,16 +759,16 @@ test.describe("the more-below cue's nudge", () => {
   test("fades in place on the reduced-fade token under reduced motion", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await openHarness(page, `${harness.url}?dialog=success`);
-    const mark = page.locator(".predict-success-mark");
-    await expect(mark).toHaveCSS("animation-name", "fsFadeIn");
+    const row = page.getByRole("list", { name: "Transactions" }).getByRole("listitem").first();
+    await expect(row).toHaveCSS("animation-name", "fsFadeIn");
     expect(
       await page.evaluate(() =>
         getComputedStyle(document.documentElement).getPropertyValue("--fs-dur-reduced-fade").trim(),
       ),
     ).toBe("150ms");
-    await expect(mark).toHaveCSS("animation-duration", "0.15s");
+    await expect(row).toHaveCSS("animation-duration", "0.15s");
     await page.evaluate(() => document.documentElement.style.setProperty("--fs-dur-reduced-fade", "90ms"));
-    await expect(mark).toHaveCSS("animation-duration", "0.09s");
+    await expect(row).toHaveCSS("animation-duration", "0.09s");
   });
 
   // a two-line status starts right under the strip, so the burst there is smaller
@@ -794,7 +794,7 @@ test.describe("the more-below cue's nudge", () => {
       await settle(dialog);
       const strip = (await cue.boundingBox())!;
       expect(await cue.evaluate((element) => getComputedStyle(element).paddingTop)).toBe("6px");
-      const status = await dialog.getByRole("status").locator("span").evaluate(inkOf);
+      const status = await dialog.getByTestId("status-text").evaluate(inkOf);
       expect(status.lines, "the status line's lines").toBe(lines);
 
       const at = (time: number) =>
@@ -859,11 +859,11 @@ for (const viewport of [
   test.describe(`a popup on a short screen at ${viewport.width} x ${viewport.height}`, () => {
     test.use({ viewport });
 
-    test("keeps the share slider and a two-line status slot", async ({ page }) => {
+    test("keeps the share slider and a 44px status slot", async ({ page }) => {
       const dialog = await openPopup(page, 2, "failed", "funds");
 
       await expect(dialog.getByTestId("amount-slider")).toBeVisible();
-      expect((await dialog.getByRole("status").boundingBox())!.height).toBeLessThanOrEqual(40);
+      expect((await dialog.getByRole("status").boundingBox())!.height).toBe(44);
     });
 
     for (const extra of ["", "&credits=enough"]) {
@@ -928,7 +928,15 @@ for (const viewport of [
   test.describe(`every failure at ${viewport.width} x ${viewport.height}`, () => {
     test.use({ viewport });
 
-    test("fits its words in a two-line status slot, left-aligned under the title, without moving the footer", async ({
+    test("fits a moved line about a long-named option in its callout", async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await openHarness(page, `${harness.url}?options=4&state=moved&moved=1`);
+      const box = page.getByRole("dialog").getByRole("status").getByTestId("status-box");
+      await expect(box).not.toBeEmpty();
+      expect(await box.evaluate((element) => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
+    });
+
+    test("fits its words in its 44px status slot, its callout under the title, without moving the footer", async ({
       page,
     }) => {
       const idle = await footprint(page, await openPopup(page, 10, "idle"));
@@ -936,13 +944,21 @@ for (const viewport of [
         const dialog = await openPopup(page, 10, "failed", reason);
         const status = dialog.getByRole("status");
         const [text, title] = await Promise.all([
-          status.locator("span").boundingBox(),
+          status.getByTestId("status-box").boundingBox(),
           dialog.getByRole("heading", { name: "Predict", exact: true }).boundingBox(),
         ]);
 
         expect.soft(await status.evaluate((element) => getComputedStyle(element).textAlign), reason).toBe("left");
         expect.soft(Math.abs(text!.x - title!.x), `${reason} starts under the title`).toBeLessThanOrEqual(1);
-        expect.soft((await status.boundingBox())!.height, `${reason}: a two-line slot`).toBeLessThanOrEqual(40);
+        expect.soft((await status.boundingBox())!.height, `${reason}: the slot`).toBe(44);
+        expect
+          .soft(
+            await status
+              .getByTestId("status-box")
+              .evaluate((element) => element.scrollHeight <= element.clientHeight + 1),
+            `${reason}: the words fit the callout`,
+          )
+          .toBe(true);
 
         expect.soft(await footprint(page, dialog), `${reason} has the idle popup's footprint`).toEqual(idle);
         expect
@@ -969,7 +985,7 @@ for (const viewport of [
       for (const state of ["disconnected", "failed", "pending"] as const) {
         for (const options of [2, 10]) {
           const dialog = await openPopup(page, options, state);
-          const status = dialog.getByRole("status").locator("span");
+          const status = dialog.getByTestId("status-text");
           await expect(status).not.toBeEmpty();
           // both scrolls wait a frame
           await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
@@ -1879,10 +1895,142 @@ test.describe("the popup's tones", () => {
       "rgb(255, 255, 255)",
     );
     expect(await done.evaluate((bullet) => getComputedStyle(bullet, "::before").opacity)).toBe("1");
-    expect(await dialog.getByRole("status").evaluate((status) => getComputedStyle(status).color)).toBe(
-      "rgb(196, 0, 42)",
-    );
+    expect(
+      await dialog.getByTestId("status-glyph").evaluate((glyph) => getComputedStyle(glyph).color),
+      "the failure's glyph",
+    ).toBe("rgb(196, 0, 42)");
   });
+});
+
+/** The callout's surface, glyph and sentence as opaque rgb, read through a canvas so color-mix() resolves. */
+function calloutColours(dialog: Locator) {
+  return dialog.getByRole("status").evaluate((status) => {
+    const box = status.querySelector<HTMLElement>("[data-testid=status-box]")!;
+    const glyph = status.querySelector<SVGElement>("[data-testid=status-glyph]")!;
+    const text = status.querySelector<HTMLElement>("[data-testid=status-text]")!;
+    const context = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
+    const rgb = (css: string, under = "#ffffff") => {
+      context.fillStyle = under;
+      context.fillRect(0, 0, 1, 1);
+      context.fillStyle = css;
+      context.fillRect(0, 0, 1, 1);
+      const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
+      return `rgb(${r}, ${g}, ${b})`;
+    };
+    const sheet = rgb(getComputedStyle(status.closest("[role=dialog]")!).backgroundColor);
+    const surface = getComputedStyle(box).backgroundColor;
+    const glyphBox = glyph.getBoundingClientRect();
+    return {
+      surface: surface === "rgba(0, 0, 0, 0)" ? "transparent" : rgb(surface, sheet),
+      under: rgb(surface, sheet),
+      glyph: rgb(getComputedStyle(glyph).color),
+      text: rgb(getComputedStyle(text).color),
+      glyphSize: [glyphBox.width, glyphBox.height],
+      radius: getComputedStyle(box).borderTopLeftRadius,
+      enters: box.classList.contains("fs-enter"),
+    };
+  });
+}
+
+test.describe("the status callout", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  for (const { width, height, size } of [
+    { width: 1280, height: 800, size: ["13px", "17px"] },
+    { width: 375, height: 812, size: ["13px", "17px"] },
+    { width: 375, height: 667, size: ["12px", "16px"] },
+    { width: 320, height: 568, size: ["12px", "16px"] },
+  ]) {
+    test(`sets its sentence at ${size.join("/")} at ${width} x ${height}`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      const dialog = await openPopup(page, 2, "failed", "reverted");
+      const text = dialog.getByTestId("status-text");
+      await expect(text).not.toBeEmpty();
+      expect(
+        await text.evaluate((element) => [getComputedStyle(element).fontSize, getComputedStyle(element).lineHeight]),
+      ).toEqual(size);
+    });
+  }
+
+  for (const theme of ["light", "dark"] as const) {
+    const TONES = [
+      { tone: "error", extra: "&state=failed&reason=reverted", surface: true, enters: true },
+      { tone: "warning", extra: "&state=moved", surface: true, enters: true },
+      { tone: "neutral", extra: "&leftOut=2", surface: false, enters: false },
+    ] as const;
+    for (const { tone, extra, surface, enters } of TONES) {
+      test(`says ${tone === "error" ? "an" : "a"} ${tone} line in ink beside a 16px glyph in its tone, ${surface ? "on a tinted surface" : "on the sheet"}, in the ${theme} theme`, async ({
+        page,
+      }) => {
+        await page.emulateMedia({ reducedMotion: "reduce" });
+        await openHarness(page, `${harness.url}?options=2&theme=${theme}${extra}`);
+        const dialog = page.getByRole("dialog");
+        await expect(dialog.getByTestId("status-text")).not.toBeEmpty();
+        const colours = await calloutColours(dialog);
+        const [ink, tint, ink2] = await Promise.all([
+          tokenValue(page, "color", "var(--fs-popup-text)"),
+          tokenValue(
+            page,
+            "color",
+            `var(--fs-tone-${tone === "neutral" ? "neutral" : tone}-text, var(--fs-popup-text-3))`,
+          ),
+          tokenValue(page, "color", "var(--fs-popup-text-2)"),
+        ]);
+
+        expect.soft(colours.glyphSize, "the glyph's box").toEqual([16, 16]);
+        expect.soft(colours.radius, "the control radius").toBe("10px");
+        expect.soft(colours.enters, "enters with fs-enter").toBe(enters);
+        if (surface) {
+          expect.soft(colours.surface, "a tinted surface").not.toBe("transparent");
+          expect.soft(colours.text, "the sentence in ink").toBe(ink);
+          expect.soft(colours.glyph, "the glyph in the tone's text colour").toBe(tint);
+          expect.soft(contrast(colours.glyph, colours.under), "the glyph on its surface").toBeGreaterThanOrEqual(3);
+        } else {
+          expect.soft(colours.surface, "no surface").toBe("transparent");
+          expect.soft(colours.text, "the note in the secondary text").toBe(ink2);
+        }
+        expect.soft(contrast(colours.text, colours.under), "the sentence on its surface").toBeGreaterThanOrEqual(4.5);
+      });
+    }
+  }
+});
+
+test.describe("the bottom half's spacing", () => {
+  for (const { width, height, title, detail, row } of [
+    { width: 1280, height: 800, title: "600 13px/18px", detail: "400 12px/16px", row: 36 },
+    { width: 375, height: 812, title: "600 13px/16px", detail: "400 12px/16px", row: 40 },
+    { width: 375, height: 667, title: "600 13px/16px", detail: "400 12px/16px", row: 40 },
+  ]) {
+    test(`sets the steps in ${title} over ${detail} in ${row}px rows, and the callout 8px over the button, at ${width} x ${height}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height });
+      const dialog = await openPopup(page, 2, "failed", "reverted");
+      await expect(dialog.getByTestId("status-text")).not.toBeEmpty();
+      const measured = await dialog.evaluate((element) => {
+        const font = (node: Element) => {
+          const style = getComputedStyle(node);
+          return `${style.fontWeight} ${style.fontSize}/${style.lineHeight}`;
+        };
+        const rows = [...element.querySelectorAll(".predict-steps > li")];
+        const box = element.querySelector("[data-testid=status-box]")!.getBoundingClientRect();
+        const cta = element.querySelector(".predict-footer > .predict-cta")!.getBoundingClientRect();
+        return {
+          titles: [...new Set(rows.map((row) => font(row.querySelector("h2")!)))],
+          details: [...new Set(rows.map((row) => font(row.querySelector("h2 + p")!)))],
+          rows: [rows[0], rows[2]].map(
+            (row) => row!.querySelector(":scope > div:nth-child(2)")!.getBoundingClientRect().height,
+          ),
+          calloutToButton: Math.round(cta.top - box.bottom),
+        };
+      });
+
+      expect.soft(measured.titles, "step titles").toEqual([title]);
+      expect.soft(measured.details, "step details").toEqual([detail]);
+      expect.soft(measured.rows, "the first and last rows").toEqual([row, row]);
+      expect.soft(measured.calloutToButton, "the callout to the button").toBe(8);
+    });
+  }
 });
 
 test.describe("the running step", () => {
@@ -2257,12 +2405,30 @@ for (const width of [375, 320, 1280]) {
   });
 }
 
+test.describe("the popup's type roles", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("give way to a weight utility beside them, in the panels and the settings", async ({ page }) => {
+    const weightOf = (locator: Locator) => locator.evaluate((element) => getComputedStyle(element).fontWeight);
+    const dialog = await openPopup(page, 2);
+    expect.soft(await weightOf(dialog.getByRole("heading", { name: "2 estimates" })), "2 estimates").toBe("500");
+    expect.soft(await weightOf(dialog.getByRole("heading", { name: /^You pay/ })), "You pay").toBe("500");
+    expect
+      .soft(await weightOf(dialog.getByTestId("predict-summary").getByRole("button").first()), "the Details row")
+      .toBe("500");
+
+    await openHarness(page, `${harness.url}?options=2&settings=open`);
+    const settings = page.getByRole("dialog");
+    await expect(settings.getByRole("button", { name: "Done" })).toBeVisible();
+    expect.soft(await weightOf(settings.getByRole("heading", { name: "Max slippage" })), "Max slippage").toBe("500");
+    expect.soft(await weightOf(settings.getByRole("button", { name: "Done" })), "Done").toBe("600");
+  });
+});
+
 test.describe("the popup's numbers", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test("set the balance and the estimates count in tabular figures, through the type roles' font shorthand", async ({
-    page,
-  }) => {
+  test("set the balance and the estimates count in tabular figures beside a type role", async ({ page }) => {
     const dialog = await openPopup(page, 10);
     for (const number of [dialog.getByText(/^Balance:/), dialog.getByText(/^10 estimates$/)]) {
       await expect(number).toHaveCSS("font-variant-numeric", "tabular-nums");
@@ -2452,8 +2618,8 @@ function contrast(first: string, second: string) {
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
 
-/** Resolves a colour or length token to its computed value, through a probe in the page. */
-function tokenValue(page: Page, property: "color" | "borderRadius", value: string) {
+/** Resolves a colour, gradient or length token to its computed value, through a probe in the page. */
+function tokenValue(page: Page, property: "color" | "borderRadius" | "backgroundImage", value: string) {
   return page.evaluate(
     ([property, value]) => {
       const probe = document.createElement("span");
@@ -2467,12 +2633,123 @@ function tokenValue(page: Page, property: "color" | "borderRadius", value: strin
   );
 }
 
+test.describe("a dialog over the sticky header", () => {
+  test("opens a tall success dialog above the header on a phone, its top edge in view and its overlay over the header", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await openHarness(page, `${harness.url}?options=4&state=success&dialog=success&run=worst&verified=0`);
+    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const box = (await dialog.boundingBox())!;
+    const header = (await page.locator("header").boundingBox())!;
+
+    // the worst case is taller than the window less the header, so it reaches under where the header sits
+    expect(box.y).toBeLessThan(header.y + header.height);
+    const hit = await page.evaluate(
+      ([x, y]) => {
+        const node = document.elementFromPoint(x!, y!)?.closest("[role=dialog], header");
+        return node ? (node.matches("header") ? "header" : "dialog") : null;
+      },
+      [box.x + box.width / 2, box.y + 4],
+    );
+    expect(hit).toBe("dialog");
+    expect(await page.evaluate(() => document.elementFromPoint(4, 4)?.closest("header"))).toBeNull();
+  });
+
+  test("lays the predict popup's overlay over the header too", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await openPopup(page, 2);
+
+    expect(await page.evaluate(() => document.elementFromPoint(4, 4)?.closest("header"))).toBeNull();
+  });
+});
+
+for (const viewport of [
+  { width: 375, height: 667 },
+  { width: 320, height: 568 },
+]) {
+  test.describe(`the success dialog at ${viewport.width} x ${viewport.height}`, () => {
+    test.use({ viewport });
+
+    test("ends every figure on one column, a wallet address under its title too", async ({ page }) => {
+      await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&run=credits`);
+      const rows = page.getByRole("list", { name: "Transactions" }).getByRole("listitem");
+      const ends = await rows.evaluateAll((items) =>
+        items
+          .map((row) => row.querySelector("span.font-semibold")?.nextElementSibling)
+          .filter((detail): detail is Element => detail != null)
+          .map((detail) => Math.round(detail.getBoundingClientRect().right)),
+      );
+      expect(ends.length).toBeGreaterThan(2);
+      expect(new Set(ends).size).toBe(1);
+    });
+
+    for (const run of ["batches", "worst"]) {
+      test(`keeps every step's title on one line beside its links (${run})`, async ({ page }) => {
+        await openHarness(page, `${harness.url}?options=4&state=success&dialog=success&run=${run}`);
+        const titles = page.getByRole("list", { name: "Transactions" }).locator("li span.font-semibold");
+        for (const title of await titles.all()) expect(Math.round((await title.boundingBox())!.height)).toBe(20);
+      });
+    }
+
+    test("gives each explorer link a 44px tall hit area, its drawn size kept", async ({ page }) => {
+      await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&run=batches`);
+      await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
+      for (const link of await page
+        .getByRole("listitem")
+        .filter({ hasText: "Prediction placed" })
+        .getByRole("link")
+        .all()) {
+        const box = (await link.boundingBox())!;
+        expect(box.height).toBe(32);
+        const hits = await page.evaluate(
+          ([x, top, bottom, label]) =>
+            [top, bottom].map(
+              (y) => document.elementFromPoint(x!, y!)?.closest("a")?.getAttribute("aria-label") === label,
+            ),
+          [
+            box.x + box.width / 2,
+            box.y - 5.5,
+            box.y + box.height + 5.5,
+            await link.getAttribute("aria-label"),
+          ] as const,
+        );
+        expect(hits).toEqual([true, true]);
+      }
+    });
+  });
+}
+
+for (const viewport of [
+  { width: 568, height: 320 },
+  { width: 844, height: 390 },
+]) {
+  test.describe(`the success dialog on a phone on its side, ${viewport.width} x ${viewport.height}`, () => {
+    test.use({ viewport });
+
+    for (const query of ["run=worst&verified=0", "subscribed=0"]) {
+      test(`keeps Close in view at the dialog's foot while the rest scrolls (${query})`, async ({ page }) => {
+        await page.emulateMedia({ reducedMotion: "reduce" });
+        await openHarness(page, `${harness.url}?options=4&state=success&dialog=success&${query}`);
+        const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+        const close = dialog.getByRole("button", { name: "Close" });
+        const [box, frame] = [(await close.boundingBox())!, (await dialog.boundingBox())!];
+        expect(box.y + box.height).toBeLessThanOrEqual(frame.y + frame.height);
+        expect(
+          await page.evaluate(
+            ([x, y]) => document.elementFromPoint(x!, y!)?.closest("button")?.textContent,
+            [box.x + box.width / 2, box.y + box.height / 2],
+          ),
+        ).toBe("Close");
+      });
+    }
+  });
+}
+
 test.describe("the success dialog", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test("names the email in one sentence, links to Settings in the accent, and rings its mark in the panel's tone", async ({
-    page,
-  }) => {
+  test("names the email in one sentence and links to Settings in the accent", async ({ page }) => {
     await openHarness(page, `${harness.url}?options=2&state=success&dialog=success`);
     const dialog = page.getByRole("dialog", { name: "Prediction placed" });
     const link = dialog.getByRole("link", { name: "Change in Settings" });
@@ -2485,19 +2762,118 @@ test.describe("the success dialog", () => {
     await expect(link).toHaveAttribute("href", "/settings?tab=notifications");
     await expect(link).toHaveCSS("color", await tokenValue(page, "color", "var(--fs-popup-accent-text)"));
     await expect(dialog.getByText("Confirm your email first", { exact: false })).toHaveCount(0);
-    const ring = await page.getByTestId("success-mark").evaluate((mark) => getComputedStyle(mark).boxShadow);
-    expect(ring).toContain(await tokenValue(page, "color", "var(--fs-popup-panel)"));
   });
 
-  test("groups the title, the panel and the action 24 and 16 apart", async ({ page }) => {
+  test("groups the lines under the title, the receipt, the panel and the action 20, 20 and 16 apart", async ({
+    page,
+  }) => {
     await openHarness(page, `${harness.url}?options=2&state=success&dialog=success`);
     const dialog = page.getByRole("dialog", { name: "Prediction placed" });
-    const title = (await dialog.getByText("2 estimates · 10 sDAI").boundingBox())!;
+    const position = (await dialog.getByText("See your position under each city.").boundingBox())!;
+    const receipt = (await dialog.getByRole("list", { name: "Transactions" }).boundingBox())!;
     const panel = (await dialog.locator("section").boundingBox())!;
     const close = (await dialog.getByRole("button", { name: "Close" }).boundingBox())!;
 
-    expect(Math.round(panel.y - (title.y + title.height))).toBe(24);
+    expect(Math.round(receipt.y - (position.y + position.height))).toBe(20);
+    expect(Math.round(panel.y - (receipt.y + receipt.height))).toBe(20);
     expect(Math.round(close.y - (panel.y + panel.height))).toBe(16);
+  });
+
+  test("keeps what could not be traded 12 above the panel's 20", async ({ page }) => {
+    await openHarness(page, `${harness.url}?options=4&state=success&dialog=success`);
+    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const receipt = (await dialog.getByRole("list", { name: "Transactions" }).boundingBox())!;
+    const leftOut = (await dialog.getByText("Could not be traded: Nairobi, Montevideo.").boundingBox())!;
+    const panel = (await dialog.locator("section").boundingBox())!;
+
+    expect(Math.round(leftOut.y - (receipt.y + receipt.height))).toBe(12);
+    expect(Math.round(panel.y - (leftOut.y + leftOut.height))).toBe(20);
+  });
+
+  test("draws no mark of its own: each step's done bullet says it, joined bullet to bullet by the axis", async ({
+    page,
+  }) => {
+    await openHarness(page, `${harness.url}?options=2&state=success&dialog=success`);
+    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const bullets = dialog.locator('[data-bullet="done"]');
+    const rows = dialog.getByRole("list", { name: "Transactions" }).getByRole("listitem");
+
+    await expect(page.getByTestId("success-mark")).toHaveCount(0);
+    await expect(bullets).toHaveCount(3);
+    await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
+    const axis = await tokenValue(page, "backgroundImage", "var(--fs-popup-axis-v)");
+    const lines = await rows.evaluateAll((items) =>
+      items.map((row) => {
+        const style = getComputedStyle(row, "::before");
+        const box = row.getBoundingClientRect();
+        return {
+          image: style.backgroundImage,
+          centre: box.left + parseFloat(style.left) + parseFloat(style.width) / 2,
+          top: box.top + parseFloat(style.top),
+          bottom: box.bottom - parseFloat(style.bottom),
+        };
+      }),
+    );
+    const centres = await bullets.evaluateAll((items) =>
+      items.map((bullet) => {
+        const box = bullet.getBoundingClientRect();
+        return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+      }),
+    );
+    for (const line of lines) expect(line.image).toBe(axis);
+    lines.forEach((line, index) => expect(line.centre).toBe(centres[index]!.x));
+    // from the first bullet's centre to the last's, unbroken through the gaps between rows
+    expect(Math.round(lines[0]!.top)).toBe(Math.round(centres[0]!.y));
+    expect(Math.round(lines[2]!.bottom)).toBe(Math.round(centres[2]!.y));
+    for (const index of [0, 1]) expect(lines[index]!.bottom).toBeGreaterThanOrEqual(lines[index + 1]!.top);
+  });
+
+  test("numbers each batch's explorer link on the prediction row, each a 32px target", async ({ page }) => {
+    await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&run=batches`);
+    const row = page.getByRole("listitem").filter({ hasText: "Prediction placed" });
+    const links = row.getByRole("link");
+
+    await expect(links).toHaveText(["1", "2", "3"]);
+    for (const link of await links.all()) {
+      await expect(link).toHaveAttribute("href", /^https:\/\/gnosisscan\.io\/tx\/0x[0-9a-f]{64}$/);
+      await expect(link).toHaveAttribute("target", "_blank");
+      expect((await link.boundingBox())!.height).toBe(32);
+    }
+    await expect(row.getByRole("link", { name: /^Prediction transaction 2 of 3, / })).toBeVisible();
+  });
+
+  test("ends every figure on one column where a step that landed unseen has no link", async ({ page }) => {
+    await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&run=recovered`);
+    const list = page.getByRole("list", { name: "Transactions" });
+    const funds = list.getByRole("listitem").filter({ hasText: "Funds added" });
+    const wallet = (await list.getByText("0xdcee...664f").boundingBox())!;
+    const added = (await funds.getByText("4 xDAI").boundingBox())!;
+
+    await expect(funds.getByRole("link")).toHaveCount(0);
+    expect(Math.round(added.x + added.width)).toBe(Math.round(wallet.x + wallet.width));
+  });
+
+  test("links nothing on a chain with no explorer, as on a local node", async ({ page }) => {
+    await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&run=worst&chain=local`);
+    const list = page.getByRole("list", { name: "Transactions" });
+
+    await expect(list.getByRole("listitem")).toHaveCount(4);
+    await expect(list.getByRole("link")).toHaveCount(0);
+  });
+
+  test("lists the credits and the funds as two steps, each with its own link", async ({ page }) => {
+    await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&run=credits`);
+    const list = page.getByRole("list", { name: "Transactions" });
+
+    for (const [title, figure, name] of [
+      ["Credits added", "2 credits", /^Credits transaction, /],
+      ["Funds added", "8 sDAI", /^Funds transaction, /],
+    ] as const) {
+      const row = list.getByRole("listitem").filter({ hasText: title });
+      await expect(row.getByText(figure)).toBeVisible();
+      await expect(row.getByRole("link")).toHaveCount(1);
+      await expect(row.getByRole("link", { name })).toBeVisible();
+    }
   });
 
   test("warns in the warning tone when the email is not confirmed", async ({ page }) => {
@@ -2595,16 +2971,34 @@ test.describe("the success dialog", () => {
     });
   }
 
-  test("brings its mark in by opacity alone under reduced motion", async ({ page }) => {
+  test("brings the receipt's rows in one after another, half an echo apart", async ({ page }) => {
+    await openHarness(page, `${harness.url}?dialog=success&run=credits`);
+    const rows = page.getByRole("list", { name: "Transactions" }).getByRole("listitem");
+    await expect(rows.first()).toHaveCSS("animation-name", "fsFadeUp");
+    expect(await rows.evaluateAll((items) => items.map((item) => getComputedStyle(item).animationDelay))).toEqual([
+      "0s",
+      "0.05s",
+      "0.1s",
+      "0.15s",
+    ]);
+    await page.evaluate(() => document.documentElement.style.setProperty("--fs-dur-echo", "200ms"));
+    await expect(rows.nth(1)).toHaveCSS("animation-delay", "0.1s");
+  });
+
+  test("brings its receipt in by opacity alone under reduced motion", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await openHarness(page, `${harness.url}?options=2&state=success&dialog=success`);
-    const keys = await page.getByTestId("success-mark").evaluate((mark) =>
-      mark
-        .getAnimations()
-        .flatMap((animation) => (animation.effect as KeyframeEffect).getKeyframes())
-        .flatMap((frame) => Object.keys(frame))
-        .filter((key) => !["offset", "easing", "composite", "computedOffset"].includes(key)),
-    );
+    const keys = await page
+      .getByRole("list", { name: "Transactions" })
+      .getByRole("listitem")
+      .first()
+      .evaluate((mark) =>
+        mark
+          .getAnimations()
+          .flatMap((animation) => (animation.effect as KeyframeEffect).getKeyframes())
+          .flatMap((frame) => Object.keys(frame))
+          .filter((key) => !["offset", "easing", "composite", "computedOffset"].includes(key)),
+      );
 
     expect([...new Set(keys)]).toEqual(["opacity"]);
   });

@@ -32,7 +32,7 @@ export interface PredictSteps {
 }
 
 /** The credits swap has no quote or route, so a run spending credits cannot be planned. */
-export const CREDITS_UNAVAILABLE = "Credits can't be spent right now. Untick them to predict with your own funds.";
+export const CREDITS_UNAVAILABLE = "Credits can't be spent now. Untick them to use your own funds.";
 
 /** The chain's own errors name gas and contracts, which the popup never shows. */
 const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], string> = {
@@ -230,6 +230,8 @@ export interface StatusLine {
   tone: "neutral" | "warning" | "error";
   /** Said for the visitor's information only, in the popup's small type on one line. */
   small?: true;
+  /** A run is checking something before it goes on. */
+  waiting?: true;
 }
 
 /**
@@ -249,7 +251,7 @@ export function statusLine(args: {
   if (notice) return { text: notice, tone: "warning" };
   if (steps.failure) return { text: steps.failure, tone: steps.pending ? "warning" : "error" };
   if (moved !== undefined) return { text: movedText(moved), tone: "warning" };
-  if (steps.note) return { text: steps.note, tone: "neutral" };
+  if (steps.note) return { text: steps.note, tone: "neutral", waiting: true };
   if (creditsLoss !== undefined && !steps.started) {
     return { text: `Credits swap loses ${creditsLoss}.`, tone: "warning", small: true };
   }
@@ -268,24 +270,21 @@ export interface MovedStatus {
   bySlippage?: true;
 }
 
-/** A market name longer than this is not quoted on the two-line status line. */
-const NAMED_MAX = 24;
+/** The longest named moved line that keeps to the callout's two lines at 320px wide, measured with real names. */
+const NAMED_LINE_MAX = 62;
 
 /** Said when the pools moved since Details was read, before anything more is signed. */
 function movedText({ markets, credits, only, bySlippage }: MovedStatus): string {
   if (bySlippage) return "Your new slippage changes the trades. Check Details, then confirm.";
-  if (!credits && markets === 1 && only && only.name.length <= NAMED_MAX) {
+  if (!credits && markets === 1 && only) {
     // a figure and its unit wrap as one
     const whole = (value: string) => value.replaceAll(" ", "\u00a0");
-    return `${only.name} now goes to ${whole(only.to)}, not ${whole(only.was)}. Confirm to go on.`;
+    const named = `${only.name} now goes to ${whole(only.to)}, not ${whole(only.was)}. Confirm to go on.`;
+    if (named.length <= NAMED_LINE_MAX) return named;
   }
   const count = `${markets} ${markets === 1 ? "market" : "markets"}`;
-  const what = credits
-    ? markets > 0
-      ? `Prices moved on ${count} and the credits swap`
-      : "The credits swap now pays less"
-    : `Prices moved on ${count}`;
-  return `${what}. Check Details, then confirm.`;
+  if (credits && markets > 0) return `Prices moved on ${count} and the credits swap. Confirm to go on.`;
+  return `${credits ? "The credits swap now pays less" : `Prices moved on ${count}`}. Check Details, then confirm.`;
 }
 
 /** The button's label while the visitor is asked to confirm the new figures. */

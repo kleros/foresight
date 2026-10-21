@@ -62,32 +62,37 @@
   --radius-fs-control: var(--fs-radius-control);
 }
 
-/* Semantic type roles as single utilities. `font` resets font-variant-numeric, so each role re-reads
-   Tailwind's numeric variables: `tabular-nums` beside a role still applies, and without one it inherits. */
+/* Semantic type roles as single utilities, in longhands: Tailwind orders a `font` shorthand after every
+   text-*, leading-* and font-* utility, so it would override them; longhands sort before them. */
 @utility type-h1 {
-  font: var(--type-h1);
-  font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,)
-    var(--tw-numeric-fraction,);
+  font-family: var(--font-sans);
+  font-weight: var(--type-h1-weight);
+  font-size: var(--type-h1-size);
+  line-height: var(--type-h1-leading);
 }
 @utility type-h2 {
-  font: var(--type-h2);
-  font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,)
-    var(--tw-numeric-fraction,);
+  font-family: var(--font-sans);
+  font-weight: var(--type-h2-weight);
+  font-size: var(--type-h2-size);
+  line-height: var(--type-h2-leading);
 }
 @utility type-body {
-  font: var(--type-body);
-  font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,)
-    var(--tw-numeric-fraction,);
+  font-family: var(--font-sans);
+  font-weight: var(--type-body-weight);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-leading);
 }
 @utility type-label {
-  font: var(--type-label);
-  font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,)
-    var(--tw-numeric-fraction,);
+  font-family: var(--font-sans);
+  font-weight: var(--type-label-weight);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-leading);
 }
 @utility type-caption {
-  font: var(--type-caption);
-  font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,)
-    var(--tw-numeric-fraction,);
+  font-family: var(--font-sans);
+  font-weight: var(--type-caption-weight);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-leading);
 }
 
 /** The one content gutter: the header, the page and the footer all sit on it. */
@@ -419,7 +424,7 @@
   transition: stroke-dashoffset var(--fs-dur-enter) var(--fs-ease-enter);
 }
 .predict-steps > li > div:first-child {
-  padding-top: 8px;
+  padding-top: 6px;
 }
 /* the library draws a line above the bullet down to the title's offset; the connector below replaces it */
 .predict-steps > li > div:first-child > div[style] {
@@ -429,8 +434,8 @@
   position: relative;
   flex: 1 1 0;
   width: 0;
-  /* through the next row's 8px top padding to its bullet */
-  margin: 0 0 -8px;
+  /* through the next row's 6px top padding to its bullet */
+  margin: 0 0 -6px;
   border-left: 2px dotted var(--fs-popup-line-strong);
 }
 .predict-steps > li > div:first-child > div:last-child:not([style])::after {
@@ -451,7 +456,7 @@
 .predict-steps > li > div:nth-child(2) {
   flex: 1 1 0;
   min-width: 0;
-  height: 40px;
+  height: 36px;
   margin: 0 0 0 12px;
   justify-content: center;
   gap: 0;
@@ -463,7 +468,7 @@
 }
 .predict-steps h2 {
   flex: none;
-  font: 600 14px/20px var(--font-sans);
+  font: 600 13px/18px var(--font-sans);
   color: var(--fs-popup-text);
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -472,13 +477,13 @@
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
-  font: 400 13px/18px var(--font-sans);
+  font: 400 12px/16px var(--font-sans);
   font-variant-numeric: tabular-nums;
   color: var(--fs-popup-text-2);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-/* the funds step's credits and deposit wrap between them onto a second line, 36px of its 40 */
+/* the funds step's credits and deposit wrap between them onto a second line, 32px of its 36 */
 .predict-steps > li:nth-child(2) h2 + p {
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -499,7 +504,7 @@
   color: var(--fs-popup-text-3);
 }
 /* the step's detail sits under its title where the two do not fit one line; both columns then
-   start at the row's top, so the 24px bullet and the title 2px down share a centre */
+   start at the row's top, so the 24px bullet and the 16px title 4px down share a centre */
 @container (max-width: 22rem) {
   .predict-steps > li > div:first-child {
     padding-top: 0;
@@ -508,14 +513,15 @@
     margin-bottom: 0;
   }
   .predict-steps > li > div:nth-child(2) {
+    height: 40px;
     justify-content: flex-start;
-    padding-top: 2px;
+    padding-top: 4px;
   }
   .predict-steps > li > div:nth-child(2) > div {
     flex-direction: column;
     align-items: flex-start;
   }
-  .predict-steps h2 + p {
+  .predict-steps h2 {
     line-height: 16px;
   }
   .predict-steps > li:nth-child(2) h2 + p {
@@ -750,6 +756,83 @@
     opacity: 0.8;
   }
 }
+/* the status callout: one slot in every state, its box a tinted surface at the control radius */
+.predict-status {
+  --predict-status-gap: 4px;
+  --predict-status-box: 44px;
+  display: flex;
+  flex-shrink: 0;
+  align-items: stretch;
+  height: calc(var(--predict-status-gap) + var(--predict-status-box));
+  padding-top: var(--predict-status-gap);
+}
+.predict-status-box {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  column-gap: 8px;
+  align-content: center;
+  align-items: start;
+  width: 100%;
+  height: var(--predict-status-box);
+  padding: 5px 10px;
+  border-radius: var(--fs-radius-control);
+  font-size: 13px;
+  line-height: 17px;
+  color: var(--fs-popup-text);
+  background: var(--predict-status-bg, transparent);
+}
+.predict-status[data-tone="warning"] {
+  --predict-status-bg: var(--fs-popup-tone-warning-bg);
+  --predict-status-ink: var(--fs-tone-warning-text);
+}
+.predict-status[data-tone="error"] {
+  --predict-status-bg: var(--fs-popup-tone-error-bg);
+  --predict-status-ink: var(--fs-tone-error-text);
+}
+.predict-status[data-tone="neutral"] {
+  --predict-status-ink: var(--fs-popup-text-3);
+}
+.predict-status[data-tone="neutral"] .predict-status-box {
+  color: var(--fs-popup-text-2);
+}
+.predict-status-box > svg {
+  width: 16px;
+  height: 16px;
+  /* centres the 16px glyph on the first 17px line */
+  margin-top: 0.5px;
+  color: var(--predict-status-ink);
+}
+.predict-status-box > span {
+  min-width: 0;
+  text-wrap: pretty;
+}
+.predict-status-box[data-small] > span {
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* the short-window variant, as `short` above: a 40px box in the caption size */
+@media (max-height: 760px) and (max-width: 639px) {
+  .predict-status {
+    --predict-status-box: 40px;
+  }
+  .predict-status-box {
+    padding: 4px 10px;
+    font-size: 12px;
+    line-height: 16px;
+  }
+  .predict-status-box > svg {
+    margin-top: 0;
+  }
+}
+@media (max-width: 359px) {
+  .predict-status-box {
+    column-gap: 6px;
+    padding-inline: 8px;
+  }
+}
 /* the popup's button: the screen's one full-strength gradient, over the library Button's own fills */
 .predict-cta {
   position: relative;
@@ -797,6 +880,14 @@ button.predict-cta.predict-cta[data-disabled]:has(> .button-text) {
   background: var(--fs-popup-cta-disabled);
 }
 button.predict-cta.predict-cta[data-disabled]:has(> .button-text) > .button-text {
+  color: var(--fs-popup-cta-disabled-text);
+}
+/* the stored run's held Predict, in the card's disabled tone rather than the library's outlined secondary */
+button.predict-held.predict-held[data-disabled] {
+  border-color: transparent;
+  background: var(--fs-popup-cta-disabled);
+}
+button.predict-held.predict-held[data-disabled] > .button-text {
   color: var(--fs-popup-cta-disabled-text);
 }
 button.predict-cta.predict-cta[data-quiet] {
@@ -857,18 +948,55 @@ button.predict-cta.predict-cta[data-busy]:has(> .button-text) > .button-text {
     animation: none;
   }
 }
-/* the success dialog's mark: the axis disc, popped in once as the dialog opens */
-.predict-success-mark {
-  display: grid;
-  place-items: center;
-  width: 56px;
-  height: 56px;
-  border-radius: 999px;
-  background: var(--fs-popup-axis);
-  color: var(--fs-popup-on-axis);
-  /* the panel's tone, so the ring reads as part of the panel below */
-  box-shadow: 0 0 0 8px var(--fs-popup-panel);
-  animation: predict-success-pop var(--fs-dur-structural) var(--fs-ease-spring) both;
+/* the success dialog's receipt: the axis connector runs bullet to bullet through the 8px row gap,
+   and the rows rise in one after another, half an echo apart */
+.predict-receipt > li {
+  position: relative;
+  animation-delay: calc(var(--i, 0) * var(--fs-dur-echo) / 2);
+}
+.predict-receipt > li::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  bottom: -8px;
+  left: 11px;
+  width: 2px;
+  background: var(--fs-popup-axis-v);
+}
+.predict-receipt > li:first-child::before {
+  top: 50%;
+}
+.predict-receipt > li:last-child::before {
+  bottom: 50%;
+}
+.predict-receipt > li:only-child::before {
+  display: none;
+}
+/* the success dialog's foot: sticky over its own bottom padding, with a fade where the rest scrolls under it */
+@media (max-height: 480px) {
+  .predict-success-foot {
+    position: sticky;
+    bottom: -20px;
+    margin-bottom: -20px;
+    padding: 8px 0 20px;
+    background: var(--fs-surface);
+  }
+  .predict-success-foot::before {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    bottom: 100%;
+    height: 16px;
+    background: linear-gradient(to bottom, transparent, var(--fs-surface));
+    pointer-events: none;
+  }
+  @media (min-width: 640px) {
+    .predict-success-foot {
+      bottom: -24px;
+      margin-bottom: -24px;
+      padding-bottom: 24px;
+    }
+  }
 }
 /* the sign-in is the panel's own control, a step below the popup's wide button */
 .predict-success-panel .predict-cta {
@@ -878,13 +1006,7 @@ button.predict-cta.predict-cta[data-busy]:has(> .button-text) > .button-text {
 .predict-success-panel .predict-cta .button-text {
   font-size: 15px;
 }
-/* the phone bar pins 126px with the header; focus scrolls a control clear of both */
-@media (max-width: 767px) and (min-height: 481px) {
-  html:has([data-predict-bar]) {
-    scroll-padding-top: 126px;
-  }
-}
-/* the market page's Predict, on the card and the phone bar: sized to its label, at the control step */
+/* the market page's Predict and Resume: sized to the label, at the control step */
 .predict-cta.predict-card-cta {
   width: auto;
   height: 44px;
@@ -894,14 +1016,125 @@ button.predict-cta.predict-cta[data-busy]:has(> .button-text) > .button-text {
 .predict-card-cta .button-text {
   font-size: 15px;
 }
-@keyframes predict-success-pop {
-  from {
+/* The Predict card's phone dock: pinned to the bottom edge while a live Predict waits below the fold. */
+.predict-dock-fold {
+  display: contents;
+}
+.predict-pin-pill {
+  display: none;
+}
+@media (max-width: 767px) {
+  .predict-dock {
+    position: sticky;
+    bottom: 0;
+    /* page layers stop at z-10; a dialog's overlay is z-40 */
+    z-index: 10;
+  }
+  .predict-dock[data-entering][data-stuck] {
+    animation: fsLiftIn var(--fs-dur-enter) var(--fs-ease-enter) both;
+  }
+  .predict-dock[data-leaving] {
+    animation: fsLiftOut var(--fs-dur-enter) var(--fs-ease-exit) both;
+  }
+  /* pinned, the heading folds away and the bar sits at the foot of the card's held height */
+  .predict-dock-fold {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows var(--fs-dur-enter) var(--fs-ease-structural);
+  }
+  .predict-dock-fold > div > * {
+    transition: opacity var(--fs-dur-enter) var(--fs-ease-enter);
+  }
+  .predict-dock[data-stuck] {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    pointer-events: none;
+  }
+  .predict-dock[data-stuck] > * {
+    pointer-events: auto;
+  }
+  .predict-dock[data-stuck] .predict-dock-fold {
+    grid-template-rows: 0fr;
+  }
+  .predict-dock[data-stuck] .predict-dock-fold > div > * {
     opacity: 0;
-    transform: scale(0.9);
+  }
+  /* pinned, the picks keep one chip and the count of the rest */
+  .predict-dock[data-stuck] .predict-picks {
+    position: relative;
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+  .predict-dock[data-stuck] .predict-picks > li {
+    min-width: 0;
+  }
+  /* out of the row without display:none, which would replay the chip's entrance on docking */
+  .predict-dock[data-stuck] .predict-pin-hide {
+    position: absolute;
+    visibility: hidden;
+  }
+  .predict-dock[data-stuck] .predict-pin-pill {
+    display: inline-flex;
+  }
+  /* under 360px the pinned chip keeps the name and its side; the card below still shows the figure */
+  @media (max-width: 359px) {
+    .predict-dock[data-stuck] .predict-chip-figure {
+      display: none;
+    }
+  }
+  .predict-dock .predict-dock-panel {
+    transition:
+      margin var(--fs-dur-enter) var(--fs-ease-structural),
+      padding var(--fs-dur-enter) var(--fs-ease-structural),
+      border-radius var(--fs-dur-enter) var(--fs-ease-structural),
+      background-color var(--fs-dur-enter) var(--fs-ease-structural),
+      box-shadow var(--fs-dur-enter) var(--fs-ease-structural);
+  }
+  .predict-dock .predict-dock-panel::before {
+    transition: opacity var(--fs-dur-enter) var(--fs-ease-structural);
+  }
+  /* pinned, the bar runs edge to edge over fs-page's gutters, in the panel tone */
+  .predict-dock[data-stuck] .predict-dock-panel {
+    width: auto;
+    margin-inline: -24px;
+    padding-inline: max(24px, env(safe-area-inset-left, 0px)) max(24px, env(safe-area-inset-right, 0px));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    border-radius: 0;
+    border-top: 1px solid var(--fs-popup-line);
+    background: var(--fs-popup-panel);
+  }
+  .predict-dock[data-stuck] .predict-dock-panel::before {
+    opacity: 0;
+  }
+  /* the dark panel is one tone off the dark page, too close for a hairline; a shadow lifts it instead */
+  .dark .predict-dock[data-stuck] .predict-dock-panel {
+    border-top-color: transparent;
+    box-shadow: 0 -4px 24px rgb(0 0 0 / 0.45);
+  }
+  @media (max-width: 640px) {
+    .predict-dock[data-stuck] .predict-dock-panel {
+      margin-inline: -16px;
+      padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px));
+    }
+  }
+  /* a phone on its side keeps the bar to 61px of its height */
+  @media (max-height: 480px) {
+    .predict-dock[data-stuck] .predict-dock-panel {
+      padding-top: 8px;
+      padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    }
+  }
+  /* focus scrolls a control clear of the pinned bar */
+  html:has(.predict-dock[data-stuck]) {
+    scroll-padding-bottom: calc(93px + env(safe-area-inset-bottom, 0px));
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .predict-success-mark {
+@media (max-width: 767px) and (prefers-reduced-motion: reduce) {
+  .predict-dock[data-entering][data-stuck] {
     animation: fsFadeIn var(--fs-dur-reduced-fade) linear both;
+  }
+  .predict-dock[data-leaving] {
+    animation: fsFadeOut var(--fs-dur-reduced-fade) linear both;
   }
 }

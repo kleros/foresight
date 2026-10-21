@@ -117,6 +117,7 @@ describe("createPredictRun while it checks a sent transaction again", () => {
     expect(statusLine({ steps, leftOut: 0 })).toEqual({
       text: "Checking your last transaction…",
       tone: "neutral",
+      waiting: true,
     });
 
     answer();

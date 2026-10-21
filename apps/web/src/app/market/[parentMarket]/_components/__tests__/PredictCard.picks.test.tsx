@@ -52,10 +52,12 @@ function pick(detail: SessionDetail) {
   );
 }
 
-function renderCard(detail: SessionDetail, barSlot?: HTMLElement, status: SessionStatus = "trading") {
+function renderCard(detail: SessionDetail, status: SessionStatus = "trading") {
   const marketEstimates = Object.fromEntries(detail.options.map((option) => [option.market.toLowerCase(), MARKET]));
-  return render(<PredictCard session={detail} status={status} marketEstimates={marketEstimates} barSlot={barSlot} />);
+  return render(<PredictCard session={detail} status={status} marketEstimates={marketEstimates} />);
 }
+
+const dock = () => document.querySelector("[data-predict-dock]");
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -70,7 +72,9 @@ describe("the predict card's picks", () => {
     pick(detail);
     renderCard(detail);
 
-    const chips = within(screen.getByRole("list", { name: "Your estimates" })).getAllByRole("listitem");
+    const chips = within(screen.getByRole("list", { name: "Your estimates" }))
+      .getAllByRole("listitem")
+      .filter((item) => !item.hasAttribute("aria-label"));
     expect(chips.map((chip) => chip.textContent)).toEqual(["Berlin400 $M", "Lisbon120 $M"]);
     expect(within(chips[0]!).getByRole("img", { name: "above the market" })).toBeInTheDocument();
     expect(within(chips[1]!).getByRole("img", { name: "below the market" })).toBeInTheDocument();
@@ -94,49 +98,32 @@ describe("the predict card's picks", () => {
   });
 
   it("shows no picks and no bar while nothing is set away from the market", () => {
-    const slot = document.createElement("div");
-    document.body.append(slot);
-    renderCard(session(2), slot);
+    renderCard(session(2));
 
     expect(screen.queryByRole("list", { name: "Your estimates" })).toBeNull();
-    expect(slot).toBeEmptyDOMElement();
+    expect(dock()).toBeNull();
     expect(screen.getByRole("button", { name: "Predict estimates" })).toBeDisabled();
   });
 });
 
-describe("the phone bar under the header", () => {
-  it("says how many picks and names the first two, beside its own Predict", () => {
+describe("the phone bar at the bottom edge", () => {
+  it("is offered while Predict is live, its phone button saying Predict and the wide one the count", () => {
     const detail = session(4);
     pick(detail);
-    const slot = document.createElement("div");
-    document.body.append(slot);
-    renderCard(detail, slot);
+    renderCard(detail);
 
-    expect(within(slot).getByText("4 estimates · Berlin, Lisbon +2")).toBeInTheDocument();
-    expect(within(slot).getByRole("button", { name: "Predict" })).toBeEnabled();
-    // the card keeps its own button for wide screens, where the bar is hidden
-    expect(screen.getByRole("button", { name: "Predict 4 estimates" })).toBeInTheDocument();
-  });
-
-  it("names one pick alone, in the singular", () => {
-    const detail = session(1);
-    pick(detail);
-    const slot = document.createElement("div");
-    document.body.append(slot);
-    renderCard(detail, slot);
-
-    expect(within(slot).getByText("1 estimate · Berlin")).toBeInTheDocument();
+    expect(dock()).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Predict" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Predict 4 estimates" })).toBeEnabled();
   });
 
   it("is not drawn without a wallet; the card keeps its button and says why", () => {
     account.address = undefined;
     const detail = session(2);
     pick(detail);
-    const slot = document.createElement("div");
-    document.body.append(slot);
-    renderCard(detail, slot);
+    renderCard(detail);
 
-    expect(slot).toBeEmptyDOMElement();
+    expect(dock()).toBeNull();
     expect(screen.getByRole("button", { name: "Predict 2 estimates" })).toBeDisabled();
     expect(screen.getByText("Connect a wallet to predict.")).toBeInTheDocument();
   });
@@ -144,30 +131,18 @@ describe("the phone bar under the header", () => {
   it.each(["closed", "setting-up"] as const)("is not drawn while the session is %s", (status) => {
     const detail = session(2);
     pick(detail);
-    const slot = document.createElement("div");
-    document.body.append(slot);
-    renderCard(detail, slot, status);
+    renderCard(detail, status);
 
-    expect(slot).toBeEmptyDOMElement();
+    expect(dock()).toBeNull();
   });
 
   it("hands its button's look to the wrong-chain switch that stands in for it", () => {
     chainGate.classNames.length = 0;
     const detail = session(2);
     pick(detail);
-    const slot = document.createElement("div");
-    document.body.append(slot);
-    renderCard(detail, slot);
+    renderCard(detail);
 
     expect(chainGate.classNames.length).toBeGreaterThan(0);
     for (const className of chainGate.classNames) expect(className).toBe("predict-cta predict-card-cta");
-  });
-
-  it("is not drawn where the page gives the card no slot", () => {
-    const detail = session(2);
-    pick(detail);
-    renderCard(detail);
-
-    expect(screen.queryByRole("button", { name: "Predict" })).toBeNull();
   });
 });

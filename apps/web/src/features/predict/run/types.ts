@@ -50,6 +50,8 @@ export interface PredictStepRow {
   id: string;
   label: string;
   state: StepState;
+  /** The transaction a settled step confirmed under; absent where it was skipped. */
+  hash?: Hash;
 }
 
 export interface PredictProgress {

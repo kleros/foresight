@@ -793,7 +793,18 @@ describe("what a run shows while it goes", () => {
 
     view.rerender(<PredictDialog {...props()} steps={{ ...steps, failure: "You declined in your wallet." }} />);
 
-    expect(within(screen.getByRole("status")).getByText("You declined in your wallet.")).toHaveClass("fs-enter");
+    expect(within(screen.getByRole("status")).getByText("You declined in your wallet.")).toBeInTheDocument();
+    expect(within(screen.getByRole("status")).getByTestId("status-box")).toHaveClass("fs-enter");
+  });
+
+  it("marks each status with its tone's glyph, and a check in progress with a clock", () => {
+    const glyph = () => within(screen.getByRole("status")).getByTestId("status-glyph").getAttribute("data-glyph");
+    const view = render(<PredictDialog {...props()} steps={{ ...steps, failure: "You declined in your wallet." }} />);
+    expect(glyph()).toBe("error");
+
+    view.rerender(<PredictDialog {...props()} steps={{ ...steps, note: "Checking your last transaction…" }} />);
+    expect(glyph()).toBe("waiting");
+    expect(screen.getByRole("status")).toHaveAttribute("data-tone", "neutral");
   });
 });
 
@@ -1264,7 +1275,7 @@ describe("a credits swap that loses much", () => {
     render(<PredictDialog {...props()} {...withCredits} creditsSwap={lossySwap} />);
 
     expect(screen.getByRole("status")).toHaveTextContent(/^Credits swap loses ≈ 38 xDAI\.$/);
-    expect(within(screen.getByRole("status")).getByText(/loses/)).toHaveClass("text-xs");
+    expect(within(screen.getByRole("status")).getByTestId("status-box")).toHaveAttribute("data-small");
     expect(screen.getByRole("button", { name: "Predict" })).toBeEnabled();
   });
 

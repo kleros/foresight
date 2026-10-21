@@ -221,7 +221,7 @@ for (const viewport of VIEWPORTS) {
 
     test("is said whole on one small line of the status line", async ({ page }) => {
       await openHarness(page, `${harness.url}?options=2&credits=enough&swapLoss=0.5&theme=light`);
-      const line = page.getByRole("dialog").getByRole("status").locator("span");
+      const line = page.getByRole("dialog").getByTestId("status-text");
 
       await expect(line).toHaveText("Credits swap loses ≈ 0.5 xDAI.");
       const [lines, height, lineHeight, fontSize, fits] = await line.evaluate((element) => {

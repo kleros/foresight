@@ -224,7 +224,7 @@ export function PredictSummary({
   const isPlanned = selected.some((estimate) => preview[estimate.scale.market.toLowerCase()]?.plan !== undefined);
 
   return (
-    <div data-testid="predict-summary" className="mt-2 short:mt-0.5">
+    <div data-testid="predict-summary" className="mt-2 short:mt-0">
       <button
         type="button"
         aria-expanded={isOpen}

@@ -317,7 +317,10 @@ describe("statusLine", () => {
       "Prices moved on 1 market. Check Details, then confirm.",
     );
     expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 1, credits: true } })?.text).toBe(
-      "Prices moved on 1 market and the credits swap. Check Details, then confirm.",
+      "Prices moved on 1 market and the credits swap. Confirm to go on.",
+    );
+    expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 2, credits: true } })?.text).toBe(
+      "Prices moved on 2 markets and the credits swap. Confirm to go on.",
     );
     expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 0, credits: true } })?.text).toBe(
       "The credits swap now pays less. Check Details, then confirm.",
@@ -329,14 +332,26 @@ describe("statusLine", () => {
     expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 1, credits: false, only } })?.text).toBe(
       "Berlin now goes to 400\u00a0$M, not 420\u00a0$M. Confirm to go on.",
     );
-    const city = { name: "New York", to: "1,200 k people", was: "1,150 k people" };
+    const city = { name: "Oslo", to: "1,200 k", was: "1,150 k" };
     expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 1, credits: false, only: city } })?.text).toBe(
-      "New York now goes to 1,200\u00a0k\u00a0people, not 1,150\u00a0k\u00a0people. Confirm to go on.",
+      "Oslo now goes to 1,200\u00a0k, not 1,150\u00a0k. Confirm to go on.",
     );
     const long = { ...only, name: "A market name far too long to quote" };
     expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 1, credits: false, only: long } })?.text).toBe(
       "Prices moved on 1 market. Check Details, then confirm.",
     );
+  });
+
+  it("names the market only while the whole sentence keeps to two lines at 320px wide", () => {
+    for (const only of [
+      { name: "Lisbon metropolitan area", to: "400 $M", was: "420 $M" },
+      { name: "New York", to: "1,200 k people", was: "1,150 k people" },
+      { name: "Montevideo", to: "1,234,567 $M", was: "1,234,587 $M" },
+    ]) {
+      expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 1, credits: false, only } })?.text).toBe(
+        "Prices moved on 1 market. Check Details, then confirm.",
+      );
+    }
   });
 
   it("puts a notice before the moved pools", () => {
@@ -521,7 +536,7 @@ describe("predictSteps with credits moved to the trade wallet", () => {
       progress: progress({ stage: "halted", failure: { reason: "credits", retryable: false } }),
     });
 
-    expect(stopped.failure).toBe("Credits can't be spent right now. Untick them to predict with your own funds.");
+    expect(stopped.failure).toBe("Credits can't be spent now. Untick them to use your own funds.");
   });
 
   it("freezes the credits a run moves along with the money it adds", () => {

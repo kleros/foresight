@@ -40,7 +40,7 @@ export function DevWallet() {
   };
 
   return (
-    // z-15 keeps it under the Kleros modal overlay (z-20) and the header (z-30).
+    // z-15 keeps it under the modal overlays (z-20 for header menus, z-40 for dialogs) and the header (z-30).
     <aside
       className="rounded-fs bg-fs-surface border-fs-border fixed bottom-4 left-4 z-15 flex flex-col gap-2 border px-3 py-2.5 shadow-lg"
       aria-label="Development wallet"
