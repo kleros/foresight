@@ -432,6 +432,8 @@ describe("PredictRunner, the dialog's controls", () => {
       amount: undefined,
       symbol: detail.collateralSymbol ?? "sDAI",
       decimals: detail.collateralDecimals ?? 18,
+      steps: [],
+      wallet: EXECUTOR,
     });
   });
 
@@ -448,6 +450,8 @@ describe("PredictRunner, the dialog's controls", () => {
       amount: 10n * 10n ** 18n,
       symbol: "xDAI",
       decimals: 18,
+      steps: [],
+      wallet: EXECUTOR,
     });
   });
 
@@ -471,6 +475,90 @@ describe("PredictRunner, the dialog's controls", () => {
       amount: 5n * 10n ** 18n,
       symbol: detail.collateralSymbol ?? "sDAI",
       decimals: detail.collateralDecimals ?? 18,
+      steps: [],
+      funds: { toAdd: 3n * 10n ** 18n, symbol: detail.collateralSymbol ?? "sDAI", decimals: 18 },
+      wallet: EXECUTOR,
+    });
+  });
+
+  it("hands a completed recovered run to the success dialog once, however often the runner draws before the reset lands", () => {
+    progress = { ...progressAt("complete"), recovered: snapshot({ deposit: 3n * 10n ** 18n }) };
+    const view = mount();
+    view.rerenderAt();
+    view.rerenderAt();
+
+    expect(view.onSuccess).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands the success dialog each settled step with the hash it confirmed under", () => {
+    const hash = (n: number) => `0x${n.toString(16).padStart(64, "0")}` as const;
+    progress = progressAt("complete", false, [
+      { id: "create-wallet", label: "Set up your trade wallet", state: "success" },
+      { id: "deposit", label: "Add money to your trade wallet", state: "success", hash: hash(1) },
+      { id: "predict-1", label: "Making your prediction", state: "success", hash: hash(2) },
+    ]);
+    const view = mount();
+
+    expect(view.onSuccess.mock.calls[0]?.[1].steps).toEqual([
+      { id: "create-wallet" },
+      { id: "deposit", hash: hash(1) },
+      { id: "predict-1", hash: hash(2) },
+    ]);
+  });
+
+  it("hands the success dialog what the funds step added as frozen at the press, not the balance since", () => {
+    const held = { wallet: 5n * 10n ** 18n, tradeWallet: 0n, manager: 1000n * 10n ** 18n };
+    fundingMock.mockImplementation(({ amount, useCredits }) => ({
+      funding: planFunding({
+        amount,
+        ownWallet: 20n * 10n ** 18n,
+        tradeWallet: 0n,
+        credits: useCredits ? creditLines(held, creditsOffer(held)) : [],
+      }),
+      credits: creditsOffer(held),
+      token: "collateral",
+      available: () => undefined,
+      canPayNative: false,
+    }));
+    const detail = session();
+    const view = mount(detail);
+    fireEvent.click(screen.getByText("pay ten"));
+    fireEvent.click(screen.getByText("predict"));
+    // the balances refresh once the run has spent them
+    fundingMock.mockImplementation(() => ({
+      funding: null,
+      credits: { state: "none" },
+      token: "collateral",
+      available: () => undefined,
+      canPayNative: false,
+    }));
+
+    progress = progressAt("complete");
+    view.rerenderAt();
+
+    expect(view.onSuccess.mock.calls[0]?.[1].funds).toEqual({
+      toAdd: 5n * 10n ** 18n,
+      symbol: detail.collateralSymbol ?? "sDAI",
+      decimals: 18,
+      credits: 5n * 10n ** 18n,
+    });
+  });
+
+  it("hands the success dialog a recovered run's xDAI deposit and the credits it moved", () => {
+    const recovered = snapshot({
+      deposit: 4n * 10n ** 18n,
+      depositNative: true,
+      collateralIn: 6n * 10n ** 18n,
+      creditsFromEoa: 2n * 10n ** 18n,
+    });
+    progress = { ...progressAt("complete"), recovered };
+    const view = mount();
+
+    expect(view.onSuccess.mock.calls[0]?.[1].funds).toEqual({
+      toAdd: 4n * 10n ** 18n,
+      symbol: "xDAI",
+      decimals: 18,
+      credits: 2n * 10n ** 18n,
     });
   });
 

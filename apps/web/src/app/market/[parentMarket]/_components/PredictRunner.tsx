@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { Address } from "viem";
 import { useAccount } from "wagmi";
@@ -135,17 +135,50 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
   const placedToken = recovered ? collateral : token;
   const { symbol: placedSymbol, decimals: placedDecimals } = placedToken;
 
+  const runToken: PayTokenChoice = recovered?.depositNative ? NATIVE : { id: "collateral", ...collateral };
+  // what a recovered run's funds step adds, from its snapshot rather than the form
+  const { symbol: runSymbol, decimals: runDecimals } = runToken;
+  const recoveredFunds = useMemo<FundsToAdd | undefined>(
+    () =>
+      recovered && {
+        toAdd: recovered.deposit,
+        symbol: runSymbol,
+        decimals: runDecimals,
+        ...(recovered.creditsFromEoa > 0n ? { credits: recovered.creditsFromEoa } : {}),
+      },
+    [recovered, runSymbol, runDecimals],
+  );
+  const placedFunds = recoveredFunds ?? frozenToAdd;
+  const placedSteps = progress?.steps;
+
   useEffect(() => {
     if (stage !== "complete") return;
     const left = progress?.leftOut ?? [];
+    // read before the reset, which empties the run's steps
+    const steps = (placedSteps ?? []).map(({ id, hash }) => (hash ? { id, hash } : { id }));
     driver?.reset();
     onSuccess(left, {
       estimates: placedCount - left.length,
       amount: placedAmount || undefined,
       symbol: placedSymbol,
       decimals: placedDecimals,
+      steps,
+      ...(placedFunds ? { funds: placedFunds } : {}),
+      ...(predicted ? { wallet: predicted } : {}),
     });
-  }, [stage, driver, onSuccess, progress?.leftOut, placedCount, placedAmount, placedSymbol, placedDecimals]);
+  }, [
+    stage,
+    driver,
+    onSuccess,
+    progress?.leftOut,
+    placedCount,
+    placedAmount,
+    placedSymbol,
+    placedDecimals,
+    placedSteps,
+    placedFunds,
+    predicted,
+  ]);
 
   // a transaction that may still mine stays stored, so the next popup recovers it instead of signing again
   const pendingHash = progress?.pendingHash;
@@ -217,19 +250,12 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
 
   // an amount over the balance cannot be predicted, so nothing is named as being added for it
   const overBalance = funding !== null && amount !== undefined && amount > funding.available;
-  const runToken: PayTokenChoice = recovered?.depositNative ? NATIVE : { id: "collateral", ...collateral };
   const steps = predictSteps({
     wallet: predicted ? { address: predicted, deployed: Boolean(executor.data?.deployed) } : null,
-    ...(recovered
-      ? {
-          toAdd: recovered.deposit,
-          symbol: runToken.symbol,
-          decimals: runToken.decimals,
-          ...(recovered.creditsFromEoa > 0n ? { credits: recovered.creditsFromEoa } : {}),
-        }
-      : // held while the form is locked to the run, moved included; otherwise the form is what the next press signs
-        ((isRunning || canRetry || moved) && frozenToAdd) ||
-        fundsToAdd(overBalance ? null : funding, token, collateral)),
+    ...(recoveredFunds ??
+      // held while the form is locked to the run, moved included; otherwise the form is what the next press signs
+      (((isRunning || canRetry || moved) && frozenToAdd) ||
+        fundsToAdd(overBalance ? null : funding, token, collateral))),
     progress,
   });
 

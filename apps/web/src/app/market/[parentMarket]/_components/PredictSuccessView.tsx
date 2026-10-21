@@ -3,11 +3,15 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import type { Address } from "viem";
+
 import { Modal } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
 import { PredictButton } from "@/features/predict/components/PredictButton";
 import { shownAmount } from "@/features/predict/utils/funding";
+import type { FundsToAdd } from "@/features/predict/utils/predictSteps";
+import type { PlacedStep } from "@/features/predict/utils/receipt";
 
 import { paths } from "@/config/paths";
 
@@ -19,6 +23,12 @@ export interface PlacedPrediction {
   amount?: bigint;
   symbol: string;
   decimals: number;
+  /** The run's steps in order, as they settled. */
+  steps?: PlacedStep[];
+  /** What the funds step added, as the run's timeline said it. */
+  funds?: FundsToAdd;
+  /** The trade wallet the run traded from. */
+  wallet?: Address;
 }
 
 /** "2 estimates · 10 sDAI", or "2 of 4 estimates · 10 sDAI" when `leftOut` more could not be traded. */
