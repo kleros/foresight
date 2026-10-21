@@ -184,6 +184,48 @@ describe("sizeBatches", () => {
     expect(size).toBeLessThan(optionsPerBatch(GNOSIS, false));
   });
 
+  /** A node whose estimate of the first batch is `live` of its option count, which it records. */
+  const counting = (live: (count: number) => bigint) => {
+    const counts: number[] = [];
+    const reader = fakeReader({
+      deployed: true,
+      estimateGas: () => {
+        counts.push(reader.asked.at(-1)!.options.length);
+        return Promise.resolve(live(counts.at(-1)!));
+      },
+    });
+    return { reader, counts };
+  };
+
+  it("settles only on a count the live estimate shows fits, where the first batch's fixed cost dominates", async () => {
+    // 7.5M whatever the count and 0.6M an option: cutting in proportion to the gas overshoots
+    const { reader, counts } = counting((count) => 7_500_000n + BigInt(count) * 600_000n);
+
+    const size = await sizeBatches(ctx(), funded(12), deps({ reader }), GNOSIS);
+
+    // the second estimate gives the fixed cost, which leaves room for one option, the floor
+    expect(counts).toEqual([5, 4]);
+    expect(size).toBe(1);
+  });
+
+  it("lands on the largest count that fits where gas is linear in the count", async () => {
+    // 3M fixed and 1.6M an option: 3 fit the 8.5M share, 4 do not
+    const { reader, counts } = counting((count) => 3_000_000n + BigInt(count) * 1_600_000n);
+
+    const size = await sizeBatches(ctx(), funded(12), deps({ reader }), GNOSIS);
+
+    expect(size).toBe(3);
+    expect(counts).toEqual([5, 3]);
+  });
+
+  it("sends one option a batch where three estimates find no count that fits", async () => {
+    // 8.6M from two options up, so no estimate fits and the count the third suggests is never shown to fit
+    const { reader, counts } = counting((count) => (count > 1 ? 8_600_000n : 8_000_000n));
+
+    expect(await sizeBatches(ctx(), funded(12), deps({ reader }), GNOSIS)).toBe(1);
+    expect(counts).toEqual([5, 4, 3]);
+  });
+
   it("sends one option at a time where even one runs over", async () => {
     const reader = node(20_000_000n);
 

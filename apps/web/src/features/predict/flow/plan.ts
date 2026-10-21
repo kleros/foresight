@@ -606,12 +606,13 @@ function assertSlippage(slippage: PredictSlippage): void {
   }
 }
 
-/** Live estimates tried, a shrink between each, before the last count stands. */
+/** Live estimates of the first batch, at most, before sizing settles on one option a batch. */
 const SIZING_ESTIMATES = 3;
 
 /**
- * Options per batch: the budget's count, cut further while a live estimate of the first batch runs over the
- * block's batch share. Only that batch can be estimated before signing, and only once nothing precedes it.
+ * Options per batch: the budget's count, cut while a live estimate of the first batch runs over the block's batch
+ * share, and kept only once an estimate shows it fits. Only that batch can be estimated before signing, and only
+ * once nothing precedes it; the rest share its count.
  */
 export async function sizeBatches(
   ctx: PredictCtx,
@@ -628,6 +629,7 @@ export async function sizeBatches(
   const share = (blockGasLimit * BATCH_GAS_SHARE_BPS) / 10_000n;
   const room = share < MAX_TX_GAS ? share : MAX_TX_GAS;
   const quiet = { ...deps, onLeftOut: undefined, heldTo: undefined };
+  let previous: { size: number; gas: bigint } | undefined;
   for (let attempt = 0; attempt < SIZING_ESTIMATES && size > 1; attempt++) {
     const options = request.options.slice(0, size);
     let live: bigint;
@@ -653,10 +655,13 @@ export async function sizeBatches(
     const budget = batchGas(options.length, credits);
     const gas = live > budget ? live : budget;
     if (gas <= room) return size;
-    const scaled = Number((BigInt(options.length) * room) / gas);
-    size = Math.max(1, Math.min(options.length - 1, scaled));
+    // two estimates give the batch's fixed cost and its cost an option; one gives only the average
+    const slope = previous && previous.gas > gas ? (previous.gas - gas) / BigInt(previous.size - size) : 0n;
+    const next = slope > 0n ? (room - (gas - slope * BigInt(size))) / slope : (BigInt(options.length) * room) / gas;
+    previous = { size, gas };
+    size = Math.max(1, Math.min(size - 1, Number(next < 0n ? 0n : next)));
   }
-  return size;
+  return 1;
 }
 
 export function planPredict(snapshot: PlannedRequest, deps: PredictDeps): Step[] {
