@@ -434,7 +434,7 @@ export function PredictDialog({
             minOverflow={1}
             fadeSize={40}
           >
-            <div ref={bodyRef} data-testid="predict-body" className="pt-2 short:pt-1.5">
+            <div ref={bodyRef} data-testid="predict-body" className="pt-2 short:pt-1 landscape-phone:pt-1.5">
               <PredictAmountSection
                 amount={recovered ? recovered.deposit : amount}
                 onAmountChange={onAmountChange}

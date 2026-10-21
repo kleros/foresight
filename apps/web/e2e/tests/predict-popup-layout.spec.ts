@@ -853,14 +853,16 @@ function inkOf(element: Element): { top: number; bottom: number; lines: number }
 for (const viewport of [
   { width: 375, height: 667 },
   { width: 360, height: 640 },
+  { width: 320, height: 568 },
+  { width: 568, height: 320 },
 ]) {
   test.describe(`a popup on a short screen at ${viewport.width} x ${viewport.height}`, () => {
     test.use({ viewport });
 
-    test("leaves out the share slider and keeps a two-line status slot", async ({ page }) => {
+    test("keeps the share slider and a two-line status slot", async ({ page }) => {
       const dialog = await openPopup(page, 2, "failed", "funds");
 
-      await expect(dialog.getByTestId("amount-slider")).toBeHidden();
+      await expect(dialog.getByTestId("amount-slider")).toBeVisible();
       expect((await dialog.getByRole("status").boundingBox())!.height).toBeLessThanOrEqual(40);
     });
   });

@@ -92,7 +92,7 @@ export function PredictAmountSection({
     <section
       data-panel="amount"
       className={clsx(
-        "@container rounded-fs-panel bg-fs-popup-panel p-4 short:px-3.5 short:py-2.5",
+        "@container rounded-fs-panel bg-fs-popup-panel p-4 short:px-3.5 short:py-2 landscape-phone:pt-2.5 landscape-phone:pb-1.5",
         "[background-image:var(--fs-popup-wash)]",
         // the field draws no ring of its own, so the panel wears the popup's 2px focus ring, inside its edge
         "has-[[data-testid=amount-input]_input:focus-visible]:ring-fs-focus-ring",
@@ -222,10 +222,10 @@ export function PredictAmountSection({
         />
       </div>
 
-      {/* two lines held, whatever it says, so no state moves the steps */}
+      {/* two lines held, whatever it says, so no state moves the steps; on a phone on its side the whole popup scrolls, so one */}
       <p
         className={clsx(
-          "mt-1.5 min-h-9 text-[13px] leading-[18px] text-pretty tabular-nums wrap-anywhere",
+          "mt-1.5 min-h-9 short:mt-1 landscape-phone:min-h-[18px] text-[13px] leading-[18px] text-pretty tabular-nums wrap-anywhere",
           summary?.tone === "error" ? "text-fs-tone-error-text" : "text-fs-popup-text-2",
         )}
       >
@@ -295,10 +295,9 @@ function AmountSlider({
   return (
     <div
       data-testid="amount-slider"
-      // typing the amount stands in for it where the steps would otherwise sit under the fold
       className={clsx(
         // a 44px hit area on a 16px row: the track overhangs into these margins, never into the summary
-        "mt-3.5 flex h-4 items-center gap-3 short:hidden",
+        "mt-3.5 flex h-4 items-center gap-3 short:mt-2.5 landscape-phone:mt-1.5",
         "transition-opacity duration-(--fs-dur-enter) ease-(--fs-ease-enter)",
         isDisabled && "opacity-50",
       )}

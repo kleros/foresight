@@ -154,6 +154,8 @@ for (const viewport of VIEWPORTS) {
         page,
       }, testInfo) => {
         const dialog = await openCredits(page, "enough", theme);
+        // on a short phone the line opens at the fold, and pressing its tick would scroll it into view
+        await dialog.getByTestId("credits-line").evaluate((element) => element.scrollIntoView({ block: "nearest" }));
         const before = await footprint(dialog);
         const tick = dialog.getByRole("checkbox", { name: TICK });
         const useMax = dialog.getByRole("button", { name: "Max credits" });
