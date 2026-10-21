@@ -2625,6 +2625,37 @@ function tokenValue(page: Page, property: "color" | "borderRadius" | "background
   );
 }
 
+test.describe("a dialog over the sticky header", () => {
+  test("opens a tall success dialog above the header on a phone, its top edge in view and its overlay over the header", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await openHarness(page, `${harness.url}?options=4&state=success&dialog=success&run=worst&verified=0`);
+    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const box = (await dialog.boundingBox())!;
+    const header = (await page.locator("header").boundingBox())!;
+
+    // the worst case is taller than the window less the header, so it reaches under where the header sits
+    expect(box.y).toBeLessThan(header.y + header.height);
+    const hit = await page.evaluate(
+      ([x, y]) => {
+        const node = document.elementFromPoint(x!, y!)?.closest("[role=dialog], header");
+        return node ? (node.matches("header") ? "header" : "dialog") : null;
+      },
+      [box.x + box.width / 2, box.y + 4],
+    );
+    expect(hit).toBe("dialog");
+    expect(await page.evaluate(() => document.elementFromPoint(4, 4)?.closest("header"))).toBeNull();
+  });
+
+  test("lays the predict popup's overlay over the header too", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await openPopup(page, 2);
+
+    expect(await page.evaluate(() => document.elementFromPoint(4, 4)?.closest("header"))).toBeNull();
+  });
+});
+
 test.describe("the success dialog", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 

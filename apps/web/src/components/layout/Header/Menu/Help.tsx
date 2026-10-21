@@ -1,8 +1,9 @@
 import Link from "next/link";
 import React from "react";
 
-import { Modal } from "@kleros/ui-components-library";
 import clsx from "clsx";
+
+import { Modal } from "@/components/ui/Modal";
 
 import Guide from "@/assets/menu-icons/book.svg";
 import Bug from "@/assets/menu-icons/bug.svg";
@@ -54,6 +55,7 @@ interface IHelp {
 const Help: React.FC<IHelp> = ({ isOpen, toggleIsHelpOpen }) => {
   return (
     <Modal
+      belowHeader
       ariaLabel="Help"
       className={clsx(
         "mt-18 h-auto max-h-[80vh] w-65 max-w-111 overflow-y-auto p-3 pr-6",

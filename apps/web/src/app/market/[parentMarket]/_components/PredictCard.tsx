@@ -66,7 +66,7 @@ interface PredictCardProps {
 
 /**
  * The page's slot for the phone bar, sticky under the 65px header over fs-page's gutters and top padding. While
- * trading it holds the bar's 61px, so the bar comes and goes without moving the page; below the z-20 modal overlay.
+ * trading it holds the bar's 61px, so the bar comes and goes without moving the page; below the modal overlays.
  */
 export const predictBarSlot = (status: SessionStatus) =>
   clsx(

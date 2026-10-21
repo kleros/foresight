@@ -3,7 +3,6 @@
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 
-import { Modal } from "@kleros/ui-components-library";
 import clsx from "clsx";
 import type { Address, Hash } from "viem";
 
@@ -12,6 +11,8 @@ import { StepBullet } from "@/features/predict/components/StepBullet";
 import { shownAmount } from "@/features/predict/utils/funding";
 import type { FundsToAdd } from "@/features/predict/utils/predictSteps";
 import { receiptRows, type PlacedStep, type ReceiptLink, type ReceiptRow } from "@/features/predict/utils/receipt";
+
+import { Modal } from "@/components/ui/Modal";
 
 import ExternalArrow from "@/assets/svg/external-arrow.svg";
 

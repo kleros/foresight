@@ -2,10 +2,10 @@
 
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 
-import { Modal } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
 import LightButton from "@/components/ui/LightButton";
+import { Modal } from "@/components/ui/Modal";
 import { ScrollFade } from "@/components/ui/ScrollFade";
 
 import CloseIcon from "@/assets/svg/close.svg";
