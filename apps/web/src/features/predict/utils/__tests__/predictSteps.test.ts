@@ -324,10 +324,14 @@ describe("statusLine", () => {
     );
   });
 
-  it("names the one market that moved, where it goes now and where it went before", () => {
+  it("names the one market that moved, where it goes now and where it went before, each kept whole on a line", () => {
     const only = { name: "Berlin", to: "400 $M", was: "420 $M" };
     expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 1, credits: false, only } })?.text).toBe(
-      "Berlin now goes to 400 $M, not 420 $M. Confirm to go on.",
+      "Berlin now goes to 400\u00a0$M, not 420\u00a0$M. Confirm to go on.",
+    );
+    const city = { name: "New York", to: "1,200 k people", was: "1,150 k people" };
+    expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 1, credits: false, only: city } })?.text).toBe(
+      "New York now goes to 1,200\u00a0k\u00a0people, not 1,150\u00a0k\u00a0people. Confirm to go on.",
     );
     const long = { ...only, name: "A market name far too long to quote" };
     expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 1, credits: false, only: long } })?.text).toBe(
