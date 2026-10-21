@@ -759,16 +759,16 @@ test.describe("the more-below cue's nudge", () => {
   test("fades in place on the reduced-fade token under reduced motion", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await openHarness(page, `${harness.url}?dialog=success`);
-    const mark = page.locator(".predict-success-mark");
-    await expect(mark).toHaveCSS("animation-name", "fsFadeIn");
+    const row = page.getByRole("list", { name: "Transactions" }).getByRole("listitem").first();
+    await expect(row).toHaveCSS("animation-name", "fsFadeIn");
     expect(
       await page.evaluate(() =>
         getComputedStyle(document.documentElement).getPropertyValue("--fs-dur-reduced-fade").trim(),
       ),
     ).toBe("150ms");
-    await expect(mark).toHaveCSS("animation-duration", "0.15s");
+    await expect(row).toHaveCSS("animation-duration", "0.15s");
     await page.evaluate(() => document.documentElement.style.setProperty("--fs-dur-reduced-fade", "90ms"));
-    await expect(mark).toHaveCSS("animation-duration", "0.09s");
+    await expect(row).toHaveCSS("animation-duration", "0.09s");
   });
 
   // a two-line status starts right under the strip, so the burst there is smaller
@@ -2610,8 +2610,8 @@ function contrast(first: string, second: string) {
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
 
-/** Resolves a colour or length token to its computed value, through a probe in the page. */
-function tokenValue(page: Page, property: "color" | "borderRadius", value: string) {
+/** Resolves a colour, gradient or length token to its computed value, through a probe in the page. */
+function tokenValue(page: Page, property: "color" | "borderRadius" | "backgroundImage", value: string) {
   return page.evaluate(
     ([property, value]) => {
       const probe = document.createElement("span");
@@ -2628,9 +2628,7 @@ function tokenValue(page: Page, property: "color" | "borderRadius", value: strin
 test.describe("the success dialog", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test("names the email in one sentence, links to Settings in the accent, and rings its mark in the panel's tone", async ({
-    page,
-  }) => {
+  test("names the email in one sentence and links to Settings in the accent", async ({ page }) => {
     await openHarness(page, `${harness.url}?options=2&state=success&dialog=success`);
     const dialog = page.getByRole("dialog", { name: "Prediction placed" });
     const link = dialog.getByRole("link", { name: "Change in Settings" });
@@ -2643,19 +2641,118 @@ test.describe("the success dialog", () => {
     await expect(link).toHaveAttribute("href", "/settings?tab=notifications");
     await expect(link).toHaveCSS("color", await tokenValue(page, "color", "var(--fs-popup-accent-text)"));
     await expect(dialog.getByText("Confirm your email first", { exact: false })).toHaveCount(0);
-    const ring = await page.getByTestId("success-mark").evaluate((mark) => getComputedStyle(mark).boxShadow);
-    expect(ring).toContain(await tokenValue(page, "color", "var(--fs-popup-panel)"));
   });
 
-  test("groups the title, the panel and the action 24 and 16 apart", async ({ page }) => {
+  test("groups the lines under the title, the receipt, the panel and the action 20, 20 and 16 apart", async ({
+    page,
+  }) => {
     await openHarness(page, `${harness.url}?options=2&state=success&dialog=success`);
     const dialog = page.getByRole("dialog", { name: "Prediction placed" });
-    const title = (await dialog.getByText("2 estimates · 10 sDAI").boundingBox())!;
+    const position = (await dialog.getByText("See your position under each city.").boundingBox())!;
+    const receipt = (await dialog.getByRole("list", { name: "Transactions" }).boundingBox())!;
     const panel = (await dialog.locator("section").boundingBox())!;
     const close = (await dialog.getByRole("button", { name: "Close" }).boundingBox())!;
 
-    expect(Math.round(panel.y - (title.y + title.height))).toBe(24);
+    expect(Math.round(receipt.y - (position.y + position.height))).toBe(20);
+    expect(Math.round(panel.y - (receipt.y + receipt.height))).toBe(20);
     expect(Math.round(close.y - (panel.y + panel.height))).toBe(16);
+  });
+
+  test("keeps what could not be traded 12 above the panel's 20", async ({ page }) => {
+    await openHarness(page, `${harness.url}?options=4&state=success&dialog=success`);
+    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const receipt = (await dialog.getByRole("list", { name: "Transactions" }).boundingBox())!;
+    const leftOut = (await dialog.getByText("Could not be traded: Nairobi, Montevideo.").boundingBox())!;
+    const panel = (await dialog.locator("section").boundingBox())!;
+
+    expect(Math.round(leftOut.y - (receipt.y + receipt.height))).toBe(12);
+    expect(Math.round(panel.y - (leftOut.y + leftOut.height))).toBe(20);
+  });
+
+  test("draws no mark of its own: each step's done bullet says it, joined bullet to bullet by the axis", async ({
+    page,
+  }) => {
+    await openHarness(page, `${harness.url}?options=2&state=success&dialog=success`);
+    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const bullets = dialog.locator('[data-bullet="done"]');
+    const rows = dialog.getByRole("list", { name: "Transactions" }).getByRole("listitem");
+
+    await expect(page.getByTestId("success-mark")).toHaveCount(0);
+    await expect(bullets).toHaveCount(3);
+    await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
+    const axis = await tokenValue(page, "backgroundImage", "var(--fs-popup-axis-v)");
+    const lines = await rows.evaluateAll((items) =>
+      items.map((row) => {
+        const style = getComputedStyle(row, "::before");
+        const box = row.getBoundingClientRect();
+        return {
+          image: style.backgroundImage,
+          centre: box.left + parseFloat(style.left) + parseFloat(style.width) / 2,
+          top: box.top + parseFloat(style.top),
+          bottom: box.bottom - parseFloat(style.bottom),
+        };
+      }),
+    );
+    const centres = await bullets.evaluateAll((items) =>
+      items.map((bullet) => {
+        const box = bullet.getBoundingClientRect();
+        return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+      }),
+    );
+    for (const line of lines) expect(line.image).toBe(axis);
+    lines.forEach((line, index) => expect(line.centre).toBe(centres[index]!.x));
+    // from the first bullet's centre to the last's, unbroken through the gaps between rows
+    expect(Math.round(lines[0]!.top)).toBe(Math.round(centres[0]!.y));
+    expect(Math.round(lines[2]!.bottom)).toBe(Math.round(centres[2]!.y));
+    for (const index of [0, 1]) expect(lines[index]!.bottom).toBeGreaterThanOrEqual(lines[index + 1]!.top);
+  });
+
+  test("numbers each batch's explorer link on the prediction row, each a 32px target", async ({ page }) => {
+    await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&run=batches`);
+    const row = page.getByRole("listitem").filter({ hasText: "Prediction placed" });
+    const links = row.getByRole("link");
+
+    await expect(links).toHaveText(["1", "2", "3"]);
+    for (const link of await links.all()) {
+      await expect(link).toHaveAttribute("href", /^https:\/\/gnosisscan\.io\/tx\/0x[0-9a-f]{64}$/);
+      await expect(link).toHaveAttribute("target", "_blank");
+      expect((await link.boundingBox())!.height).toBe(32);
+    }
+    await expect(row.getByRole("link", { name: /^Prediction transaction 2 of 3, / })).toBeVisible();
+  });
+
+  test("ends every figure on one column where a step that landed unseen has no link", async ({ page }) => {
+    await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&run=recovered`);
+    const list = page.getByRole("list", { name: "Transactions" });
+    const funds = list.getByRole("listitem").filter({ hasText: "Funds added" });
+    const wallet = (await list.getByText("0xdcee...664f").boundingBox())!;
+    const added = (await funds.getByText("4 xDAI").boundingBox())!;
+
+    await expect(funds.getByRole("link")).toHaveCount(0);
+    expect(Math.round(added.x + added.width)).toBe(Math.round(wallet.x + wallet.width));
+  });
+
+  test("links nothing on a chain with no explorer, as on a local node", async ({ page }) => {
+    await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&run=worst&chain=local`);
+    const list = page.getByRole("list", { name: "Transactions" });
+
+    await expect(list.getByRole("listitem")).toHaveCount(4);
+    await expect(list.getByRole("link")).toHaveCount(0);
+  });
+
+  test("lists the credits and the funds as two steps, each with its own link", async ({ page }) => {
+    await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&run=credits`);
+    const list = page.getByRole("list", { name: "Transactions" });
+
+    for (const [title, figure, name] of [
+      ["Credits added", "2 credits", /^Credits transaction, /],
+      ["Funds added", "8 sDAI", /^Funds transaction, /],
+    ] as const) {
+      const row = list.getByRole("listitem").filter({ hasText: title });
+      await expect(row.getByText(figure)).toBeVisible();
+      await expect(row.getByRole("link")).toHaveCount(1);
+      await expect(row.getByRole("link", { name })).toBeVisible();
+    }
   });
 
   test("warns in the warning tone when the email is not confirmed", async ({ page }) => {
@@ -2753,16 +2850,34 @@ test.describe("the success dialog", () => {
     });
   }
 
-  test("brings its mark in by opacity alone under reduced motion", async ({ page }) => {
+  test("brings the receipt's rows in one after another, half an echo apart", async ({ page }) => {
+    await openHarness(page, `${harness.url}?dialog=success&run=credits`);
+    const rows = page.getByRole("list", { name: "Transactions" }).getByRole("listitem");
+    await expect(rows.first()).toHaveCSS("animation-name", "fsFadeUp");
+    expect(await rows.evaluateAll((items) => items.map((item) => getComputedStyle(item).animationDelay))).toEqual([
+      "0s",
+      "0.05s",
+      "0.1s",
+      "0.15s",
+    ]);
+    await page.evaluate(() => document.documentElement.style.setProperty("--fs-dur-echo", "200ms"));
+    await expect(rows.nth(1)).toHaveCSS("animation-delay", "0.1s");
+  });
+
+  test("brings its receipt in by opacity alone under reduced motion", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await openHarness(page, `${harness.url}?options=2&state=success&dialog=success`);
-    const keys = await page.getByTestId("success-mark").evaluate((mark) =>
-      mark
-        .getAnimations()
-        .flatMap((animation) => (animation.effect as KeyframeEffect).getKeyframes())
-        .flatMap((frame) => Object.keys(frame))
-        .filter((key) => !["offset", "easing", "composite", "computedOffset"].includes(key)),
-    );
+    const keys = await page
+      .getByRole("list", { name: "Transactions" })
+      .getByRole("listitem")
+      .first()
+      .evaluate((mark) =>
+        mark
+          .getAnimations()
+          .flatMap((animation) => (animation.effect as KeyframeEffect).getKeyframes())
+          .flatMap((frame) => Object.keys(frame))
+          .filter((key) => !["offset", "easing", "composite", "computedOffset"].includes(key)),
+      );
 
     expect([...new Set(keys)]).toEqual(["opacity"]);
   });

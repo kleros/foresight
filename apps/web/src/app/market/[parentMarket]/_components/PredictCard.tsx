@@ -20,7 +20,7 @@ import { useSessionEstimates } from "@/features/predict/stores/estimateStore";
 import type { SelectedEstimate } from "@/features/predict/types";
 import { selectedEstimates } from "@/features/predict/utils/estimates";
 import type { SessionDetail, SessionStatus } from "@/features/sessions/types";
-import { optionNoun } from "@/features/sessions/utils/optionNoun";
+import { optionNoun, optionNounSingular } from "@/features/sessions/utils/optionNoun";
 
 import { SectionCard } from "@/components/ui/SectionCard";
 import EnsureChain from "@/components/wallet/EnsureChain";
@@ -282,7 +282,13 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
         />
       ) : null}
       {isSuccessOpen ? (
-        <PredictSuccessDialog isOpen placed={placedRun} leftOut={leftOut} onClose={() => setIsSuccessOpen(false)} />
+        <PredictSuccessDialog
+          isOpen
+          placed={placedRun}
+          leftOut={leftOut}
+          optionNoun={optionNounSingular(session.itemName)}
+          onClose={() => setIsSuccessOpen(false)}
+        />
       ) : null}
     </SectionCard>
   );

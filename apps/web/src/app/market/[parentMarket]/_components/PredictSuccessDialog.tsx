@@ -7,7 +7,12 @@ import ContactDetailsForm from "@/features/settings/components/NotificationSetti
 
 import EnsureAuth from "@/components/auth/EnsureAuth";
 
+import { DEFAULT_CHAIN } from "@/config/chains";
+import { explorerTxUrl } from "@/config/site";
+
 import { type PlacedPrediction, PredictSuccessView } from "./PredictSuccessView";
+
+const txUrl = (hash: string) => explorerTxUrl(hash, DEFAULT_CHAIN);
 
 /** Shown once a prediction lands, with the way to hear when the market resolves. */
 export function PredictSuccessDialog({
@@ -15,12 +20,15 @@ export function PredictSuccessDialog({
   placed,
   leftOut,
   onClose,
+  optionNoun,
 }: {
   isOpen: boolean;
   placed?: PlacedPrediction;
   /** Names of the options the run could not trade and left out. */
   leftOut: string[];
   onClose: () => void;
+  /** What the market calls one option. */
+  optionNoun: string;
 }) {
   const { user, userExists } = useAtlasProvider();
 
@@ -33,6 +41,8 @@ export function PredictSuccessDialog({
       subscribed={Boolean(userExists)}
       email={user?.email}
       isEmailVerified={user?.isEmailVerified}
+      optionNoun={optionNoun}
+      txUrl={txUrl}
       signUp={
         <EnsureAuth
           renderButton={({ onPress, isDisabled, isSigningIn }) => (

@@ -940,18 +940,29 @@ button.predict-cta.predict-cta[data-busy]:has(> .button-text) > .button-text {
     animation: none;
   }
 }
-/* the success dialog's mark: the axis disc, popped in once as the dialog opens */
-.predict-success-mark {
-  display: grid;
-  place-items: center;
-  width: 56px;
-  height: 56px;
-  border-radius: 999px;
-  background: var(--fs-popup-axis);
-  color: var(--fs-popup-on-axis);
-  /* the panel's tone, so the ring reads as part of the panel below */
-  box-shadow: 0 0 0 8px var(--fs-popup-panel);
-  animation: predict-success-pop var(--fs-dur-structural) var(--fs-ease-spring) both;
+/* the success dialog's receipt: the axis connector runs bullet to bullet through the 8px row gap,
+   and the rows rise in one after another, half an echo apart */
+.predict-receipt > li {
+  position: relative;
+  animation-delay: calc(var(--i, 0) * var(--fs-dur-echo) / 2);
+}
+.predict-receipt > li::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  bottom: -8px;
+  left: 11px;
+  width: 2px;
+  background: var(--fs-popup-axis-v);
+}
+.predict-receipt > li:first-child::before {
+  top: 50%;
+}
+.predict-receipt > li:last-child::before {
+  bottom: 50%;
+}
+.predict-receipt > li:only-child::before {
+  display: none;
 }
 /* the sign-in is the panel's own control, a step below the popup's wide button */
 .predict-success-panel .predict-cta {
@@ -976,15 +987,4 @@ button.predict-cta.predict-cta[data-busy]:has(> .button-text) > .button-text {
 }
 .predict-card-cta .button-text {
   font-size: 15px;
-}
-@keyframes predict-success-pop {
-  from {
-    opacity: 0;
-    transform: scale(0.9);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .predict-success-mark {
-    animation: fsFadeIn var(--fs-dur-reduced-fade) linear both;
-  }
 }

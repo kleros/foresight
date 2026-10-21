@@ -24,7 +24,7 @@ describe("PredictSuccessDialog", () => {
     [["Hanoi"], "Could not be traded: Hanoi."],
     [["Berlin", "Hanoi"], "Could not be traded: Berlin, Hanoi."],
   ])("names what it left out: %j", (leftOut, line) => {
-    render(<PredictSuccessDialog isOpen leftOut={leftOut} onClose={vi.fn()} />);
+    render(<PredictSuccessDialog isOpen optionNoun="city" leftOut={leftOut} onClose={vi.fn()} />);
 
     expect(screen.getByText(line)).toBeInTheDocument();
   });
@@ -33,6 +33,7 @@ describe("PredictSuccessDialog", () => {
     render(
       <PredictSuccessDialog
         isOpen
+        optionNoun="city"
         placed={{ estimates: 2, amount: 10n * 10n ** 18n, symbol: "sDAI", decimals: 18 }}
         leftOut={["Nairobi", "Montevideo"]}
         onClose={vi.fn()}
@@ -43,14 +44,14 @@ describe("PredictSuccessDialog", () => {
   });
 
   it("is named by its heading", () => {
-    render(<PredictSuccessDialog isOpen leftOut={[]} onClose={vi.fn()} />);
+    render(<PredictSuccessDialog isOpen optionNoun="city" leftOut={[]} onClose={vi.fn()} />);
 
     expect(screen.getByRole("dialog", { name: "Prediction placed" })).toBeInTheDocument();
   });
 
   it("offers the email once to a visitor not yet subscribed, without a line restating its heading", () => {
     atlas = { userExists: false, isVerified: false, isSigningIn: false, authoriseUser: vi.fn() };
-    render(<PredictSuccessDialog isOpen leftOut={[]} onClose={vi.fn()} />);
+    render(<PredictSuccessDialog isOpen optionNoun="city" leftOut={[]} onClose={vi.fn()} />);
 
     expect(screen.getByRole("heading", { name: "Get an email when the market resolves" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign in to subscribe" })).toBeInTheDocument();
@@ -59,7 +60,7 @@ describe("PredictSuccessDialog", () => {
 
   it("closes on a quiet wide button for a visitor already subscribed, as nothing is at stake", async () => {
     const onClose = vi.fn();
-    render(<PredictSuccessDialog isOpen leftOut={[]} onClose={onClose} />);
+    render(<PredictSuccessDialog isOpen optionNoun="city" leftOut={[]} onClose={onClose} />);
     const close = screen.getByRole("button", { name: "Close" });
 
     expect(close).toHaveAttribute("data-quiet", "true");
@@ -70,7 +71,7 @@ describe("PredictSuccessDialog", () => {
   it("makes Close a text action beside the sign-in, which is the one action there", async () => {
     atlas = { userExists: false, isVerified: false, isSigningIn: false, authoriseUser: vi.fn() };
     const onClose = vi.fn();
-    render(<PredictSuccessDialog isOpen leftOut={[]} onClose={onClose} />);
+    render(<PredictSuccessDialog isOpen optionNoun="city" leftOut={[]} onClose={onClose} />);
     const close = screen.getByRole("button", { name: "Close" });
 
     expect(close).not.toHaveClass("predict-cta");
@@ -83,6 +84,7 @@ describe("PredictSuccessDialog", () => {
     render(
       <PredictSuccessDialog
         isOpen
+        optionNoun="city"
         placed={{ estimates: 2, amount: 10n * 10n ** 18n, symbol: "sDAI", decimals: 18 }}
         leftOut={[]}
         onClose={vi.fn()}
@@ -96,6 +98,7 @@ describe("PredictSuccessDialog", () => {
     render(
       <PredictSuccessDialog
         isOpen
+        optionNoun="city"
         placed={{ estimates: 1, symbol: "sDAI", decimals: 18 }}
         leftOut={[]}
         onClose={vi.fn()}
@@ -106,7 +109,7 @@ describe("PredictSuccessDialog", () => {
   });
 
   it("names the subscribed email in one sentence, with a link to change it in Settings", () => {
-    render(<PredictSuccessDialog isOpen leftOut={[]} onClose={vi.fn()} />);
+    render(<PredictSuccessDialog isOpen optionNoun="city" leftOut={[]} onClose={vi.fn()} />);
 
     expect(screen.getByText(/^You'll get an email at/)).toHaveTextContent(
       "You'll get an email at visitor@example.com when the market resolves.",
@@ -124,7 +127,7 @@ describe("PredictSuccessDialog", () => {
     [undefined, false],
   ])("warns the email will not arrive when isEmailVerified is %s: %s", (isEmailVerified, warns) => {
     atlas = { user: { email: "visitor@example.com", isEmailVerified }, userExists: true };
-    render(<PredictSuccessDialog isOpen leftOut={[]} onClose={vi.fn()} />);
+    render(<PredictSuccessDialog isOpen optionNoun="city" leftOut={[]} onClose={vi.fn()} />);
 
     expect(Boolean(screen.queryByText("Confirm your email first, or it will not arrive."))).toBe(warns);
     expect(screen.getByRole("link", { name: warns ? "Confirm in Settings" : "Change in Settings" })).toHaveAttribute(
@@ -135,7 +138,7 @@ describe("PredictSuccessDialog", () => {
 
   it("keeps the sign-in's label beside a spinner while the wallet signs, and cannot be pressed", () => {
     atlas = { userExists: false, isVerified: false, isSigningIn: true, authoriseUser: vi.fn() };
-    render(<PredictSuccessDialog isOpen leftOut={[]} onClose={vi.fn()} />);
+    render(<PredictSuccessDialog isOpen optionNoun="city" leftOut={[]} onClose={vi.fn()} />);
     const button = screen.getByRole("button", { name: "Signing in…" });
 
     expect(button).toBeDisabled();
@@ -147,7 +150,7 @@ describe("PredictSuccessDialog", () => {
   it("asks the wallet to sign once when the sign-in is pressed", async () => {
     const authoriseUser = vi.fn().mockResolvedValue(undefined);
     atlas = { userExists: false, isVerified: false, isSigningIn: false, authoriseUser };
-    render(<PredictSuccessDialog isOpen leftOut={[]} onClose={vi.fn()} />);
+    render(<PredictSuccessDialog isOpen optionNoun="city" leftOut={[]} onClose={vi.fn()} />);
 
     await userEvent.click(screen.getByRole("button", { name: "Sign in to subscribe" }));
     expect(authoriseUser).toHaveBeenCalledTimes(1);
@@ -156,8 +159,46 @@ describe("PredictSuccessDialog", () => {
   it("cannot be pressed to sign in with no wallet connected", () => {
     address = undefined;
     atlas = { userExists: false, isVerified: false, isSigningIn: false, authoriseUser: vi.fn() };
-    render(<PredictSuccessDialog isOpen leftOut={[]} onClose={vi.fn()} />);
+    render(<PredictSuccessDialog isOpen optionNoun="city" leftOut={[]} onClose={vi.fn()} />);
 
     expect(screen.getByRole("button", { name: "Sign in to subscribe" })).toBeDisabled();
+  });
+
+  it("says where the position shows, in the market's own word for an option", () => {
+    render(<PredictSuccessDialog isOpen optionNoun="city" leftOut={[]} onClose={vi.fn()} />);
+
+    expect(screen.getByText("See your position under each city.")).toBeInTheDocument();
+  });
+
+  it("lists the run's steps without links on a chain with no explorer, as on a local node", () => {
+    render(
+      <PredictSuccessDialog
+        isOpen
+        optionNoun="city"
+        placed={{
+          estimates: 2,
+          amount: 10n * 10n ** 18n,
+          symbol: "sDAI",
+          decimals: 18,
+          steps: [
+            { id: "create-wallet", hash: `0x${"1".repeat(64)}` },
+            { id: "deposit", hash: `0x${"2".repeat(64)}` },
+            { id: "predict-1", hash: `0x${"3".repeat(64)}` },
+          ],
+          funds: { toAdd: 10n * 10n ** 18n, symbol: "sDAI", decimals: 18 },
+        }}
+        leftOut={[]}
+        onClose={vi.fn()}
+      />,
+    );
+    const list = screen.getByRole("list", { name: "Transactions" });
+
+    const [wallet, funds, prediction, ...rest] = within(list).getAllByRole("listitem");
+    expect(rest).toEqual([]);
+    expect(within(wallet!).getByText("Trade wallet created")).toBeInTheDocument();
+    expect(within(funds!).getByText("Funds added")).toBeInTheDocument();
+    expect(within(funds!).getByText("10 sDAI")).toBeInTheDocument();
+    expect(within(prediction!).getByText("Prediction placed")).toBeInTheDocument();
+    expect(within(list).queryAllByRole("link")).toEqual([]);
   });
 });
