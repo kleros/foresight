@@ -2257,12 +2257,39 @@ for (const width of [375, 320, 1280]) {
   });
 }
 
+test.describe("the popup's type roles", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("give way to a weight utility beside them, in the panels and the settings", async ({ page }) => {
+    const weightOf = (locator: Locator) => locator.evaluate((element) => getComputedStyle(element).fontWeight);
+    const dialog = await openPopup(page, 2);
+    expect.soft(await weightOf(dialog.getByRole("heading", { name: "2 estimates" })), "2 estimates").toBe("500");
+    expect.soft(await weightOf(dialog.getByRole("heading", { name: /^You pay/ })), "You pay").toBe("500");
+    expect
+      .soft(await weightOf(dialog.getByTestId("predict-summary").getByRole("button").first()), "the Details row")
+      .toBe("500");
+
+    await openHarness(page, `${harness.url}?options=2&settings=open`);
+    const settings = page.getByRole("dialog");
+    await expect(settings.getByRole("button", { name: "Done" })).toBeVisible();
+    expect.soft(await weightOf(settings.getByRole("heading", { name: "Max slippage" })), "Max slippage").toBe("500");
+    expect.soft(await weightOf(settings.getByRole("button", { name: "Done" })), "Done").toBe("600");
+  });
+
+  test("give way to a size and leading utility beside them, on the status line", async ({ page }) => {
+    const dialog = await openPopup(page, 2, "failed", "reverted");
+    const status = dialog.getByRole("status");
+    await expect(status).not.toBeEmpty();
+    expect(
+      await status.evaluate((element) => [getComputedStyle(element).fontSize, getComputedStyle(element).lineHeight]),
+    ).toEqual(["13px", "18px"]);
+  });
+});
+
 test.describe("the popup's numbers", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test("set the balance and the estimates count in tabular figures, through the type roles' font shorthand", async ({
-    page,
-  }) => {
+  test("set the balance and the estimates count in tabular figures beside a type role", async ({ page }) => {
     const dialog = await openPopup(page, 10);
     for (const number of [dialog.getByText(/^Balance:/), dialog.getByText(/^10 estimates$/)]) {
       await expect(number).toHaveCSS("font-variant-numeric", "tabular-nums");

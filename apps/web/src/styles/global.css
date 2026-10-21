@@ -62,32 +62,37 @@
   --radius-fs-control: var(--fs-radius-control);
 }
 
-/* Semantic type roles as single utilities. `font` resets font-variant-numeric, so each role re-reads
-   Tailwind's numeric variables: `tabular-nums` beside a role still applies, and without one it inherits. */
+/* Semantic type roles as single utilities, in longhands: Tailwind orders a `font` shorthand after every
+   text-*, leading-* and font-* utility, so it would override them; longhands sort before them. */
 @utility type-h1 {
-  font: var(--type-h1);
-  font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,)
-    var(--tw-numeric-fraction,);
+  font-family: var(--font-sans);
+  font-weight: var(--type-h1-weight);
+  font-size: var(--type-h1-size);
+  line-height: var(--type-h1-leading);
 }
 @utility type-h2 {
-  font: var(--type-h2);
-  font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,)
-    var(--tw-numeric-fraction,);
+  font-family: var(--font-sans);
+  font-weight: var(--type-h2-weight);
+  font-size: var(--type-h2-size);
+  line-height: var(--type-h2-leading);
 }
 @utility type-body {
-  font: var(--type-body);
-  font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,)
-    var(--tw-numeric-fraction,);
+  font-family: var(--font-sans);
+  font-weight: var(--type-body-weight);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-leading);
 }
 @utility type-label {
-  font: var(--type-label);
-  font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,)
-    var(--tw-numeric-fraction,);
+  font-family: var(--font-sans);
+  font-weight: var(--type-label-weight);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-leading);
 }
 @utility type-caption {
-  font: var(--type-caption);
-  font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,)
-    var(--tw-numeric-fraction,);
+  font-family: var(--font-sans);
+  font-weight: var(--type-caption-weight);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-leading);
 }
 
 /** The one content gutter: the header, the page and the footer all sit on it. */
