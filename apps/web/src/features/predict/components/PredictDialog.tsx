@@ -492,9 +492,15 @@ export function PredictDialog({
             ) : null}
           </p>
 
-          <div className="predict-footer bg-fs-surface landscape-phone:pb-2 sticky bottom-0 flex gap-2 pt-1 pb-4 short:pb-3">
+          {/* under 375px Go back and Confirm new prices outgrow one row, so Confirm stacks over Go back */}
+          <div
+            className={clsx(
+              "predict-footer bg-fs-surface landscape-phone:pb-2 sticky bottom-0 flex gap-2 pt-1 pb-4 short:pb-3",
+              "[@media(max-width:374px)]:flex-col-reverse",
+            )}
+          >
             {isMoved && onBack ? (
-              <div className="w-28 shrink-0">
+              <div className="w-28 shrink-0 [@media(max-width:374px)]:w-full">
                 <PredictButton text="Go back" quiet isDisabled={false} onPress={onBack} />
               </div>
             ) : null}
