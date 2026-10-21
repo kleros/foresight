@@ -68,6 +68,19 @@ export function usePredictDock(isLive: boolean) {
     };
   }, [isLive]);
 
+  // React has no onAnimationCancel; a dock widened past md mid-exit drops its animation without an end
+  useEffect(() => {
+    const dock = ref.current;
+    if (phase !== "leaving" || !dock) return;
+    const settle = (event: Event) => {
+      if (event.target !== dock) return;
+      setIsStuck(false);
+      setPhase("idle");
+    };
+    dock.addEventListener("animationcancel", settle);
+    return () => dock.removeEventListener("animationcancel", settle);
+  }, [phase]);
+
   const onAnimationEnd = (event: AnimationEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget) return;
     if (phase === "leaving") setIsStuck(false);
