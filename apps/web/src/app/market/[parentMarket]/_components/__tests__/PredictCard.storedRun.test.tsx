@@ -182,6 +182,16 @@ describe("the predict card before it has read the stored run", () => {
     expect(commits).not.toContain("live");
   });
 
+  it("keeps Predict held and draws no phone bar while Resume's popup is open", async () => {
+    saveRun();
+    const commits = renderCounted();
+    await userEvent.click(await screen.findByRole("button", { name: "Resume" }));
+    await screen.findByRole("dialog");
+
+    expect(commits).not.toContain("live");
+    expect(document.querySelector("[data-predict-dock]")).toBeNull();
+  });
+
   it("never commits a live Predict when the popup closes over a stored run", async () => {
     saveRun();
     const commits = renderCounted();
