@@ -28,7 +28,8 @@ vi.mock("wagmi", async (importOriginal) => ({
 }));
 vi.mock("@/components/wallet/EnsureChain", () => ({ default: ({ children }: { children: ReactNode }) => children }));
 const stored = vi.hoisted(() => ({ run: null as Partial<PredictSnapshot> | null }));
-vi.mock("@/features/predict/run/interrupted", () => ({
+vi.mock("@/features/predict/run/interrupted", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/predict/run/interrupted")>()),
   findInterruptedRun: () => stored.run,
   hasPendingTransaction: () => false,
   discardRun: () => undefined,
