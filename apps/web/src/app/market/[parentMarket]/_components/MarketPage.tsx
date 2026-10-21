@@ -23,7 +23,7 @@ import { paths } from "@/config/paths";
 import { AdvancedSection } from "./AdvancedSection";
 import { OptionCard } from "./OptionCard";
 import { ParticipateSection } from "./ParticipateSection";
-import { PREDICT_BAR_SLOT, PredictCard } from "./PredictCard";
+import { predictBarSlot, PredictCard } from "./PredictCard";
 import { SessionHeader } from "./SessionHeader";
 import { toWalletMarket } from "./toWalletMarket";
 import { useOptionPositions } from "./useOptionPositions";
@@ -79,7 +79,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
 
   return (
     <PageColumn>
-      <div ref={setPredictBar} className={PREDICT_BAR_SLOT} />
+      <div ref={setPredictBar} className={predictBarSlot(status)} />
       <SessionHeader session={detail} status={status} stats={stats.data} statsPending={stats.isPending} />
       {chart.isPending ? (
         <ChartSkeleton />

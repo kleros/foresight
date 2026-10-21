@@ -8,11 +8,11 @@ import { createConfig, http, mock, WagmiProvider } from "wagmi";
 import { connect } from "wagmi/actions";
 
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
-import type { SessionDetail, SessionOption } from "@/features/sessions/types";
+import type { SessionDetail, SessionOption, SessionStatus } from "@/features/sessions/types";
 
 import { SectionCard } from "@/components/ui/SectionCard";
 
-import { PREDICT_BAR_SLOT, PredictCard } from "@/app/market/[parentMarket]/_components/PredictCard";
+import { predictBarSlot, PredictCard } from "@/app/market/[parentMarket]/_components/PredictCard";
 
 import "@/styles/global.css";
 import "../inter.css";
@@ -22,6 +22,8 @@ const params = new URLSearchParams(window.location.search);
 const set = params.get("set") ?? "normal";
 /** `?wallet=0` no wallet connected. */
 const isConnected = params.get("wallet") !== "0";
+/** `?status=closed` or `setting-up`; trading otherwise. */
+const status = (params.get("status") ?? "trading") as SessionStatus;
 if (params.get("theme") === "dark") document.documentElement.classList.add("dark");
 
 const WALLET = "0xdcee0000000000000000000000000000000c664f";
@@ -88,12 +90,18 @@ const session: SessionDetail = {
 const marketEstimates = Object.fromEntries(
   options.map((option, index) => [option.market.toLowerCase(), picks[index]![1]]),
 );
+const picked = Object.fromEntries(options.map((option, index) => [option.market.toLowerCase(), picks[index]![2]]));
+/** For specs: put the first pick in, or take every pick out, as a slider would. */
+Object.assign(window, {
+  pickFirst: () => useEstimateStore.getState().setEstimate(PARENT, options[0]!.market, picks[0]![2]),
+  clearPicks: () => useEstimateStore.getState().resetEstimates(PARENT),
+});
 useEstimateStore.setState({
   estimates:
     set === "none"
       ? {}
       : {
-          [PARENT]: Object.fromEntries(options.map((option, index) => [option.market.toLowerCase(), picks[index]![2]])),
+          [PARENT]: picked,
         },
 });
 
@@ -118,15 +126,15 @@ function Harness() {
       </header>
       <main className="fs-page flex-1 py-10">
         <div className="mx-auto flex w-full max-w-294 flex-col">
-          <div ref={setBar} className={PREDICT_BAR_SLOT} />
+          <div ref={setBar} className={predictBarSlot(status)} />
           <h1 className="text-fs-text-primary text-2xl font-semibold">{session.name}</h1>
           <section className="mt-12 flex flex-col gap-4">
             {options.map((option) => (
-              <SectionCard key={option.market} className="text-fs-text-secondary h-14 p-4 text-sm">
-                {option.name}
-              </SectionCard>
+              <div key={option.market} data-testid="option-card">
+                <SectionCard className="text-fs-text-secondary h-14 p-4 text-sm">{option.name}</SectionCard>
+              </div>
             ))}
-            <PredictCard session={session} status="trading" marketEstimates={marketEstimates} barSlot={bar} />
+            <PredictCard session={session} status={status} marketEstimates={marketEstimates} barSlot={bar} />
             <div className="h-[600px]" />
           </section>
         </div>

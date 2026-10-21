@@ -878,6 +878,12 @@ button.predict-cta.predict-cta[data-busy]:has(> .button-text) > .button-text {
 .predict-success-panel .predict-cta .button-text {
   font-size: 15px;
 }
+/* the phone bar pins 126px with the header; focus scrolls a control clear of both */
+@media (max-width: 767px) and (min-height: 481px) {
+  html:has([data-predict-bar]) {
+    scroll-padding-top: 126px;
+  }
+}
 /* the market page's Predict, on the card and the phone bar: sized to its label, at the control step */
 .predict-cta.predict-card-cta {
   width: auto;

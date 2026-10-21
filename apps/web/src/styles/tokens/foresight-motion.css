@@ -134,6 +134,15 @@
 .fs-drop-in {
   animation: fsDropIn var(--fs-dur-enter) var(--fs-ease-enter) both;
 }
+@keyframes fsDropOut {
+  to {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+}
+.fs-drop-out {
+  animation: fsDropOut var(--fs-dur-enter) var(--fs-ease-exit) both;
+}
 /* A disclosure opens by grid rows, the one height-class animation allowed, as its content rises in;
    closing, the content fades first and the rows then fold. Markup: .fs-disclosure > div (min-h-0, overflow hidden) > content. */
 .fs-disclosure {
@@ -265,7 +274,8 @@
   .fs-icon-draw polyline {
     animation: fsFadeIn var(--fs-dur-reduced-fade) linear both;
   }
-  .fs-exit {
+  .fs-exit,
+  .fs-drop-out {
     animation: fsFadeOut var(--fs-dur-reduced-fade) linear both;
   }
   .fs-spawn {

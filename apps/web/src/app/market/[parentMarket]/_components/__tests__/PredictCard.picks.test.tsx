@@ -4,7 +4,7 @@ import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
-import type { SessionDetail } from "@/features/sessions/types";
+import type { SessionDetail, SessionStatus } from "@/features/sessions/types";
 import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 import { toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
 
@@ -17,7 +17,13 @@ vi.mock("wagmi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("wagmi")>()),
   useAccount: () => ({ address: account.address }),
 }));
-vi.mock("@/components/wallet/EnsureChain", () => ({ default: ({ children }: { children: ReactNode }) => children }));
+const chainGate = vi.hoisted(() => ({ classNames: [] as Array<string | undefined> }));
+vi.mock("@/components/wallet/EnsureChain", () => ({
+  default: ({ children, className }: { children: ReactNode; className?: string }) => {
+    chainGate.classNames.push(className);
+    return children;
+  },
+}));
 
 const NAMES = ["Berlin", "Lisbon", "Nairobi", "Montevideo"];
 const MARKETS = ["0x1111", "0x2222", "0x3333", "0x4444"].map((head) => head.padEnd(42, head.slice(-1)));
@@ -46,9 +52,9 @@ function pick(detail: SessionDetail) {
   );
 }
 
-function renderCard(detail: SessionDetail, barSlot?: HTMLElement) {
+function renderCard(detail: SessionDetail, barSlot?: HTMLElement, status: SessionStatus = "trading") {
   const marketEstimates = Object.fromEntries(detail.options.map((option) => [option.market.toLowerCase(), MARKET]));
-  return render(<PredictCard session={detail} status="trading" marketEstimates={marketEstimates} barSlot={barSlot} />);
+  return render(<PredictCard session={detail} status={status} marketEstimates={marketEstimates} barSlot={barSlot} />);
 }
 
 beforeEach(() => {
@@ -71,7 +77,7 @@ describe("the predict card's picks", () => {
     expect(within(chips[0]!).getByText("Berlin")).toHaveAttribute("title", "Berlin");
   });
 
-  it("names three picks on a wide screen and two on a phone, and counts the rest", () => {
+  it("names three picks from lg up and two below, and counts the rest", () => {
     const detail = session(4);
     pick(detail);
     renderCard(detail);
@@ -81,10 +87,10 @@ describe("the predict card's picks", () => {
       .getAllByRole("listitem")
       .filter((item) => !item.hasAttribute("aria-label"));
     expect(chips).toHaveLength(4);
-    expect(chips[2]).toHaveClass("max-md:hidden");
+    expect(chips[2]).toHaveClass("max-lg:hidden");
     expect(chips[3]).toHaveClass("hidden");
-    expect(screen.getByLabelText("1 more estimate")).toHaveClass("max-md:hidden");
-    expect(screen.getByLabelText("2 more estimates")).toHaveClass("md:hidden");
+    expect(screen.getByLabelText("1 more estimate")).toHaveClass("max-lg:hidden");
+    expect(screen.getByLabelText("2 more estimates")).toHaveClass("lg:hidden");
   });
 
   it("shows no picks and no bar while nothing is set away from the market", () => {
@@ -122,7 +128,7 @@ describe("the phone bar under the header", () => {
     expect(within(slot).getByText("1 estimate · Berlin")).toBeInTheDocument();
   });
 
-  it("is off whenever the card's button is, here without a wallet", () => {
+  it("is not drawn without a wallet; the card keeps its button and says why", () => {
     account.address = undefined;
     const detail = session(2);
     pick(detail);
@@ -130,8 +136,31 @@ describe("the phone bar under the header", () => {
     document.body.append(slot);
     renderCard(detail, slot);
 
-    expect(within(slot).getByRole("button", { name: "Predict" })).toBeDisabled();
+    expect(slot).toBeEmptyDOMElement();
     expect(screen.getByRole("button", { name: "Predict 2 estimates" })).toBeDisabled();
+    expect(screen.getByText("Connect a wallet to predict.")).toBeInTheDocument();
+  });
+
+  it.each(["closed", "setting-up"] as const)("is not drawn while the session is %s", (status) => {
+    const detail = session(2);
+    pick(detail);
+    const slot = document.createElement("div");
+    document.body.append(slot);
+    renderCard(detail, slot, status);
+
+    expect(slot).toBeEmptyDOMElement();
+  });
+
+  it("hands its button's look to the wrong-chain switch that stands in for it", () => {
+    chainGate.classNames.length = 0;
+    const detail = session(2);
+    pick(detail);
+    const slot = document.createElement("div");
+    document.body.append(slot);
+    renderCard(detail, slot);
+
+    expect(chainGate.classNames.length).toBeGreaterThan(0);
+    for (const className of chainGate.classNames) expect(className).toBe("predict-cta predict-card-cta");
   });
 
   it("is not drawn where the page gives the card no slot", () => {
