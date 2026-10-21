@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { openHarness, startHarness } from "../utils/component-harness";
 
@@ -24,6 +24,23 @@ const panelBox = (page: Page) =>
     .locator("[data-predict-dock] > *")
     .first()
     .evaluate((element) => element.getBoundingClientRect().toJSON() as DOMRect);
+
+/** A held button's fill, ink and edge against the disabled tokens the card's own Predict wears. */
+const heldTone = (button: Locator) =>
+  button.evaluate((element) => {
+    const probe = document.createElement("div");
+    probe.style.cssText = "background: var(--fs-popup-cta-disabled); color: var(--fs-popup-cta-disabled-text)";
+    document.body.append(probe);
+    const tokens = getComputedStyle(probe);
+    const [fill, ink] = [tokens.backgroundColor, tokens.color];
+    probe.remove();
+    const style = getComputedStyle(element);
+    return {
+      fill: style.backgroundColor === fill,
+      ink: getComputedStyle(element.querySelector(".button-text") ?? element).color === ink,
+      edge: style.borderTopColor === fill || style.borderTopColor === "rgba(0, 0, 0, 0)",
+    };
+  });
 
 const sideways = (page: Page) =>
   page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -94,6 +111,7 @@ for (const theme of ["light", "dark"]) {
       const held = page.getByRole("button", { name: "Predict 3 estimates" });
       await expect(held).toBeDisabled();
       expect((await held.boundingBox())!.height).toBeLessThan(44);
+      expect(await heldTone(held)).toEqual({ fill: true, ink: true, edge: true });
     });
 
     test("offers a disabled Predict and no chips while nothing is picked", async ({ page }) => {
@@ -348,6 +366,8 @@ for (const theme of ["light", "dark"]) {
           await expect(resume).toBeEnabled();
           expect((await resume.boundingBox())!.height).toBe(44);
           const held = page.getByRole("button", { name: "Predict", exact: true });
+          // held in the disabled tone the card's own Predict has, apart from the live Discard beside it
+          expect(await heldTone(held)).toEqual({ fill: true, ink: true, edge: true });
           const [text, button] = [(await said.boundingBox())!, (await held.boundingBox())!];
           expect(button.y).toBeGreaterThanOrEqual(text.y);
           expect(button.y).toBeLessThanOrEqual(text.y + text.height + 12);
