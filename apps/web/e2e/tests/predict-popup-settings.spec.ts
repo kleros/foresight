@@ -379,6 +379,38 @@ test.describe("prices that moved at 320 x 568", () => {
   }
 });
 
+test.describe("the moved footer's focus order", () => {
+  for (const viewport of [
+    { width: 320, height: 568 },
+    { width: 375, height: 667 },
+  ]) {
+    test(`runs as Confirm new prices and Go back are drawn, at ${viewport.width} wide`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      const dialog = await openPopup(page, "state=moved");
+      const confirm = dialog.getByRole("button", { name: "Confirm new prices" });
+      const back = dialog.getByRole("button", { name: "Go back" });
+      const [c, b] = [(await confirm.boundingBox())!, (await back.boundingBox())!];
+      // stacked, the first drawn is the higher one; in a row, the one to the left
+      const [first, second] = (c.y === b.y ? c.x < b.x : c.y < b.y) ? [confirm, back] : [back, confirm];
+
+      await first.focus();
+      await page.keyboard.press("Tab");
+      await expect(second).toBeFocused();
+      await page.keyboard.press("Shift+Tab");
+      await expect(first).toBeFocused();
+    });
+  }
+
+  test("brings Go back in with the enter motion", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    const dialog = await openPopup(page, "state=moved");
+    const wrapper = dialog
+      .locator(".predict-footer > div")
+      .filter({ has: page.getByRole("button", { name: "Go back" }) });
+    expect(await wrapper.evaluate((element) => getComputedStyle(element).animationName)).toBe("fsFadeUp");
+  });
+});
+
 test.describe("prices that could not be read", () => {
   test.use({ viewport: { width: 375, height: 667 } });
 
