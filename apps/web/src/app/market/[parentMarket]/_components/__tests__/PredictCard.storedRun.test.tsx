@@ -81,14 +81,14 @@ function saveRun(deposit: "pending" | "submitted" = "pending") {
   });
 }
 
-function card(barSlot?: HTMLElement) {
+function card() {
   const detail = session();
   const marketEstimates = moveEveryEstimate(detail);
-  return <PredictCard session={detail} status="trading" marketEstimates={marketEstimates} barSlot={barSlot} />;
+  return <PredictCard session={detail} status="trading" marketEstimates={marketEstimates} />;
 }
 
-function renderCard(barSlot?: HTMLElement) {
-  render(card(barSlot));
+function renderCard() {
+  render(card());
   return () => screen.getByRole("button", { name: "Predict 2 estimates" });
 }
 
@@ -126,12 +126,21 @@ describe("the predict card with an unfinished run stored", () => {
 
   it("draws no phone bar while the run is stored", async () => {
     saveRun();
-    const slot = document.body.appendChild(document.createElement("div"));
-    renderCard(slot);
+    renderCard();
 
     await screen.findByText(RESUME_OR_DISCARD);
-    expect(slot.querySelector("[data-predict-bar]")).toBeNull();
-    slot.remove();
+    expect(document.querySelector("[data-predict-dock]")).toBeNull();
+  });
+
+  it("makes Resume the card's main button and holds Predict as the secondary one", async () => {
+    saveRun();
+    const predict = renderCard();
+
+    const resume = await screen.findByRole("button", { name: "Resume" });
+    expect(resume).toHaveClass("predict-cta");
+    expect(predict()).not.toHaveClass("predict-cta");
+    expect(predict()).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Predict" })).toBeDisabled();
   });
 
   it("lets Predict go once the run is discarded", async () => {

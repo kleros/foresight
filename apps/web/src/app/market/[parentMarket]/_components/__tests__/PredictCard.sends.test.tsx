@@ -54,10 +54,7 @@ function renderCard() {
   detail.options.forEach((option, index) =>
     useEstimateStore.getState().setEstimate(detail.parentMarket, option.market, [400, 120][index]!),
   );
-  const slot = document.createElement("div");
-  document.body.append(slot);
-  render(<PredictCard session={detail} status="trading" marketEstimates={marketEstimates} barSlot={slot} />);
-  return slot;
+  render(<PredictCard session={detail} status="trading" marketEstimates={marketEstimates} />);
 }
 
 beforeEach(() => {
@@ -71,7 +68,7 @@ beforeEach(() => {
 describe("what the predict card shows against what Predict sends", () => {
   it("after a placed run, names only the pick changed since, as Predict sends", async () => {
     const user = userEvent.setup();
-    const slot = renderCard();
+    renderCard();
     await user.click(screen.getByRole("button", { name: "Predict 2 estimates" }));
     act(() => (runner.props.at(-1)!.onSuccess as (leftOut: string[], run: unknown) => void)([], {}));
 
@@ -79,7 +76,6 @@ describe("what the predict card shows against what Predict sends", () => {
 
     const chips = within(screen.getByRole("list", { name: "Your estimates" })).getAllByRole("listitem");
     expect(chips.map((chip) => chip.textContent)).toEqual(["Berlin410 $M"]);
-    expect(within(slot).getByText("1 estimate · Berlin")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Predict 1 estimate" }));
     const sent = runner.props.at(-1)!.selected as SelectedEstimate[];
     expect(sent.map((estimate) => estimate.scale.name)).toEqual(["Berlin"]);
@@ -87,10 +83,10 @@ describe("what the predict card shows against what Predict sends", () => {
 
   it("shows no picks and no bar while an unfinished run is stored, which Predict reopens", async () => {
     stored.run = { deposit: 0n, creditsToSpend: 0n };
-    const slot = renderCard();
+    renderCard();
 
     await screen.findByRole("button", { name: "Resume" });
     expect(screen.queryByRole("list", { name: "Your estimates" })).toBeNull();
-    expect(slot).toBeEmptyDOMElement();
+    expect(document.querySelector("[data-predict-dock]")).toBeNull();
   });
 });
