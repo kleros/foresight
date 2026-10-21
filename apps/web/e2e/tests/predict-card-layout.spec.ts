@@ -156,6 +156,24 @@ for (const theme of ["light", "dark"]) {
         expect(await sideways(page)).toBe(0);
       });
 
+      test("keeps enough of a long name in the pinned chip to say which option it is", async ({ page }) => {
+        await openCard(page, `set=worst&rows=14&theme=${theme}`);
+        await expect(page.locator("[data-predict-dock][data-stuck]")).toHaveCount(1);
+        const name = page
+          .getByRole("list", { name: "Your estimates" })
+          .locator("li:visible")
+          .first()
+          .locator("span")
+          .first();
+        const [shown, eight] = await name.evaluate((element) => {
+          const range = document.createRange();
+          range.setStart(element.firstChild!, 0);
+          range.setEnd(element.firstChild!, 8);
+          return [element.clientWidth, range.getBoundingClientRect().width];
+        });
+        expect(shown).toBeGreaterThanOrEqual(eight);
+      });
+
       test("docks into the card when the page reaches it, with one Predict on screen", async ({ page }) => {
         await openCard(page, `set=normal&rows=14&theme=${theme}`);
         const dock = page.locator("[data-predict-dock]");
