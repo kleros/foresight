@@ -270,7 +270,7 @@ export interface MovedStatus {
   bySlippage?: true;
 }
 
-/** The longest named moved line that keeps to the callout's two lines at 320px wide; measured on real names to 63. */
+/** The longest named moved line that keeps to the callout's two lines at 320px wide, measured with real names. */
 const NAMED_LINE_MAX = 62;
 
 /** Said when the pools moved since Details was read, before anything more is signed. */

@@ -108,7 +108,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
     setReads((count) => count + 1);
   };
 
-  // read in the same commit that closes the popup, so the card never shows the run as it was before it
+  // read in the same commit that closes the popup, so the card never shows a run the popup has since finished
   const closePopup = () => {
     readStored();
     setOpened(undefined);
