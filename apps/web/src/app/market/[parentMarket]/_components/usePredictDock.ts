@@ -58,6 +58,7 @@ export function usePredictDock(isLive: boolean, content: string) {
       // the dock pins only below md; its computed position says whether it does at this width
       if (getComputedStyle(dock).position !== "sticky") {
         setIsStuck(false);
+        setPhase((current) => (current === "entering" ? "idle" : current));
         return;
       }
       if (measure) {
