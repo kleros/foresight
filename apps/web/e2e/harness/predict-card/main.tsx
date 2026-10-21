@@ -7,7 +7,7 @@ import { hardhat } from "viem/chains";
 import { createConfig, http, mock, WagmiProvider } from "wagmi";
 import { connect } from "wagmi/actions";
 
-import type { PredictCtx, PredictSnapshot } from "@/features/predict/flow/types";
+import type { PredictSnapshot } from "@/features/predict/flow/types";
 import { predictFlowId } from "@/features/predict/run/interrupted";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import type { SessionDetail, SessionOption, SessionStatus } from "@/features/sessions/types";
@@ -119,9 +119,9 @@ if (run === "stored" || run === "pending") {
   createRunStore().save({
     flowId,
     adapterId: "predict-flow",
-    // the card reads only the deposit, its token and the credits from the snapshot, and the owner from ctx
+    // the card reads the deposit, its token and the credits from the snapshot, and only the owner from ctx
     snapshot: { deposit: 3n * 10n ** 18n, depositNative: false, creditsToSpend: 0n } as PredictSnapshot,
-    ctx: { owner: WALLET, chainId: DEFAULT_CHAIN_ID } as PredictCtx,
+    ctx: { owner: WALLET, chainId: DEFAULT_CHAIN_ID },
     steps: [
       {
         stepId: "deposit",
