@@ -344,6 +344,41 @@ test.describe("plans moved by the visitor's new slippage at 320 x 568", () => {
   });
 });
 
+test.describe("prices that moved at 320 x 568", () => {
+  test.use({ viewport: { width: 320, height: 568 } });
+
+  for (const theme of THEMES) {
+    test(`stack Confirm over Go back inside the popup's footprint, in the ${theme} theme`, async ({ page }) => {
+      const before = await openPopup(page, `theme=${theme}`);
+      await before.getByTestId("predict-summary").getByRole("button").first().click();
+      await settle(before);
+      const idle = await footprint(before);
+      const dialog = await openPopup(page, `theme=${theme}&state=moved`);
+
+      // the dialog keeps its box; Confirm keeps Predict's width and height, Go back takes a row of its own under it
+      const moved = await footprint(dialog);
+      expect(moved.dialog).toEqual(idle.dialog);
+      expect([moved.footer[0], moved.footer[2], moved.footer[3]]).toEqual([
+        idle.footer[0],
+        idle.footer[2],
+        idle.footer[3],
+      ]);
+      const confirm = dialog.getByRole("button", { name: "Confirm new prices" });
+      const back = dialog.getByRole("button", { name: "Go back" });
+      await expect(confirm).toBeEnabled();
+      const [over, under] = [(await confirm.boundingBox())!, (await back.boundingBox())!];
+      expect(under.y).toBeCloseTo(over.y + over.height + 8, 0);
+      expect([under.x, under.width, under.height]).toEqual([over.x, over.width, over.height]);
+      expect(await isWhole(confirm)).toBe(true);
+      expect(await isWhole(back)).toBe(true);
+      const footer = dialog.locator(".predict-footer");
+      expect(await footer.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+      expect(await isWhole(dialog.getByRole("status").locator("span"))).toBe(true);
+      await expect(page).toHaveScreenshot(`moved-320x568-${theme}.png`, { animations: "disabled" });
+    });
+  }
+});
+
 test.describe("prices that could not be read", () => {
   test.use({ viewport: { width: 375, height: 667 } });
 
