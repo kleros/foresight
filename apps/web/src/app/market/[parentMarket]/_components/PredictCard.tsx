@@ -40,9 +40,11 @@ const PredictSuccessDialog = dynamic(
 
 const CTA = "predict-cta predict-card-cta";
 
-const blockerText = (blocker: PredictBlocker, noun: string): string =>
+const blockerText = (blocker: PredictBlocker, noun: string, isPending: boolean): string =>
   ({
     closed: "Trading has closed.",
+    // a run whose transaction awaits a receipt offers no Discard
+    unfinished: isPending ? "Resume the one below first." : "Resume or discard the one below.",
     "no-liquidity": `None of the ${noun} can be traded yet.`,
     "no-move": "Set an estimate above or below the market to predict.",
     disconnected: "Connect a wallet to predict.",
@@ -113,7 +115,8 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
 
   const estimates = useSessionEstimates(session.parentMarket);
   const selected = selectedEstimates(session.options, estimates, marketEstimates);
-  const isDisabled = selected.length === 0 || status !== "trading" || !address;
+  // a stored run is resumed or discarded before a new one starts
+  const isDisabled = selected.length === 0 || status !== "trading" || !address || Boolean(interrupted);
   const blocker = predictBlocker({
     status,
     options: session.options,
@@ -121,6 +124,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
     isMarketUnknown,
     selectedCount: selected.length,
     isConnected: Boolean(address),
+    hasStoredRun: Boolean(interrupted),
   });
   const changed = selected.filter(
     (estimate) => placed?.owner !== address || placed?.values[estimate.scale.market.toLowerCase()] !== estimate.value,
@@ -199,7 +203,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
         : null}
       {blocker ? (
         <p className="text-fs-text-secondary w-full text-sm">
-          {blockerText(blocker, optionNoun(session.itemNamePlural))}
+          {blockerText(blocker, optionNoun(session.itemNamePlural), isPending)}
         </p>
       ) : null}
 

@@ -1,6 +1,6 @@
 import type { SessionOption, SessionStatus } from "@/features/sessions/types";
 
-export type PredictBlocker = "closed" | "no-liquidity" | "no-move" | "disconnected";
+export type PredictBlocker = "closed" | "unfinished" | "no-liquidity" | "no-move" | "disconnected";
 
 interface PredictBlockerArgs {
   status: SessionStatus;
@@ -9,11 +9,13 @@ interface PredictBlockerArgs {
   isMarketUnknown: boolean;
   selectedCount: number;
   isConnected: boolean;
+  /** True while this wallet's unfinished run is stored for the session. */
+  hasStoredRun?: boolean;
 }
 
 /**
- * Why Predict is off, one cause by priority: closed, then no liquidity, then no estimate moved,
- * then no wallet. Null when Predict is on, while setting up, and while the market numbers are not known.
+ * Why Predict is off, one cause by priority: closed, then a stored run, then no liquidity, then no estimate
+ * moved, then no wallet. Null when Predict is on, while setting up, and while the market numbers are not known.
  */
 export function predictBlocker({
   status,
@@ -22,8 +24,10 @@ export function predictBlocker({
   isMarketUnknown,
   selectedCount,
   isConnected,
+  hasStoredRun = false,
 }: PredictBlockerArgs): PredictBlocker | null {
   if (status === "closed") return "closed";
+  if (hasStoredRun) return "unfinished";
   if (status !== "trading" || isMarketUnknown) return null;
   if (selectedCount > 0) return isConnected ? null : "disconnected";
 
