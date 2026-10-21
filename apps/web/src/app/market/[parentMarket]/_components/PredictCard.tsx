@@ -10,7 +10,12 @@ import type { Address } from "viem";
 import { useAccount } from "wagmi";
 
 import type { PredictSnapshot } from "@/features/predict/flow/types";
-import { discardRun, findInterruptedRun, hasPendingTransaction } from "@/features/predict/run/interrupted";
+import {
+  discardRun,
+  findInterruptedRun,
+  hasPendingTransaction,
+  predictFlowId,
+} from "@/features/predict/run/interrupted";
 import { useSessionEstimates } from "@/features/predict/stores/estimateStore";
 import type { SelectedEstimate } from "@/features/predict/types";
 import { selectedEstimates } from "@/features/predict/utils/estimates";
@@ -40,7 +45,8 @@ const PredictSuccessDialog = dynamic(
 
 const CTA = "predict-cta predict-card-cta";
 
-const blockerText = (blocker: PredictBlocker, noun: string): string =>
+// a stored run's reason is said in the run's own row, beside its Resume
+const blockerText = (blocker: Exclude<PredictBlocker, "unfinished">, noun: string): string =>
   ({
     closed: "Trading has closed.",
     "no-liquidity": `None of the ${noun} can be traded yet.`,
@@ -83,19 +89,42 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
   const [stored, setStored] = useState<{ owner: Address | undefined; run: PredictSnapshot | null }>();
   const interrupted = stored && stored.owner === address ? stored.run : undefined;
   const [isPending, setIsPending] = useState(false);
-  const [discards, setDiscards] = useState(0);
+  const [reads, setReads] = useState(0);
+
+  const readStored = (isPopupOpen: boolean) => {
+    const store = createRunStore();
+    const isRead = address !== undefined && !isPopupOpen;
+    setStored({ owner: address, run: isRead ? findInterruptedRun(store, session.id, address) : null });
+    setIsPending(isRead ? hasPendingTransaction(store, session.id, address) : false);
+  };
 
   // read after mount: the stored run lives in this browser, and the popup may have finished or discarded it
   useEffect(() => {
-    const store = createRunStore();
-    setStored({ owner: address, run: address && !isOpen ? findInterruptedRun(store, session.id, address) : null });
-    setIsPending(address && !isOpen ? hasPendingTransaction(store, session.id, address) : false);
-  }, [address, isOpen, session.id, discards]);
+    readStored(isOpen);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- readStored reads only address and session.id
+  }, [address, isOpen, session.id, reads]);
+
+  // another tab's run lives in the same storage; a null key is a clear of all of it
+  useEffect(() => {
+    if (!address) return;
+    const flowId = predictFlowId(session.id, address);
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === null || event.key.endsWith(`.${flowId}`)) setReads((count) => count + 1);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [address, session.id]);
 
   // re-read rather than clear: discardRun keeps a run whose transaction awaits a receipt
   const discard = () => {
     if (address) discardRun(createRunStore(), session.id, address);
-    setDiscards((count) => count + 1);
+    setReads((count) => count + 1);
+  };
+
+  // read in the same commit that closes the popup, so the card never shows the popup's null as current
+  const closePopup = () => {
+    readStored(false);
+    setOpened(undefined);
   };
 
   const runShown = (run: PredictSnapshot) => {
@@ -113,7 +142,8 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
 
   const estimates = useSessionEstimates(session.parentMarket);
   const selected = selectedEstimates(session.options, estimates, marketEstimates);
-  const isDisabled = selected.length === 0 || status !== "trading" || !address;
+  // a stored run is resumed or discarded before a new one starts; unread counts as stored
+  const isDisabled = selected.length === 0 || status !== "trading" || !address || interrupted !== null;
   const blocker = predictBlocker({
     status,
     options: session.options,
@@ -121,6 +151,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
     isMarketUnknown,
     selectedCount: selected.length,
     isConnected: Boolean(address),
+    hasStoredRun: Boolean(interrupted),
   });
   const changed = selected.filter(
     (estimate) => placed?.owner !== address || placed?.values[estimate.scale.market.toLowerCase()] !== estimate.value,
@@ -197,7 +228,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
             barSlot,
           )
         : null}
-      {blocker ? (
+      {blocker && blocker !== "unfinished" ? (
         <p className="text-fs-text-secondary w-full text-sm">
           {blockerText(blocker, optionNoun(session.itemNamePlural))}
         </p>
@@ -208,6 +239,12 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
           <p className="text-fs-text-secondary text-sm">
             {runShown(interrupted)}
             {isPending ? " A transaction from it may still be pending." : null}
+            {/* a run whose transaction awaits a receipt offers no Discard */}
+            {blocker === "unfinished"
+              ? isPending
+                ? " Resume it before starting a new one."
+                : " Resume or discard it before starting a new one."
+              : null}
           </p>
           <div className="flex gap-3">
             {isPending ? null : <Button small variant="secondary" text="Discard" onPress={discard} />}
@@ -221,7 +258,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
         <PredictRunner
           session={session}
           selected={opened}
-          onClose={() => setOpened(undefined)}
+          onClose={closePopup}
           onSuccess={(leftOut: Address[], run: PlacedPrediction) => {
             if (address) {
               const traded = opened.filter((estimate) => !leftOut.includes(estimate.scale.market));
@@ -239,7 +276,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
               session.options.filter((option) => leftOut.includes(option.market)).map((option) => option.name),
             );
             setPlacedRun(run);
-            setOpened(undefined);
+            closePopup();
             setIsSuccessOpen(true);
           }}
         />

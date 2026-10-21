@@ -7,10 +7,16 @@ import { hardhat } from "viem/chains";
 import { createConfig, http, mock, WagmiProvider } from "wagmi";
 import { connect } from "wagmi/actions";
 
+import type { PredictSnapshot } from "@/features/predict/flow/types";
+import { predictFlowId } from "@/features/predict/run/interrupted";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import type { SessionDetail, SessionOption, SessionStatus } from "@/features/sessions/types";
 
 import { SectionCard } from "@/components/ui/SectionCard";
+
+import { createRunStore } from "@/lib/flowRunStore";
+
+import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
 import { predictBarSlot, PredictCard } from "@/app/market/[parentMarket]/_components/PredictCard";
 
@@ -24,6 +30,8 @@ const set = params.get("set") ?? "normal";
 const isConnected = params.get("wallet") !== "0";
 /** `?status=closed` or `setting-up`; trading otherwise. */
 const status = (params.get("status") ?? "trading") as SessionStatus;
+/** `?run=stored` an unfinished run of 3 sDAI is stored for the wallet, `pending` one whose deposit awaits a receipt. */
+const run = params.get("run");
 if (params.get("theme") === "dark") document.documentElement.classList.add("dark");
 
 const WALLET = "0xdcee0000000000000000000000000000000c664f";
@@ -104,6 +112,32 @@ useEstimateStore.setState({
           [PARENT]: picked,
         },
 });
+
+const flowId = predictFlowId(session.id, WALLET);
+if (run === "stored" || run === "pending") {
+  const HASH = `0x${"ab".repeat(32)}` as const;
+  createRunStore().save({
+    flowId,
+    adapterId: "predict-flow",
+    // the card reads the deposit, its token and the credits from the snapshot, and only the owner from ctx
+    snapshot: { deposit: 3n * 10n ** 18n, depositNative: false, creditsToSpend: 0n } as PredictSnapshot,
+    ctx: { owner: WALLET, chainId: DEFAULT_CHAIN_ID },
+    steps: [
+      {
+        stepId: "deposit",
+        label: "Add funds",
+        outcome: run === "pending" ? { status: "submitted", hash: HASH } : { status: "pending" },
+      },
+      { stepId: "predict", label: "Predict", outcome: { status: "pending" } },
+    ],
+    status: "paused",
+    reason: "error",
+    error: { stepId: "deposit", message: "RPC unavailable", cause: "rpc", hash: HASH },
+  });
+} else {
+  // the page's storage outlives a spec's earlier visits
+  createRunStore().clear(flowId);
+}
 
 // no transport reaches a node: the card only reads the account
 const config = createConfig({

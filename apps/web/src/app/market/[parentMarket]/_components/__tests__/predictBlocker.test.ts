@@ -48,3 +48,30 @@ describe("predictBlocker with an estimate moved", () => {
     expect(moved(true)).toBeNull();
   });
 });
+
+describe("predictBlocker with an unfinished run stored", () => {
+  const stored = (overrides: Partial<Parameters<typeof predictBlocker>[0]> = {}) =>
+    predictBlocker({
+      status: "trading",
+      options: [{ market: LIQUID }],
+      marketEstimates: { [LIQUID.toLowerCase()]: 312 },
+      isMarketUnknown: false,
+      selectedCount: 1,
+      isConnected: true,
+      hasStoredRun: true,
+      ...overrides,
+    });
+
+  it("asks for the run to be resumed or discarded once an estimate is moved", () => {
+    expect(stored()).toBe("unfinished");
+  });
+
+  it("names the run before an unmoved estimate or a market still loading", () => {
+    expect(stored({ selectedCount: 0 })).toBe("unfinished");
+    expect(stored({ isMarketUnknown: true })).toBe("unfinished");
+  });
+
+  it("still says trading has closed first", () => {
+    expect(stored({ status: "closed" })).toBe("closed");
+  });
+});

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 
 import { Modal } from "@kleros/ui-components-library";
 import clsx from "clsx";
@@ -146,6 +146,15 @@ function recoveryNote(
   return `Locked to this prediction's amount; the deposit ≈ ${deposited} ${collateral.symbol}.`;
 }
 
+// the width under which the moved footer stacks, as its [@media(max-width:374px)] classes say
+const STACKED = "(max-width: 374px)";
+const subscribeStacked = (onChange: () => void) => {
+  const query = window.matchMedia?.(STACKED);
+  query?.addEventListener("change", onChange);
+  return () => query?.removeEventListener("change", onChange);
+};
+const isStackedNow = () => window.matchMedia?.(STACKED).matches ?? false;
+
 /**
  * Futarchy's predict popup: the estimates, the amount, a summary of the markets it moves, then the run's steps.
  * Every region has a fixed height, so the dialog keeps one size from the first look through signing, a failure
@@ -277,6 +286,14 @@ export function PredictDialog({
     observer.observe(line);
     return () => observer.disconnect();
   }, [isOpen, statusText]);
+
+  // stacked, Go back follows Confirm in the DOM as on screen, so focus runs top to bottom
+  const isStacked = useSyncExternalStore(subscribeStacked, isStackedNow, () => false);
+  const goBack = onBack ? (
+    <div className="fs-enter w-28 shrink-0 [@media(max-width:374px)]:w-full">
+      <PredictButton text="Go back" quiet isDisabled={false} onPress={onBack} />
+    </div>
+  ) : null;
 
   return (
     <Modal
@@ -492,12 +509,14 @@ export function PredictDialog({
             ) : null}
           </p>
 
-          <div className="predict-footer bg-fs-surface landscape-phone:pb-2 sticky bottom-0 flex gap-2 pt-1 pb-4 short:pb-3">
-            {isMoved && onBack ? (
-              <div className="w-28 shrink-0">
-                <PredictButton text="Go back" quiet isDisabled={false} onPress={onBack} />
-              </div>
-            ) : null}
+          {/* under 375px Go back and Confirm new prices outgrow one row, so Confirm stacks over Go back */}
+          <div
+            className={clsx(
+              "predict-footer bg-fs-surface landscape-phone:pb-2 sticky bottom-0 flex gap-2 pt-1 pb-4 short:pb-3",
+              "[@media(max-width:374px)]:flex-col",
+            )}
+          >
+            {isMoved && onBack && !isStacked ? goBack : null}
             <PredictButton
               text={
                 onRetryPrices
@@ -538,6 +557,7 @@ export function PredictDialog({
                         !pricesReady))
               }
             />
+            {isMoved && onBack && isStacked ? goBack : null}
           </div>
         </div>
       </div>
