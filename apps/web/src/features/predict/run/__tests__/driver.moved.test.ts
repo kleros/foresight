@@ -2,7 +2,16 @@ import { createFlowRunStore, createMemoryStorage, type FlowTx, type TxGateway } 
 import { UserRejectedRequestError } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { chainState, ctx, fakeQuoter, fakeReader, option, snapshot, WAD } from "../../flow/__tests__/support/fakes";
+import {
+  chainState,
+  ctx,
+  fakeQuoter,
+  fakeReader,
+  gasLimitFor,
+  option,
+  snapshot,
+  WAD,
+} from "../../flow/__tests__/support/fakes";
 import type { OptionChainState } from "../../flow/types";
 import { SLIPPAGE_BPS } from "../../oracle/tolerances";
 import { previewTrades, type PreviewTrades } from "../../utils/plan";
@@ -133,5 +142,45 @@ describe("createPredictRun when Predict is pressed", () => {
 
     expect(driver.getProgress().stage).toBe("idle");
     expect(driver.getProgress().moved).toBeUndefined();
+  });
+});
+
+describe("createPredictRun's batch count across a moved confirm", () => {
+  it("keeps the batches the visitor saw at moved, whatever the node estimates on confirm", async () => {
+    const options = [OPTION, option(2), option(3)];
+    let estimate = 100_000_000n;
+    const driver = createPredictRun({
+      gateway: {
+        sendTransaction: () => Promise.reject(new UserRejectedRequestError(new Error("rejected"))),
+        waitForReceipt: () => Promise.reject(new Error("nothing was sent")),
+        getReceipt: () => Promise.resolve(null),
+        isKnown: () => Promise.resolve(false),
+      },
+      // everything already in a deployed trade wallet, so the first batch is estimated live
+      reader: fakeReader({
+        deployed: true,
+        collateral: WAD,
+        state: () => DEEPER,
+        blockGasLimit: gasLimitFor(3),
+        estimateGas: () => Promise.resolve(estimate),
+      }),
+      quoter: fakeQuoter(),
+      flowId: `${FLOW_ID}-sized`,
+      store: createFlowRunStore({ storage: createMemoryStorage() }),
+      ctx: () => ctx(),
+      snapshot: () => ({ ...REQUEST, options, deposit: 0n, collateralBefore: WAD }),
+    });
+    drivers.push(driver);
+
+    driver.start({ plans: { [KEY]: planOn(AS_SHOWN) } });
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("moved"));
+    const shown = driver.getProgress().batches;
+    expect(shown).toBe(3);
+
+    estimate = 1_000_000n;
+    driver.confirm();
+    await signed(driver);
+
+    expect(driver.getProgress().batches).toBe(shown);
   });
 });
