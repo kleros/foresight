@@ -66,6 +66,16 @@ for (const theme of ["light", "dark"]) {
       await expect(page.locator("[data-predict-bar]")).toHaveCount(0);
     });
 
+    test("holds Predict while a run is stored and says why on one line", async ({ page }) => {
+      await openCard(page, `set=worst&theme=${theme}&run=stored`);
+      const line = page.getByText("Resume or discard the one below.", { exact: true });
+      await expect(line).toBeVisible();
+      await expect(page.getByRole("button", { name: "Predict 6 estimates" })).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Resume" })).toBeEnabled();
+      expect((await line.boundingBox())!.height).toBeLessThanOrEqual(20);
+      await expect(page.locator("[data-predict-bar]")).toHaveCount(0);
+    });
+
     test("offers a disabled Predict and no chips while nothing is picked", async ({ page }) => {
       await openCard(page, `set=none&theme=${theme}`);
       await expect(page.getByRole("list", { name: "Your estimates" })).toHaveCount(0);
@@ -160,6 +170,23 @@ for (const theme of ["light", "dark"]) {
           await expect(page.getByRole("button", { name: "Predict 6 estimates" })).toBeDisabled();
           await expect(page.getByRole("button", { name: "Predict", exact: true })).toHaveCount(0);
           await expect(page.getByText(/^(Connect a wallet to predict\.|Trading has closed\.)$/)).toBeVisible();
+        });
+      }
+
+      for (const [run, reason] of [
+        ["stored", "Resume or discard the one below."],
+        ["pending", "Resume the one below first."],
+      ] as const) {
+        test(`holds Predict and draws no bar while a run is ${run}, and the card says why`, async ({ page }) => {
+          await openCard(page, `set=worst&theme=${theme}&run=${run}`);
+          await expect(page.getByText(reason, { exact: true })).toBeVisible();
+          await expect(page.getByRole("button", { name: "Predict 6 estimates" })).toBeDisabled();
+          await expect(page.getByRole("button", { name: "Resume" })).toBeEnabled();
+          await expect(page.locator("[data-predict-bar]")).toHaveCount(0);
+          // one 20px line of text-sm, inside the card
+          const line = page.getByText(reason, { exact: true });
+          expect((await line.boundingBox())!.height).toBeLessThanOrEqual(20);
+          expect(await sideways(page)).toBe(0);
         });
       }
 
