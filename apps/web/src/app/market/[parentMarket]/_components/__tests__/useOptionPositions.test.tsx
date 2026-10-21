@@ -12,7 +12,10 @@ const OWNER = "0x0000000000000000000000000000000000000a11" as Address;
 const TRADE_WALLET = "0x00000000000000000000000000000000000e7ec0" as Address;
 const WAD = 10n ** 18n;
 
-const account = vi.hoisted(() => ({ address: undefined as Address | undefined, chainId: undefined as number | undefined }));
+const account = vi.hoisted(() => ({
+  address: undefined as Address | undefined,
+  chainId: undefined as number | undefined,
+}));
 const executor = vi.hoisted(() => ({ deployed: undefined as Address | undefined | null }));
 const balances = vi.hoisted(() => ({
   data: undefined as bigint[] | undefined,

@@ -21,8 +21,9 @@ import { PredictCard } from "../PredictCard";
 
 const OWNER = "0xa11ce000000000000000000000000000000a11ce";
 const HASH = `0x${"ab".repeat(32)}` as const;
-const RESUME_OR_DISCARD = "Resume or discard the one below.";
-const RESUME_FIRST = "Resume the one below first.";
+const RESUME_OR_DISCARD = /^A prediction with .* did not finish\. Resume or discard it before starting a new one\.$/;
+const RESUME_FIRST =
+  /did not finish\. A transaction from it may still be pending\. Resume it before starting a new one\.$/;
 
 vi.mock("wagmi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("wagmi")>()),

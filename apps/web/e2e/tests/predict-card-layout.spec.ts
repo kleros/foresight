@@ -66,13 +66,11 @@ for (const theme of ["light", "dark"]) {
       await expect(page.locator("[data-predict-bar]")).toHaveCount(0);
     });
 
-    test("holds Predict while a run is stored and says why on one line", async ({ page }) => {
+    test("holds Predict while a run is stored and says why with the run", async ({ page }) => {
       await openCard(page, `set=worst&theme=${theme}&run=stored`);
-      const line = page.getByText("Resume or discard the one below.", { exact: true });
-      await expect(line).toBeVisible();
+      await expect(page.getByText(/did not finish\. Resume or discard it before starting a new one\.$/)).toBeVisible();
       await expect(page.getByRole("button", { name: "Predict 6 estimates" })).toBeDisabled();
       await expect(page.getByRole("button", { name: "Resume" })).toBeEnabled();
-      expect((await line.boundingBox())!.height).toBeLessThanOrEqual(20);
       await expect(page.locator("[data-predict-bar]")).toHaveCount(0);
     });
 
@@ -174,18 +172,23 @@ for (const theme of ["light", "dark"]) {
       }
 
       for (const [run, reason] of [
-        ["stored", "Resume or discard the one below."],
-        ["pending", "Resume the one below first."],
+        ["stored", "Resume or discard it before starting a new one."],
+        ["pending", "Resume it before starting a new one."],
       ] as const) {
-        test(`holds Predict and draws no bar while a run is ${run}, and the card says why`, async ({ page }) => {
+        test(`holds Predict and draws no bar while a run is ${run}, and says why with the run`, async ({ page }) => {
           await openCard(page, `set=worst&theme=${theme}&run=${run}`);
-          await expect(page.getByText(reason, { exact: true })).toBeVisible();
           await expect(page.getByRole("button", { name: "Predict 6 estimates" })).toBeDisabled();
-          await expect(page.getByRole("button", { name: "Resume" })).toBeEnabled();
           await expect(page.locator("[data-predict-bar]")).toHaveCount(0);
-          // one 20px line of text-sm, inside the card
-          const line = page.getByText(reason, { exact: true });
-          expect((await line.boundingBox())!.height).toBeLessThanOrEqual(20);
+          // the reason closes the run's own paragraph, and Resume sits beside or right under it
+          const said = page.locator("p").filter({ hasText: reason });
+          await expect(said).toHaveCount(1);
+          await expect(said).toHaveText(
+            new RegExp(`^A prediction with .* did not finish\\. .*${reason.replace(".", "\\.")}$`),
+          );
+          const resume = page.getByRole("button", { name: "Resume" });
+          await expect(resume).toBeEnabled();
+          const [text, button] = [(await said.boundingBox())!, (await resume.boundingBox())!];
+          expect(button.y).toBeLessThanOrEqual(text.y + text.height + 12);
           expect(await sideways(page)).toBe(0);
         });
       }
