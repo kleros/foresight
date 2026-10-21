@@ -120,28 +120,22 @@
 .fs-rise {
   animation: fsRise var(--fs-dur-enter) var(--fs-ease-enter) both;
 }
-/* A bar sliding out from under the sticky header above it. */
-@keyframes fsDropIn {
+/* A bar rising from the bottom edge, and sinking back to it. */
+@keyframes fsLiftIn {
   from {
     opacity: 0;
-    transform: translateY(-100%);
+    transform: translateY(100%);
   }
   to {
     opacity: 1;
     transform: none;
   }
 }
-.fs-drop-in {
-  animation: fsDropIn var(--fs-dur-enter) var(--fs-ease-enter) both;
-}
-@keyframes fsDropOut {
+@keyframes fsLiftOut {
   to {
     opacity: 0;
-    transform: translateY(-100%);
+    transform: translateY(100%);
   }
-}
-.fs-drop-out {
-  animation: fsDropOut var(--fs-dur-enter) var(--fs-ease-exit) both;
 }
 /* A disclosure opens by grid rows, the one height-class animation allowed, as its content rises in;
    closing, the content fades first and the rows then fold. Markup: .fs-disclosure > div (min-h-0, overflow hidden) > content. */
@@ -269,13 +263,11 @@
   .fs-enter,
   .fs-spawn,
   .fs-rise,
-  .fs-drop-in,
   .fs-icon-draw path,
   .fs-icon-draw polyline {
     animation: fsFadeIn var(--fs-dur-reduced-fade) linear both;
   }
-  .fs-exit,
-  .fs-drop-out {
+  .fs-exit {
     animation: fsFadeOut var(--fs-dur-reduced-fade) linear both;
   }
   .fs-spawn {

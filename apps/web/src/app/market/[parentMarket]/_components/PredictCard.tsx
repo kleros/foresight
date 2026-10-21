@@ -2,7 +2,6 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 
 import { Button } from "@kleros/ui-components-library";
 import clsx from "clsx";
@@ -33,6 +32,7 @@ import { createRunStore } from "@/lib/flowRunStore";
 
 import { type PredictBlocker, predictBlocker } from "./predictBlocker";
 import type { PlacedPrediction } from "./PredictSuccessView";
+import { usePredictDock } from "./usePredictDock";
 
 // The run pulls in the orchestrator, the quoter and a chain client; none of that belongs on the
 // page until someone asks to predict.
@@ -60,22 +60,9 @@ interface PredictCardProps {
   marketEstimates: Record<string, number | undefined>;
   /** True while the market numbers are loading or failed; an empty `marketEstimates` says nothing then. */
   isMarketUnknown?: boolean;
-  /** Where the page holds the phone bar under its header; without one there is no bar. */
-  barSlot?: HTMLElement | null;
 }
 
-/**
- * The page's slot for the phone bar, sticky under the 65px header over fs-page's gutters and top padding. While
- * trading it holds the bar's 61px, so the bar comes and goes without moving the page; below the modal overlays.
- */
-export const predictBarSlot = (status: SessionStatus) =>
-  clsx(
-    "pointer-events-none sticky top-[65px] z-10 -mx-6 -mt-10 mb-10 md:hidden landscape-phone:hidden",
-    "[@media(max-width:640px)]:-mx-4",
-    status === "trading" && "h-[61px]",
-  );
-
-export function PredictCard({ session, status, marketEstimates, isMarketUnknown = false, barSlot }: PredictCardProps) {
+export function PredictCard({ session, status, marketEstimates, isMarketUnknown = false }: PredictCardProps) {
   // what the popup lists, held from the press so a market refresh cannot empty it under the visitor
   const [opened, setOpened] = useState<SelectedEstimate[]>();
   const isOpen = opened !== undefined;
@@ -160,152 +147,148 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
   const toPredict = changed.length > 0 ? changed : selected;
 
   const count = `${toPredict.length} ${toPredict.length === 1 ? "estimate" : "estimates"}`;
-  const predict = (text: string, isLeaving = false) => {
-    const button = (
-      <Button
-        className={CTA}
-        text={text}
-        isDisabled={isLeaving ? false : isDisabled}
-        onPress={() => setOpened(toPredict)}
-      />
-    );
+  const predict = (text: string) => {
+    const button = <Button className={CTA} text={text} isDisabled={isDisabled} onPress={() => setOpened(toPredict)} />;
     // without a wallet the button stays put and disabled; the blocker line says to connect
     return address ? <EnsureChain className={CTA}>{button}</EnsureChain> : button;
   };
-  // the bar carries only a live Predict; otherwise the card keeps its button and says why
-  const hasBar = Boolean(barSlot) && !isDisabled && blocker === null && interrupted === null;
-  const names = toPredict.map((estimate) => estimate.scale.name);
-  const barText = hasBar
-    ? `${count} · ${names.slice(0, 2).join(", ")}${names.length > 2 ? ` +${names.length - 2}` : ""}`
-    : undefined;
-  // what the bar said, held while it leaves
-  const [leavingText, setLeavingText] = useState<string>();
-  const [shownText, setShownText] = useState<string>();
-  if (barText !== shownText) {
-    // a slot that is not displayed runs no exit, whose end would unmount the bar
-    const isSlotShown = (barSlot?.getClientRects().length ?? 0) > 0;
-    if (barText === undefined && shownText !== undefined && isSlotShown) setLeavingText(shownText);
-    if (barText !== undefined) setLeavingText(undefined);
-    setShownText(barText);
-  }
-  const bar = barText ?? leavingText;
+  // the phone dock carries only a live Predict; otherwise the card stays in the page and says why
+  const dock = usePredictDock(!isDisabled && blocker === null && interrupted === null);
+  const isDocked = dock.isDocked;
 
   return (
-    <SectionCard
-      className={clsx(
-        "p-4 md:px-8",
-        "flex flex-wrap items-start justify-start gap-x-6 gap-y-4",
-        "md:flex-row md:items-center md:justify-between",
-      )}
+    <div
+      ref={dock.ref}
+      data-predict-dock={isDocked ? "" : undefined}
+      data-stuck={dock.isStuck ? "" : undefined}
+      data-entering={dock.phase === "entering" ? "" : undefined}
+      data-leaving={dock.phase === "leaving" ? "" : undefined}
+      {...(dock.phase === "leaving" ? INERT : {})}
+      onAnimationEnd={dock.onAnimationEnd}
+      style={dock.style}
+      className={clsx(isDocked && "predict-dock")}
     >
-      {/* from md to lg the heading and button share a row, the picks one of their own under them */}
-      <h3 className="text-fs-text-primary text-base font-semibold md:max-lg:order-first">Place your estimates</h3>
-      {toPredict.length > 0 && interrupted === null ? <Picks selected={toPredict} /> : null}
-      {/* where the phone bar carries Predict, the card shows it from md up and on a phone on its side */}
-      <div className={clsx("shrink-0 md:max-lg:order-first", hasBar && "max-md:[@media(min-height:481px)]:hidden")}>
-        {predict(toPredict.length > 0 ? `Predict ${count}` : "Predict estimates")}
-      </div>
-      {bar !== undefined && barSlot
-        ? createPortal(
-            <div
-              data-predict-bar=""
-              data-leaving={barText === undefined ? "" : undefined}
-              {...(barText === undefined ? INERT : {})}
-              onAnimationEnd={(event) => {
-                if (event.target === event.currentTarget && barText === undefined) setLeavingText(undefined);
-              }}
-              className={clsx(
-                barText === undefined ? "fs-drop-out" : "fs-drop-in",
-                "bg-fs-popup-panel pointer-events-auto flex items-center gap-3 border-b border-(--fs-popup-line) py-2",
-                "px-4 [@media(min-width:641px)]:px-6",
-              )}
-            >
-              <span className="text-fs-popup-text min-w-0 flex-1 truncate text-[13px] leading-[18px] font-medium tabular-nums">
-                {bar}
-              </span>
-              {predict("Predict", barText === undefined)}
-            </div>,
-            barSlot,
-          )
-        : null}
-      {blocker && blocker !== "unfinished" ? (
-        <p className="text-fs-text-secondary w-full text-sm">
-          {blockerText(blocker, optionNoun(session.itemNamePlural))}
-        </p>
-      ) : null}
-
-      {interrupted ? (
-        <div className="flex w-full flex-wrap items-center justify-between gap-3">
-          <p className="text-fs-text-secondary text-sm">
-            {runShown(interrupted)}
-            {isPending ? " A transaction from it may still be pending." : null}
-            {/* a run whose transaction awaits a receipt offers no Discard */}
-            {blocker === "unfinished"
-              ? isPending
-                ? " Resume it before starting a new one."
-                : " Resume or discard it before starting a new one."
-              : null}
-          </p>
-          <div className="flex gap-3">
-            {isPending ? null : <Button small variant="secondary" text="Discard" onPress={discard} />}
-            <Button small text="Resume" onPress={() => setOpened(toPredict)} />
+      <SectionCard
+        className={clsx(
+          "p-4 md:px-8",
+          "flex flex-wrap items-start justify-start gap-x-6 gap-y-4",
+          "md:flex-row md:items-center md:justify-between",
+          isDocked && "predict-dock-panel max-md:block",
+        )}
+      >
+        {/* pinned on a phone, the heading folds away and leaves [chips | Predict] */}
+        <div className={isDocked ? "predict-dock-fold" : "contents"}>
+          <div className={isDocked ? "min-h-0 overflow-hidden md:contents" : "contents"}>
+            <div className={clsx(isDocked && "max-md:pb-4", "md:contents")}>
+              {/* from md to lg the heading and button share a row, the picks one of their own under them */}
+              <h3 className="text-fs-text-primary text-base font-semibold md:max-lg:order-first">
+                Place your estimates
+              </h3>
+            </div>
           </div>
         </div>
-      ) : null}
+        <div className={isDocked ? "max-md:flex max-md:items-center max-md:gap-3 md:contents" : "contents"}>
+          {toPredict.length > 0 && interrupted === null ? (
+            <Picks selected={toPredict} isCompact={dock.isStuck} />
+          ) : null}
+          <div className="shrink-0 md:max-lg:order-first">
+            {interrupted ? (
+              <Button className={CTA} text="Resume" onPress={() => setOpened(toPredict)} />
+            ) : (
+              <>
+                <div className="md:hidden">{predict("Predict")}</div>
+                <div className="max-md:hidden">
+                  {predict(toPredict.length > 0 ? `Predict ${count}` : "Predict estimates")}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+        {blocker && blocker !== "unfinished" ? (
+          <p className="text-fs-text-secondary w-full text-sm">
+            {blockerText(blocker, optionNoun(session.itemNamePlural))}
+          </p>
+        ) : null}
 
-      {/* outside the chain gate, so a wallet switching away mid-run does not unmount the run */}
-      {isOpen ? (
-        <PredictRunner
-          session={session}
-          selected={opened}
-          onClose={closePopup}
-          onSuccess={(leftOut: Address[], run: PlacedPrediction) => {
-            if (address) {
-              const traded = opened.filter((estimate) => !leftOut.includes(estimate.scale.market));
-              setPlaced({
-                owner: address,
-                values: {
-                  ...(placed?.owner === address ? placed.values : {}),
-                  ...Object.fromEntries(
-                    traded.map((estimate) => [estimate.scale.market.toLowerCase(), estimate.value]),
-                  ),
-                },
-              });
-            }
-            setLeftOut(
-              session.options.filter((option) => leftOut.includes(option.market)).map((option) => option.name),
-            );
-            setPlacedRun(run);
-            closePopup();
-            setIsSuccessOpen(true);
-          }}
-        />
-      ) : null}
-      {isSuccessOpen ? (
-        <PredictSuccessDialog
-          isOpen
-          placed={placedRun}
-          leftOut={leftOut}
-          optionNoun={optionNounSingular(session.itemName)}
-          onClose={() => setIsSuccessOpen(false)}
-        />
-      ) : null}
-    </SectionCard>
+        {interrupted ? (
+          <div className="flex w-full flex-wrap items-center justify-between gap-3">
+            <p className="text-fs-text-secondary text-sm">
+              {runShown(interrupted)}
+              {isPending ? " A transaction from it may still be pending." : null}
+              {/* a run whose transaction awaits a receipt offers no Discard */}
+              {blocker === "unfinished"
+                ? isPending
+                  ? " Resume it before starting a new one."
+                  : " Resume or discard it before starting a new one."
+                : null}
+            </p>
+            <div className="flex gap-3">
+              {isPending ? null : <Button small variant="secondary" text="Discard" onPress={discard} />}
+              <div className="md:hidden">
+                <Button small variant="secondary" text="Predict" isDisabled />
+              </div>
+              <div className="max-md:hidden">
+                <Button small variant="secondary" text={`Predict ${count}`} isDisabled />
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* outside the chain gate, so a wallet switching away mid-run does not unmount the run */}
+        {isOpen ? (
+          <PredictRunner
+            session={session}
+            selected={opened}
+            onClose={closePopup}
+            onSuccess={(leftOut: Address[], run: PlacedPrediction) => {
+              if (address) {
+                const traded = opened.filter((estimate) => !leftOut.includes(estimate.scale.market));
+                setPlaced({
+                  owner: address,
+                  values: {
+                    ...(placed?.owner === address ? placed.values : {}),
+                    ...Object.fromEntries(
+                      traded.map((estimate) => [estimate.scale.market.toLowerCase(), estimate.value]),
+                    ),
+                  },
+                });
+              }
+              setLeftOut(
+                session.options.filter((option) => leftOut.includes(option.market)).map((option) => option.name),
+              );
+              setPlacedRun(run);
+              closePopup();
+              setIsSuccessOpen(true);
+            }}
+          />
+        ) : null}
+        {isSuccessOpen ? (
+          <PredictSuccessDialog
+            isOpen
+            placed={placedRun}
+            leftOut={leftOut}
+            optionNoun={optionNounSingular(session.itemName)}
+            onClose={() => setIsSuccessOpen(false)}
+          />
+        ) : null}
+      </SectionCard>
+    </div>
   );
 }
 
 const SHOWN_WIDE = 3;
 const SHOWN_NARROW = 2;
+const SHOWN_PINNED = 1;
 
-/** The picks Predict would send, as chips: three from lg up, two below, and a count of the rest. */
-function Picks({ selected }: { selected: SelectedEstimate[] }) {
+/** The picks Predict would send, as chips: three from lg up, two below, one in the pinned phone bar, and a count of the rest. */
+function Picks({ selected, isCompact }: { selected: SelectedEstimate[]; isCompact: boolean }) {
   const more = (shown: number) => selected.length - shown;
   const morePill = (shown: number, className: string) =>
     more(shown) > 0 ? (
       <li
         aria-label={`${more(shown)} more ${more(shown) === 1 ? "estimate" : "estimates"}`}
         className={clsx(
-          "text-fs-popup-text-2 h-7 items-center rounded-full border border-(--fs-popup-line-strong) px-2.5",
+          "text-fs-popup-text-2 h-7 shrink-0 items-center rounded-full border border-(--fs-popup-line-strong) px-2.5",
           "text-[13px] leading-[18px] font-medium tabular-nums",
           className,
         )}
@@ -315,7 +298,13 @@ function Picks({ selected }: { selected: SelectedEstimate[] }) {
     ) : null;
 
   return (
-    <ul aria-label="Your estimates" className="flex min-w-0 flex-[1_1_100%] flex-wrap gap-2 lg:flex-1 lg:justify-end">
+    <ul
+      aria-label="Your estimates"
+      className={clsx(
+        "flex min-w-0 flex-[1_1_100%] flex-wrap gap-2 lg:flex-1 lg:justify-end",
+        isCompact && "max-md:flex-nowrap max-md:overflow-hidden",
+      )}
+    >
       {selected.map((estimate, index) => {
         const higher = estimate.direction === "higher";
         return (
@@ -324,7 +313,14 @@ function Picks({ selected }: { selected: SelectedEstimate[] }) {
             className={clsx(
               "fs-rise bg-fs-popup-chip text-fs-popup-text h-7 max-w-full items-center gap-1.5 rounded-full px-2.5",
               "text-[13px] leading-[18px] font-medium whitespace-nowrap tabular-nums md:max-w-[200px]",
-              index >= SHOWN_WIDE ? "hidden" : index >= SHOWN_NARROW ? "inline-flex max-lg:hidden" : "inline-flex",
+              index >= SHOWN_WIDE
+                ? "hidden"
+                : index >= SHOWN_NARROW
+                  ? "inline-flex max-lg:hidden"
+                  : index >= (isCompact ? SHOWN_PINNED : SHOWN_NARROW)
+                    ? "inline-flex max-md:hidden"
+                    : "inline-flex",
+              isCompact && "max-md:min-w-0",
             )}
           >
             <span className="min-w-0 truncate" title={estimate.scale.name}>
@@ -352,7 +348,8 @@ function Picks({ selected }: { selected: SelectedEstimate[] }) {
         );
       })}
       {morePill(SHOWN_WIDE, "inline-flex max-lg:hidden")}
-      {morePill(SHOWN_NARROW, "inline-flex lg:hidden")}
+      {morePill(SHOWN_NARROW, clsx("inline-flex lg:hidden", isCompact && "max-md:hidden"))}
+      {isCompact ? morePill(SHOWN_PINNED, "inline-flex md:hidden") : null}
     </ul>
   );
 }
