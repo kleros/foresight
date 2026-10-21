@@ -51,6 +51,14 @@ export type SentTx =
   /** Nothing has used the nonce yet. */
   | { status: "none" };
 
+/** A transaction for the node to estimate, sent from `from`. */
+export interface GasEstimateTx {
+  from: Address;
+  to: Address;
+  data?: Hex;
+  value?: bigint;
+}
+
 export interface PredictReader {
   /** False until the owner has paid for their executor. */
   isExecutorDeployed(executor: Address): Promise<boolean>;
@@ -68,6 +76,8 @@ export interface PredictReader {
   latestBlock(): Promise<bigint>;
   /** The latest block's gas limit, which no one transaction may pass. */
   blockGasLimit(): Promise<bigint>;
+  /** The gas the node expects `tx` to use against the latest state; rejects where it would revert. */
+  estimateGas(tx: GasEstimateTx): Promise<bigint>;
   /**
    * What `owner` sent from `fromBlock` on that landed and moved the collateral or the credits
    * into or out of `executor`.

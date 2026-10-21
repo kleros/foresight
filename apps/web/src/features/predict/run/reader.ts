@@ -81,6 +81,10 @@ export function createPredictReader(args: {
       return (await args.client.getBlock()).gasLimit;
     },
 
+    estimateGas({ from, to, data, value }) {
+      return args.client.estimateGas({ account: from, to, data, value });
+    },
+
     async landedSince({ owner, executor, fromBlock }) {
       const tokens = [args.collateral, ...(args.credits ? [args.credits.token] : [])];
       const [outgoing, incoming] = await Promise.all([

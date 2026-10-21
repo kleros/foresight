@@ -59,6 +59,32 @@ describe("createPredictRun's batches", () => {
     expect(driver.getProgress().batches).toBe(3);
   });
 
+  it("sizes them by the first batch's live estimate where the node puts it above the budget", async () => {
+    const reader = fakeReader({
+      deployed: true,
+      collateral: WAD,
+      state: () => chainState({ underlying: WAD }),
+      blockGasLimit: gasLimitFor(2),
+      // 0.7M and 2M an option, above the budget's 1.5M an option
+      estimateGas: () => Promise.resolve(700_000n + BigInt(reader.asked.at(-1)!.options.length) * 2_000_000n),
+    });
+    const driver = createPredictRun({
+      gateway: rejecting,
+      reader,
+      quoter: fakeQuoter(),
+      flowId: `${FLOW_ID}-live`,
+      ctx: () => ctx(),
+      snapshot: () => snapshot({ options: OPTIONS, deposit: 0n, collateralBefore: WAD }),
+    });
+    drivers.push(driver);
+
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("halted"));
+
+    expect(reader.estimated.length).toBeGreaterThan(0);
+    expect(batchRows(driver)).toBe(5);
+  });
+
   it("keeps a stored run's batches when the gas limit has changed since it started", async () => {
     const { driver, store } = setup(gasLimitFor(2));
     driver.start();

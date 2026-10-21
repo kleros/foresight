@@ -27,11 +27,11 @@ import {
   heldMoves,
   isTx,
   NoRouteError,
-  optionsPerBatch,
   planPredict,
   PlansMovedError,
   PredictConfigError,
   QuoteFailedError,
+  sizeBatches,
   STEP_ID,
   tradeWalletShare,
   TxPendingError,
@@ -493,7 +493,7 @@ export function createPredictRun(args: {
 
       const checked = await (async () => {
         const gasLimit = await args.reader.blockGasLimit();
-        const sized = { ...requested, optionsPerBatch: optionsPerBatch(gasLimit, requested.creditsToSpend > 0n) };
+        const sized = { ...requested, optionsPerBatch: await sizeBatches(ctx, requested, deps, gasLimit) };
         const steps = checkingUnanswered(planPredict(sized, deps));
         // The rows exist before the run does, so the popup shows the list while the routes are checked.
         if (checking === check) {
