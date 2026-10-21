@@ -315,7 +315,10 @@ export function createPredictRun(args: {
 
     const steps = (run?.steps ?? []).map((entry): PredictStepRow => {
       const done = settled.get(entry.stepId);
-      if (done) return { id: entry.stepId, label: entry.label, state: "success" };
+      if (done) {
+        const hash = done.outcome.status === "confirmed" ? { hash: done.outcome.hash } : {};
+        return { id: entry.stepId, label: entry.label, state: "success", ...hash };
+      }
       if (entry.stepId === current) return { id: entry.stepId, label: entry.label, state: "running" };
       if (entry.stepId === failedStep) return { id: entry.stepId, label: entry.label, state: "error" };
       return { id: entry.stepId, label: entry.label, state: "pending" };

@@ -260,6 +260,70 @@ describe("createPredictRun and the trade wallet's balance", () => {
   });
 });
 
+describe("createPredictRun's steps once settled", () => {
+  const hashOf = (n: number) => `0x${n.toString(16).padStart(64, "0")}` as Hash;
+
+  it("carry the hash each confirmed under, and none where a step was skipped", async () => {
+    const { progress } = await runToEndWith(
+      snapshot({ deposit: WAD * 3n, collateralIn: WAD * 5n, collateralBefore: WAD * 2n }),
+      fakeReader({ deployed: true, collateral: WAD * 5n }),
+    );
+
+    expect(progress.stage).toBe("complete");
+    expect(progress.steps.map(({ id, hash }) => ({ id, hash }))).toEqual([
+      { id: STEP_ID.createExecutor, hash: undefined },
+      { id: STEP_ID.deposit, hash: hashOf(1) },
+      { id: STEP_ID.predict(1), hash: hashOf(2) },
+    ]);
+    expect(progress.steps[0]).not.toHaveProperty("hash");
+  });
+
+  it("keep a recovered step's stored hash, and give none to a step that landed before its hash was kept", async () => {
+    const snap = snapshot({ deposit: WAD * 3n, collateralIn: WAD * 5n, collateralBefore: WAD * 2n });
+    const store = createFlowRunStore({ storage: createMemoryStorage() });
+    const flowId = "predict-receipt-recovered";
+    const created = `0x${"a".repeat(64)}` as Hash;
+    store.save<PredictSnapshot, ReturnType<typeof ctx>>({
+      flowId,
+      adapterId: "predict-flow",
+      snapshot: snap,
+      ctx: ctx(),
+      status: "running",
+      steps: [
+        {
+          stepId: STEP_ID.createExecutor,
+          label: "Set up your trade wallet",
+          outcome: { status: "confirmed", hash: created, blockNumber: 1n },
+        },
+        { stepId: STEP_ID.deposit, label: "Add money to your trade wallet", outcome: { status: "awaiting-signature" } },
+        { stepId: STEP_ID.predict(1), label: "Making your prediction", outcome: { status: "pending" } },
+      ],
+    });
+    const deposit = depositTx({ executor: addresses.executor, asset: { token: addresses.collateral, amount: WAD * 3n } });
+    const driver = createPredictRun({
+      gateway: fakeGateway(),
+      reader: fakeReader({ deployed: true, collateral: WAD * 5n, landed: [landedTx(deposit)] }),
+      quoter: fakeQuoter(),
+      flowId,
+      store,
+      ctx: () => ctx(),
+      snapshot: () => snap,
+    });
+    drivers.push(driver);
+
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("review"));
+    driver.resume();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("complete"));
+
+    expect(driver.getProgress().steps.map(({ id, hash }) => ({ id, hash }))).toEqual([
+      { id: STEP_ID.createExecutor, hash: created },
+      { id: STEP_ID.deposit, hash: undefined },
+      { id: STEP_ID.predict(1), hash: hashOf(1) },
+    ]);
+  });
+});
+
 describe("createPredictRun holding another wallet's saved run", () => {
   it("keeps the run in storage when the halted popup is reset", async () => {
     const store = createFlowRunStore({ storage: createMemoryStorage() });
