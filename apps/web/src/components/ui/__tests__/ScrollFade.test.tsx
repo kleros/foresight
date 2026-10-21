@@ -104,20 +104,22 @@ describe("ScrollFade's cue nudge", () => {
     expect(screen.getByTestId("more-below-nudge")).toHaveClass("fs-nudge-down");
   });
 
-  it("moves the arrow and the words together, dropping 6px unless told less", () => {
+  it("moves the arrow and the words together, lifting 3px and dropping 6px unless told less", () => {
     sized(340, 300);
     const { rerender } = renderCue();
     const nudge = screen.getByTestId("more-below-nudge");
 
     expect(nudge).toContainElement(screen.getByTestId("more-below-arrow"));
     expect(nudge).toHaveTextContent("More below");
+    expect(nudge.style.getPropertyValue("--fs-nudge-lift")).toBe("3px");
     expect(nudge.style.getPropertyValue("--fs-nudge-drop")).toBe("6px");
     rerender(
-      <ScrollFade cue="More below" cueDrop={4}>
+      <ScrollFade cue="More below" cueLift={2} cueDrop={3}>
         <p>body</p>
       </ScrollFade>,
     );
-    expect(nudge.style.getPropertyValue("--fs-nudge-drop")).toBe("4px");
+    expect(nudge.style.getPropertyValue("--fs-nudge-lift")).toBe("2px");
+    expect(nudge.style.getPropertyValue("--fs-nudge-drop")).toBe("3px");
   });
 
   it("stays still once its bursts have run, through a later re-measure", () => {

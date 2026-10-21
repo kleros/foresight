@@ -120,6 +120,29 @@
 .fs-rise {
   animation: fsRise var(--fs-dur-enter) var(--fs-ease-enter) both;
 }
+/* A bar sliding out from under the sticky header above it. */
+@keyframes fsDropIn {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fs-drop-in {
+  animation: fsDropIn var(--fs-dur-enter) var(--fs-ease-enter) both;
+}
+@keyframes fsDropOut {
+  to {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+}
+.fs-drop-out {
+  animation: fsDropOut var(--fs-dur-enter) var(--fs-ease-exit) both;
+}
 /* A disclosure opens by grid rows, the one height-class animation allowed, as its content rises in;
    closing, the content fades first and the rows then fold. Markup: .fs-disclosure > div (min-h-0, overflow hidden) > content. */
 .fs-disclosure {
@@ -213,7 +236,7 @@
   animation: fsSpinDash var(--fs-dur-spin) linear infinite;
   transform-origin: 50% 50%;
 }
-/* A cue, three bursts of lift, drop (--fs-nudge-drop) and settle, each followed by a hold.
+/* A cue, three bursts of lift (--fs-nudge-lift), drop (--fs-nudge-drop) and settle, each followed by a hold.
    Literal curves: Chromium ignores var() in a keyframe's timing function; they are --fs-ease-enter and --fs-ease-exit. */
 @keyframes fsNudgeDown {
   0% {
@@ -221,7 +244,7 @@
     animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
   }
   12.5% {
-    transform: translateY(-3px);
+    transform: translateY(calc(-1 * var(--fs-nudge-lift, 3px)));
     animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
   }
   25% {
@@ -246,11 +269,13 @@
   .fs-enter,
   .fs-spawn,
   .fs-rise,
+  .fs-drop-in,
   .fs-icon-draw path,
   .fs-icon-draw polyline {
     animation: fsFadeIn var(--fs-dur-reduced-fade) linear both;
   }
-  .fs-exit {
+  .fs-exit,
+  .fs-drop-out {
     animation: fsFadeOut var(--fs-dur-reduced-fade) linear both;
   }
   .fs-spawn {

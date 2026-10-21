@@ -40,6 +40,7 @@ import type {
   PredictCtx,
   PlannedRequest,
   PredictOption,
+  PredictRequest,
   PredictReader,
   PredictSlippage,
   PredictSnapshot,
@@ -603,6 +604,64 @@ function assertSlippage(slippage: PredictSlippage): void {
   if (!validSlippage(slippage.tradeBps) || !validSlippage(slippage.creditsBps)) {
     throw new PredictConfigError(`Slippage must be a whole number of basis points from 0 to ${MAX_SLIPPAGE_BPS}.`);
   }
+}
+
+/** Live estimates of the first batch, at most, before sizing settles on one option a batch. */
+const SIZING_ESTIMATES = 3;
+
+/**
+ * Options per batch: the budget's count, cut while a live estimate of the first batch runs over the block's batch
+ * share, and kept only once an estimate shows it fits. Only that batch can be estimated before signing, and only
+ * once nothing precedes it; the rest share its count.
+ */
+export async function sizeBatches(
+  ctx: PredictCtx,
+  request: PredictRequest,
+  deps: PredictDeps,
+  blockGasLimit: bigint,
+): Promise<number> {
+  const credits = request.creditsToSpend > 0n;
+  let size = optionsPerBatch(blockGasLimit, credits);
+  const estimable =
+    request.deposit === 0n && request.creditsFromEoa === 0n && (await deps.reader.isExecutorDeployed(ctx.executor));
+  if (!estimable) return size;
+
+  const share = (blockGasLimit * BATCH_GAS_SHARE_BPS) / 10_000n;
+  const room = share < MAX_TX_GAS ? share : MAX_TX_GAS;
+  const quiet = { ...deps, onLeftOut: undefined, heldTo: undefined };
+  let previous: { size: number; gas: bigint } | undefined;
+  for (let attempt = 0; attempt < SIZING_ESTIMATES && size > 1; attempt++) {
+    const options = request.options.slice(0, size);
+    let live: bigint;
+    try {
+      const tx = batchTx(
+        ctx.executor,
+        await predictCalls({
+          ctx,
+          stepId: STEP_ID.predict(1),
+          options,
+          mint: request.collateralIn,
+          credits: credits
+            ? await creditsLeg(ctx, request.creditsToSpend, request.slippage.creditsBps, quiet)
+            : undefined,
+          slippageBps: request.slippage.tradeBps,
+          deps: quiet,
+        }),
+      );
+      live = await deps.reader.estimateGas({ from: ctx.owner, to: tx.to, data: tx.data, value: tx.value });
+    } catch {
+      return size;
+    }
+    const budget = batchGas(options.length, credits);
+    const gas = live > budget ? live : budget;
+    if (gas <= room) return size;
+    // two estimates give the batch's fixed cost and its cost an option; one gives only the average
+    const slope = previous && previous.gas > gas ? (previous.gas - gas) / BigInt(previous.size - size) : 0n;
+    const next = slope > 0n ? (room - (gas - slope * BigInt(size))) / slope : (BigInt(options.length) * room) / gas;
+    previous = { size, gas };
+    size = Math.max(1, Math.min(size - 1, Number(next < 0n ? 0n : next)));
+  }
+  return 1;
 }
 
 export function planPredict(snapshot: PlannedRequest, deps: PredictDeps): Step[] {

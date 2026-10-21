@@ -1,7 +1,7 @@
 import type { Address } from "viem";
 
 import { shortenAddress } from "@/utils/address";
-import { OUT_OF_FUNDS_COPY } from "@/utils/txErrorText";
+import { FEE_ONLY_OUT_OF_FUNDS_COPY, OUT_OF_FUNDS_COPY } from "@/utils/txErrorText";
 
 import { shownAmount, type Funding } from "./funding";
 import { STEP_ID } from "../flow/stepIds";
@@ -52,9 +52,6 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
   "wrong-wallet": "Started from another wallet. Connect it to finish.",
   "wrong-chain": "Started on another network. Switch to it to finish.",
 };
-
-/** Once the deposit is in the amount is fixed, so the only thing short is the fee in the wallet. */
-const FEE_SHORT_COPY = "Not enough xDAI for the fee. Add some, then try the rest.";
 
 /** Once the credits are in the trade wallet the run is locked to them, so only waiting helps. */
 const CREDITS_LOCKED_COPY = "Credits can't be spent right now. Try again shortly.";
@@ -219,7 +216,7 @@ export function predictSteps(
   const reason = progress.pendingHash
     ? PENDING_COPY
     : progress.failure?.reason === "funds" && progress.moneyMoved
-      ? FEE_SHORT_COPY
+      ? FEE_ONLY_OUT_OF_FUNDS_COPY
       : progress.failure?.reason === "credits" && progress.moneyMoved
         ? CREDITS_LOCKED_COPY
         : progress.failure

@@ -47,7 +47,11 @@ export function PredictCreditsLine({
   const note = creditsNote(offer);
 
   return (
-    <div data-testid="credits-line" className="border-fs-popup-line mt-3 border-t pt-2.5 short:mt-2 short:pt-2">
+    // positioned, so its targets paint over the share slider's hit area above it
+    <div
+      data-testid="credits-line"
+      className="border-fs-popup-line relative mt-3 border-t pt-2.5 short:mt-2 short:pt-2"
+    >
       <div className="flex h-5 items-center justify-between gap-3">
         {hasUsable ? (
           <label

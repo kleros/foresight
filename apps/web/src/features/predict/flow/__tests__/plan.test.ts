@@ -17,6 +17,7 @@ import {
   planPredict,
   PredictConfigError,
   QuoteFailedError,
+  sizeBatches,
   STEP_ID,
   TxPendingError,
   type PredictDeps,
@@ -140,6 +141,116 @@ describe("optionsPerBatch", () => {
 
   it("still sends one option at a time where the budget holds none", () => {
     expect(optionsPerBatch(1_000_000n, true)).toBe(1);
+  });
+});
+
+describe("sizeBatches", () => {
+  const GNOSIS = 17_000_000n;
+  const share = (gasLimit: bigint) => (gasLimit * BATCH_GAS_SHARE_BPS) / 10_000n;
+  /** A run whose money is already in a deployed trade wallet, so its first batch can be estimated as it stands. */
+  const funded = (count: number) =>
+    snapshot({
+      options: Array.from({ length: count }, (_, index) => option(index + 1)),
+      deposit: 0n,
+      collateralBefore: WAD,
+    });
+  /** A node that prices each option the first batch trades at `perOption`, over a 0.7M base. */
+  const node = (perOption: bigint) => {
+    const reader = fakeReader({
+      deployed: true,
+      estimateGas: () => Promise.resolve(700_000n + BigInt(reader.asked.at(-1)!.options.length) * perOption),
+    });
+    return reader;
+  };
+
+  it("keeps the budget's count where the live estimate of the first batch is lower", async () => {
+    const reader = node(1_000_000n);
+
+    const size = await sizeBatches(ctx(), funded(12), deps({ reader }), GNOSIS);
+
+    expect(size).toBe(optionsPerBatch(GNOSIS, false));
+    expect(reader.estimated).toHaveLength(1);
+    expect(reader.estimated[0]).toMatchObject({ from: addresses.owner, to: addresses.executor });
+  });
+
+  it("shrinks the batches until the live estimate of the first fits the budget share, where it is the higher", async () => {
+    const reader = node(2_000_000n);
+
+    const size = await sizeBatches(ctx(), funded(12), deps({ reader }), GNOSIS);
+
+    // the live figure, 0.7M and 2M an option, binds before the budget's 1.5M an option
+    expect(700_000n + BigInt(size) * 2_000_000n).toBeLessThanOrEqual(share(GNOSIS));
+    expect(700_000n + BigInt(size + 1) * 2_000_000n).toBeGreaterThan(share(GNOSIS));
+    expect(size).toBeLessThan(optionsPerBatch(GNOSIS, false));
+  });
+
+  /** A node whose estimate of the first batch is `live` of its option count, which it records. */
+  const counting = (live: (count: number) => bigint) => {
+    const counts: number[] = [];
+    const reader = fakeReader({
+      deployed: true,
+      estimateGas: () => {
+        counts.push(reader.asked.at(-1)!.options.length);
+        return Promise.resolve(live(counts.at(-1)!));
+      },
+    });
+    return { reader, counts };
+  };
+
+  it("settles only on a count the live estimate shows fits, where the first batch's fixed cost dominates", async () => {
+    // 7.5M whatever the count and 0.6M an option: cutting in proportion to the gas overshoots
+    const { reader, counts } = counting((count) => 7_500_000n + BigInt(count) * 600_000n);
+
+    const size = await sizeBatches(ctx(), funded(12), deps({ reader }), GNOSIS);
+
+    // the second estimate gives the fixed cost, which leaves room for one option, the floor
+    expect(counts).toEqual([5, 4]);
+    expect(size).toBe(1);
+  });
+
+  it("lands on the largest count that fits where gas is linear in the count", async () => {
+    // 3M fixed and 1.6M an option: 3 fit the 8.5M share, 4 do not
+    const { reader, counts } = counting((count) => 3_000_000n + BigInt(count) * 1_600_000n);
+
+    const size = await sizeBatches(ctx(), funded(12), deps({ reader }), GNOSIS);
+
+    expect(size).toBe(3);
+    expect(counts).toEqual([5, 3]);
+  });
+
+  it("sends one option a batch where three estimates find no count that fits", async () => {
+    // 8.6M from two options up, so no estimate fits and the count the third suggests is never shown to fit
+    const { reader, counts } = counting((count) => (count > 1 ? 8_600_000n : 8_000_000n));
+
+    expect(await sizeBatches(ctx(), funded(12), deps({ reader }), GNOSIS)).toBe(1);
+    expect(counts).toEqual([5, 4, 3]);
+  });
+
+  it("sends one option at a time where even one runs over", async () => {
+    const reader = node(20_000_000n);
+
+    expect(await sizeBatches(ctx(), funded(4), deps({ reader }), GNOSIS)).toBe(1);
+  });
+
+  it("falls back to the budget where the node cannot estimate the batch", async () => {
+    const reader = fakeReader({ deployed: true });
+
+    expect(await sizeBatches(ctx(), funded(12), deps({ reader }), GNOSIS)).toBe(optionsPerBatch(GNOSIS, false));
+    expect(reader.estimated).toHaveLength(1);
+  });
+
+  it.each([
+    ["a deposit comes first", { deposit: WAD }, true],
+    ["credits move in first", { creditsFromEoa: WAD, creditsToSpend: WAD }, true],
+    ["the trade wallet is not deployed yet", {}, false],
+  ] as const)("keeps the budget without asking the node where %s", async (_, overrides, deployed) => {
+    const reader = fakeReader({ deployed, estimateGas: () => Promise.resolve(100_000_000n) });
+    const request = { ...funded(12), ...overrides };
+
+    const size = await sizeBatches(ctx(), request, deps({ reader }), GNOSIS);
+
+    expect(size).toBe(optionsPerBatch(GNOSIS, request.creditsToSpend > 0n));
+    expect(reader.estimated).toHaveLength(0);
   });
 });
 

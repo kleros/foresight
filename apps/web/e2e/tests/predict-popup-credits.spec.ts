@@ -154,6 +154,8 @@ for (const viewport of VIEWPORTS) {
         page,
       }, testInfo) => {
         const dialog = await openCredits(page, "enough", theme);
+        // at 320 x 568 the tick's target opens 7px past the fold; the scroll a press makes is the next test's
+        await dialog.getByTestId("credits-line").evaluate((element) => element.scrollIntoView({ block: "nearest" }));
         const before = await footprint(dialog);
         const tick = dialog.getByRole("checkbox", { name: TICK });
         const useMax = dialog.getByRole("button", { name: "Max credits" });
@@ -180,6 +182,26 @@ for (const viewport of VIEWPORTS) {
         await tickLabel(dialog).click();
         await expect(tick).toBeChecked();
         expect(await footprint(dialog)).toEqual(before);
+      });
+
+      test("scrolls the body on a first tick press no further than brings the line whole into view", async ({
+        page,
+      }, testInfo) => {
+        const dialog = await openCredits(page, "enough", theme);
+        // the line's nearest scrolling ancestor, and how far the tick's target runs past its visible foot
+        const read = () =>
+          tickLabel(dialog).evaluate((label) => {
+            let box = label.parentElement!;
+            while (!["auto", "scroll"].includes(getComputedStyle(box).overflowY)) box = box.parentElement!;
+            const below = label.getBoundingClientRect().bottom - box.getBoundingClientRect().bottom;
+            return { scrolled: box.scrollTop, below: Math.max(0, below) };
+          });
+        const before = await read();
+        testInfo.annotations.push({ type: "below the fold at open", description: `${before.below}px` });
+        await tickLabel(dialog).click();
+        const after = await read();
+        expect(after.below).toBe(0);
+        expect(after.scrolled - before.scrolled).toBeLessThanOrEqual(Math.ceil(before.below));
       });
 
       test("the tick's target is 44px tall on its 20px row", async ({ page }) => {

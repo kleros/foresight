@@ -23,6 +23,7 @@ import {
 import { CREDITS_SLIPPAGE_BPS, SLIPPAGE_BPS } from "../../../oracle/tolerances";
 import { batchGas, BATCH_GAS_SHARE_BPS } from "../../plan";
 import type {
+  GasEstimateTx,
   LandedTx,
   OptionChainState,
   PredictCtx,
@@ -115,6 +116,8 @@ export const snapshot = (overrides: Partial<PredictSnapshot> = {}): PredictSnaps
 export interface FakeReader extends PredictReader {
   /** Every `optionStates` call, so a test can see what a build asked for. */
   readonly asked: Array<{ options: PredictOption[]; executor: Address }>;
+  /** Every transaction the node was asked to estimate. */
+  readonly estimated: GasEstimateTx[];
 }
 
 /** A block gas limit whose batch budget holds exactly `options` options, with or without the credits leg. */
@@ -138,14 +141,22 @@ export function fakeReader(
     pending?: () => boolean;
     /** The latest block's gas limit, Gnosis' 17M by default. */
     blockGasLimit?: bigint;
+    /** What the node estimates a transaction at; by default it cannot estimate one. */
+    estimateGas?: (tx: GasEstimateTx) => Promise<bigint>;
   } = {},
 ): FakeReader {
   const asked: FakeReader["asked"] = [];
+  const estimated: FakeReader["estimated"] = [];
   const credits = opts.credits;
   const manager = opts.manager;
 
   return {
     asked,
+    estimated,
+    estimateGas: (tx) => {
+      estimated.push(tx);
+      return opts.estimateGas ? opts.estimateGas(tx) : Promise.reject(new Error("execution reverted"));
+    },
     isExecutorDeployed: () => Promise.resolve(opts.deployed ?? false),
     collateralBalance: () => Promise.resolve(opts.collateral ?? 0n),
     creditsBalance: (holder) =>

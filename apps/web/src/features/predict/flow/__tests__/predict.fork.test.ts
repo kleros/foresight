@@ -1242,6 +1242,8 @@ interface ScenarioRun {
   preview: Map<Address, ReturnType<Awaited<ReturnType<typeof load>>["previewTrades"]>>;
   /** The credits swap as Details showed it before the run, for a run that spends credits. */
   creditsSwap?: import("../types").CreditsSwapPreview;
+  /** What the node estimated each batch it sized at, before anything was signed. */
+  estimates: bigint[];
   /** A fresh driver on the storage as the tab left it, as a reload opens it. */
   reopen: () => import("../../run/types").PredictDriver;
 }
@@ -1529,12 +1531,21 @@ describe("money kept by every predict run, against a gnosis fork", () => {
     }
 
     // what the popup's Details shows, worked out as usePricePreview does
-    const reader = app.createPredictReader({
+    const chainReader = app.createPredictReader({
       client,
       sessionId: session.id,
       collateral: session.collateralToken,
       credits: { token: route.token, manager: route.manager },
     });
+    const estimates: bigint[] = [];
+    const reader: typeof chainReader = {
+      ...chainReader,
+      estimateGas: async (tx) => {
+        const gas = await chainReader.estimateGas(tx);
+        estimates.push(gas);
+        return gas;
+      },
+    };
     const states = await reader.optionStates({ options, executor });
     const preview: ScenarioRun["preview"] = new Map();
     for (const [index, option] of options.entries()) {
@@ -1671,6 +1682,7 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       start,
       preview,
       creditsSwap,
+      estimates,
       reopen: () => {
         if (!leftBehind) throw new Error("The tab never closed.");
         driver.dispose();
@@ -2079,6 +2091,8 @@ describe("money kept by every predict run, against a gnosis fork", () => {
         options: nudged(1),
       });
       expect(run.request).toMatchObject({ creditsToSpend: parseEther("15"), creditsFromEoa: parseEther("5") });
+      // a credits transfer comes before the first batch, so its size is the budget's alone
+      expect(run.estimates).toEqual([]);
       expect(run.funding.credits).toEqual([
         { kind: "foresight", fromTradeWallet: parseEther("10"), fromWallet: parseEther("5") },
       ]);
@@ -2092,6 +2106,10 @@ describe("money kept by every predict run, against a gnosis fork", () => {
         options: nudged(1),
       });
       expect(held.request.creditsFromEoa).toBe(0n);
+      // everything is already in the deployed trade wallet, so the first batch was estimated live, under the budget
+      expect(held.estimates).toHaveLength(1);
+      expect(held.estimates[0]).toBeGreaterThan(0n);
+      expect(held.estimates[0]).toBeLessThanOrEqual(app.batchGas(1, true));
       expect(held.sent.some(({ tx }) => tx.to.toLowerCase() === route.token.toLowerCase())).toBe(false);
       await expectMoneyKept(held, { landing: false });
     },

@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { isAddress } from "viem";
 
@@ -23,7 +23,7 @@ import { paths } from "@/config/paths";
 import { AdvancedSection } from "./AdvancedSection";
 import { OptionCard } from "./OptionCard";
 import { ParticipateSection } from "./ParticipateSection";
-import { PredictCard } from "./PredictCard";
+import { predictBarSlot, PredictCard } from "./PredictCard";
 import { SessionHeader } from "./SessionHeader";
 import { toWalletMarket } from "./toWalletMarket";
 import { useOptionPositions } from "./useOptionPositions";
@@ -38,6 +38,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
   const stats = useSessionStats(session.data?.id);
   const chart = useSessionChart(session.data ?? undefined);
   const positions = useOptionPositions(session.data ?? undefined);
+  const [predictBar, setPredictBar] = useState<HTMLDivElement | null>(null);
   useEstimateHydration();
 
   if (!isAddress(parentMarket, { strict: false }) || session.data === null) {
@@ -78,6 +79,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
 
   return (
     <PageColumn>
+      <div ref={setPredictBar} className={predictBarSlot(status)} />
       <SessionHeader session={detail} status={status} stats={stats.data} statsPending={stats.isPending} />
       {chart.isPending ? (
         <ChartSkeleton />
@@ -126,6 +128,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
           status={status}
           marketEstimates={marketEstimates}
           isMarketUnknown={chart.data === undefined}
+          barSlot={predictBar}
         />
         {walletMarket ? <TradeWallet market={walletMarket} noun={optionNounSingular(detail.itemName)} /> : null}
         <AdvancedSection parentMarket={detail.parentMarket} />

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { FEE_ONLY_OUT_OF_FUNDS_COPY } from "@/utils/txErrorText";
+
 import type { PredictProgress } from "../../run/types";
 import { fundingSummary, planFunding } from "../funding";
 import { fundsToAdd, predictSteps, statusLine } from "../predictSteps";
@@ -388,14 +390,15 @@ describe("statusLine", () => {
     expect(statusLine({ steps: stopped, leftOut: 0 })?.text).toBe(text);
   });
 
-  it("names a funds stop after money moved as the fee alone", () => {
+  it("names a funds stop after money moved as the fee alone, in the wallet dialogs' words", () => {
     const stopped = steps({
       progress: progress({ stage: "halted", failure: { reason: "funds", retryable: true }, moneyMoved: true }),
     });
 
     expect(statusLine({ steps: stopped, leftOut: 0 })?.text).toBe(
-      "Not enough xDAI for the fee. Add some, then try the rest.",
+      "Not enough xDAI for the network fee. Add some, then try again.",
     );
+    expect(statusLine({ steps: stopped, leftOut: 0 })?.text).toBe(FEE_ONLY_OUT_OF_FUNDS_COPY);
   });
 
   it("says nothing while a step is running", () => {

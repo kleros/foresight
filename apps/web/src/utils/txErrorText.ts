@@ -27,5 +27,5 @@ export const REVERTS = /execution reverted|reverted with|vm exception/;
 /** For a send that carries an amount as well as the fee: a deposit or a prediction. */
 export const OUT_OF_FUNDS_COPY = "Your wallet is short, fee included. Lower the amount or add funds.";
 
-/** For a send that moves only the trade wallet's own tokens, so the wallet pays the fee alone. */
+/** For a send whose amount is already in the trade wallet, a predict run's after its deposit included, so only the fee can be short. */
 export const FEE_ONLY_OUT_OF_FUNDS_COPY = "Not enough xDAI for the network fee. Add some, then try again.";
