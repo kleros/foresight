@@ -2664,6 +2664,88 @@ test.describe("a dialog over the sticky header", () => {
   });
 });
 
+for (const viewport of [
+  { width: 375, height: 667 },
+  { width: 320, height: 568 },
+]) {
+  test.describe(`the success dialog at ${viewport.width} x ${viewport.height}`, () => {
+    test.use({ viewport });
+
+    test("ends every figure on one column, a wallet address under its title too", async ({ page }) => {
+      await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&run=credits`);
+      const rows = page.getByRole("list", { name: "Transactions" }).getByRole("listitem");
+      const ends = await rows.evaluateAll((items) =>
+        items
+          .map((row) => row.querySelector("span.font-semibold")?.nextElementSibling)
+          .filter((detail): detail is Element => detail != null)
+          .map((detail) => Math.round(detail.getBoundingClientRect().right)),
+      );
+      expect(ends.length).toBeGreaterThan(2);
+      expect(new Set(ends).size).toBe(1);
+    });
+
+    for (const run of ["batches", "worst"]) {
+      test(`keeps every step's title on one line beside its links (${run})`, async ({ page }) => {
+        await openHarness(page, `${harness.url}?options=4&state=success&dialog=success&run=${run}`);
+        const titles = page.getByRole("list", { name: "Transactions" }).locator("li span.font-semibold");
+        for (const title of await titles.all()) expect((await title.boundingBox())!.height).toBe(20);
+      });
+    }
+
+    test("gives each explorer link a 44px tall hit area, its drawn size kept", async ({ page }) => {
+      await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&run=batches`);
+      await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
+      for (const link of await page
+        .getByRole("listitem")
+        .filter({ hasText: "Prediction placed" })
+        .getByRole("link")
+        .all()) {
+        const box = (await link.boundingBox())!;
+        expect(box.height).toBe(32);
+        const hits = await page.evaluate(
+          ([x, top, bottom, label]) =>
+            [top, bottom].map(
+              (y) => document.elementFromPoint(x!, y!)?.closest("a")?.getAttribute("aria-label") === label,
+            ),
+          [
+            box.x + box.width / 2,
+            box.y - 5.5,
+            box.y + box.height + 5.5,
+            await link.getAttribute("aria-label"),
+          ] as const,
+        );
+        expect(hits).toEqual([true, true]);
+      }
+    });
+  });
+}
+
+for (const viewport of [
+  { width: 568, height: 320 },
+  { width: 844, height: 390 },
+]) {
+  test.describe(`the success dialog on a phone on its side, ${viewport.width} x ${viewport.height}`, () => {
+    test.use({ viewport });
+
+    for (const query of ["run=worst&verified=0", "subscribed=0"]) {
+      test(`keeps Close in view at the dialog's foot while the rest scrolls (${query})`, async ({ page }) => {
+        await page.emulateMedia({ reducedMotion: "reduce" });
+        await openHarness(page, `${harness.url}?options=4&state=success&dialog=success&${query}`);
+        const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+        const close = dialog.getByRole("button", { name: "Close" });
+        const [box, frame] = [(await close.boundingBox())!, (await dialog.boundingBox())!];
+        expect(box.y + box.height).toBeLessThanOrEqual(frame.y + frame.height);
+        expect(
+          await page.evaluate(
+            ([x, y]) => document.elementFromPoint(x!, y!)?.closest("button")?.textContent,
+            [box.x + box.width / 2, box.y + box.height / 2],
+          ),
+        ).toBe("Close");
+      });
+    }
+  });
+}
+
 test.describe("the success dialog", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
