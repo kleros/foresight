@@ -882,6 +882,14 @@ button.predict-cta.predict-cta[data-disabled]:has(> .button-text) {
 button.predict-cta.predict-cta[data-disabled]:has(> .button-text) > .button-text {
   color: var(--fs-popup-cta-disabled-text);
 }
+/* the stored run's held Predict, in the card's disabled tone rather than the library's outlined secondary */
+button.predict-held.predict-held[data-disabled] {
+  border-color: transparent;
+  background: var(--fs-popup-cta-disabled);
+}
+button.predict-held.predict-held[data-disabled] > .button-text {
+  color: var(--fs-popup-cta-disabled-text);
+}
 button.predict-cta.predict-cta[data-quiet] {
   background: var(--fs-popup-chip);
 }

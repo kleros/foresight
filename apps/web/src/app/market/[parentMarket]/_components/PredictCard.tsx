@@ -234,10 +234,10 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
             <div className="flex gap-3">
               {isPending ? null : <Button small variant="secondary" text="Discard" onPress={discard} />}
               <div className="md:hidden">
-                <Button small variant="secondary" text="Predict" isDisabled />
+                <Button className="predict-held" small variant="secondary" text="Predict" isDisabled />
               </div>
               <div className="max-md:hidden">
-                <Button small variant="secondary" text={`Predict ${count}`} isDisabled />
+                <Button className="predict-held" small variant="secondary" text={`Predict ${count}`} isDisabled />
               </div>
             </div>
           </div>
