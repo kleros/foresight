@@ -32,7 +32,7 @@ export interface PredictSteps {
 }
 
 /** The credits swap has no quote or route, so a run spending credits cannot be planned. */
-export const CREDITS_UNAVAILABLE = "Credits can't be spent right now. Untick them to predict with your own funds.";
+export const CREDITS_UNAVAILABLE = "Credits can't be spent now. Untick them to use your own funds.";
 
 /** The chain's own errors name gas and contracts, which the popup never shows. */
 const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], string> = {
@@ -280,12 +280,8 @@ function movedText({ markets, credits, only, bySlippage }: MovedStatus): string 
     return `${only.name} now goes to ${whole(only.to)}, not ${whole(only.was)}. Confirm to go on.`;
   }
   const count = `${markets} ${markets === 1 ? "market" : "markets"}`;
-  const what = credits
-    ? markets > 0
-      ? `Prices moved on ${count} and the credits swap`
-      : "The credits swap now pays less"
-    : `Prices moved on ${count}`;
-  return `${what}. Check Details, then confirm.`;
+  if (credits && markets > 0) return `Prices moved on ${count} and the credits swap. Confirm to go on.`;
+  return `${credits ? "The credits swap now pays less" : `Prices moved on ${count}`}. Check Details, then confirm.`;
 }
 
 /** The button's label while the visitor is asked to confirm the new figures. */

@@ -317,7 +317,10 @@ describe("statusLine", () => {
       "Prices moved on 1 market. Check Details, then confirm.",
     );
     expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 1, credits: true } })?.text).toBe(
-      "Prices moved on 1 market and the credits swap. Check Details, then confirm.",
+      "Prices moved on 1 market and the credits swap. Confirm to go on.",
+    );
+    expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 2, credits: true } })?.text).toBe(
+      "Prices moved on 2 markets and the credits swap. Confirm to go on.",
     );
     expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 0, credits: true } })?.text).toBe(
       "The credits swap now pays less. Check Details, then confirm.",
@@ -521,7 +524,7 @@ describe("predictSteps with credits moved to the trade wallet", () => {
       progress: progress({ stage: "halted", failure: { reason: "credits", retryable: false } }),
     });
 
-    expect(stopped.failure).toBe("Credits can't be spent right now. Untick them to predict with your own funds.");
+    expect(stopped.failure).toBe("Credits can't be spent now. Untick them to use your own funds.");
   });
 
   it("freezes the credits a run moves along with the money it adds", () => {
