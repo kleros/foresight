@@ -213,7 +213,7 @@
   animation: fsSpinDash var(--fs-dur-spin) linear infinite;
   transform-origin: 50% 50%;
 }
-/* A cue, three bursts of lift, drop (--fs-nudge-drop) and settle, each followed by a hold.
+/* A cue, three bursts of lift (--fs-nudge-lift), drop (--fs-nudge-drop) and settle, each followed by a hold.
    Literal curves: Chromium ignores var() in a keyframe's timing function; they are --fs-ease-enter and --fs-ease-exit. */
 @keyframes fsNudgeDown {
   0% {
@@ -221,7 +221,7 @@
     animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
   }
   12.5% {
-    transform: translateY(-3px);
+    transform: translateY(calc(-1 * var(--fs-nudge-lift, 3px)));
     animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
   }
   25% {

@@ -265,7 +265,7 @@ export function PredictDialog({
     );
     return () => cancelAnimationFrame(frame);
   }, [isOpen, statusText, isRunning]);
-  // a status on two lines starts right under the more-below cue, so the cue drops less
+  // a status on two lines starts right under the more-below cue, so the cue's nudge is smaller
   const [isStatusTall, setIsStatusTall] = useState(false);
   useEffect(() => {
     const line = statusRef.current?.firstElementChild;
@@ -429,7 +429,8 @@ export function PredictDialog({
             className="landscape-phone:min-h-0 landscape-phone:flex-none min-h-32 w-full"
             cue="More below"
             cueTone="border-(--fs-popup-line) text-fs-popup-text-2"
-            cueDrop={isStatusTall ? 4 : 6}
+            cueLift={isStatusTall ? 2 : 3}
+            cueDrop={isStatusTall ? 3 : 6}
             minOverflow={1}
             fadeSize={40}
           >
