@@ -2644,7 +2644,7 @@ test.describe("a dialog over the sticky header", () => {
   }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await openHarness(page, `${harness.url}?options=4&state=success&dialog=success&run=worst&verified=0`);
-    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const dialog = page.getByRole("dialog", { name: "Prediction successful" });
     const box = (await dialog.boundingBox())!;
     const header = (await page.locator("header").boundingBox())!;
 
@@ -2736,7 +2736,7 @@ for (const viewport of [
       test(`keeps Close in view at the dialog's foot while the rest scrolls (${query})`, async ({ page }) => {
         await page.emulateMedia({ reducedMotion: "reduce" });
         await openHarness(page, `${harness.url}?options=4&state=success&dialog=success&${query}`);
-        const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+        const dialog = page.getByRole("dialog", { name: "Prediction successful" });
         const close = dialog.getByRole("button", { name: "Close" });
         const [box, frame] = [(await close.boundingBox())!, (await dialog.boundingBox())!];
         expect(box.y + box.height).toBeLessThanOrEqual(frame.y + frame.height);
@@ -2756,7 +2756,7 @@ test.describe("the success dialog", () => {
 
   test("names the email in one sentence and links to Settings in the accent", async ({ page }) => {
     await openHarness(page, `${harness.url}?options=2&state=success&dialog=success`);
-    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const dialog = page.getByRole("dialog", { name: "Prediction successful" });
     const link = dialog.getByRole("link", { name: "Change in Settings" });
 
     await expect(dialog.getByText("2 estimates · 10 sDAI")).toBeVisible();
@@ -2773,7 +2773,7 @@ test.describe("the success dialog", () => {
     page,
   }) => {
     await openHarness(page, `${harness.url}?options=2&state=success&dialog=success`);
-    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const dialog = page.getByRole("dialog", { name: "Prediction successful" });
     const position = (await dialog.getByText("See your position under each city.").boundingBox())!;
     const receipt = (await dialog.getByRole("list", { name: "Transactions" }).boundingBox())!;
     const panel = (await dialog.locator("section").boundingBox())!;
@@ -2786,7 +2786,7 @@ test.describe("the success dialog", () => {
 
   test("keeps what could not be traded 12 above the panel's 20", async ({ page }) => {
     await openHarness(page, `${harness.url}?options=4&state=success&dialog=success`);
-    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const dialog = page.getByRole("dialog", { name: "Prediction successful" });
     const receipt = (await dialog.getByRole("list", { name: "Transactions" }).boundingBox())!;
     const leftOut = (await dialog.getByText("Could not be traded: Nairobi, Montevideo.").boundingBox())!;
     const panel = (await dialog.locator("section").boundingBox())!;
@@ -2799,7 +2799,7 @@ test.describe("the success dialog", () => {
     page,
   }) => {
     await openHarness(page, `${harness.url}?options=2&state=success&dialog=success`);
-    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const dialog = page.getByRole("dialog", { name: "Prediction successful" });
     const bullets = dialog.locator('[data-bullet="done"]');
     const rows = dialog.getByRole("list", { name: "Transactions" }).getByRole("listitem");
 
@@ -2895,7 +2895,7 @@ test.describe("the success dialog", () => {
 
   test("keeps the sign-in at 44px in the panel and Close as a 44px text action", async ({ page }) => {
     await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&subscribed=0`);
-    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const dialog = page.getByRole("dialog", { name: "Prediction successful" });
     const signIn = dialog.locator("section").getByRole("button", { name: "Sign in to subscribe" });
     const close = dialog.getByRole("button", { name: "Close" });
 
@@ -2914,7 +2914,7 @@ test.describe("the success dialog", () => {
       page,
     }) => {
       await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&subscribed=0&theme=${theme}`);
-      const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+      const dialog = page.getByRole("dialog", { name: "Prediction successful" });
       const accent = await tokenValue(page, "color", "var(--fs-popup-accent)");
       for (const name of ["Sign in to subscribe", "Close"]) {
         const button = dialog.getByRole("button", { name });
@@ -2939,7 +2939,7 @@ test.describe("the success dialog", () => {
       page,
     }) => {
       await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&subscribed=0&theme=${theme}`);
-      const signIn = page.getByRole("dialog", { name: "Prediction placed" }).getByRole("button", {
+      const signIn = page.getByRole("dialog", { name: "Prediction successful" }).getByRole("button", {
         name: "Sign in to subscribe",
       });
       const ends = [
@@ -2962,7 +2962,7 @@ test.describe("the success dialog", () => {
         page,
         `${harness.url}?options=2&state=success&dialog=success&subscribed=0&signin=busy&theme=${theme}`,
       );
-      const signIn = page.getByRole("dialog", { name: "Prediction placed" }).getByRole("button", {
+      const signIn = page.getByRole("dialog", { name: "Prediction successful" }).getByRole("button", {
         name: "Signing in…",
       });
       await expect(signIn).toHaveAttribute("data-busy", "true");
