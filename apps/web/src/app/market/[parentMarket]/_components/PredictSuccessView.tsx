@@ -137,7 +137,7 @@ export function PredictSuccessView({
     : [];
   return (
     <Modal
-      ariaLabel="Prediction placed"
+      ariaLabel="Prediction successful"
       isOpen={isOpen}
       isDismissable
       onOpenChange={(open) => (open ? undefined : onClose())}
@@ -148,7 +148,7 @@ export function PredictSuccessView({
       )}
     >
       <div className="flex flex-col">
-        <h1 className="text-fs-popup-text text-xl font-semibold tracking-[-0.01em]">Prediction placed</h1>
+        <h1 className="text-fs-popup-text text-xl font-semibold tracking-[-0.01em]">Prediction successful</h1>
         <div className="mt-1 flex flex-col gap-1">
           {placed ? (
             <p className="text-fs-popup-text-2 text-sm tabular-nums">{placedText(placed, leftOut.length)}</p>
