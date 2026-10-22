@@ -31,5 +31,5 @@ coverage/
 
 # agent config: shared rules and skills are committed;
 # local settings and personal notes are not
-.claude/settings.local.json
+.claude/settings.local.json*
 packages/mock-atlas/.store/

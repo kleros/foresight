@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { branchColor, contrastRatio, getReadableTextColor, isLegibleBranchColor, nextBranchColor } from "../branchColor";
+import {
+  branchColor,
+  contrastRatio,
+  getReadableTextColor,
+  isLegibleBranchColor,
+  nextBranchColor,
+} from "../branchColor";
 
 /** More branches than any wizard flow reaches, to cover the whole hue wheel. */
 const LONG_SESSION = 200;
