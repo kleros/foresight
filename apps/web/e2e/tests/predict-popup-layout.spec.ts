@@ -771,15 +771,18 @@ test.describe("the more-below cue's nudge", () => {
     await expect(row).toHaveCSS("animation-duration", "0.09s");
   });
 
-  // a two-line status starts right under the strip, so the burst there is smaller
+  // a status callout starts right under the strip, so the burst there is smaller
   const AMPLITUDES = [
-    { width: 1280, height: 720, state: "idle&leftOut=1", lines: 1, lift: 3, drop: 6 },
-    { width: 375, height: 640, state: "idle&leftOut=1", lines: 1, lift: 3, drop: 6 },
+    { width: 1280, height: 720, state: "idle", lines: 0, lift: 3, drop: 6 },
+    { width: 375, height: 640, state: "idle", lines: 0, lift: 3, drop: 6 },
+    { width: 1280, height: 720, state: "idle&leftOut=1", lines: 1, lift: 2, drop: 3 },
+    { width: 375, height: 640, state: "idle&leftOut=1", lines: 1, lift: 2, drop: 3 },
     { width: 375, height: 640, state: "moved", lines: 2, lift: 2, drop: 3 },
     { width: 320, height: 568, state: "moved", lines: 2, lift: 2, drop: 3 },
   ];
   for (const { width, height, state, lines, lift, drop } of AMPLITUDES) {
-    test(`lifts ${lift}px and drops ${drop}px with its words, clear of a ${lines}-line status, at ${width} x ${height}`, async ({
+    const beside = lines === 0 ? "with no status" : `clear of a ${lines}-line status`;
+    test(`lifts ${lift}px and drops ${drop}px with its words, ${beside}, at ${width} x ${height}`, async ({
       page,
     }) => {
       await page.setViewportSize({ width, height });
@@ -794,7 +797,9 @@ test.describe("the more-below cue's nudge", () => {
       await settle(dialog);
       const strip = (await cue.boundingBox())!;
       expect(await cue.evaluate((element) => getComputedStyle(element).paddingTop)).toBe("6px");
-      const status = await dialog.getByTestId("status-text").evaluate(inkOf);
+      const statusText = dialog.getByTestId("status-text");
+      await expect(statusText).toHaveCount(lines === 0 ? 0 : 1);
+      const status = lines === 0 ? { top: Infinity, lines: 0 } : await statusText.evaluate(inkOf);
       expect(status.lines, "the status line's lines").toBe(lines);
 
       const at = (time: number) =>
