@@ -782,9 +782,7 @@ test.describe("the more-below cue's nudge", () => {
   ];
   for (const { width, height, state, lines, lift, drop } of AMPLITUDES) {
     const beside = lines === 0 ? "with no status" : `clear of a ${lines}-line status`;
-    test(`lifts ${lift}px and drops ${drop}px with its words, ${beside}, at ${width} x ${height}`, async ({
-      page,
-    }) => {
+    test(`lifts ${lift}px and drops ${drop}px with its words, ${beside}, at ${width} x ${height}`, async ({ page }) => {
       await page.setViewportSize({ width, height });
       // opened once the fonts are in, so the bursts are still running when they are measured
       await openHarness(page, `${harness.url}?options=10&state=${state}&open=press`);
