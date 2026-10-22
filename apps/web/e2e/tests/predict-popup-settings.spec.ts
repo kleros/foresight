@@ -338,7 +338,7 @@ test.describe("plans moved by the visitor's new slippage at 320 x 568", () => {
     expect(after.dialog).toEqual(before.dialog);
     expect([after.footer[1], after.footer[3]]).toEqual([before.footer[1], before.footer[3]]);
     const status = dialog.getByRole("status");
-    await expect(status).toHaveText("Your new slippage changes the trades. Check Details, then confirm.");
+    await expect(status).toHaveText("Your new slippage changes the trades. Confirm to go on.");
     expect(await status.evaluate((element) => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
     await expect(dialog.getByRole("button", { name: "Confirm trades" })).toBeEnabled();
   });
