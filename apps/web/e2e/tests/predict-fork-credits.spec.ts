@@ -248,7 +248,8 @@ test.describe("a credits prediction on the gnosis fork", () => {
       ),
     ).toBeVisible();
     // the step keeps each part whole with no-break spaces
-    const step = popup.getByText(/(^|\+\s)[\d.,]+\sxDAI$/);
+    // credits lead the funds step, which keeps it apart from the balance figure
+    const step = popup.getByText(/\+\s[\d.,]+\sxDAI$/);
     await expect(step).toBeVisible();
     const deposit = parseEther((await step.textContent())!.match(/([\d.,]+)\sxDAI$/)![1]!.replace(/,/g, ""));
 
