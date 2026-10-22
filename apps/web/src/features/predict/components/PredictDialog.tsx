@@ -96,14 +96,6 @@ interface PredictDialogProps {
   onPredict: () => void;
 }
 
-/** The lines an element's text wraps onto. */
-function lineCount(element: Element): number {
-  const range = document.createRange();
-  range.selectNodeContents(element);
-  return new Set([...(range.getClientRects?.() ?? [])].filter((box) => box.width > 0).map((box) => Math.round(box.top)))
-    .size;
-}
-
 /** What `value` was when `lock` last took a new key, held until it is null. */
 function useHeldWhile<T>(value: T, lock: string | null): T {
   const [held, setHeld] = useState<{ value: T; lock: string } | null>(lock === null ? null : { value, lock });
@@ -276,17 +268,6 @@ export function PredictDialog({
     );
     return () => cancelAnimationFrame(frame);
   }, [isOpen, statusText, isRunning]);
-  // a status on two lines starts right under the more-below cue, so the cue's nudge is smaller
-  const [isStatusTall, setIsStatusTall] = useState(false);
-  useEffect(() => {
-    const line = statusRef.current?.querySelector("[data-testid=status-text]");
-    if (!line) return setIsStatusTall(false);
-    const measure = () => setIsStatusTall(lineCount(line) > 1);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(line);
-    return () => observer.disconnect();
-  }, [isOpen, statusText]);
 
   // stacked, Go back follows Confirm in the DOM as on screen, so focus runs top to bottom
   const isStacked = useSyncExternalStore(subscribeStacked, isStackedNow, () => false);
@@ -447,8 +428,9 @@ export function PredictDialog({
             className="landscape-phone:min-h-0 landscape-phone:flex-none min-h-32 w-full"
             cue="More below"
             cueTone="border-(--fs-popup-line) text-fs-popup-text-2"
-            cueLift={isStatusTall ? 2 : 3}
-            cueDrop={isStatusTall ? 3 : 6}
+            // a status callout starts right under the cue, so its nudge is smaller
+            cueLift={status ? 2 : 3}
+            cueDrop={status ? 3 : 6}
             minOverflow={1}
             fadeSize={40}
           >
