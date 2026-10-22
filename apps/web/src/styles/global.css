@@ -972,6 +972,18 @@ button.predict-cta.predict-cta[data-busy]:has(> .button-text) > .button-text {
 .predict-receipt > li:only-child::before {
   display: none;
 }
+/* the last check draws once its row has risen; 14 is the path's length, rounded up */
+.predict-receipt > li:last-child > .step-bullet > [data-glyph="check"] path {
+  --fs-draw-len: 14;
+  stroke-dasharray: 14;
+  animation: fsDraw var(--fs-dur-structural) var(--fs-ease-enter)
+    calc(var(--i, 0) * var(--fs-dur-echo) / 2 + var(--fs-dur-enter)) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .predict-receipt > li:last-child > .step-bullet > [data-glyph="check"] path {
+    animation: none;
+  }
+}
 /* the success dialog's foot: sticky over its own bottom padding, with a fade where the rest scrolls under it */
 @media (max-height: 480px) {
   .predict-success-foot {
