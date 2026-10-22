@@ -388,23 +388,42 @@ for (const theme of ["light", "dark"]) {
 }
 
 for (const theme of ["light", "dark"]) {
-  test.describe(`the Predict card on a phone on its side, 568 x 320, ${theme}`, () => {
-    test.use({ viewport: { width: 568, height: 320 } });
+  for (const viewport of [
+    { width: 568, height: 320 },
+    { width: 667, height: 375 },
+  ]) {
+    test.describe(`the Predict card on a phone on its side, ${viewport.width} x ${viewport.height}, ${theme}`, () => {
+      test.use({ viewport });
 
-    test("pins a slimmer bar, edge to edge, and docks it into the card", async ({ page }) => {
+      test("pins no bar over the options and keeps Predict on the card, in place", async ({ page }) => {
+        await openCard(page, `set=worst&rows=14&theme=${theme}`);
+        await page.evaluate(() => window.scrollTo(0, 400));
+        await page.waitForTimeout(300);
+        await expect(page.locator("[data-stuck]")).toHaveCount(0);
+        const dock = page.locator("[data-predict-dock]");
+        expect(await dock.evaluate((element) => getComputedStyle(element).position)).toBe("static");
+        const predict = page.getByRole("button", { name: /^Predict/ }).locator("visible=true");
+        await expect(predict).toHaveCount(1);
+        await expect(predict).not.toBeInViewport();
+        await predict.scrollIntoViewIfNeeded();
+        await expect(predict).toBeInViewport();
+        await expect(page.locator("[data-stuck]")).toHaveCount(0);
+        expect(await sideways(page)).toBe(0);
+      });
+    });
+  }
+
+  test.describe(`the Predict card on a phone turned from upright to its side, ${theme}`, () => {
+    test.use({ viewport: { width: 375, height: 667 } });
+
+    test("unpins the bar when the phone turns, and pins it again when it turns back", async ({ page }) => {
       await openCard(page, `set=worst&rows=14&theme=${theme}`);
-      // among the options, as when picking: the bar cannot rise above the top of the section it is in
-      await page.evaluate(() => window.scrollTo(0, 400));
       await expect(page.locator("[data-stuck]")).toHaveCount(1);
-      await expect.poll(async () => (await panelBox(page)).bottom).toBe(320);
-      const panel = await panelBox(page);
-      expect(panel.width).toBe(568);
-      expect(panel.height).toBe(61);
-      await expect(page.getByRole("button", { name: "Predict", exact: true })).toBeInViewport();
-      expect(await sideways(page)).toBe(0);
-      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      await page.setViewportSize({ width: 667, height: 375 });
       await expect(page.locator("[data-stuck]")).toHaveCount(0);
-      await expect(page.getByRole("button", { name: /^Predict/ }).locator("visible=true")).toHaveCount(1);
+      await page.setViewportSize({ width: 375, height: 667 });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await expect(page.locator("[data-stuck]")).toHaveCount(1);
     });
   });
 
