@@ -3007,6 +3007,88 @@ test.describe("the success dialog", () => {
 
     expect([...new Set(keys)]).toEqual(["opacity"]);
   });
+
+  /** Records the receipt checks' fsDraw events from the page's first script, each with its row. */
+  async function recordDraws(page: Page) {
+    await page.addInitScript(() => {
+      const seen: string[] = [];
+      (window as unknown as { draws: string[] }).draws = seen;
+      for (const type of ["animationstart", "animationiteration", "animationend", "animationcancel"]) {
+        document.addEventListener(
+          type,
+          (event) => {
+            if ((event as AnimationEvent).animationName !== "fsDraw") return;
+            const row = (event.target as Element).closest(".predict-receipt > li");
+            seen.push(`${type}:${row ? [...row.parentElement!.children].indexOf(row) : "elsewhere"}`);
+          },
+          true,
+        );
+      }
+    });
+    return () => page.evaluate(() => (window as unknown as { draws: string[] }).draws);
+  }
+
+  const checkPaths = (page: Page) =>
+    page.getByRole("list", { name: "Transactions" }).locator('[data-glyph="check"] path');
+
+  test("draws the last row's check once as it opens, by its stroke alone, after the row rises", async ({ page }) => {
+    const draws = await recordDraws(page);
+    await openHarness(page, `${harness.url}?dialog=success&run=credits`);
+    const paths = checkPaths(page);
+    await expect(paths).toHaveCount(4);
+    const last = paths.last();
+    await expect(last).toHaveCSS("animation-name", "fsDraw");
+    const [timing, properties, length, dash] = await last.evaluate((path) => {
+      const [animation] = path.getAnimations();
+      const frames = (animation!.effect as KeyframeEffect).getKeyframes();
+      return [
+        animation!.effect!.getTiming(),
+        [...new Set(frames.flatMap((frame) => Object.keys(frame)))].filter(
+          (key) => !["offset", "easing", "composite", "computedOffset"].includes(key),
+        ),
+        (path as SVGPathElement).getTotalLength(),
+        parseFloat(getComputedStyle(path).strokeDasharray),
+      ] as const;
+    });
+    expect(properties).toEqual(["strokeDashoffset"]);
+    expect(timing.iterations).toBe(1);
+    // the fourth row's stagger, 1.5 echoes, then its own rise
+    expect(timing.delay).toBe(400);
+    expect(timing.duration).toBe(400);
+    expect(dash).toBeGreaterThanOrEqual(length);
+    expect(dash - length).toBeLessThan(1);
+    for (const earlier of (await paths.all()).slice(0, -1)) await expect(earlier).toHaveCSS("animation-name", "none");
+
+    await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
+    await page.waitForTimeout(300);
+    expect(await draws()).toEqual(["animationstart:3", "animationend:3"]);
+    await expect(last).toHaveCSS("stroke-dashoffset", "0px");
+  });
+
+  test("draws the check on the structural duration token and the enter curve", async ({ page }) => {
+    await openHarness(page, `${harness.url}?dialog=success&run=credits`);
+    const last = checkPaths(page).last();
+    await expect(last).toHaveCSS("animation-timing-function", "cubic-bezier(0, 0, 0.2, 1)");
+    await expect(last).toHaveCSS("animation-duration", "0.4s");
+    await page.evaluate(() => document.documentElement.style.setProperty("--fs-dur-structural", "600ms"));
+    await expect(last).toHaveCSS("animation-duration", "0.6s");
+  });
+
+  for (const theme of ["light", "dark"]) {
+    test(`shows the last row's check whole, with no draw, under reduced motion in the ${theme} theme`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      const draws = await recordDraws(page);
+      await openHarness(page, `${harness.url}?dialog=success&run=credits&theme=${theme}`);
+      const last = checkPaths(page).last();
+      await expect(last).toBeAttached();
+      await expect(last).toHaveCSS("animation-name", "none");
+      await expect(last).toHaveCSS("stroke-dashoffset", "0px");
+      await page.waitForTimeout(800);
+      expect(await draws()).toEqual([]);
+    });
+  }
 });
 
 test.describe("entrances under reduced motion", () => {
