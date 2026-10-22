@@ -46,7 +46,8 @@ describe("PredictSuccessDialog", () => {
   it("is named by its heading", () => {
     render(<PredictSuccessDialog isOpen optionNoun="city" leftOut={[]} onClose={vi.fn()} />);
 
-    expect(screen.getByRole("dialog", { name: "Prediction placed" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Prediction successful" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Prediction successful" })).toBeInTheDocument();
   });
 
   it("offers the email once to a visitor not yet subscribed, without a line restating its heading", () => {

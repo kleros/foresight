@@ -113,6 +113,6 @@ test.describe("a session seeded on the gnosis fork", () => {
     await popup.getByRole("button", { name: "Predict", exact: true }).click();
 
     // the dev wallet signs each step; the run ends in the success dialog, not a failure
-    await expect(page.getByRole("dialog", { name: "Prediction placed" })).toBeVisible({ timeout: 240_000 });
+    await expect(page.getByRole("dialog", { name: "Prediction successful" })).toBeVisible({ timeout: 240_000 });
   });
 });

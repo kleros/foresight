@@ -135,7 +135,7 @@ async function predictAndComplete(leftOut: Address[]) {
   act(() => run.set(progressAt("signing")));
   act(() => run.set(progressAt("complete", leftOut)));
 
-  await screen.findByText(/Prediction placed/);
+  await screen.findByRole("dialog", { name: "Prediction successful" });
   expect(driver.reset).toHaveBeenCalled();
   return within(screen.getByRole("dialog"));
 }

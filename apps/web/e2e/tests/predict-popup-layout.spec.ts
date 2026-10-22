@@ -771,17 +771,18 @@ test.describe("the more-below cue's nudge", () => {
     await expect(row).toHaveCSS("animation-duration", "0.09s");
   });
 
-  // a two-line status starts right under the strip, so the burst there is smaller
+  // a status callout starts right under the strip, so the burst there is smaller
   const AMPLITUDES = [
-    { width: 1280, height: 720, state: "idle&leftOut=1", lines: 1, lift: 3, drop: 6 },
-    { width: 375, height: 640, state: "idle&leftOut=1", lines: 1, lift: 3, drop: 6 },
+    { width: 1280, height: 720, state: "idle", lines: 0, lift: 3, drop: 6 },
+    { width: 375, height: 640, state: "idle", lines: 0, lift: 3, drop: 6 },
+    { width: 1280, height: 720, state: "idle&leftOut=1", lines: 1, lift: 2, drop: 3 },
+    { width: 375, height: 640, state: "idle&leftOut=1", lines: 1, lift: 2, drop: 3 },
     { width: 375, height: 640, state: "moved", lines: 2, lift: 2, drop: 3 },
     { width: 320, height: 568, state: "moved", lines: 2, lift: 2, drop: 3 },
   ];
   for (const { width, height, state, lines, lift, drop } of AMPLITUDES) {
-    test(`lifts ${lift}px and drops ${drop}px with its words, clear of a ${lines}-line status, at ${width} x ${height}`, async ({
-      page,
-    }) => {
+    const beside = lines === 0 ? "with no status" : `clear of a ${lines}-line status`;
+    test(`lifts ${lift}px and drops ${drop}px with its words, ${beside}, at ${width} x ${height}`, async ({ page }) => {
       await page.setViewportSize({ width, height });
       // opened once the fonts are in, so the bursts are still running when they are measured
       await openHarness(page, `${harness.url}?options=10&state=${state}&open=press`);
@@ -794,7 +795,9 @@ test.describe("the more-below cue's nudge", () => {
       await settle(dialog);
       const strip = (await cue.boundingBox())!;
       expect(await cue.evaluate((element) => getComputedStyle(element).paddingTop)).toBe("6px");
-      const status = await dialog.getByTestId("status-text").evaluate(inkOf);
+      const statusText = dialog.getByTestId("status-text");
+      await expect(statusText).toHaveCount(lines === 0 ? 0 : 1);
+      const status = lines === 0 ? { top: Infinity, lines: 0 } : await statusText.evaluate(inkOf);
       expect(status.lines, "the status line's lines").toBe(lines);
 
       const at = (time: number) =>
@@ -2639,7 +2642,7 @@ test.describe("a dialog over the sticky header", () => {
   }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await openHarness(page, `${harness.url}?options=4&state=success&dialog=success&run=worst&verified=0`);
-    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const dialog = page.getByRole("dialog", { name: "Prediction successful" });
     const box = (await dialog.boundingBox())!;
     const header = (await page.locator("header").boundingBox())!;
 
@@ -2731,7 +2734,7 @@ for (const viewport of [
       test(`keeps Close in view at the dialog's foot while the rest scrolls (${query})`, async ({ page }) => {
         await page.emulateMedia({ reducedMotion: "reduce" });
         await openHarness(page, `${harness.url}?options=4&state=success&dialog=success&${query}`);
-        const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+        const dialog = page.getByRole("dialog", { name: "Prediction successful" });
         const close = dialog.getByRole("button", { name: "Close" });
         const [box, frame] = [(await close.boundingBox())!, (await dialog.boundingBox())!];
         expect(box.y + box.height).toBeLessThanOrEqual(frame.y + frame.height);
@@ -2751,7 +2754,7 @@ test.describe("the success dialog", () => {
 
   test("names the email in one sentence and links to Settings in the accent", async ({ page }) => {
     await openHarness(page, `${harness.url}?options=2&state=success&dialog=success`);
-    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const dialog = page.getByRole("dialog", { name: "Prediction successful" });
     const link = dialog.getByRole("link", { name: "Change in Settings" });
 
     await expect(dialog.getByText("2 estimates · 10 sDAI")).toBeVisible();
@@ -2768,7 +2771,7 @@ test.describe("the success dialog", () => {
     page,
   }) => {
     await openHarness(page, `${harness.url}?options=2&state=success&dialog=success`);
-    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const dialog = page.getByRole("dialog", { name: "Prediction successful" });
     const position = (await dialog.getByText("See your position under each city.").boundingBox())!;
     const receipt = (await dialog.getByRole("list", { name: "Transactions" }).boundingBox())!;
     const panel = (await dialog.locator("section").boundingBox())!;
@@ -2781,7 +2784,7 @@ test.describe("the success dialog", () => {
 
   test("keeps what could not be traded 12 above the panel's 20", async ({ page }) => {
     await openHarness(page, `${harness.url}?options=4&state=success&dialog=success`);
-    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const dialog = page.getByRole("dialog", { name: "Prediction successful" });
     const receipt = (await dialog.getByRole("list", { name: "Transactions" }).boundingBox())!;
     const leftOut = (await dialog.getByText("Could not be traded: Nairobi, Montevideo.").boundingBox())!;
     const panel = (await dialog.locator("section").boundingBox())!;
@@ -2794,7 +2797,7 @@ test.describe("the success dialog", () => {
     page,
   }) => {
     await openHarness(page, `${harness.url}?options=2&state=success&dialog=success`);
-    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const dialog = page.getByRole("dialog", { name: "Prediction successful" });
     const bullets = dialog.locator('[data-bullet="done"]');
     const rows = dialog.getByRole("list", { name: "Transactions" }).getByRole("listitem");
 
@@ -2890,7 +2893,7 @@ test.describe("the success dialog", () => {
 
   test("keeps the sign-in at 44px in the panel and Close as a 44px text action", async ({ page }) => {
     await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&subscribed=0`);
-    const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+    const dialog = page.getByRole("dialog", { name: "Prediction successful" });
     const signIn = dialog.locator("section").getByRole("button", { name: "Sign in to subscribe" });
     const close = dialog.getByRole("button", { name: "Close" });
 
@@ -2909,7 +2912,7 @@ test.describe("the success dialog", () => {
       page,
     }) => {
       await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&subscribed=0&theme=${theme}`);
-      const dialog = page.getByRole("dialog", { name: "Prediction placed" });
+      const dialog = page.getByRole("dialog", { name: "Prediction successful" });
       const accent = await tokenValue(page, "color", "var(--fs-popup-accent)");
       for (const name of ["Sign in to subscribe", "Close"]) {
         const button = dialog.getByRole("button", { name });
@@ -2934,7 +2937,7 @@ test.describe("the success dialog", () => {
       page,
     }) => {
       await openHarness(page, `${harness.url}?options=2&state=success&dialog=success&subscribed=0&theme=${theme}`);
-      const signIn = page.getByRole("dialog", { name: "Prediction placed" }).getByRole("button", {
+      const signIn = page.getByRole("dialog", { name: "Prediction successful" }).getByRole("button", {
         name: "Sign in to subscribe",
       });
       const ends = [
@@ -2957,7 +2960,7 @@ test.describe("the success dialog", () => {
         page,
         `${harness.url}?options=2&state=success&dialog=success&subscribed=0&signin=busy&theme=${theme}`,
       );
-      const signIn = page.getByRole("dialog", { name: "Prediction placed" }).getByRole("button", {
+      const signIn = page.getByRole("dialog", { name: "Prediction successful" }).getByRole("button", {
         name: "Signing in…",
       });
       await expect(signIn).toHaveAttribute("data-busy", "true");
@@ -3002,6 +3005,88 @@ test.describe("the success dialog", () => {
 
     expect([...new Set(keys)]).toEqual(["opacity"]);
   });
+
+  /** Records the receipt checks' fsDraw events from the page's first script, each with its row. */
+  async function recordDraws(page: Page) {
+    await page.addInitScript(() => {
+      const seen: string[] = [];
+      (window as unknown as { draws: string[] }).draws = seen;
+      for (const type of ["animationstart", "animationiteration", "animationend", "animationcancel"]) {
+        document.addEventListener(
+          type,
+          (event) => {
+            if ((event as AnimationEvent).animationName !== "fsDraw") return;
+            const row = (event.target as Element).closest(".predict-receipt > li");
+            seen.push(`${type}:${row ? [...row.parentElement!.children].indexOf(row) : "elsewhere"}`);
+          },
+          true,
+        );
+      }
+    });
+    return () => page.evaluate(() => (window as unknown as { draws: string[] }).draws);
+  }
+
+  const checkPaths = (page: Page) =>
+    page.getByRole("list", { name: "Transactions" }).locator('[data-glyph="check"] path');
+
+  test("draws the last row's check once as it opens, by its stroke alone, after the row rises", async ({ page }) => {
+    const draws = await recordDraws(page);
+    await openHarness(page, `${harness.url}?dialog=success&run=credits`);
+    const paths = checkPaths(page);
+    await expect(paths).toHaveCount(4);
+    const last = paths.last();
+    await expect(last).toHaveCSS("animation-name", "fsDraw");
+    const [timing, properties, length, dash] = await last.evaluate((path) => {
+      const [animation] = path.getAnimations();
+      const frames = (animation!.effect as KeyframeEffect).getKeyframes();
+      return [
+        animation!.effect!.getTiming(),
+        [...new Set(frames.flatMap((frame) => Object.keys(frame)))].filter(
+          (key) => !["offset", "easing", "composite", "computedOffset"].includes(key),
+        ),
+        (path as SVGPathElement).getTotalLength(),
+        parseFloat(getComputedStyle(path).strokeDasharray),
+      ] as const;
+    });
+    expect(properties).toEqual(["strokeDashoffset"]);
+    expect(timing.iterations).toBe(1);
+    // the fourth row's stagger, 1.5 echoes, then its own rise
+    expect(timing.delay).toBe(400);
+    expect(timing.duration).toBe(400);
+    expect(dash).toBeGreaterThanOrEqual(length);
+    expect(dash - length).toBeLessThan(1);
+    for (const earlier of (await paths.all()).slice(0, -1)) await expect(earlier).toHaveCSS("animation-name", "none");
+
+    await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
+    await page.waitForTimeout(300);
+    expect(await draws()).toEqual(["animationstart:3", "animationend:3"]);
+    await expect(last).toHaveCSS("stroke-dashoffset", "0px");
+  });
+
+  test("draws the check on the structural duration token and the enter curve", async ({ page }) => {
+    await openHarness(page, `${harness.url}?dialog=success&run=credits`);
+    const last = checkPaths(page).last();
+    await expect(last).toHaveCSS("animation-timing-function", "cubic-bezier(0, 0, 0.2, 1)");
+    await expect(last).toHaveCSS("animation-duration", "0.4s");
+    await page.evaluate(() => document.documentElement.style.setProperty("--fs-dur-structural", "600ms"));
+    await expect(last).toHaveCSS("animation-duration", "0.6s");
+  });
+
+  for (const theme of ["light", "dark"]) {
+    test(`shows the last row's check whole, with no draw, under reduced motion in the ${theme} theme`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      const draws = await recordDraws(page);
+      await openHarness(page, `${harness.url}?dialog=success&run=credits&theme=${theme}`);
+      const last = checkPaths(page).last();
+      await expect(last).toBeAttached();
+      await expect(last).toHaveCSS("animation-name", "none");
+      await expect(last).toHaveCSS("stroke-dashoffset", "0px");
+      await page.waitForTimeout(800);
+      expect(await draws()).toEqual([]);
+    });
+  }
 });
 
 test.describe("entrances under reduced motion", () => {

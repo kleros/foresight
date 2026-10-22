@@ -54,7 +54,7 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
 };
 
 /** Once the credits are in the trade wallet the run is locked to them, so only waiting helps. */
-const CREDITS_LOCKED_COPY = "Credits can't be spent right now. Try again shortly.";
+const CREDITS_LOCKED_COPY = "Credits can't be spent now. Try again shortly.";
 
 /** A transaction is out there and nothing has said how it ended, so it is neither a success nor a failure. */
 const PENDING_COPY = "Sent, not confirmed yet.";
@@ -275,7 +275,7 @@ const NAMED_LINE_MAX = 62;
 
 /** Said when the pools moved since Details was read, before anything more is signed. */
 function movedText({ markets, credits, only, bySlippage }: MovedStatus): string {
-  if (bySlippage) return "Your new slippage changes the trades. Check Details, then confirm.";
+  if (bySlippage) return "Your new slippage changes the trades. Confirm to go on.";
   if (!credits && markets === 1 && only) {
     // a figure and its unit wrap as one
     const whole = (value: string) => value.replaceAll(" ", "\u00a0");
@@ -284,7 +284,7 @@ function movedText({ markets, credits, only, bySlippage }: MovedStatus): string 
   }
   const count = `${markets} ${markets === 1 ? "market" : "markets"}`;
   if (credits && markets > 0) return `Prices moved on ${count} and the credits swap. Confirm to go on.`;
-  return `${credits ? "The credits swap now pays less" : `Prices moved on ${count}`}. Check Details, then confirm.`;
+  return `${credits ? "The credits swap now pays less" : `Prices moved on ${count}`}. Confirm to go on.`;
 }
 
 /** The button's label while the visitor is asked to confirm the new figures. */

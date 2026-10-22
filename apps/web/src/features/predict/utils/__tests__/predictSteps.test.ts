@@ -308,13 +308,13 @@ describe("statusLine", () => {
     expect(statusLine({ steps: idle, leftOut: 1 })?.text).toBe("1 estimate could not be traded.");
   });
 
-  it("asks the visitor to check Details when the pools moved, in the warning tone", () => {
+  it("asks the visitor to confirm when the pools moved, in the warning tone", () => {
     expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 2, credits: false } })).toEqual({
-      text: "Prices moved on 2 markets. Check Details, then confirm.",
+      text: "Prices moved on 2 markets. Confirm to go on.",
       tone: "warning",
     });
     expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 1, credits: false } })?.text).toBe(
-      "Prices moved on 1 market. Check Details, then confirm.",
+      "Prices moved on 1 market. Confirm to go on.",
     );
     expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 1, credits: true } })?.text).toBe(
       "Prices moved on 1 market and the credits swap. Confirm to go on.",
@@ -323,7 +323,7 @@ describe("statusLine", () => {
       "Prices moved on 2 markets and the credits swap. Confirm to go on.",
     );
     expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 0, credits: true } })?.text).toBe(
-      "The credits swap now pays less. Check Details, then confirm.",
+      "The credits swap now pays less. Confirm to go on.",
     );
   });
 
@@ -338,7 +338,7 @@ describe("statusLine", () => {
     );
     const long = { ...only, name: "A market name far too long to quote" };
     expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 1, credits: false, only: long } })?.text).toBe(
-      "Prices moved on 1 market. Check Details, then confirm.",
+      "Prices moved on 1 market. Confirm to go on.",
     );
   });
 
@@ -349,7 +349,7 @@ describe("statusLine", () => {
       { name: "Montevideo", to: "1,234,567 $M", was: "1,234,587 $M" },
     ]) {
       expect(statusLine({ steps: idle, leftOut: 0, moved: { markets: 1, credits: false, only } })?.text).toBe(
-        "Prices moved on 1 market. Check Details, then confirm.",
+        "Prices moved on 1 market. Confirm to go on.",
       );
     }
   });
@@ -418,6 +418,14 @@ describe("statusLine", () => {
       "Not enough xDAI for the network fee. Add some, then try again.",
     );
     expect(statusLine({ steps: stopped, leftOut: 0 })?.text).toBe(FEE_ONLY_OUT_OF_FUNDS_COPY);
+  });
+
+  it("asks to try again shortly when credits can't be spent after money moved", () => {
+    const stopped = steps({
+      progress: progress({ stage: "halted", failure: { reason: "credits", retryable: false }, moneyMoved: true }),
+    });
+
+    expect(statusLine({ steps: stopped, leftOut: 0 })?.text).toBe("Credits can't be spent now. Try again shortly.");
   });
 
   it("says nothing while a step is running", () => {
@@ -531,7 +539,7 @@ describe("predictSteps with credits moved to the trade wallet", () => {
     expect(stopped.rows.map((row) => row.view)).toEqual(["done", "failed", "inactive"]);
   });
 
-  it("says credits cannot be spent right now when the manager cannot cover them", () => {
+  it("says credits cannot be spent now when the manager cannot cover them", () => {
     const stopped = steps({
       progress: progress({ stage: "halted", failure: { reason: "credits", retryable: false } }),
     });

@@ -1147,7 +1147,7 @@ describe("prices that moved before signing", () => {
     render(<PredictDialog {...props()} moved={{ markets: 2, credits: false }} />);
 
     expect(screen.getByRole("button", { name: "Confirm new prices" })).toBeEnabled();
-    expect(screen.getByRole("status")).toHaveTextContent("Prices moved on 2 markets. Check Details, then confirm.");
+    expect(screen.getByRole("status")).toHaveTextContent("Prices moved on 2 markets. Confirm to go on.");
   });
 
   it("name the one market that moved on the status line", () => {
@@ -1171,7 +1171,7 @@ describe("prices that moved before signing", () => {
       />,
     );
 
-    expect(screen.getByRole("status")).toHaveTextContent("Prices moved on 1 market. Check Details, then confirm.");
+    expect(screen.getByRole("status")).toHaveTextContent("Prices moved on 1 market. Confirm to go on.");
   });
 
   it("say the visitor's new slippage changed the trades, where no price moved", () => {
@@ -1183,9 +1183,7 @@ describe("prices that moved before signing", () => {
       />,
     );
 
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Your new slippage changes the trades. Check Details, then confirm.",
-    );
+    expect(screen.getByRole("status")).toHaveTextContent("Your new slippage changes the trades. Confirm to go on.");
     expect(screen.getByRole("button", { name: "Confirm trades" })).toBeEnabled();
   });
 

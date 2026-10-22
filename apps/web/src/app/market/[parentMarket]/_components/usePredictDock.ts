@@ -55,7 +55,7 @@ export function usePredictDock(isLive: boolean, content: string) {
       frame = 0;
       const dock = ref.current;
       if (!dock) return;
-      // the dock pins only below md; its computed position says whether it does at this width
+      // the dock pins only below md and upright; its computed position says whether it does in this viewport
       if (getComputedStyle(dock).position !== "sticky") {
         setIsStuck(false);
         setPhase((current) => (current === "entering" ? "idle" : current));

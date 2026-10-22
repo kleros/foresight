@@ -201,7 +201,7 @@ test.describe("a credits prediction on the gnosis fork", () => {
       await expect(popup.getByText(`${shownAmount(fromWallet, 18)} credits`, { exact: true })).toBeVisible();
 
     await popup.getByRole("button", { name: "Predict", exact: true }).click();
-    const success = page.getByRole("dialog", { name: "Prediction placed" });
+    const success = page.getByRole("dialog", { name: "Prediction successful" });
     await expect(success).toBeVisible({ timeout: 240_000 });
     await expect(success.getByText("1 estimate · 2 sDAI")).toBeVisible();
 
@@ -253,7 +253,7 @@ test.describe("a credits prediction on the gnosis fork", () => {
     const deposit = parseEther((await step.textContent())!.match(/([\d.,]+)\sxDAI$/)![1]!.replace(/,/g, ""));
 
     await popup.getByRole("button", { name: "Predict", exact: true }).click();
-    const success = page.getByRole("dialog", { name: "Prediction placed" });
+    const success = page.getByRole("dialog", { name: "Prediction successful" });
     await expect(success).toBeVisible({ timeout: 240_000 });
     await expect(success.getByText(`1 estimate · ${typed} xDAI`)).toBeVisible();
 
@@ -312,7 +312,7 @@ test.describe("a credits prediction on the gnosis fork", () => {
       const resume = reopened.getByRole("dialog").getByRole("button", { name: "Resume", exact: true });
       await expect(resume).toBeEnabled({ timeout: 60_000 });
       await resume.click();
-      const success = reopened.getByRole("dialog", { name: "Prediction placed" });
+      const success = reopened.getByRole("dialog", { name: "Prediction successful" });
       await expect(success).toBeVisible({ timeout: 240_000 });
       await expect(success.getByText("1 estimate · 2 sDAI")).toBeVisible();
 
