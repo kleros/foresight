@@ -1028,14 +1028,15 @@ button.predict-cta.predict-cta[data-busy]:has(> .button-text) > .button-text {
 .predict-card-cta .button-text {
   font-size: 15px;
 }
-/* The Predict card's phone dock: pinned to the bottom edge while a live Predict waits below the fold. */
+/* The Predict card's phone dock: pinned to the bottom edge while a live Predict waits below the fold.
+   Only upright: a phone on its side keeps the card in place, as on desktop. */
 .predict-dock-fold {
   display: contents;
 }
 .predict-pin-pill {
   display: none;
 }
-@media (max-width: 767px) {
+@media (max-width: 767px) and (orientation: portrait) {
   .predict-dock {
     position: sticky;
     bottom: 0;
