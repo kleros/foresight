@@ -18,8 +18,8 @@
   ],
   "scripts": {
     "build": "hardhat compile",
-    "codegen:localhost": "NODE_NO_WARNINGS=1 wagmi generate -c wagmi.config.localhost.mts",
-    "codegen:gnosis": "NODE_NO_WARNINGS=1 wagmi generate -c wagmi.config.gnosis.mts",
+    "codegen:localhost": "hardhat export-creation-code && NODE_NO_WARNINGS=1 wagmi generate -c wagmi.config.localhost.mts",
+    "codegen:gnosis": "hardhat export-creation-code && NODE_NO_WARNINGS=1 wagmi generate -c wagmi.config.gnosis.mts",
     "test": "hardhat test",
     "local-node": "hardhat node --port 8545 --tags SessionFactory,TradeExecutorFactory,Credits",
     "local-node:gnosis-fork": "HARDHAT_FORK=gnosis hardhat node --port 8545 --no-deploy",

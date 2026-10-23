@@ -1,24 +1,35 @@
+import { tradeExecutorCreationCode } from "@foresight/contracts";
+import gnosisFactory from "@foresight/contracts/deployments/gnosis/TradeExecutorFactory.json";
 import { decodeFunctionData, encodeFunctionResult, getAddress, zeroAddress, type Address } from "viem";
 import { describe, expect, it } from "vitest";
 
 import { tradeExecutorAbi, tradeExecutorFactoryAbi } from "@/config/contracts";
 
-import { batchExecuteTx, batchValueExecuteTx, createExecutorTx, fetchExecutorState } from "../executor";
+
+import {
+  batchExecuteTx,
+  batchValueExecuteTx,
+  createExecutorTx,
+  executorAddress,
+  fetchExecutorState,
+  TradeWalletMismatchError,
+} from "../executor";
 import { readClient } from "./support/readClient";
 
 const FACTORY: Address = "0x00000000000000000000000000000000000000fa";
 const OWNER: Address = "0x1111111111111111111111111111111111111111";
+const ATTACKER: Address = "0x9999999999999999999999999999999999999999";
 
-/** What the factory predicts for OWNER; the tests only care that it flows through. */
-const PREDICTED: Address = "0x2222222222222222222222222222222222222222";
+/** The trade wallet the factory deploys for OWNER. */
+const PREDICTED = executorAddress(FACTORY, OWNER);
 
-/** Answers the factory's two views: `executorOf` with whatever the test says is on chain. */
-function factoryClient(executorOf: Address) {
+/** Answers the factory's two views: `predictExecutor` with `predicted`, `executorOf` with what is on chain. */
+function factoryClient(executorOf: Address, predicted: Address = PREDICTED) {
   return readClient({
     call: ({ data }) => {
       const { functionName } = decodeFunctionData({ abi: tradeExecutorFactoryAbi, data });
       if (functionName === "predictExecutor") {
-        return encodeFunctionResult({ abi: tradeExecutorFactoryAbi, functionName, result: PREDICTED });
+        return encodeFunctionResult({ abi: tradeExecutorFactoryAbi, functionName, result: predicted });
       }
       if (functionName === "executorOf") {
         return encodeFunctionResult({ abi: tradeExecutorFactoryAbi, functionName, result: executorOf });
@@ -39,6 +50,31 @@ describe("fetchExecutorState", () => {
     const state = await fetchExecutorState(factoryClient(PREDICTED), { factory: FACTORY, owner: OWNER });
 
     expect(state).toEqual({ predicted: PREDICTED, deployed: PREDICTED });
+  });
+
+  it.each([
+    ["a predicted trade wallet", zeroAddress, ATTACKER],
+    ["a deployed trade wallet", ATTACKER, PREDICTED],
+  ] as const)("refuses %s the node names other than the factory's own derivation", async (_, executorOf, predicted) => {
+    await expect(
+      fetchExecutorState(factoryClient(executorOf, predicted), { factory: FACTORY, owner: OWNER }),
+    ).rejects.toBeInstanceOf(TradeWalletMismatchError);
+  });
+});
+
+describe("executorAddress", () => {
+  it("gives the address the gnosis factory answers for an owner", () => {
+    // as TradeExecutorFactory at this address answers predictExecutor on a gnosis fork
+    expect(executorAddress(gnosisFactory.address as Address, "0x00000000000000000000000000000000000000a1")).toBe(
+      "0xff8F719427c050fFF02f6AAd8dd28D2d44e9935E",
+    );
+    expect(executorAddress(gnosisFactory.address as Address, "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")).toBe(
+      "0xdCEe80927E54E243c5af17f9825ce55909D3664F",
+    );
+  });
+
+  it("derives from the creation code the deployed gnosis factory carries", () => {
+    expect(gnosisFactory.bytecode).toContain(tradeExecutorCreationCode.slice(2));
   });
 });
 
