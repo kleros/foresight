@@ -50,48 +50,50 @@ export function PredictList({
   /** A stored run's estimates, which offer no remove at all. */
   isFixed?: boolean;
 }) {
-  const [leaving, setLeaving] = useState<string[]>([]);
+  /** Rows already removed upstream, still shown while they fade, at the index they were shown at. */
+  const [leaving, setLeaving] = useState<Array<{ estimate: ListedEstimate; index: number }>>([]);
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
-  const readOnly = useRef(isReadOnly);
-  useEffect(() => {
-    readOnly.current = isReadOnly;
-  }, [isReadOnly]);
   useEffect(() => {
     const pending = timers.current;
     return () => pending.forEach(clearTimeout);
   }, []);
 
-  const remove = (market: string) => {
-    if (leaving.includes(market)) return;
-    setLeaving((markets) => [...markets, market]);
+  const shown = selected.filter(
+    (estimate) => !leaving.some((row) => row.estimate.scale.market === estimate.scale.market),
+  );
+  for (const row of [...leaving].sort((a, b) => a.index - b.index)) shown.splice(row.index, 0, row.estimate);
+
+  const remove = (estimate: ListedEstimate) => {
+    const market = estimate.scale.market;
+    if (leaving.some((row) => row.estimate.scale.market === market)) return;
+    setLeaving((rows) => [...rows, { estimate, index: shown.indexOf(estimate) }]);
+    onRemove(market);
     // the token is 1ms under reduced motion
     const timer = setTimeout(() => {
       timers.current.delete(timer);
-      setLeaving((markets) => markets.filter((other) => other !== market));
-      // a run that started during the exit has already taken this estimate in
-      if (!readOnly.current) onRemove(market);
+      setLeaving((rows) => rows.filter((row) => row.estimate.scale.market !== market));
     }, exitMs());
     timers.current.add(timer);
   };
-  // the last estimate is never removed, counting the ones on their way out
-  const removable = selected.length - leaving.length > 1;
+  // the last estimate is never removed
+  const removable = shown.length - leaving.length > 1;
 
   return (
     <ul
       className={clsx(
         "grid w-full gap-x-2.5",
-        isFixed || selected.length < 2
+        isFixed || shown.length < 2
           ? "grid-cols-[8px_minmax(0,1fr)_max-content]"
           : "grid-cols-[8px_minmax(0,1fr)_max-content_28px]",
       )}
     >
-      {selected.map((estimate) => (
+      {shown.map((estimate) => (
         <EstimateRow
           key={estimate.scale.market}
           estimate={estimate}
-          onRemove={removable ? () => remove(estimate.scale.market) : undefined}
-          hasRemove={selected.length > 1 && !isFixed}
-          isLeaving={leaving.includes(estimate.scale.market)}
+          onRemove={removable ? () => remove(estimate) : undefined}
+          hasRemove={shown.length > 1 && !isFixed}
+          isLeaving={leaving.some((row) => row.estimate === estimate)}
           isReadOnly={isReadOnly}
         />
       ))}

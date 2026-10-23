@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -50,30 +52,32 @@ describe("removing a row", () => {
     document.documentElement.style.removeProperty("--fs-dur-echo");
   });
 
-  it("lets the row fade out before it leaves the list", async () => {
+  it("hands the removal over at once and lets the row fade out before it leaves the list", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const onRemove = vi.fn();
-    render(<PredictList selected={[estimate, other]} onRemove={onRemove} isReadOnly={false} />);
+    const { rerender } = render(<PredictList selected={[estimate, other]} onRemove={onRemove} isReadOnly={false} />);
 
     await userEvent.click(screen.getByRole("button", { name: "Remove Movie A" }));
+    expect(onRemove).toHaveBeenCalledExactlyOnceWith(market);
+    rerender(<PredictList selected={[other]} onRemove={onRemove} isReadOnly={false} />);
     expect(screen.getByText("Movie A").closest("li")).toHaveAttribute("data-leaving");
-    expect(onRemove).not.toHaveBeenCalled();
+    expect(screen.getAllByRole("listitem").map((row) => row.textContent)).toEqual(["Movie A87 %", "Movie B87 %"]);
 
     act(() => vi.advanceTimersByTime(100));
-    expect(onRemove).toHaveBeenCalledExactlyOnceWith(market);
+    expect(screen.queryByText("Movie A")).toBeNull();
   });
 
   it("takes the exit's length from the motion token", () => {
     vi.useFakeTimers();
     document.documentElement.style.setProperty("--fs-dur-echo", "0.25s");
-    const onRemove = vi.fn();
-    render(<PredictList selected={[estimate, other]} onRemove={onRemove} isReadOnly={false} />);
+    const { rerender } = render(<PredictList selected={[estimate, other]} onRemove={vi.fn()} isReadOnly={false} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Remove Movie A" }));
+    rerender(<PredictList selected={[other]} onRemove={vi.fn()} isReadOnly={false} />);
     act(() => vi.advanceTimersByTime(249));
-    expect(onRemove).not.toHaveBeenCalled();
+    expect(screen.getByText("Movie A")).toBeInTheDocument();
     act(() => vi.advanceTimersByTime(1));
-    expect(onRemove).toHaveBeenCalledExactlyOnceWith(market);
+    expect(screen.queryByText("Movie A")).toBeNull();
   });
 
   it("keeps the last row when both are removed within one exit", () => {
@@ -90,15 +94,39 @@ describe("removing a row", () => {
     expect(onRemove).toHaveBeenCalledExactlyOnceWith(market);
   });
 
-  it("keeps a row whose exit is overtaken by a run starting", () => {
+  it("leaves a removed estimate out of a run started during its exit", () => {
     vi.useFakeTimers();
-    const onRemove = vi.fn();
-    const { rerender } = render(<PredictList selected={[estimate, other]} onRemove={onRemove} isReadOnly={false} />);
+    const taken: string[][] = [];
+    function Popup() {
+      const [removed, setRemoved] = useState<string[]>([]);
+      const [running, setRunning] = useState(false);
+      const kept = [estimate, other].filter((row) => !removed.includes(row.scale.market));
+      return (
+        <>
+          <PredictList
+            selected={kept}
+            onRemove={(gone) => setRemoved((markets) => [...markets, gone])}
+            isReadOnly={running}
+          />
+          <button
+            onClick={() => {
+              taken.push(kept.map((row) => row.scale.name));
+              setRunning(true);
+            }}
+          >
+            Predict
+          </button>
+        </>
+      );
+    }
+    render(<Popup />);
 
     fireEvent.click(screen.getByRole("button", { name: "Remove Movie A" }));
-    rerender(<PredictList selected={[estimate, other]} onRemove={onRemove} isReadOnly />);
+    act(() => vi.advanceTimersByTime(50));
+    fireEvent.click(screen.getByRole("button", { name: "Predict" }));
     act(() => vi.advanceTimersByTime(200));
 
-    expect(onRemove).not.toHaveBeenCalled();
+    expect(taken).toEqual([["Movie B"]]);
+    expect(screen.queryByText("Movie A")).toBeNull();
   });
 });
