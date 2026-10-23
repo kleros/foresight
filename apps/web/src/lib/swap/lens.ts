@@ -121,7 +121,8 @@ export function createLensQuoter(
 
       // Lens quotes the whole amount past the target; the limit stops it at `amountOutAtLimit`
       const amountOut = result.amountOut < request.amountOutAtLimit ? result.amountOut : request.amountOutAtLimit;
-      const scaled = result.amountOut === 0n ? 0n : (params.amountOutMinimum * amountOut) / result.amountOut;
+      // Lens's own min-out and deadline are the node's answer, so both are set here
+      const quotedMin = (amountOut * (10_000n - BigInt(request.slippageBps))) / 10_000n;
       const swapped = params.amountIn < request.amountInAtLimit ? params.amountIn : request.amountInAtLimit;
       const floor = minOutAtLimit(
         params.tokenIn,
@@ -131,7 +132,7 @@ export function createLensQuoter(
         request.poolFee,
         request.slippageBps,
       );
-      const amountOutMinimum = scaled > floor ? scaled : floor;
+      const amountOutMinimum = quotedMin > floor ? quotedMin : floor;
 
       return {
         amountIn: request.amount,
@@ -140,7 +141,7 @@ export function createLensQuoter(
         data: encodeFunctionData({
           abi: ALGEBRA_ROUTER_ABI,
           functionName: "exactInputSingle",
-          args: [{ ...params, amountOutMinimum, limitSqrtPrice: request.limitSqrtPrice }],
+          args: [{ ...params, deadline, amountOutMinimum, limitSqrtPrice: request.limitSqrtPrice }],
         }),
         value: 0n,
       };
@@ -168,7 +169,13 @@ export function createLensExactInputQuoter(
       if (!result.data.startsWith(EXACT_INPUT_SINGLE)) {
         throw new NoSwapRouteError(`Lens routed ${request.tokenIn} to ${request.tokenOut} through more than one pool.`);
       }
-      return { amountOut: result.amountOut, router: result.target as Address, data: result.data as Hex };
+      const [params] = decodeFunctionData({ abi: ALGEBRA_ROUTER_ABI, data: result.data as Hex }).args;
+      const data = encodeFunctionData({
+        abi: ALGEBRA_ROUTER_ABI,
+        functionName: "exactInputSingle",
+        args: [{ ...params, deadline }],
+      });
+      return { amountOut: result.amountOut, router: result.target as Address, data };
     },
   };
 }

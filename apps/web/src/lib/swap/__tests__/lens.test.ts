@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // eslint-disable-next-line import-x/no-restricted-paths -- the predict oracle owns the slippage these legs are signed at
 import { SLIPPAGE_BPS } from "@/features/predict/oracle/tolerances";
 
-import { createLensQuoter } from "../lens";
+import { createLensExactInputQuoter, createLensQuoter } from "../lens";
 import { NoSwapRouteError, QuoteRefusedError, type SwapQuoteRequest } from "../types";
 
 const ROUTER_ABI = parseAbi([
@@ -79,7 +79,7 @@ describe("createLensQuoter", () => {
     expect(quote).toHaveBeenCalledWith(expect.objectContaining({ deadline: 5_000n + 1_800n }));
   });
 
-  it("signs the swap with the limit it was asked for, leaving the rest of Lens's call as it was", async () => {
+  it("signs the swap with the limit it was asked for, through the router, tokens and recipient Lens named", async () => {
     const result = await quoter().quote(request());
 
     expect(result.router).toBe(ROUTER);
@@ -101,7 +101,7 @@ describe("createLensQuoter", () => {
     expect(params(result.data).amountOutMinimum).toBe(396n);
   });
 
-  it("keeps Lens's own quote and min-out when the limit is further than the amount reaches", async () => {
+  it("keeps Lens's own quote, less slippage as min-out, when the limit is further than the amount reaches", async () => {
     const result = await quoter().quote(request({ amountOutAtLimit: 900n }));
 
     expect(result.amountOut).toBe(500n);
@@ -299,5 +299,87 @@ describe("createLensQuoter against a node that answers for another swap than ask
 
   it("accepts the swap it asked for", async () => {
     await expect(answer()).resolves.toMatchObject({ router: ROUTER, amountIn: 1000n, value: 0n });
+  });
+});
+
+describe("createLensQuoter against a node that answers the asked swap with its own limits", () => {
+  /** Lens's router call for the asked swap, carrying `minOut` and `deadline` of the node's choosing. */
+  const answer = (minOut: bigint, deadline: bigint) =>
+    quote.mockResolvedValue({
+      ...lensResult,
+      data: encodeFunctionData({
+        abi: ROUTER_ABI,
+        functionName: "exactInputSingle",
+        args: [
+          {
+            tokenIn: TOKEN_IN,
+            tokenOut: TOKEN_OUT,
+            recipient: EXECUTOR,
+            deadline,
+            amountIn: 1000n,
+            amountOutMinimum: minOut,
+            limitSqrtPrice: 0n,
+          },
+        ],
+      }),
+    });
+
+  beforeEach(() => {
+    quote.mockReset();
+  });
+
+  it("signs a min-out of the quoted amount less slippage when Lens answers a min-out of zero", async () => {
+    answer(0n, 1_800n);
+
+    // amountOutAtLimit 900 leaves Lens's 500 as the quote; 1% slippage keeps 495
+    const result = await quoter().quote(request({ amountOutAtLimit: 900n, slippageBps: 100 }));
+
+    expect(params(result.data).amountOutMinimum).toBe(495n);
+  });
+
+  it("signs the deadline it asked Lens for, not the one Lens answers", async () => {
+    answer(495n, 2n ** 255n);
+
+    // chainNow is 0, so the asked deadline is the thirty minutes alone
+    const result = await quoter().quote(request());
+
+    expect(params(result.data).deadline).toBe(1_800n);
+  });
+});
+
+describe("createLensExactInputQuoter against a node that answers its own deadline", () => {
+  beforeEach(() => {
+    quote.mockReset();
+  });
+
+  it("signs the deadline it asked Lens for", async () => {
+    quote.mockResolvedValue({
+      ...lensResult,
+      data: encodeFunctionData({
+        abi: ROUTER_ABI,
+        functionName: "exactInputSingle",
+        args: [
+          {
+            tokenIn: TOKEN_IN,
+            tokenOut: TOKEN_OUT,
+            recipient: EXECUTOR,
+            deadline: 2n ** 255n,
+            amountIn: 1000n,
+            amountOutMinimum: 0n,
+            limitSqrtPrice: 0n,
+          },
+        ],
+      }),
+    });
+
+    // chainNow is 0, so the asked deadline is the thirty minutes alone
+    const result = await createLensExactInputQuoter({} as PublicClient, 100, () => Promise.resolve(0n)).quote({
+      tokenIn: TOKEN_IN,
+      tokenOut: TOKEN_OUT,
+      amount: 1000n,
+      recipient: EXECUTOR,
+    });
+
+    expect(params(result.data).deadline).toBe(1_800n);
   });
 });
