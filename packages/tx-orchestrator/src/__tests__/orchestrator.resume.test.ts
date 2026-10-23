@@ -570,3 +570,47 @@ describe("a step the chain confirmed while the tab was away", () => {
     expect(second.orchestrator.getStatus()).toBe("completed");
   });
 });
+
+describe("resuming a step that already has a transaction out", () => {
+  /** What an adapter's chain check throws while the owner's own transaction is still unmined. */
+  const stillPending = () => {
+    throw new Error("A transaction from this wallet is still pending.");
+  };
+
+  it("adopts the stored hash on resume after a reload, and never asks canSkip", async () => {
+    const { first, hash } = await pausedMidFlight();
+    const second = reload(first);
+    second.orchestrator.restore({ flowId: "flow-1", steps: [step("a", { canSkip: stillPending }), step("b")] });
+
+    await second.orchestrator.resume();
+
+    expect(second.orchestrator.getStatus()).toBe("completed");
+    expect(second.gateway.waitedOn[0]).toBe(hash);
+    // only step b was signed
+    expect(second.gateway.signRequests).toHaveLength(1);
+  });
+
+  it("keeps the hash when Check again resumes in the same tab", async () => {
+    let checks = 0;
+    const h = harness({ scripts: [{ mine: "hold" }] });
+    const running = h.start([
+      step("a", { canSkip: () => (checks++ === 0 ? false : stillPending()) }),
+      step("b", { canSkip: () => true }),
+    ]);
+    await settle();
+    h.orchestrator.pause();
+    await running;
+    const hash = inFlightHash(h.orchestrator.getRun());
+    expect(hash).toBeDefined();
+
+    const resumed = h.orchestrator.resume();
+    await settle();
+    expect(inFlightHash(h.orchestrator.getRun())).toBe(hash);
+    h.gateway.releaseMine();
+    await resumed;
+
+    expect(h.orchestrator.getStatus()).toBe("completed");
+    expect(h.gateway.signRequests).toHaveLength(1);
+    expect(h.gateway.waitedOn).toEqual([hash, hash]);
+  });
+});

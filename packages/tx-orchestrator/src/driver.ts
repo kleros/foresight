@@ -332,7 +332,8 @@ export function createFlowDriver<TSnapshot, TCtx>(deps: {
         const index = run.steps.findIndex((candidate) => candidate.stepId === entry.stepId);
         const total = run.steps.length;
 
-        const skip = await askedToSkip(entry);
+        // A step with a hash out there is the chain's to settle; canSkip would drop the hash.
+        const skip = entry.outcome.status === "submitted" ? false : await askedToSkip(entry);
         if (skip === undefined || gone()) return;
 
         if (skip) {
