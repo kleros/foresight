@@ -791,6 +791,8 @@ export function createPredictRun(args: {
     reset() {
       const stored = args.store?.load<PredictSnapshot, PredictCtx>(args.flowId);
       if (hasUnanswered(orchestrator.getRun()?.snapshot ?? stored?.snapshot)) return;
+      // the transaction still confirming may be this run's own, which only its pinned block finds once it lands
+      if (failure?.reason === "pending" || failure?.reason === "deposit-unconfirmed") return;
       checking = undefined;
       claiming = undefined;
       const mismatch = stored && foreign(stored.ctx, args.ctx());

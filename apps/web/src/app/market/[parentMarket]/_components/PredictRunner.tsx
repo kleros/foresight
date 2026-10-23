@@ -194,7 +194,11 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
   // once money has moved, or may have, the run's snapshot is what gets signed, so the form locks to it
   const canRetry = recovered
     ? stage === "review" || retryable
-    : retryable && (Boolean(pendingHash) || Boolean(progress?.moneyMoved) || Boolean(progress?.unanswered));
+    : retryable &&
+      (Boolean(pendingHash) ||
+        Boolean(progress?.moneyMoved) ||
+        Boolean(progress?.unanswered) ||
+        progress?.failure?.reason === "pending");
 
   const close = () => {
     if ((stage === "halted" && !pendingHash) || stage === "moved") driver?.reset();

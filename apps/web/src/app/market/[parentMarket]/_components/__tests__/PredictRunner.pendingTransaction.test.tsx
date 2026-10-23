@@ -394,6 +394,21 @@ describe("PredictRunner, closing a run whose transaction may still be pending", 
   });
 });
 
+describe("PredictRunner, a new run stopped by a transaction of the wallet's still pending", () => {
+  it("retries on Predict and keeps the run on Close, since the pending one may be its own deposit", async () => {
+    const chain = fakeChain();
+    const reader = { ...chain.reader, hasPending: () => Promise.resolve(true) };
+    const popup = open(chain, store, reader);
+    popup.predict();
+    await vi.waitFor(() => expect(screen.getByTestId("failure").textContent).not.toBe(""));
+    expect(chain.deposits()).toHaveLength(0);
+    expect(screen.getByTestId("can-retry").textContent).toBe("true");
+
+    popup.close();
+    expect(store.load(FLOW_ID)).not.toBeNull();
+  });
+});
+
 describe("PredictRunner, reopening after closing on a pending transaction", () => {
   it("waits on the deposit already broadcast instead of asking for it again", async () => {
     const chain = fakeChain(["hold-and-network-down"]);
