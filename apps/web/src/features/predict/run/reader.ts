@@ -37,6 +37,37 @@ export function createPredictReader(args: {
       ? UNPRICED
       : readPoolLiquidity(args.client, ref, sqrtPriceX96FromPrice(targetPriceWad, ref.outcomeIsToken0));
 
+  /** `owner`'s transaction with `nonce` in block `blockNumber`, if it holds one. */
+  const sentIn = async (blockNumber: bigint, owner: Address, nonce: number) =>
+    (await args.client.getBlock({ blockNumber, includeTransactions: true })).transactions.find(
+      (each) => isAddressEqual(each.from, owner) && each.nonce === nonce,
+    );
+
+  /**
+   * The block from `fromBlock` to `head` that mined `owner`'s `nonce`, found from the owner's count after each
+   * block, which first passes `nonce` there; null where it was mined before `fromBlock`. A pruned node rejects.
+   */
+  async function blockMining(owner: Address, nonce: number, fromBlock: bigint, head: bigint): Promise<bigint | null> {
+    const countAfter = (blockNumber: bigint) => args.client.getTransactionCount({ address: owner, blockNumber });
+    if (fromBlock > 0n && (await countAfter(fromBlock - 1n)) > nonce) return null;
+    let [low, high] = [fromBlock, head];
+    while (low < high) {
+      const middle = (low + high) / 2n;
+      if ((await countAfter(middle)) > nonce) high = middle;
+      else low = middle + 1n;
+    }
+    return low;
+  }
+
+  /** The same transaction, looked for block by block from `head` down, for a node that keeps no past state. */
+  async function walkedTo(owner: Address, nonce: number, fromBlock: bigint, head: bigint) {
+    for (let number = head; number >= fromBlock; number--) {
+      const tx = await sentIn(number, owner, nonce);
+      if (tx) return tx;
+    }
+    return undefined;
+  }
+
   return {
     async isExecutorDeployed(executor) {
       const code = await args.client.getCode({ address: executor });
@@ -134,22 +165,20 @@ export function createPredictReader(args: {
       if (mined <= nonce) return { status: broadcast > nonce ? "pending" : "none" };
 
       const head = await args.client.getBlockNumber({ cacheTime: 0 });
-      for (let number = head; number >= fromBlock; number--) {
-        const block = await args.client.getBlock({ blockNumber: number, includeTransactions: true });
-        const tx = block.transactions.find((each) => isAddressEqual(each.from, owner) && each.nonce === nonce);
-        if (!tx) continue;
-        if (tx.to === null) return { status: "taken" };
-        const receipt = await args.client.getTransactionReceipt({ hash: tx.hash });
-        return {
-          status: "mined",
-          hash: tx.hash,
-          to: tx.to,
-          value: tx.value,
-          input: tx.input,
-          success: receipt.status === "success",
-        };
-      }
-      return { status: "taken" };
+      const minedIn = await blockMining(owner, nonce, fromBlock, head).catch(() => undefined);
+      if (minedIn === null) return { status: "taken" };
+      const tx =
+        minedIn === undefined ? await walkedTo(owner, nonce, fromBlock, head) : await sentIn(minedIn, owner, nonce);
+      if (!tx || tx.to === null) return { status: "taken" };
+      const receipt = await args.client.getTransactionReceipt({ hash: tx.hash });
+      return {
+        status: "mined",
+        hash: tx.hash,
+        to: tx.to,
+        value: tx.value,
+        input: tx.input,
+        success: receipt.status === "success",
+      };
     },
 
     async optionStates({ options, executor }) {
