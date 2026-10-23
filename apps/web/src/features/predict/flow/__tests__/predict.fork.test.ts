@@ -1222,6 +1222,8 @@ interface Scenario {
   closeTab?: "before-deposit" | "after-deposit" | "before-batch" | "after-batch";
   /** The wallet times out on the first batch, as the dev wallet's 10 s does on a cold fork, and the node mines it `lagMs` later. */
   lostAnswer?: { lagMs: number; waitMs?: number };
+  /** Confirms at Prices moved up to this many times, as the visitor pressing Confirm does. */
+  confirmMoved?: number;
 }
 
 interface ScenarioRun {
@@ -1248,6 +1250,8 @@ interface ScenarioRun {
   reopen: () => import("../../run/types").PredictDriver;
   /** The tab closed after its transaction landed and before the hash reached the app. */
   tabClosed: boolean;
+  /** How often the run stopped at Prices moved and was confirmed. */
+  confirmed: number;
 }
 
 /** The tab closed at this send; the storage it left is what a reload reads. */
@@ -1667,10 +1671,18 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       plans: Object.fromEntries([...preview].map(([market, plan]) => [market.toLowerCase(), plan!])),
       ...(creditsSwap ? { credits: creditsSwap } : {}),
     });
-    await vi.waitFor(() => tabClosed || expect(["halted", "complete"]).toContain(driver.getProgress().stage), {
-      timeout: 300_000,
-      interval: 250,
-    });
+    let confirmed = 0;
+    await vi.waitFor(
+      () => {
+        if (tabClosed) return;
+        if (driver.getProgress().stage === "moved" && confirmed < (scenario.confirmMoved ?? 0)) {
+          confirmed += 1;
+          driver.confirm();
+        }
+        expect(["halted", "complete"]).toContain(driver.getProgress().stage);
+      },
+      { timeout: 300_000, interval: 250 },
+    );
     await lateBatch;
     const after = await readLedger(client, scope);
     return {
@@ -1689,6 +1701,7 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       creditsSwap,
       estimates,
       tabClosed,
+      confirmed,
       reopen: () => {
         if (!leftBehind) throw new Error("The tab never closed.");
         driver.dispose();
@@ -2005,6 +2018,41 @@ describe("money kept by every predict run, against a gnosis fork", () => {
 
   const nudged = (count: number) => (children: Array<{ child: Child; up: bigint }>) =>
     children.slice(0, count).map(({ child, up }) => asOption(child, up + NUDGE));
+
+  it.skipIf(!FORK_RPC_URL)(
+    "goes on from one Confirm when the next swap's fee has risen above the fee the pools store",
+    async () => {
+      const [roomy] = await roomyChildren();
+      // a large trade raises the pools' volatility, and the fee their next swap pays climbs over the hour after it
+      const mover = await runScenario({
+        key: nextKey(),
+        pay: "collateral",
+        amount: parseEther("600"),
+        walletCollateral: parseEther("800"),
+        options: () => [asOption(roomy!.child, (WAD * 8n) / 10n)],
+      });
+      expect(mover.progress.stage, JSON.stringify(mover.progress.failure)).toBe("complete");
+      await rpc("evm_increaseTime", [3_600]);
+      await rpc("evm_mine");
+
+      const run = await runScenario({
+        key: nextKey(),
+        pay: "collateral",
+        amount: parseEther("5"),
+        walletCollateral: parseEther("50"),
+        options: (children) => {
+          const now = children.find(({ child }) => child.id === roomy!.child.id) ?? children[0]!;
+          return [asOption(now.child, now.up - (WAD * 15n) / 100n)];
+        },
+        confirmMoved: 3,
+      });
+
+      expect(run.progress.stage, JSON.stringify(run.progress.failure)).toBe("complete");
+      expect(run.confirmed, "Prices moved stopped the run once, on the fee gap, and Confirm went on").toBe(1);
+      expect(landedBatches(run)).toHaveLength(1);
+    },
+    900_000,
+  );
 
   it.skipIf(!FORK_RPC_URL)(
     "sDAI only: debits the sDAI shown and lands the estimate",
