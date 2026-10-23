@@ -94,6 +94,34 @@ describe("removing a row", () => {
     expect(onRemove).toHaveBeenCalledExactlyOnceWith(market);
   });
 
+  it("keeps a row still fading in its place once a row above it, removed first, has left", () => {
+    vi.useFakeTimers();
+    const rows = ["Movie A", "Movie B", "Movie C", "Movie D"].map((name, index) => ({
+      ...estimate,
+      scale: { ...estimate.scale, market: `0x${String(index + 1).repeat(40)}` as typeof market, name },
+    }));
+    function Popup() {
+      const [removed, setRemoved] = useState<string[]>([]);
+      return (
+        <PredictList
+          selected={rows.filter((row) => !removed.includes(row.scale.market))}
+          onRemove={(gone) => setRemoved((markets) => [...markets, gone])}
+          isReadOnly={false}
+        />
+      );
+    }
+    render(<Popup />);
+    const order = () => screen.getAllByRole("listitem").map((row) => row.querySelector("span[title]")?.textContent);
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove Movie B" }));
+    act(() => vi.advanceTimersByTime(40));
+    fireEvent.click(screen.getByRole("button", { name: "Remove Movie C" }));
+    // B's exit ends while C has 40ms left to fade where it was shown
+    act(() => vi.advanceTimersByTime(60));
+
+    expect(order()).toEqual(["Movie A", "Movie C", "Movie D"]);
+  });
+
   it("leaves a removed estimate out of a run started during its exit", () => {
     vi.useFakeTimers();
     const taken: string[][] = [];

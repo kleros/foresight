@@ -50,8 +50,8 @@ export function PredictList({
   /** A stored run's estimates, which offer no remove at all. */
   isFixed?: boolean;
 }) {
-  /** Rows already removed upstream, still shown while they fade, at the index they were shown at. */
-  const [leaving, setLeaving] = useState<Array<{ estimate: ListedEstimate; index: number }>>([]);
+  /** Rows already removed upstream, still shown while they fade, each after the row it followed; null for the first. */
+  const [leaving, setLeaving] = useState<Array<{ estimate: ListedEstimate; after: string | null }>>([]);
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
   useEffect(() => {
     const pending = timers.current;
@@ -61,17 +61,37 @@ export function PredictList({
   const shown = selected.filter(
     (estimate) => !leaving.some((row) => row.estimate.scale.market === estimate.scale.market),
   );
-  for (const row of [...leaving].sort((a, b) => a.index - b.index)) shown.splice(row.index, 0, row.estimate);
+  // a leaving row goes in once the row it follows is in; one following a row no longer listed goes last
+  let unplaced = leaving;
+  while (unplaced.length > 0) {
+    const placed = (row: (typeof leaving)[number]) =>
+      row.after === null || shown.some((each) => each.scale.market === row.after);
+    const ready = unplaced.filter(placed);
+    const queued = unplaced.filter((row) => !placed(row));
+    const last = ready.length === 0;
+    for (const row of last ? queued : ready) {
+      const at = row.after === null ? 0 : shown.findIndex((each) => each.scale.market === row.after) + 1;
+      shown.splice(at > 0 || row.after === null ? at : shown.length, 0, row.estimate);
+    }
+    unplaced = last ? [] : queued;
+  }
 
   const remove = (estimate: ListedEstimate) => {
     const market = estimate.scale.market;
     if (leaving.some((row) => row.estimate.scale.market === market)) return;
-    setLeaving((rows) => [...rows, { estimate, index: shown.indexOf(estimate) }]);
+    const index = shown.indexOf(estimate);
+    setLeaving((rows) => [...rows, { estimate, after: index > 0 ? shown[index - 1]!.scale.market : null }]);
     onRemove(market);
     // the token is 1ms under reduced motion
     const timer = setTimeout(() => {
       timers.current.delete(timer);
-      setLeaving((rows) => rows.filter((row) => row.estimate.scale.market !== market));
+      setLeaving((rows) => {
+        const gone = rows.find((row) => row.estimate.scale.market === market);
+        // a row that followed this one now follows the row this one followed
+        return rows
+          .filter((row) => row !== gone)
+          .map((row) => (gone && row.after === market ? { ...row, after: gone.after } : row));
+      });
     }, exitMs());
     timers.current.add(timer);
   };
