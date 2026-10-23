@@ -7,7 +7,7 @@ import {
   chainState,
   ctx,
   fakeCreditsQuoter,
-  fakeQuoter,
+  poolQuoter,
   fakeReader,
   option,
   snapshot,
@@ -77,17 +77,18 @@ function setup(
     getReceipt: (hash) => Promise.resolve(receipt(hash)),
     isKnown: () => Promise.resolve(true),
   };
+  const state = () => (split ? chainState({ underlying: STATE.underlying + request.collateralIn }) : STATE);
   const reader = fakeReader({
     deployed: true,
     blockGasLimit: opts.blockGasLimit,
-    state: () => (split ? chainState({ underlying: STATE.underlying + request.collateralIn }) : STATE),
+    state,
     credits: { [addresses.executor]: request.creditsToSpend },
   });
   const creditsQuoter = fakeCreditsQuoter({});
   const driver = createPredictRun({
     gateway,
     reader,
-    quoter: fakeQuoter(),
+    quoter: poolQuoter(request.options, state),
     creditsQuoter,
     flowId: `retry-slippage-${drivers.length}`,
     store: opts.store,

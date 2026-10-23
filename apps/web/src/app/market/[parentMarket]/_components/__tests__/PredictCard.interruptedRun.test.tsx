@@ -68,6 +68,8 @@ const chain = vi.hoisted(() => ({
   deployed: true,
   /** The target prices every build asked the chain about, in order. */
   asked: [] as bigint[][],
+  /** The options the last build asked the chain about, which the quoter prices. */
+  options: [] as PredictOption[],
 }));
 
 function mine() {
@@ -185,6 +187,7 @@ vi.mock("@/features/predict/run/reader", async () => {
       sentWithNonce: () => Promise.resolve({ status: "none" as const }),
       optionStates: ({ options }: { options: PredictOption[] }) => {
         chain.asked.push(options.map((option) => option.targetPriceWad));
+        chain.options = options;
         return Promise.resolve(options.map(() => chainState()));
       },
     }),
@@ -192,8 +195,11 @@ vi.mock("@/features/predict/run/reader", async () => {
 });
 
 vi.mock("@/lib/swap/lens", async () => {
-  const { fakeCreditsQuoter, fakeQuoter } = await import("@/features/predict/flow/__tests__/support/fakes");
-  return { createLensQuoter: () => fakeQuoter(), createLensExactInputQuoter: () => fakeCreditsQuoter() };
+  const { fakeCreditsQuoter, poolQuoter } = await import("@/features/predict/flow/__tests__/support/fakes");
+  return {
+    createLensQuoter: () => poolQuoter(() => chain.options),
+    createLensExactInputQuoter: () => fakeCreditsQuoter(),
+  };
 });
 
 vi.mock("@/features/trade-executor/api/getExecutor", async (importOriginal) => ({

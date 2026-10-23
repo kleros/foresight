@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAccount } from "wagmi";
 
 import type { PredictDialog } from "@/features/predict/components/PredictDialog";
-import { addresses, ctx, fakeQuoter, fakeReader, snapshot, WAD } from "@/features/predict/flow/__tests__/support/fakes";
+import { addresses, ctx, fakeReader, poolQuoter, snapshot, WAD } from "@/features/predict/flow/__tests__/support/fakes";
 import { STEP_ID } from "@/features/predict/flow/plan";
 import type { PredictCtx, PredictSnapshot } from "@/features/predict/flow/types";
 import { createPredictRun } from "@/features/predict/run/driver";
@@ -236,7 +236,7 @@ function open(chain: Chain, store: FlowRunStore, reader = chain.reader) {
     createPredictRun({
       gateway: chain.gateway,
       reader,
-      quoter: fakeQuoter(),
+      quoter: poolQuoter(SNAP.options),
       store,
       flowId: FLOW_ID,
       ctx: (): PredictCtx => ctx(),

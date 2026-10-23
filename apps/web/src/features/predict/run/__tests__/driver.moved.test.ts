@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   chainState,
   ctx,
-  fakeQuoter,
+  poolQuoter,
   fakeReader,
   gasLimitFor,
   option,
@@ -63,7 +63,7 @@ function setup(initial: OptionChainState) {
   const driver = createPredictRun({
     gateway,
     reader: fakeReader({ deployed: true, state: () => state }),
-    quoter: fakeQuoter(),
+    quoter: poolQuoter([OPTION], () => state),
     flowId: FLOW_ID,
     store,
     ctx: () => ctx(),
@@ -164,7 +164,7 @@ describe("createPredictRun's batch count across a moved confirm", () => {
         blockGasLimit: gasLimitFor(3),
         estimateGas: () => Promise.resolve(estimate),
       }),
-      quoter: fakeQuoter(),
+      quoter: poolQuoter(options, () => DEEPER),
       flowId: `${FLOW_ID}-sized`,
       store: createFlowRunStore({ storage: createMemoryStorage() }),
       ctx: () => ctx(),

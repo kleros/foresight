@@ -21,6 +21,7 @@ import {
 } from "@/lib/swap/types";
 
 import { CREDITS_SLIPPAGE_BPS, SLIPPAGE_BPS } from "../../../oracle/tolerances";
+import { swapToward } from "../../../utils/poolMath";
 import { batchGas, BATCH_GAS_SHARE_BPS } from "../../plan";
 import type {
   GasEstimateTx,
@@ -224,6 +225,52 @@ export function fakeQuoter(
         value: 0n,
       };
       return Promise.resolve(quote);
+    },
+  };
+}
+
+/**
+ * Prices each leg of `options` by the pool maths the popup's preview uses, against the pools `state`
+ * gives when the quote is asked, so a quote agrees with a plan shown from the same pools.
+ */
+export function poolQuoter(
+  options: readonly PredictOption[] | (() => readonly PredictOption[]),
+  state: (option: PredictOption) => OptionChainState = () => chainState(),
+): FakeQuoter {
+  const requests: SwapQuoteRequest[] = [];
+  return {
+    requests,
+    quote: (request) => {
+      requests.push(request);
+      const tokens = [request.tokenIn, request.tokenOut];
+      const option = (typeof options === "function" ? options() : options).find(
+        (each) => tokens.includes(each.upToken) || tokens.includes(each.downToken),
+      );
+      if (!option) return Promise.reject(new NoSwapRouteError("No pool."));
+      const side = tokens.includes(option.upToken) ? "up" : "down";
+      const target = side === "up" ? option.targetPriceWad : WAD - option.targetPriceWad;
+      const { amountOut } = swapToward(state(option).pools[side], target, request.amount);
+      return Promise.resolve({
+        amountIn: request.amount,
+        amountOut,
+        router: addresses.swapRouter,
+        data: encodeFunctionData({
+          abi: ALGEBRA_ROUTER_ABI,
+          functionName: "exactInputSingle",
+          args: [
+            {
+              tokenIn: request.tokenIn,
+              tokenOut: request.tokenOut,
+              recipient: request.recipient,
+              deadline: 1_700_001_800n,
+              amountIn: request.amount,
+              amountOutMinimum: amountOut,
+              limitSqrtPrice: request.limitSqrtPrice,
+            },
+          ],
+        }),
+        value: 0n,
+      });
     },
   };
 }

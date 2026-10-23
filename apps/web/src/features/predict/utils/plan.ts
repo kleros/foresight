@@ -317,3 +317,37 @@ export function planChanged(shown: PreviewTrades, now: PreviewTrades, toleranceB
   const before = figures(shown);
   return figures(now).some((figure, index) => !near(before[index]!, figure, toleranceBps));
 }
+
+/** A leg as the run quoted it: what it spends where its limit stops it, and what the quote pays. */
+export interface QuotedLeg {
+  side: OptionSide;
+  amountIn: bigint;
+  amountOut: bigint;
+}
+
+/** `now` is more than `toleranceBps` below `shown`, as a share of `shown`. */
+const short = (shown: bigint, now: bigint, toleranceBps: number) =>
+  now * 10_000n < shown * (10_000n - BigInt(toleranceBps));
+
+/**
+ * Whether a live quote pays less than `shown`'s leg on the same side by more than `toleranceBps`,
+ * or a buy spends less than shown. A leg only one of them has is left to the sells' check.
+ */
+export function quotesShort(
+  shown: PreviewTrades,
+  quoted: { sells: readonly QuotedLeg[]; buys: readonly QuotedLeg[] },
+  toleranceBps: number,
+): boolean {
+  const sellShort = quoted.sells.some((leg) => {
+    const before = shown.sells.find((each) => each.side === leg.side);
+    return before !== undefined && short(before.underlyingOut, leg.amountOut, toleranceBps);
+  });
+  const buyShort = quoted.buys.some((leg) => {
+    const before = shown.buys.find((each) => each.side === leg.side);
+    return (
+      before !== undefined &&
+      (short(before.outcomeOut, leg.amountOut, toleranceBps) || short(before.amountIn, leg.amountIn, toleranceBps))
+    );
+  });
+  return sellShort || buyShort;
+}

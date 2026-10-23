@@ -30,6 +30,7 @@ import {
   fakeReader,
   landedTx,
   option,
+  poolQuoter,
   snapshot,
   VAULT_RATE,
   WAD,
@@ -339,7 +340,7 @@ describe("a credits batch held to the swap Details showed", () => {
       deps({ creditsQuoter: fakeCreditsQuoter({ lossBps: 40n }) }),
     );
     const plans = await plansNow();
-    const used = deps({ heldTo: () => ({ plans, credits: shown }) });
+    const used = deps({ quoter: poolQuoter(creditsRun().options), heldTo: () => ({ plans, credits: shown }) });
 
     expect(shown.floor).toBeLessThan(floorOf(2n * WAD));
     expect(await minimumOf(await build(creditsRun(), used))).toBe(floorOf(2n * WAD));

@@ -52,9 +52,12 @@ import {
   planChanged,
   planSells,
   previewTrades,
+  quotesShort,
   type OptionSide,
   type PreviewTrades,
+  type QuotedLeg,
   type SoldLeg,
+  type SwapLeg,
 } from "../utils/plan";
 
 /**
@@ -121,6 +124,9 @@ export class AtEstimatesError extends Error {
 
 /** One option's pools already sit at its estimate. */
 class OptionAtEstimate extends Error {}
+
+/** One option's live quotes pay less than the plan the run is held to. */
+class OptionQuotesShort extends Error {}
 
 /** The quoter gave no answer, so whether a route exists is unknown; trying again may help. */
 export class QuoteFailedError extends Error {
@@ -191,12 +197,15 @@ async function optionCalls(
   mint: bigint,
   slippageBps: number,
   deps: PredictDeps,
+  /** The plan the popup showed for this option, which its quotes may fall short of by `toleranceBps`. */
+  shown: { plan: PreviewTrades; toleranceBps: number } | undefined,
 ): Promise<ExecutorCall[]> {
   const splitAmount = state.underlying + mint;
   const target = { pools: state.pools, targetPriceWad: option.targetPriceWad, held: state.held, splitAmount };
 
   const sells: QuotedSwap[] = [];
   const sold: SoldLeg[] = [];
+  const quoted: { sells: QuotedLeg[]; buys: QuotedLeg[] } = { sells: [], buys: [] };
   for (const leg of planSells(target)) {
     const tokenIn = outcomeToken(option, leg.side);
     const quote = await quoteLeg(deps, {
@@ -212,6 +221,7 @@ async function optionCalls(
     });
     sells.push({ tokenIn, quote });
     sold.push({ ...leg, underlyingOut: quote.amountOut });
+    quoted.sells.push(quotedLeg(leg, quote));
   }
 
   const { mergeAmount, legs } = planBuys(target, sold, slippageBps);
@@ -230,6 +240,12 @@ async function optionCalls(
       poolFee: state.pools[leg.side].fee,
     });
     buys.push({ tokenIn: option.underlying, quote });
+    quoted.buys.push(quotedLeg(leg, quote));
+  }
+
+  // the pools were checked against the held plan when read; a pool moved after that shows only in the quotes
+  if (shown && quotesShort(shown.plan, quoted, shown.toleranceBps)) {
+    throw new OptionQuotesShort(`${option.childMarket}'s quotes pay less than the plan shown.`);
   }
 
   if (sells.length === 0 && buys.length === 0) {
@@ -250,6 +266,13 @@ async function optionCalls(
     buys,
   });
 }
+
+/** A leg as quoted, spending no more than its limit lets it, as the preview shows a leg. */
+const quotedLeg = (leg: SwapLeg, quote: SwapQuote): QuotedLeg => ({
+  side: leg.side,
+  amountIn: leg.amountIn < leg.amountInAtLimit ? leg.amountIn : leg.amountInAtLimit,
+  amountOut: quote.amountOut,
+});
 
 /** The credits leg of the first batch, and the collateral its xDAI mints at the parent. */
 interface CreditsLeg {
@@ -414,18 +437,33 @@ async function predictCalls(args: {
 
   let traded = 0;
   const reasons: unknown[] = [];
+  const short: Address[] = [];
+  const toleranceBps = Math.min(slippageBps, MOVED_TOLERANCE_BPS);
   for (const [index, option] of options.entries()) {
     const state = states[index];
     if (state === undefined) continue;
 
     try {
-      calls.push(...(await optionCalls(ctx, option, state, perOption, slippageBps, deps)).map(withoutValue));
+      const plan = held?.plans[option.childMarket.toLowerCase()];
+      const shown = plan ? { plan, toleranceBps } : undefined;
+      calls.push(...(await optionCalls(ctx, option, state, perOption, slippageBps, deps, shown)).map(withoutValue));
       traded += 1;
     } catch (reason) {
       if (reason instanceof QuoteFailedError) throw reason;
+      if (reason instanceof OptionQuotesShort) {
+        short.push(option.childMarket);
+        continue;
+      }
       reasons.push(reason);
       deps.onLeftOut?.(option, reason, stepId);
     }
+  }
+
+  if (held && short.length > 0) {
+    const now = await deps.reader.optionStates({ options, executor: ctx.executor });
+    const moved = movedFrom(held, options, now, perOption, slippageBps);
+    const markets = [...short, ...moved.markets.filter((market) => !short.includes(market))];
+    throw new PlansMovedError({ ...moved, markets });
   }
 
   if (traded === 0) {

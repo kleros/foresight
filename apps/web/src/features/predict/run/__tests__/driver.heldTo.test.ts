@@ -11,7 +11,7 @@ import {
   chainState,
   ctx,
   fakeCreditsQuoter,
-  fakeQuoter,
+  poolQuoter,
   fakeReader,
   option,
   snapshot,
@@ -85,7 +85,7 @@ function setup(args: {
   const driver = createPredictRun({
     gateway,
     reader,
-    quoter: fakeQuoter(),
+    quoter: poolQuoter([OPTION], () => state),
     creditsQuoter,
     flowId: `held-${drivers.length}`,
     ctx: () => ctx(),
