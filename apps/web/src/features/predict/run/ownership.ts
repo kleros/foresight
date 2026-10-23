@@ -20,7 +20,8 @@ export function createRunOwnership(locks: RunLocks | null): RunOwnership {
       if (!locks) return Promise.resolve(() => {});
       const name = lockName(flowId);
       return new Promise((resolve) => {
-        void locks.request(name, { ifAvailable: true }, (lock) => {
+        // a document that is not fully active, or an opaque origin, refuses locks; the run is then this tab's, as with no API
+        locks.request(name, { ifAvailable: true }, (lock) => {
           if (!lock) {
             resolve(null);
             return;
@@ -33,7 +34,7 @@ export function createRunOwnership(locks: RunLocks | null): RunOwnership {
               letGo();
             });
           });
-        });
+        }).catch(() => resolve(() => {}));
       });
     },
 
@@ -42,7 +43,7 @@ export function createRunOwnership(locks: RunLocks | null): RunOwnership {
       const name = lockName(flowId);
       // a lock this tab is letting go of can still be listed as the query answers
       const oursBefore = here.has(name);
-      const { held = [] } = await locks.query();
+      const { held = [] } = await locks.query().catch(() => ({ held: [] }));
       return !oursBefore && !here.has(name) && held.some((lock) => lock.name === name);
     },
   };
