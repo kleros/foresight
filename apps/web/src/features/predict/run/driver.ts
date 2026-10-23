@@ -647,10 +647,11 @@ export function createPredictRun(args: {
     return snapshot;
   }
 
-  /** The batch size the last check planned with; confirming at moved plans the batches it showed. */
+  /** The request and batch size the last check planned with; confirming at moved signs what it showed. */
   let plannedSize: number | undefined;
+  let plannedRequest: PredictRequest | undefined;
 
-  const startRun = (heldTo?: HeldTo, size?: number) =>
+  const startRun = (heldTo?: HeldTo, size?: number, request?: PredictRequest) =>
     detached(async () => {
       report(undefined);
       held = heldTo;
@@ -659,7 +660,8 @@ export function createPredictRun(args: {
       leavingOut.clear();
       moneyMoved = false;
 
-      const requested: PredictRequest = args.snapshot();
+      const requested: PredictRequest = request ?? args.snapshot();
+      plannedRequest = requested;
       const ctx = args.ctx();
       const check = {};
       checking = check;
@@ -773,7 +775,7 @@ export function createPredictRun(args: {
       };
       const status = orchestrator.getStatus();
       if (status === "idle") {
-        startRun(next, plannedSize);
+        startRun(next, plannedSize, plannedRequest);
         return;
       }
       if (status !== "paused" && status !== "failed") return;

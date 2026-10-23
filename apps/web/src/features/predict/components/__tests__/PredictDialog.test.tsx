@@ -685,6 +685,19 @@ describe("the summary under the amount", () => {
     expect(screen.getByTestId("trade-mint")).toHaveTextContent("10 sDAI → 10 tokens");
   });
 
+  it("holds the mint it showed at Predict through moved and the Confirm after it, which sign that funding", async () => {
+    const view = render(<PredictDialog {...props()} />);
+    await userEvent.click(summaryHead());
+    const refreshed = funding({ collateralIn: 3n * WAD });
+
+    view.rerender(<PredictDialog {...props()} isRunning />);
+    view.rerender(<PredictDialog {...props()} moved={{ markets: 1, credits: false }} funding={refreshed} />);
+    expect(screen.getByTestId("trade-mint")).toHaveTextContent("10 sDAI → 10 tokens");
+    view.rerender(<PredictDialog {...props()} isRunning funding={refreshed} />);
+
+    expect(screen.getByTestId("trade-mint")).toHaveTextContent("10 sDAI → 10 tokens");
+  });
+
   it("names no mint with nothing going in", async () => {
     render(<PredictDialog {...props()} funding={funding({ collateralIn: 0n })} />);
 

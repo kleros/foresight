@@ -198,8 +198,9 @@ export function PredictDialog({
   const nothingToTrade = isFirstPrediction && (funding?.collateralIn ?? 0n) === 0n;
   const isPricing = steps.pricing === true;
   const runToken = recovered?.token;
-  // a refreshed balance or re-priced preview would change what the visitor is reading mid-run
-  const shownFunding = useHeldWhile(funding, lock);
+  // a refreshed balance or re-priced preview would change what the visitor is reading mid-run; a Confirm at moved
+  // signs the funding read at Predict, so the funding alone is held through moved as well
+  const shownFunding = useHeldWhile(funding, isLocked ? "run" : null);
   const shownPreview = useHeldWhile(preview, lock);
   const shownCreditsSwap = useHeldWhile(creditsSwap, lock);
   const swap = recovered ? undefined : shownCreditsSwap?.preview;
