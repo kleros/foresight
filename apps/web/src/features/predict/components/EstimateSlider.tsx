@@ -35,6 +35,12 @@ const PILL_TONE = {
   lower: { color: "var(--fs-tone-error-text)", wash: "var(--fs-estimate-down)" },
 } as const;
 
+/** `value` to `digits` places with trailing zeros cut; `String(number)` turns a small one into `5e-8`, which the field refuses. */
+const plainDecimal = (value: number, digits: number): string => {
+  const fixed = value.toFixed(digits);
+  return fixed.includes(".") ? fixed.replace(/0+$/, "").replace(/\.$/, "") : fixed;
+};
+
 /** The chip's travel from its place above the track to 2px under the thumb, in px. */
 const PIN_DROP_PX = 52;
 /** The stick from the raised chip down to the track, in px. */
@@ -412,7 +418,7 @@ const ValuePill = forwardRef<HTMLSpanElement, ValuePillProps>(function ValuePill
           onClick={() => {
             setLanded(false);
             onOpen();
-            setDraft(String(Number(shown.toFixed(estimateDigits(scale)))));
+            setDraft(plainDecimal(shown, estimateDigits(scale)));
           }}
           onAnimationEnd={() => setLanded(false)}
           style={

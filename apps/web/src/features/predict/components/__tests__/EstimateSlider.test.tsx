@@ -314,6 +314,17 @@ describe("EstimateSlider value pill", () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
+  it("opens a tiny estimate as the plain decimal it then accepts", async () => {
+    const tiny: OptionScale = { ...scale, unit: null, lowerBound: 0, upperBound: 0.000001 };
+    renderSlider(0.00000005, { scale: tiny, marketEstimate: 0.0000005 });
+
+    await userEvent.click(screen.getByRole("button", { name: /type your estimate/ }));
+    expect(field()).toHaveValue("0.00000005");
+    await userEvent.keyboard("{Enter}");
+
+    expect(screen.queryByText("Enter a number.")).toBeNull();
+  });
+
   it("is named by the value it shows, then what it does", () => {
     renderSlider(400);
 
