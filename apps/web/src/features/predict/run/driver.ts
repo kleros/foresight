@@ -28,6 +28,7 @@ import {
   AtEstimatesError,
   createPredictHooks,
   CreditsUnavailableError,
+  depositMintPatch,
   heldMoves,
   isTx,
   NoRouteError,
@@ -364,17 +365,32 @@ export function createPredictRun(args: {
     }));
   }
 
+  const hooks = createPredictHooks({
+    reader: args.reader,
+    takeLeftOut: (stepId) => {
+      const left = leavingOut.get(stepId) ?? [];
+      leavingOut.delete(stepId);
+      return left;
+    },
+  });
+
   const orchestrator = createTxOrchestrator<PredictSnapshot, PredictCtx>({
     adapterId: "predict-flow",
     gateway,
-    hooks: createPredictHooks({
-      reader: args.reader,
-      takeLeftOut: (stepId) => {
-        const left = leavingOut.get(stepId) ?? [];
-        leavingOut.delete(stepId);
-        return left;
+    hooks: {
+      ...hooks,
+      async afterStep(context) {
+        try {
+          return await hooks.afterStep!(context);
+        } catch (error) {
+          // the deposit is settled and its hook never runs again, so the mint left unread is owed until it is read
+          if (context.completed.stepId === STEP_ID.deposit && context.snapshot.depositNative) {
+            orchestrator.updateSnapshot({ mintOwed: true }, { source: "adapter" });
+          }
+          throw error;
+        }
       },
-    }),
+    },
     store: args.store,
     now: args.now,
     // A build reads the chain and the indexer before it signs anything. Those failures are
@@ -551,7 +567,20 @@ export function createPredictRun(args: {
     return action;
   }
 
-  const resumeRun = detached(() => orchestrator.resume());
+  /** Reads the collateral a settled xDAI deposit minted, where its hook could not, before anything is split. */
+  async function settleOwedMint() {
+    const run = orchestrator.getRun();
+    if (!run?.snapshot.mintOwed) return;
+    const patch = await depositMintPatch(deps, run.ctx, run.snapshot);
+    orchestrator.updateSnapshot(({ mintOwed: _read, ...rest }) => ({ ...rest, ...patch }), { source: "adapter" });
+  }
+
+  // resumed in the same tick where nothing is owed, so the run is running as soon as a retry returns
+  const resumeRun = detached(() =>
+    orchestrator.getRun()?.snapshot.mintOwed
+      ? settleOwedMint().then(() => orchestrator.resume())
+      : orchestrator.resume(),
+  );
 
   /** Settles a sent transaction whose receipt was never seen, then carries on only if it mined or may still. */
   const reconcileRun = detached(async () => {
@@ -566,6 +595,7 @@ export function createPredictRun(args: {
       report(errorOf(orchestrator.getRun())?.cause ?? "unknown", resumeRun);
       return;
     }
+    await settleOwedMint();
     await orchestrator.resume();
   });
 

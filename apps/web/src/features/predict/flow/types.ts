@@ -132,6 +132,8 @@ export interface PredictSnapshot {
   optionsPerBatch: number;
   /** Options that settled batches left out for lack of a route; absent until one does. */
   leftOut?: Address[];
+  /** Set while an xDAI deposit is settled and the collateral it minted not yet read; the first batch waits on it. */
+  mintOwed?: true;
   /** Sends the wallet was asked for and no hash is stored for, by step id, until their nonce says how they ended. */
   unanswered?: Record<string, UnansweredSend>;
 }

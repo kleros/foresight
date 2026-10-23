@@ -862,14 +862,24 @@ export function createPredictHooks(
       if (completed.stepId !== STEP_ID.deposit || !snapshot.depositNative) return;
 
       // The adapter mints whatever the xDAI was worth, which only the deposit's own logs show.
-      const minted = receipt
-        ? collateralInto(receipt.logs, ctx)
-        : (await landedSince(deps, ctx, snapshot)).find((landed) => isTx(landed, depositStepTx(ctx, snapshot)))
-            ?.collateralReceived;
-      if (minted === undefined) throw new Error("The deposit's transaction was not found on chain.");
-      return { snapshotPatch: { collateralIn: minted + tradeWalletShare(snapshot) } };
+      if (receipt)
+        return { snapshotPatch: { collateralIn: collateralInto(receipt.logs, ctx) + tradeWalletShare(snapshot) } };
+      return { snapshotPatch: await depositMintPatch(deps, ctx, snapshot) };
     },
   };
+}
+
+/** The split an xDAI deposit that landed with no receipt read gives: what its own logs show it minted. */
+export async function depositMintPatch(
+  deps: Pick<PredictDeps, "reader">,
+  ctx: PredictCtx,
+  snapshot: Readonly<PredictSnapshot>,
+): Promise<Pick<PredictSnapshot, "collateralIn">> {
+  const minted = (await landedSince(deps, ctx, snapshot)).find((landed) =>
+    isTx(landed, depositStepTx(ctx, snapshot)),
+  )?.collateralReceived;
+  if (minted === undefined) throw new Error("The deposit's transaction was not found on chain.");
+  return { collateralIn: minted + tradeWalletShare(snapshot) };
 }
 
 /**
