@@ -57,7 +57,7 @@ async function build() {
   const step = planPredict(snap, { reader: fakeReader({ state: () => chainState() }), quoter, onLeftOut }).find(
     (each) => each.id === STEP_ID.predict(1),
   )!;
-  const built = await step.build(ctx(), snap).catch((caught: unknown) => caught);
+  const built = await Promise.resolve(step.build(ctx(), snap)).catch((caught: unknown) => caught);
   return { built, onLeftOut };
 }
 
