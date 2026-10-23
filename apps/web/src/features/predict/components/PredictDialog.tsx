@@ -208,9 +208,11 @@ export function PredictDialog({
   const shownCreditsSwap = useHeldWhile(creditsSwap, lock);
   const swap = recovered ? undefined : shownCreditsSwap?.preview;
   const resolved = resolveSlippage(slippage.settings);
+  // the swap lands with the first batch, after the figures were held, so whether it has is read live
+  const swapLanded = Boolean(creditsSwap?.landed || shownCreditsSwap?.landed);
   const inUse = {
     tradeBps: resolved.tradeBps,
-    ...(shownCreditsSwap && !shownCreditsSwap.landed ? { creditsBps: resolved.creditsBps } : {}),
+    ...(shownCreditsSwap && !swapLanded ? { creditsBps: resolved.creditsBps } : {}),
   };
   const status = statusLine({
     steps,

@@ -1344,4 +1344,13 @@ describe("Details' slippage", () => {
 
     expect(await slippageRows()).toEqual(["Max slippage1%"]);
   });
+
+  it("leaves it out once the swap lands part way through a run held to the swap shown at Predict", async () => {
+    const view = render(<PredictDialog {...props()} {...withCredits} isRunning creditsSwap={lossySwap} />);
+    view.rerender(
+      <PredictDialog {...props()} {...withCredits} canRetry creditsSwap={{ ...lossySwap, landed: true }} />,
+    );
+
+    expect(await slippageRows()).toEqual(["Max slippage1%"]);
+  });
 });
