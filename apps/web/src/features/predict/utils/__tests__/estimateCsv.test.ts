@@ -49,13 +49,22 @@ describe("parseEstimateCsv rows", () => {
 });
 
 describe("serializeEstimateCsv", () => {
+  it("starts with a UTF-8 byte-order mark, which Excel needs to read the file as UTF-8", async () => {
+    const csv = serializeEstimateCsv([{ name: "São Paulo", estimate: 250 }]);
+    const bytes = new Uint8Array(await new Blob([csv]).arrayBuffer());
+
+    expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    expect(parseEstimateCsv(await new Blob([csv]).text(), [{ ...villeneuve, name: "São Paulo" }])).toHaveLength(1);
+    expect(parseEstimateCsv(csv, [{ ...villeneuve, name: "São Paulo" }])).toHaveLength(1);
+  });
+
   it("writes the header and quotes a name that carries a comma", () => {
     const csv = serializeEstimateCsv([
       { name: "Villeneuve", estimate: 250 },
       { name: "Gerwig, Greta", estimate: 300.5 },
     ]);
 
-    expect(csv).toBe('name,estimate\nVilleneuve,250\n"Gerwig, Greta",300.5');
+    expect(csv).toBe('\uFEFFname,estimate\nVilleneuve,250\n"Gerwig, Greta",300.5');
   });
 
   it("round-trips through the parser", () => {

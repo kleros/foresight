@@ -65,7 +65,7 @@ describe("EstimateActions", () => {
 
     expect(downloadTextFile).toHaveBeenCalledWith(
       expect.stringMatching(/^estimates-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}\.csv$/),
-      "name,estimate\nVilleneuve,250\nGerwig,300",
+      "\uFEFFname,estimate\nVilleneuve,250\nGerwig,300",
       "text/csv",
     );
   });

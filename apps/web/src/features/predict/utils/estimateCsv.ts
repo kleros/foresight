@@ -53,8 +53,11 @@ const FORMULA_START = /^[=+\-@\t\r]/;
 const quote = (cell: string) => (/[",\r\n]/.test(cell) ? `"${cell.replaceAll('"', '""')}"` : cell);
 const asText = (cell: string) => quote(FORMULA_START.test(cell) ? `'${cell}` : cell);
 
+/** Excel reads a CSV without a byte-order mark as the system's ANSI code page; `trim()` drops it on upload. */
+const UTF8_BOM = "\uFEFF";
+
 export function serializeEstimateCsv(rows: { name: string; estimate: number }[]): string {
-  return [CSV_COLUMNS.join(","), ...rows.map((row) => `${asText(row.name)},${row.estimate}`)].join("\n");
+  return UTF8_BOM + [CSV_COLUMNS.join(","), ...rows.map((row) => `${asText(row.name)},${row.estimate}`)].join("\n");
 }
 
 interface ParsedEstimate {

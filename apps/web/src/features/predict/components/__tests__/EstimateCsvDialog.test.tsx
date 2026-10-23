@@ -82,7 +82,7 @@ describe("EstimateCsvDialog", () => {
 
     expect(downloadTextFile).toHaveBeenCalledWith(
       "estimates-template.csv",
-      "name,estimate\nVilleneuve,250\nGerwig,280",
+      "\uFEFFname,estimate\nVilleneuve,250\nGerwig,280",
       "text/csv",
     );
   });
