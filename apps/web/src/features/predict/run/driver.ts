@@ -56,10 +56,8 @@ class TradeWalletShortError extends Error {}
 /** The chain's clock has passed the session's close. */
 class SessionClosedError extends Error {}
 
-/**
- * How long, and how often, the chain is read for a send that errored. A lost answer is waited on for `waitMs`;
- * a coded error for `graceMs`, since the wallet's own node may see the transaction before this app's does.
- */
+/** Chain reads for a send that errored: `waitMs` for a lost answer, `graceMs` for a coded error, which the
+ * wallet's own node may have broadcast before this app's node sees it. */
 const UNANSWERED_SEND = { waitMs: 120_000, pollMs: 2_000, graceMs: 4_000 };
 
 const TRANSPORT_FAILURES = new Set(["TimeoutError", "HttpRequestError"]);
@@ -237,10 +235,7 @@ export function createPredictRun(args: {
     if ((await args.reader.latestTimestamp()) >= BigInt(args.closesAt)) throw new SessionClosedError();
   }
 
-  /**
-   * Each step first asks whether a send of its that errored has since been mined, and is built only while the
-   * session is open.
-   */
+  /** Each step first reads how its errored send ended, and is built only while the session is open. */
   function guardedSteps(steps: TxStep<PredictSnapshot, PredictCtx>[]): TxStep<PredictSnapshot, PredictCtx>[] {
     return steps.map((step) => ({
       ...step,
