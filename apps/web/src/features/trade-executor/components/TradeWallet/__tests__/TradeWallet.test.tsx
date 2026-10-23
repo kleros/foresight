@@ -341,6 +341,16 @@ describe("TradeWallet's amount dialogs", () => {
     expect(await within(dialog).findByText("Balance: less than 0.0001 sDAI")).toBeInTheDocument();
   });
 
+  it.each(["Deposit", "Withdraw"])("names %s's amount field for a screen reader", async (action) => {
+    ownerHeld = new Map([[COLLATERAL, units("1")]]);
+    renderWallet(market, { closed: true });
+
+    await userEvent.click(screen.getByRole("button", { name: action }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(within(dialog).getByRole("spinbutton")).toHaveAccessibleName("Amount");
+  });
+
   it("does not offer a Max of 0 over an empty balance", async () => {
     renderWallet(market, { closed: true });
 

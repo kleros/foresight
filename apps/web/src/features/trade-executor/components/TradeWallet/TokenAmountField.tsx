@@ -49,8 +49,9 @@ export function TokenAmountField({
       <div className="border-fs-border rounded-fs flex h-fit flex-row border">
         <BigNumberField
           name="amount"
+          label="Amount"
           className={clsx(
-            "inline-block flex-1 tabular-nums max-md:w-max",
+            "inline-block flex-1 tabular-nums max-md:w-max [&>label]:sr-only",
             "[&_input]:rounded-r-none [&_input]:border-none [&_input]:focus:shadow-none",
           )}
           onChange={(entered) => onChange(entered.toFixed())}
