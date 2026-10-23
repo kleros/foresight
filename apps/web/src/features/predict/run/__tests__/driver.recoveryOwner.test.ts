@@ -258,6 +258,17 @@ describe("createPredictRun recovering a stored run whose contracts differ from t
     expect(gateway.signRequests).toEqual([]);
   });
 
+  it("keeps such a run through reset while it holds a broadcast hash no receipt has been read for", async () => {
+    const store = savedRunOfA(submittedDeposit, ctx({ executor: ATTACKER }));
+    const { driver } = recover(store, live);
+
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("halted"));
+    driver.reset();
+
+    expect(store.load(FLOW_ID)).not.toBeNull();
+  });
+
   it("recovers a stored run whose addresses differ from the app's only in letter case", async () => {
     const upper = (address: Address) => address.toUpperCase().replace("0X", "0x") as Address;
     const store = savedRunOfA(

@@ -98,8 +98,8 @@ export interface PredictDriver {
   resume(): void;
   retry(): void;
   /**
-   * Throws the run away, including anything persisted. Not for a run with a `pendingHash`; refused while a held send is
-   * unresolved, or the run stopped at `pending` or `deposit-unconfirmed`.
+   * Throws the run away, including anything persisted. Refused while a step holds a hash with no receipt read or a held
+   * send is unresolved, and for a run stopped at `pending` or `deposit-unconfirmed`.
    */
   reset(): void;
   dispose(): void;

@@ -793,6 +793,10 @@ export function createPredictRun(args: {
       if (hasUnanswered(orchestrator.getRun()?.snapshot ?? stored?.snapshot)) return;
       // the transaction still confirming may be this run's own, which only its pinned block finds once it lands
       if (failure?.reason === "pending" || failure?.reason === "deposit-unconfirmed") return;
+      // a hash with no receipt read is kept, as the card's Discard keeps it, even for a run that cannot resume
+      if ((orchestrator.getRun()?.steps ?? stored?.steps ?? []).some((step) => step.outcome.status === "submitted")) {
+        return;
+      }
       checking = undefined;
       claiming = undefined;
       const mismatch = stored && foreign(stored.ctx, args.ctx());
