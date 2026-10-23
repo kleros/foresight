@@ -325,7 +325,7 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
       isRunning={isRunning}
       canClose={stage === "confirming" && Boolean(progress?.sentHash)}
       canRetry={canRetry}
-      isPending={Boolean(pendingHash)}
+      isPending={Boolean(pendingHash) || (stage === "halted" && Boolean(progress?.unanswered))}
       recovered={
         recovered && {
           deposit: recovered.deposit,
@@ -359,7 +359,8 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
         }
       }
       pricesReady={preview.ready}
-      onBack={moved && !progress?.moneyMoved ? () => driver?.reset() : undefined}
+      // reset refuses a run holding a send, so Back would do nothing
+      onBack={moved && !progress?.moneyMoved && !progress?.unanswered ? () => driver?.reset() : undefined}
       // only where the prices are what stands in the way
       onRetryPrices={shownNotice === PRICES_FAILED || shownNotice === PRICES_FAILED_AGAIN ? preview.retry : undefined}
       isRetryingPrices={preview.retrying}

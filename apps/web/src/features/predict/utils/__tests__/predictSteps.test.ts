@@ -469,6 +469,20 @@ describe("statusLine", () => {
     expect(statusLine({ steps: pending, leftOut: 0 })?.tone).toBe("warning");
   });
 
+  it("crosses out no row for a send held because it may still land, and warns rather than errs", () => {
+    const held = steps({
+      progress: progress({
+        stage: "halted",
+        failure: { reason: "pending", retryable: true },
+        unanswered: true,
+        steps: progress().steps.map((step) => (step.id === "deposit" ? { ...step, state: "error" as const } : step)),
+      }),
+    });
+
+    expect(held.rows.map((row) => row.view)).not.toContain("failed");
+    expect(statusLine({ steps: held, leftOut: 0 })?.tone).toBe("warning");
+  });
+
   it("says nothing between steps of a run that is going normally", () => {
     const between = steps({
       progress: progress({

@@ -160,9 +160,10 @@ export function predictSteps(
   const txWait = progress?.stage === "signing" || progress?.stage === "confirming" ? stageCopy : "";
 
   // the row whose step errored stopped the run; with none, nothing got past pricing.
-  // A sent, unconfirmed transaction may still land, so its row is not crossed.
+  // A sent, unconfirmed transaction may still land, as may a held send, so its row is not crossed.
+  const mayLand = Boolean(progress?.pendingHash) || Boolean(progress?.unanswered);
   const failedKey: PredictStepRow["key"] | undefined =
-    halted && !progress.pendingHash
+    halted && !mayLand
       ? walletRow?.state === "error"
         ? "wallet"
         : fundsState === "error"
@@ -230,7 +231,7 @@ export function predictSteps(
         : progress.failure
           ? FAILURE_COPY[progress.failure.reason]
           : FAILURE_COPY.unknown;
-  return { rows: marked, failure: reason, ...started, ...(progress.pendingHash ? { pending: true as const } : {}) };
+  return { rows: marked, failure: reason, ...started, ...(mayLand ? { pending: true as const } : {}) };
 }
 
 export interface StatusLine {

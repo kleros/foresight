@@ -512,6 +512,25 @@ describe("prices that moved when Predict read the pools again", () => {
     expect(popup.queryByRole("button", { name: "Go back" })).toBeNull();
   });
 
+  it("offers no Go back while a send the run held may still land", async () => {
+    const { detail, popup } = await pressPredict();
+    const scale = detail.options[0]!;
+    act(() =>
+      run.set({
+        ...idle,
+        stage: "moved",
+        unanswered: true,
+        moved: {
+          markets: [scale.market],
+          plans: { [scale.market.toLowerCase()]: planTo(scale, 300) },
+          bySlippage: true,
+        },
+      }),
+    );
+
+    expect(popup.queryByRole("button", { name: "Go back" })).toBeNull();
+  });
+
   it("throws the moved check away when the popup closes", async () => {
     const { detail, popup } = await pressPredict();
     move(detail, 300);
