@@ -21,20 +21,22 @@ export function createRunOwnership(locks: RunLocks | null): RunOwnership {
       const name = lockName(flowId);
       return new Promise((resolve) => {
         // a document that is not fully active, or an opaque origin, refuses locks; the run is then this tab's, as with no API
-        locks.request(name, { ifAvailable: true }, (lock) => {
-          if (!lock) {
-            resolve(null);
-            return;
-          }
-          here.add(name);
-          // the lock is held until this promise settles
-          return new Promise<void>((letGo) => {
-            resolve(() => {
-              if (!here.delete(name)) return;
-              letGo();
+        locks
+          .request(name, { ifAvailable: true }, (lock) => {
+            if (!lock) {
+              resolve(null);
+              return;
+            }
+            here.add(name);
+            // the lock is held until this promise settles
+            return new Promise<void>((letGo) => {
+              resolve(() => {
+                if (!here.delete(name)) return;
+                letGo();
+              });
             });
-          });
-        }).catch(() => resolve(() => {}));
+          })
+          .catch(() => resolve(() => {}));
       });
     },
 

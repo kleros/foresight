@@ -3,9 +3,9 @@ import { sendTransaction } from "@wagmi/core";
 import type { Address, Hash } from "viem";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_CHAIN_ID } from "@/config/chains";
-
 import { createRunStore } from "@/lib/flowRunStore";
+
+import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
 import { addresses, ctx, option, snapshot, WAD } from "../../flow/__tests__/support/fakes";
 import { STEP_ID } from "../../flow/plan";
