@@ -51,7 +51,8 @@ function parseCsvRows(text: string): string[][] {
 const FORMULA_START = /^[=+\-@\t\r]/;
 
 const quote = (cell: string) => (/[",\r\n]/.test(cell) ? `"${cell.replaceAll('"', '""')}"` : cell);
-const asText = (cell: string) => quote(FORMULA_START.test(cell) ? `'${cell}` : cell);
+// a name that already starts with an apostrophe gets one more, so the one the upload strips is always this one
+const asText = (cell: string) => quote(FORMULA_START.test(cell) || cell.startsWith("'") ? `'${cell}` : cell);
 
 /** Excel reads a CSV without a byte-order mark as the system's ANSI code page; `trim()` drops it on upload. */
 const UTF8_BOM = "\uFEFF";
@@ -88,14 +89,15 @@ export function parseEstimateCsv(text: string, scales: OptionScale[]): ParsedEst
 
   rows.forEach((cells, index) => {
     const line = index + 2;
+    // a row cut short, or a quote left open to the end of the file, has fewer cells than the header
+    if (cells.length !== columns.length) throw new Error(`Row ${line}: both columns need a value.`);
     const name = (cells[nameAt] ?? "").trim();
     const raw = (cells[estimateAt] ?? "").trim();
     if (!name) throw new Error(`Row ${line}: the name is missing.`);
 
     const key = name.toLowerCase();
-    const scale =
-      byName.get(key) ??
-      (key.startsWith("'") && FORMULA_START.test(key.slice(1)) ? byName.get(key.slice(1).trim()) : undefined);
+    // the download puts one apostrophe before a name that would run as a formula or starts with one
+    const scale = (key.startsWith("'") ? byName.get(key.slice(1).trim()) : undefined) ?? byName.get(key);
     if (!scale) throw new Error(`Row ${line}: there is no option named "${name}".`);
     if (!raw) {
       parsed.set(scale.market.toLowerCase(), { scale, value: null });

@@ -152,6 +152,16 @@ describe("parseEstimateCsv", () => {
   it("names the row missing a name", () => {
     expect(() => parseEstimateCsv("name,estimate\n,250", scales)).toThrow("Row 2: the name is missing.");
   });
+
+  it.each([
+    ["cut off after a name", 'name,estimate\nGerwig,300\n"Villeneuve'],
+    ["with no estimate cell", "name,estimate\nVilleneuve"],
+    ["with a third cell", "name,estimate\nVilleneuve,250,1"],
+  ])("refuses a row %s, rather than read it as no estimate", (_, csv) => {
+    const named = [{ ...gerwig, name: "Gerwig" }, villeneuve];
+
+    expect(() => parseEstimateCsv(csv, named)).toThrow(/^Row \d+: both columns need a value\.$/);
+  });
 });
 
 describe("serializeEstimateCsv with a name a spreadsheet would run as a formula", () => {
@@ -184,12 +194,25 @@ describe("serializeEstimateCsv with a name a spreadsheet would run as a formula"
     expect(parseEstimateCsv(csv, named).map(({ scale }) => scale)).toEqual(named);
   });
 
-  it("leaves a name that only starts with an apostrophe as it is, and still matches it", () => {
+  it("writes a name that already starts with an apostrophe behind another, so it reads back as itself", () => {
     const quoted = scaleNamed("'=1+1", 0);
     const csv = serializeEstimateCsv([{ name: quoted.name, estimate: 50 }]);
 
-    expect(csv.split("\n")[1]).toBe("'=1+1,50");
+    expect(csv.split("\n")[1]).toBe("''=1+1,50");
     expect(parseEstimateCsv(csv, [quoted, scaleNamed("=1+1", 1)])).toEqual([{ scale: quoted, value: 50 }]);
+  });
+
+  it("round-trips two options whose names differ only by a leading apostrophe", () => {
+    const named = [scaleNamed("=1+1", 0), scaleNamed("'=1+1", 1)];
+    const csv = serializeEstimateCsv([
+      { name: named[0]!.name, estimate: 10 },
+      { name: named[1]!.name, estimate: 20 },
+    ]);
+
+    expect(parseEstimateCsv(csv, named)).toEqual([
+      { scale: named[0], value: 10 },
+      { scale: named[1], value: 20 },
+    ]);
   });
 
   it("writes an option with no estimate as an empty cell", () => {
