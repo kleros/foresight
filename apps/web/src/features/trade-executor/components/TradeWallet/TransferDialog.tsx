@@ -12,6 +12,7 @@ import type { Asset } from "@/lib/trade-executor/types";
 import { overCap } from "./AmountDialog";
 import { TokenAmountField } from "./TokenAmountField";
 import { useFunds } from "../../api/getFunds";
+import { useEachTokenBalance } from "../../api/getTokenBalances";
 
 export interface TokenChoice {
   decimals: number;
@@ -21,7 +22,6 @@ export interface TokenChoice {
 /** A token besides the collateral the source holds, picked by its address. */
 export interface HeldToken extends TokenChoice {
   address: Address;
-  balance: bigint;
 }
 
 /** The token ids the picker addresses; the native one is not an address. */
@@ -39,7 +39,7 @@ interface TransferDialogProps {
   collateral: TokenChoice & { address: Address };
   /** Offered only where the native currency can reach the collateral. */
   native?: TokenChoice;
-  /** Other tokens the source holds, such as Foresight credits; each offered only when it holds some. */
+  /** Other tokens the source may hold, such as Foresight credits; read as the dialog opens, each offered when it holds some. */
   held?: HeldToken[];
   onSubmit: (asset: Asset) => void;
   isPending: boolean;
@@ -65,19 +65,27 @@ export function TransferDialog({
   const [input, setInput] = useState("");
 
   const useNative = selected === NATIVE && native !== undefined;
-  const other = held.find((token) => token.balance > 0n && token.address === selected);
+  const reads = useEachTokenBalance(
+    source,
+    held.map((token) => token.address),
+  );
+  // a balance that could not be read is offered as unknown, never as an empty one
+  const heldNow = held.map((token, index) => {
+    const read = reads[index];
+    return { ...token, balance: read?.data, unread: read?.isError === true && read.data === undefined };
+  });
+  const offered = heldNow.filter((token) => token.unread || (token.balance ?? 0n) > 0n);
+  const other = offered.find((token) => token.address === selected);
   const funds = useFunds(source, collateral.address);
 
   const tokens = [
     { id: COLLATERAL, symbol: collateral.symbol, decimals: collateral.decimals },
     ...(native ? [{ id: NATIVE, symbol: native.symbol, decimals: native.decimals }] : []),
-    ...held
-      .filter((token) => token.balance > 0n)
-      .map((token) => ({ id: token.address, symbol: token.symbol, decimals: token.decimals })),
+    ...offered.map((token) => ({ id: token.address, symbol: token.symbol, decimals: token.decimals })),
   ];
   // a picked token whose balance re-reads as zero leaves the list, and nothing is sent in its place
   const isPickOffered = tokens.some((token) => token.id === selected);
-  const stale = isPickOffered ? undefined : held.find((token) => token.address === selected);
+  const stale = isPickOffered ? undefined : heldNow.find((token) => token.address === selected);
 
   const chosen = useNative && native ? native : (other ?? stale ?? collateral);
   const available = !isPickOffered
@@ -121,7 +129,9 @@ export function TransferDialog({
           type="submit"
           text={actionText}
           isLoading={isPending}
-          isDisabled={amount === null || exceedsAvailable || isPending || !source || !isPickOffered}
+          isDisabled={
+            amount === null || exceedsAvailable || isPending || !source || !isPickOffered || other?.unread === true
+          }
         />
       </Form>
     </Dialog>

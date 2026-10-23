@@ -1,6 +1,6 @@
 "use client";
 
-import { skipToken, useQuery } from "@tanstack/react-query";
+import { skipToken, useQueries, useQuery } from "@tanstack/react-query";
 import type { Address } from "viem";
 
 import { STALE_TIME } from "@/lib/query";
@@ -20,5 +20,18 @@ export function useTokenBalances(holder: Address | undefined, tokens: Address[])
     queryKey: tokenBalancesKey(holder, tokens),
     queryFn: holder ? () => fetchTokenBalances(publicClient, { holder, tokens }) : skipToken,
     staleTime: STALE_TIME.balance,
+  });
+}
+
+/** One holder's balance of each token, each read on its own, so one failed read leaves the others standing. */
+export function useEachTokenBalance(holder: Address | undefined, tokens: Address[]) {
+  return useQueries({
+    queries: tokens.map((token) => ({
+      queryKey: tokenBalancesKey(holder, [token]),
+      queryFn: holder
+        ? async () => (await fetchTokenBalances(publicClient, { holder, tokens: [token] }))[0]!
+        : skipToken,
+      staleTime: STALE_TIME.balance,
+    })),
   });
 }

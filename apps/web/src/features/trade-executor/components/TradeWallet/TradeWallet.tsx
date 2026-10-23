@@ -67,10 +67,6 @@ export function TradeWallet({
     ...(creditsToken ? [{ address: creditsToken, symbol: "credits" }] : []),
     ...(wxdai ? [{ address: wxdai, symbol: "WXDAI" }] : []),
   ];
-  const withdrawableHeld = useTokenBalances(
-    deployed ?? undefined,
-    withdrawable.map((token) => token.address),
-  ).data;
 
   const deposit = useDepositToExecutor(close);
   const withdraw = useWithdrawFromExecutor(close);
@@ -193,11 +189,7 @@ export function TradeWallet({
           source={deployed}
           collateral={collateral}
           native={chain && { symbol: chain.nativeCurrency.symbol, decimals: chain.nativeCurrency.decimals }}
-          held={withdrawable.map((token, index) => ({
-            ...token,
-            decimals: 18,
-            balance: withdrawableHeld?.[index] ?? 0n,
-          }))}
+          held={withdrawable.map((token) => ({ ...token, decimals: 18 }))}
           onSubmit={(asset) => withdraw.mutate({ executor: deployed, recipient: owner, assets: [asset] })}
           isPending={withdraw.isPending}
           // what is shown is cut to four decimals, and a cut Max would leave dust behind

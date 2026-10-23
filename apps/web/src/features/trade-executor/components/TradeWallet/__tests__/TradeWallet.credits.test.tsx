@@ -21,12 +21,19 @@ const INVALID = token("8");
 
 /** balanceOf on chain per holder and token */
 let held: Map<Address, Map<Address, bigint>>;
+/** Tokens whose balanceOf the node refuses to answer. */
+let unreadable: Set<Address>;
+/** balanceOf calls, per token. */
+let reads: Map<Address, number>;
 
 vi.mock("@/lib/web3/public-client", () => ({
   publicClient: {
     getBalance: async () => 0n,
-    readContract: ({ address, args: [holder] }: { address: Address; args: [Address] }) =>
-      Promise.resolve(held.get(holder)?.get(address) ?? 0n),
+    readContract: ({ address, args: [holder] }: { address: Address; args: [Address] }) => {
+      reads.set(address, (reads.get(address) ?? 0) + 1);
+      if (unreadable.has(address)) return Promise.reject(new Error("HTTP request failed. Status: 429"));
+      return Promise.resolve(held.get(holder)?.get(address) ?? 0n);
+    },
   },
 }));
 vi.mock("@/lib/web3/wagmi", () => ({ wagmiConfig: {} }));
@@ -87,7 +94,50 @@ function renderWallet() {
 
 beforeEach(() => {
   held = new Map();
+  unreadable = new Set();
+  reads = new Map();
   for (const log of Object.values(sent)) log.length = 0;
+});
+
+describe("a held token's balance in Withdraw", () => {
+  it("offers the WXDAI it could read when the credits read fails, and says the credits could not be read", async () => {
+    held.set(EXECUTOR, new Map([[WXDAI, units("3")]]));
+    unreadable.add(CREDITS);
+    renderWallet();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Withdraw" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: /sDAI/ }));
+    expect(await screen.findByRole("option", { name: "WXDAI" })).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("option", { name: "credits" }));
+
+    expect(await within(dialog).findByText("Could not read balance")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Withdraw" })).toBeDisabled();
+  });
+
+  it("reads the held tokens again as Withdraw opens, so a balance that changed elsewhere is not offered", async () => {
+    held.set(EXECUTOR, new Map([[CREDITS, units("3")]]));
+    renderWallet();
+    await userEvent.click(await screen.findByRole("button", { name: "Withdraw" }));
+    await screen.findByRole("dialog");
+    await userEvent.keyboard("{Escape}");
+    const before = reads.get(CREDITS) ?? 0;
+
+    // another tab withdraws the credits, and the balances are past their stale time
+    held.get(EXECUTOR)!.set(CREDITS, 0n);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + 60_000);
+    try {
+      await userEvent.click(await screen.findByRole("button", { name: "Withdraw" }));
+      const dialog = await screen.findByRole("dialog");
+      await vi.waitFor(() => expect(reads.get(CREDITS)).toBeGreaterThan(before));
+      await userEvent.click(within(dialog).getByRole("button", { name: /sDAI/ }));
+
+      expect(screen.queryByRole("option", { name: "credits" })).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("credits in the trade wallet's Withdraw", () => {
