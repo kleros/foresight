@@ -17,6 +17,8 @@ import { chainText, OUT_OF_FUNDS, REVERTS } from "@/utils/txErrorText";
 
 import type { ExactInputQuoter, SwapQuoter } from "@/lib/swap/types";
 
+import type { CreditsRoute } from "@/config/contracts";
+
 import { hasUnanswered } from "./interrupted";
 import type { RunOwnership } from "./ownership";
 import type { PredictDriver, PredictFailureReason, PredictProgress, PredictStepRow } from "./types";
@@ -84,10 +86,36 @@ const sleep = (ms: number, signal?: AbortSignal) =>
 const sameSlippage = (a: PredictSlippage, b: PredictSlippage) =>
   a.tradeBps === b.tradeBps && a.creditsBps === b.creditsBps;
 
+const sameAddress = (a: unknown, b: Address | null) =>
+  b === null ? a === null : typeof a === "string" && a.toLowerCase() === b.toLowerCase();
+
+/** The contracts a saved run would sign against, as the app names them now. */
+function sameContracts(saved: PredictCtx, current: PredictCtx): boolean {
+  const pairs: Array<[unknown, Address | null]> = [
+    [saved.executor, current.executor],
+    [saved.factory, current.factory],
+    [saved.router, current.router],
+    [saved.collateral, current.collateral],
+    [saved.parentMarket, current.parentMarket],
+    [saved.sDaiAdapter, current.sDaiAdapter],
+  ];
+  const savedCredits: Partial<CreditsRoute> | null | undefined = saved.credits;
+  if (current.credits === null) {
+    if (savedCredits !== null) return false;
+  } else {
+    if (!savedCredits) return false;
+    for (const key of ["token", "manager", "wxdai", "swaprRouter"] as const) {
+      pairs.push([savedCredits[key], current.credits[key]]);
+    }
+  }
+  return pairs.every(([a, b]) => sameAddress(a, b));
+}
+
 /** Why a saved run cannot be continued from the connected wallet, if it cannot. */
-function foreign(saved: PredictCtx, current: PredictCtx): "wrong-wallet" | "wrong-chain" | undefined {
+function foreign(saved: PredictCtx, current: PredictCtx): "wrong-wallet" | "wrong-chain" | "unknown" | undefined {
   if (String(saved.owner).toLowerCase() !== current.owner.toLowerCase()) return "wrong-wallet";
   if (saved.chainId !== current.chainId) return "wrong-chain";
+  if (!sameContracts(saved, current)) return "unknown";
   return undefined;
 }
 

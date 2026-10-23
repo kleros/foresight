@@ -211,3 +211,50 @@ describe("createPredictRun recovering a run saved by wallet A on chain 100", () 
     expect(gateway.signRequests.every((tx) => tx.to === addresses.executor)).toBe(true);
   });
 });
+
+const ATTACKER = "0x00000000000000000000000000000000000000ad" as Address;
+const live = ctx();
+
+/** A run planted under A's key on chain 100 that names another contract than the app does. */
+const planted: Array<[string, PredictCtx, PredictCtx]> = [
+  ["trade wallet", ctx({ executor: ATTACKER }), live],
+  ["sDAI adapter", ctx({ sDaiAdapter: ATTACKER }), live],
+  ["collateral", ctx({ collateral: ATTACKER }), live],
+  ["Seer router", ctx({ router: ATTACKER }), live],
+  ["factory", ctx({ factory: ATTACKER }), live],
+  ["parent market", ctx({ parentMarket: ATTACKER }), live],
+  ["credits token", ctx({ credits: { ...live.credits!, token: ATTACKER } }), live],
+  ["credits manager", ctx({ credits: { ...live.credits!, manager: ATTACKER } }), live],
+  ["WXDAI", ctx({ credits: { ...live.credits!, wxdai: ATTACKER } }), live],
+  ["credits swap router", ctx({ credits: { ...live.credits!, swaprRouter: ATTACKER } }), live],
+  ["credits route, where the app has none", live, ctx({ credits: null })],
+  ["sDAI adapter, where the app has none", live, ctx({ sDaiAdapter: null })],
+];
+
+describe("createPredictRun recovering a stored run whose contracts differ from the app's", () => {
+  it.each(planted)("halts with nothing signed when the stored %s differs", async (_, stored, current) => {
+    const store = savedRunOfA(pendingDeposit, stored);
+    const { gateway, driver } = recover(store, current);
+
+    driver.start();
+    await vi.waitFor(() => expect(["halted", "review"]).toContain(driver.getProgress().stage));
+    driver.resume();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(gateway.signRequests).toEqual([]);
+    expect(driver.getProgress().stage).toBe("halted");
+  });
+
+  it("recovers a stored run whose addresses differ from the app's only in letter case", async () => {
+    const upper = (address: Address) => address.toUpperCase().replace("0X", "0x") as Address;
+    const store = savedRunOfA(
+      pendingDeposit,
+      ctx({ owner: upper(addresses.owner), credits: { ...live.credits!, manager: upper(addresses.manager) } }),
+    );
+    const { gateway, driver } = recover(store, live);
+
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("review"));
+    expect(gateway.signRequests).toEqual([]);
+  });
+});
