@@ -20,6 +20,7 @@ export function createRunOwnership(locks: RunLocks | null): RunOwnership {
       if (!locks) return Promise.resolve(() => {});
       const name = lockName(flowId);
       return new Promise((resolve) => {
+        let held = false;
         // a document that is not fully active, or an opaque origin, refuses locks; the run is then this tab's, as with no API
         locks
           .request(name, { ifAvailable: true }, (lock) => {
@@ -27,14 +28,16 @@ export function createRunOwnership(locks: RunLocks | null): RunOwnership {
               resolve(null);
               return;
             }
+            held = true;
             here.add(name);
             // the lock is held until this promise settles
             return new Promise<void>((letGo) => {
-              resolve(() => {
-                if (!here.delete(name)) return;
-                letGo();
-              });
+              resolve(() => letGo());
             });
+          })
+          // the lock manager lists the lock until the request settles, so this tab counts it as its own till then
+          .then(() => {
+            if (held) here.delete(name);
           })
           .catch(() => resolve(() => {}));
       });

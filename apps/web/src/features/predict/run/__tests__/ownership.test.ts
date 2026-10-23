@@ -42,6 +42,17 @@ describe("createRunOwnership", () => {
     await expect.poll(() => ours.has(LOCK)).toBe(false);
   });
 
+  it("reads its own run as not held elsewhere while the lock manager is still letting it go", async () => {
+    const { locks } = fakeLocks();
+    const ownership = createRunOwnership(locks);
+
+    const release = await ownership.claim(FLOW);
+    release!();
+
+    // asked in the same task, before the lock manager has taken the release
+    expect(await ownership.heldElsewhere(FLOW)).toBe(false);
+  });
+
   it("answers null for a run another tab holds", async () => {
     const ownership = createRunOwnership(fakeLocks([LOCK]).locks);
 
