@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 import { lensQuoterOn, nodeAnswers } from "@/lib/swap/__tests__/support/lensNode";
 
+import { withdrawTx } from "@/lib/trade-executor/funding";
+
 import { gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
 
 import { MAX_SLIPPAGE_BPS } from "../../oracle/tolerances";
@@ -490,6 +492,37 @@ describe("skipping a step that has already landed", () => {
     await expect(step(STEP_ID.predict(1), snap, [landedTx(batch)]).canSkip!(ctx(), snap)).resolves.toBe(true);
     await expect(step(STEP_ID.predict(1), snap, [landedTx(other)]).canSkip!(ctx(), snap)).resolves.toBe(false);
     await expect(step(STEP_ID.predict(1), snap, [], true).canSkip!(ctx(), snap)).rejects.toBeInstanceOf(TxPendingError);
+  });
+
+  it("never reads an unfunded first batch as landed from another batch on the trade wallet", async () => {
+    const snap = snapshot({ deposit: 0n, collateralIn: 0n, collateralBefore: 0n });
+    const withdraw = withdrawTx({
+      executor: addresses.executor,
+      recipient: addresses.owner,
+      assets: [{ token: addresses.collateral, amount: WAD }],
+    });
+
+    await expect(step(STEP_ID.predict(1), snap, [landedTx(withdraw)]).canSkip!(ctx(), snap)).resolves.toBe(false);
+  });
+
+  it("finds a deposit that mines between its two reads, landed or pending, never neither", async () => {
+    const snap = snapshot({ deposit: WAD * 4n });
+    const deposit = await step(STEP_ID.deposit, snap, []).build(ctx(), snap);
+    // the deposit is in the mempool for the first read, whichever it is, and mined for the second
+    let mined = false;
+    const read = <T>(answer: () => T) => {
+      const value = answer();
+      mined = true;
+      return Promise.resolve(value);
+    };
+    const reader = {
+      ...fakeReader(),
+      landedSince: () => read(() => (mined ? [landedTx(deposit)] : [])),
+      hasPending: () => read(() => !mined),
+    };
+    const canSkip = planPredict(snap, deps({ reader })).find((each) => each.id === STEP_ID.deposit)!.canSkip!;
+
+    await expect(canSkip(ctx(), snap)).resolves.toBe(true);
   });
 });
 

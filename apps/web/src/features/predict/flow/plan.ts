@@ -570,6 +570,8 @@ export const isTx = (landed: Pick<LandedTx, "to" | "value" | "input">, tx: FlowT
  * its credits at its parent market. Its trades are rebuilt from fresh quotes, so they are not compared.
  */
 function isFirstBatch(landed: LandedTx, ctx: PredictCtx, snap: Readonly<PredictSnapshot>): boolean {
+  // a batch that neither splits nor spends credits leaves nothing in the logs to tell it from another
+  if (snap.collateralIn === 0n && snap.creditsToSpend === 0n) return false;
   if (!isAddressEqual(landed.to, ctx.executor)) return false;
   let calls: readonly { to: Address; data: `0x${string}` }[];
   try {
@@ -624,8 +626,10 @@ async function landedOrPending(
   snap: Readonly<PredictSnapshot>,
   matches: (landed: LandedTx) => boolean,
 ): Promise<boolean> {
+  // the mempool first: a transaction that mines between the two reads is then in the logs
+  const pending = await deps.reader.hasPending(ctx.owner);
   if ((await landedSince(deps, ctx, snap)).some(matches)) return true;
-  if (await deps.reader.hasPending(ctx.owner)) throw new TxPendingError();
+  if (pending) throw new TxPendingError();
   return false;
 }
 
