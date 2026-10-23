@@ -19,7 +19,7 @@ import {
   snapshot,
   WAD,
 } from "../../flow/__tests__/support/fakes";
-import type { LandedTx, SentTx } from "../../flow/types";
+import type { LandedTx, PredictCtx, PredictSnapshot, SentTx } from "../../flow/types";
 import { createPredictRun } from "../driver";
 import { discardRun, hasPendingTransaction, predictFlowId } from "../interrupted";
 import type { PredictDriver } from "../types";
@@ -154,7 +154,7 @@ describe("createPredictRun with a wallet prompt left open as the tab closed", ()
     const { left } = await closedAtSecondBatch(fake);
 
     const store = createFlowRunStore({ storage: left });
-    expect(store.load(FLOW_ID)?.snapshot.unanswered?.["predict-2"]).toBeDefined();
+    expect(store.load<PredictSnapshot, PredictCtx>(FLOW_ID)?.snapshot.unanswered?.["predict-2"]).toBeDefined();
     expect(hasPendingTransaction(store, SESSION, addresses.owner)).toBe(true);
     discardRun(store, SESSION, addresses.owner);
     expect(store.load(FLOW_ID)).not.toBeNull();
@@ -198,5 +198,35 @@ describe("createPredictRun with a wallet prompt left open as the tab closed", ()
     const next = await recoverAndResume(fake, storage);
     expect(next.getProgress().stage).toBe("complete");
     expect(fake.batchSends()).toBe(2);
+  });
+});
+
+describe("createPredictRun settling a held send it finds mined", () => {
+  it("never stores the step pending with neither its hash nor its held send", async () => {
+    const fake = chain({ hangAt: 2 });
+    const { left } = await closedAtSecondBatch(fake);
+    fake.approve();
+    fake.land();
+
+    // every record written, read back as a reload would
+    const written: Array<{ status?: string; held: boolean }> = [];
+    const watched: FlowRunStorage = {
+      ...left,
+      keys: () => left.keys(),
+      getItem: (key) => left.getItem(key),
+      removeItem: (key) => left.removeItem(key),
+      setItem: (key, value) => {
+        left.setItem(key, value);
+        const record = createFlowRunStore({ storage: left }).load<PredictSnapshot, PredictCtx>(FLOW_ID);
+        const step = record?.steps.find((each) => each.stepId === "predict-2");
+        written.push({ status: step?.outcome.status, held: Boolean(record?.snapshot.unanswered?.["predict-2"]) });
+      },
+    };
+
+    const driver = await recoverAndResume(fake, watched);
+    expect(driver.getProgress().stage).toBe("complete");
+    expect(
+      written.filter(({ status, held }) => (status === "pending" || status === "awaiting-signature") && !held),
+    ).toEqual([]);
   });
 });

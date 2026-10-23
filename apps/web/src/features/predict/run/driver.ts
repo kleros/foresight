@@ -325,8 +325,9 @@ export function createPredictRun(args: {
         if (send) {
           const found = await args.reader.sentWithNonce(send);
           if (found.status === "pending") throw new TxPendingError();
-          forgetUnanswered(step.id);
+          // forgotten once the skip is stored, so no record holds the step pending without it
           if (found.status === "mined" && found.success && isTx(found, send.tx)) return true;
+          forgetUnanswered(step.id);
         }
         return step.canSkip ? step.canSkip(ctx, snap) : false;
       },
@@ -476,6 +477,7 @@ export function createPredictRun(args: {
     // the hash is stored by now, and the receipt settles the step from here
     forgetUnanswered(event.stepId);
   });
+  orchestrator.on("step:skipped", (event) => forgetUnanswered(event.stepId));
   orchestrator.on("flow:paused", () => {
     if (movedByBuild) {
       moved = movedByBuild;
@@ -560,6 +562,8 @@ export function createPredictRun(args: {
     const restored = orchestrator.restore({ flowId: args.flowId, steps });
     if (!restored) return;
 
+    // a send held for a step stored as settled was left by a write cut short; the step's outcome stands
+    for (const entry of settledEntries(orchestrator.getRun()?.steps ?? [])) forgetUnanswered(entry.stepId);
     planned = [];
     held = undefined;
     recovered = true;
