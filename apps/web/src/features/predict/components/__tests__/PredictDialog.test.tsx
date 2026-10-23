@@ -708,6 +708,29 @@ describe("the summary under the amount", () => {
     expect(screen.getByTestId("trade-mint")).toHaveTextContent("10 sDAI → 10 tokens");
   });
 
+  it("mints what the credits swap's floor gives for credits, marked as an estimate", async () => {
+    const swap = { ...lossySwap, credits: 10n * WAD, preview: { ...lossySwap.preview, minted: 9_974n * 10n ** 15n } };
+    render(
+      <PredictDialog
+        {...props()}
+        {...withCredits}
+        funding={funding({
+          collateralIn: 10n * WAD,
+          creditsIn: 10n * WAD,
+          deposit: 0n,
+          toAdd: 0n,
+          fromTradeWallet: 0n,
+        })}
+        creditsSwap={swap}
+      />,
+    );
+    await userEvent.click(summaryHead());
+
+    expect(screen.getByTestId("trade-mint")).toHaveTextContent(
+      /^Mint≈ 9\.974 sDAI → ≈ 9\.974 tokens of every director$/,
+    );
+  });
+
   it("names no mint with nothing going in", async () => {
     render(<PredictDialog {...props()} funding={funding({ collateralIn: 0n })} />);
 

@@ -203,7 +203,11 @@ export function PredictSummary({
   /** Option tokens count in the collateral's base units too. */
   collateral: { symbol: string; decimals: number };
   /** Collateral split at the parent into a token of every option; `noun` names one option. */
-  mint?: { amount: bigint; noun: string };
+  mint?: {
+    amount: bigint;
+    noun: string;
+    /** Credits' share is quoted, so the amount is an estimate. */ isEstimated?: true;
+  };
   isOpen: boolean;
   onToggle: () => void;
   /** A run is pricing its routes. */
@@ -263,9 +267,16 @@ export function PredictSummary({
               <p data-testid="trade-mint" className={clsx(ROW, "py-1.5")}>
                 <span className="text-fs-popup-text-2 shrink-0">Mint</span>
                 <span className={clsx(VALUE, "font-medium")}>
-                  {figure(mint.amount, collateral.decimals, isEstimated, [collateral.symbol, collateral.symbol])}
+                  {figure(mint.amount, collateral.decimals, isEstimated || mint.isEstimated === true, [
+                    collateral.symbol,
+                    collateral.symbol,
+                  ])}
                   <Arrow />
-                  {nb(figure(mint.amount, collateral.decimals, isEstimated, TOKENS), "of every", mint.noun)}
+                  {nb(
+                    figure(mint.amount, collateral.decimals, isEstimated || mint.isEstimated === true, TOKENS),
+                    "of every",
+                    mint.noun,
+                  )}
                 </span>
               </p>
             ) : null}

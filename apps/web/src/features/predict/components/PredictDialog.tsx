@@ -24,7 +24,7 @@ import { PredictStepsTimeline } from "./PredictStepsTimeline";
 import { PredictSummary, type CreditsSwapShown } from "./PredictSummary";
 import { StatusGlyph } from "./StatusGlyph";
 import { HIGH_SLIPPAGE_BPS } from "../oracle/tolerances";
-import { shownAmount, type Funding } from "../utils/funding";
+import { shownAmount, shownSplit, type Funding } from "../utils/funding";
 import {
   CHECKING_PRICES,
   CONFIRM_MOVED,
@@ -460,7 +460,16 @@ export function PredictDialog({
                 preview={shownPreview}
                 collateral={collateral}
                 // a stored run minted what it stored, not what this form holds
-                mint={recovered || !shownFunding ? undefined : { amount: shownFunding.collateralIn, noun: optionNoun }}
+                mint={
+                  recovered || !shownFunding
+                    ? undefined
+                    : {
+                        // credits split what their swap's floor mints, which the credits swap's quote estimates
+                        amount: shownSplit(shownFunding, swap?.minted) ?? shownFunding.collateralIn,
+                        noun: optionNoun,
+                        ...(shownFunding.creditsIn > 0n ? { isEstimated: true as const } : {}),
+                      }
+                }
                 isOpen={summaryOpen}
                 onToggle={() => setSummaryOpen((open) => !open)}
                 // before the run, Details waits for the plans Predict will hold the run to
