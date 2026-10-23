@@ -331,6 +331,15 @@ export function createPredictRun(args: {
     if ((await args.reader.latestTimestamp()) >= BigInt(args.closesAt)) throw new SessionClosedError();
   }
 
+  const sessionClosed = () =>
+    assertOpen().then(
+      () => false,
+      (error: unknown) => {
+        if (error instanceof SessionClosedError) return true;
+        throw error;
+      },
+    );
+
   /** Each step first reads how its errored send ended, and is built only while the session is open. */
   function guardedSteps(steps: TxStep<PredictSnapshot, PredictCtx>[]): TxStep<PredictSnapshot, PredictCtx>[] {
     return steps.map((step) => ({
@@ -592,6 +601,11 @@ export function createPredictRun(args: {
       reconciling = false;
     });
     if (found.outcome === "reverted") return;
+    // Past the close nothing can be signed, so a held send is settled by running the steps, whose builds stop the run.
+    if (hasUnanswered(orchestrator.getRun()?.snapshot) && (await sessionClosed())) {
+      await orchestrator.resume();
+      return;
+    }
     // A transfer signed as the tab died left no hash, and its own transaction shows only once it mines.
     if (found.outcome === "unknown" && (found.stepId === STEP_ID.deposit || found.stepId === STEP_ID.addCredits)) {
       const transfer = steps.find((step) => step.id === found.stepId);

@@ -189,3 +189,44 @@ describe("createPredictRun when a send errors after the wallet broadcast it", ()
     expect(sentWithNonce).not.toHaveBeenCalled();
   });
 });
+
+describe("createPredictRun recovering a held send after the session closed", () => {
+  it("reads how the send ended and lets the run go, signing nothing", async () => {
+    const fake = chain({ error: internalError, broadcastThenFail: isDeposit });
+    const closesAt = 1_800_000_000;
+    let now = BigInt(closesAt - 60);
+    const reader = { ...fake.reader, latestTimestamp: () => Promise.resolve(now) };
+    const store = createFlowRunStore({ storage: createMemoryStorage() });
+    const open = () => {
+      const driver = createPredictRun({
+        gateway: fake.gateway,
+        reader,
+        quoter: fakeQuoter(),
+        flowId: FLOW_ID,
+        ctx: () => ctx(),
+        snapshot: () => snapshot(),
+        store,
+        closesAt,
+        unansweredSend: { waitMs: 20, pollMs: 5, graceMs: 20 },
+      });
+      drivers.push(driver);
+      return driver;
+    };
+
+    const first = open();
+    first.start();
+    await vi.waitFor(() => expect(first.getProgress().failure?.reason).toBe("pending"));
+    first.dispose();
+    fake.land();
+    now = BigInt(closesAt + 60);
+    const sentBefore = fake.deposits();
+
+    const reopened = open();
+    reopened.recover();
+    await vi.waitFor(() => expect(reopened.getProgress().failure?.reason).toBe("closed"));
+    expect(fake.deposits()).toBe(sentBefore);
+    expect(hasPendingTransaction(store, SESSION, addresses.owner)).toBe(false);
+    reopened.reset();
+    expect(store.load(FLOW_ID)).toBeNull();
+  });
+});
