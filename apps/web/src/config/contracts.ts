@@ -69,6 +69,8 @@ const WXDAI_ADDRESSES: Record<number, Address> = { 100: "0xe91D153E0b41518A2Ce8D
 /** Swapr's Algebra router: Lens' target for a single-pool swap, and the one the credits manager whitelists. */
 const SWAPR_ROUTER_ADDRESSES: Record<number, Address> = { 100: "0xfFB643E73f280B97809A8b41f7232AB401a04ee1" };
 
+export const swaprRouterAddress = (chainId: number): Address | undefined => SWAPR_ROUTER_ADDRESSES[chainId];
+
 export interface CreditsRoute {
   /** The credits token. */
   token: Address;

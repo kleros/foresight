@@ -4,14 +4,18 @@ import {
   ContractFunctionRevertedError,
   decodeFunctionData,
   encodeFunctionData,
+  isAddress,
+  isAddressEqual,
   toFunctionSelector,
   type Address,
   type Hex,
   type PublicClient,
 } from "viem";
 
+import { swaprRouterAddress } from "@/config/contracts";
+
 import { ALGEBRA_ROUTER_ABI } from "./algebraRouter";
-import { NoSwapRouteError, type ExactInputQuoter, type SwapQuoter } from "./types";
+import { NoSwapRouteError, QuoteRefusedError, type ExactInputQuoter, type SwapQuoter } from "./types";
 
 /**
  * Seer's on-chain LensQuoter picks the route and returns the router call to make. Its execution
@@ -73,9 +77,11 @@ export function createLensQuoter(
   chainNow: () => Promise<bigint> = latestBlockTime(client),
 ): SwapQuoter {
   const lens = new Lens(client, chainId);
+  const router = swaprRouterAddress(chainId);
 
   return {
     async quote(request) {
+      if (router === undefined) throw new QuoteRefusedError(`No Swapr router is known on chain ${chainId}.`);
       const deadline = (await chainNow()) + QUOTE_DEADLINE_SECONDS;
       const result = await lens
         .quote({
@@ -99,6 +105,19 @@ export function createLensQuoter(
         );
       }
       const [params] = decodeFunctionData({ abi: ALGEBRA_ROUTER_ABI, data: result.data as Hex }).args;
+      // the answer comes from whichever RPC serves the eth_call, and the batch approves and pays what it names
+      if (
+        !isAddress(result.target) ||
+        !isAddressEqual(result.target, router) ||
+        !isAddressEqual(params.recipient, request.recipient) ||
+        !isAddressEqual(params.tokenIn, request.tokenIn) ||
+        !isAddressEqual(params.tokenOut, request.tokenOut) ||
+        params.amountIn !== request.amount ||
+        result.amountIn !== request.amount ||
+        result.msgValue !== 0n
+      ) {
+        throw new QuoteRefusedError(`Lens answered with another swap than ${request.tokenIn} to ${request.tokenOut}.`);
+      }
 
       // Lens quotes the whole amount past the target; the limit stops it at `amountOutAtLimit`
       const amountOut = result.amountOut < request.amountOutAtLimit ? result.amountOut : request.amountOutAtLimit;
@@ -115,15 +134,15 @@ export function createLensQuoter(
       const amountOutMinimum = scaled > floor ? scaled : floor;
 
       return {
-        amountIn: result.amountIn,
+        amountIn: request.amount,
         amountOut,
-        router: result.target as Address,
+        router,
         data: encodeFunctionData({
           abi: ALGEBRA_ROUTER_ABI,
           functionName: "exactInputSingle",
           args: [{ ...params, amountOutMinimum, limitSqrtPrice: request.limitSqrtPrice }],
         }),
-        value: result.msgValue,
+        value: 0n,
       };
     },
   };

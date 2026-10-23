@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SLIPPAGE_BPS } from "@/features/predict/oracle/tolerances";
 
 import { createLensQuoter } from "../lens";
-import { NoSwapRouteError, type SwapQuoteRequest } from "../types";
+import { NoSwapRouteError, QuoteRefusedError, type SwapQuoteRequest } from "../types";
 
 const ROUTER_ABI = parseAbi([
   "function exactInputSingle((address tokenIn, address tokenOut, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 limitSqrtPrice) params) payable returns (uint256 amountOut)",
@@ -128,7 +128,9 @@ const TOKEN0 = TOKEN_IN;
 const TOKEN1 = TOKEN_OUT;
 
 describe("createLensQuoter's min-out floor at the limit price", () => {
-  beforeEach(() => quote.mockReset());
+  beforeEach(() => {
+    quote.mockReset();
+  });
 
   it("takes the pool's fee off what goes in before pricing the floor at the limit", async () => {
     // a 2% fee and 1% slippage: an input that fills at the limit returns 98% of its limit value, under a fee-blind floor
@@ -245,5 +247,57 @@ describe("createLensQuoter's min-out floor at the limit price", () => {
     });
 
     expect(params(result.data).amountOutMinimum).toBe((1000n * BigInt(10_000 - SLIPPAGE_BPS)) / (4n * 10_000n));
+  });
+});
+
+describe("createLensQuoter against a node that answers for another swap than asked", () => {
+  const ATTACKER = "0xBAd0000000000000000000000000000000000Bad" as Address;
+
+  /** Lens's answer with `swap`'s fields in its router call, and `result`'s over the rest. */
+  function answer(swap: Partial<ReturnType<typeof params>> = {}, result: Partial<typeof lensResult> = {}) {
+    quote.mockResolvedValue({
+      ...lensResult,
+      data: encodeFunctionData({
+        abi: ROUTER_ABI,
+        functionName: "exactInputSingle",
+        args: [
+          {
+            tokenIn: TOKEN_IN,
+            tokenOut: TOKEN_OUT,
+            recipient: EXECUTOR,
+            deadline: 1_800n,
+            amountIn: 1000n,
+            amountOutMinimum: 495n,
+            limitSqrtPrice: 0n,
+            ...swap,
+          },
+        ],
+      }),
+      ...result,
+    });
+    return quoter().quote(request());
+  }
+
+  beforeEach(() => {
+    quote.mockReset();
+  });
+
+  it.each([
+    ["routes through another router", {}, { target: ATTACKER }],
+    ["pays another recipient", { recipient: ATTACKER }, {}],
+    ["swaps another token in", { tokenIn: ATTACKER }, {}],
+    ["swaps for another token", { tokenOut: ATTACKER }, {}],
+    ["swaps more than asked in its call", { amountIn: 10n ** 30n }, {}],
+    ["approves more than asked in its quote", {}, { amountIn: 10n ** 30n }],
+    ["carries native currency", {}, { msgValue: 1n }],
+  ] as const)("refuses a quote that %s, as no answer rather than no route", async (_, swap, result) => {
+    const quoted = answer(swap, result);
+
+    await expect(quoted).rejects.toBeInstanceOf(QuoteRefusedError);
+    await expect(quoted).rejects.not.toBeInstanceOf(NoSwapRouteError);
+  });
+
+  it("accepts the swap it asked for", async () => {
+    await expect(answer()).resolves.toMatchObject({ router: ROUTER, amountIn: 1000n, value: 0n });
   });
 });

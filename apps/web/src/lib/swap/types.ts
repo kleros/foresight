@@ -43,8 +43,16 @@ export class NoSwapRouteError extends Error {
   }
 }
 
+/** The quoter answered with a call for another swap than the one asked for, so its answer is not used. */
+export class QuoteRefusedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "QuoteRefusedError";
+  }
+}
+
 export interface SwapQuoter {
-  /** Rejects with `NoSwapRouteError` when no route takes the swap. */
+  /** Rejects with `NoSwapRouteError` when no route takes the swap, and `QuoteRefusedError` for another swap's call. */
   quote(request: SwapQuoteRequest): Promise<SwapQuote>;
 }
 
