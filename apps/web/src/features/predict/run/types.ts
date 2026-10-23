@@ -82,7 +82,7 @@ export interface PredictProgress {
   held?: HeldTo;
 }
 
-export type { HeldTo, MovedPlans, ShownPlans } from "../flow/types";
+export type { HeldTo, MovedPlans, ShownPlans, ShownQuotes } from "../flow/types";
 
 export interface PredictDriver {
   /**

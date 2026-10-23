@@ -758,9 +758,18 @@ export function createPredictRun(args: {
 
     confirm() {
       if (!moved || checking) return;
+      const now = moved;
+      const replanned = new Set(now.markets.map((market) => market.toLowerCase()));
+      // quotes confirmed for an option whose pools moved since are for a plan no longer shown
+      const quotes = Object.fromEntries(
+        Object.entries({ ...held?.quotes, ...now.quotes }).filter(
+          ([key]) => now.quotes?.[key] !== undefined || !replanned.has(key),
+        ),
+      );
       const next: HeldTo = {
-        plans: { ...held?.plans, ...moved.plans },
-        ...((moved.credits ?? held?.credits) ? { credits: moved.credits ?? held?.credits } : {}),
+        plans: { ...held?.plans, ...now.plans },
+        ...(Object.keys(quotes).length > 0 ? { quotes } : {}),
+        ...((now.credits ?? held?.credits) ? { credits: now.credits ?? held?.credits } : {}),
       };
       const status = orchestrator.getStatus();
       if (status === "idle") {

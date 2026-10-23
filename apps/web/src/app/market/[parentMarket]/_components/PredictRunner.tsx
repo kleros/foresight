@@ -10,11 +10,12 @@ import { PredictDialog } from "@/features/predict/components/PredictDialog";
 import type { PriceMove } from "@/features/predict/components/PredictList";
 import { tradeWalletShare } from "@/features/predict/flow/plan";
 import { STEP_ID } from "@/features/predict/flow/stepIds";
-import type { HeldTo, ShownPlans } from "@/features/predict/run/types";
+import type { HeldTo, ShownPlans, ShownQuotes } from "@/features/predict/run/types";
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import { useSlippageStore } from "@/features/predict/stores/slippageStore";
 import type { PayToken, SelectedEstimate } from "@/features/predict/types";
 import { roundToDisplay, shownSplit } from "@/features/predict/utils/funding";
+import { withQuotes } from "@/features/predict/utils/plan";
 import {
   CREDITS_UNAVAILABLE,
   fundsToAdd,
@@ -220,18 +221,23 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
     }
     return moves;
   };
+  /** `plans`, each with its legs as `quotes` give them where it has quotes. */
+  const quotedPlans = (plans: ShownPlans, quotes: ShownQuotes | undefined): ShownPlans =>
+    Object.fromEntries(
+      Object.entries(plans).map(([key, plan]) => [key, quotes?.[key] ? withQuotes(plan, quotes[key]) : plan]),
+    );
   // while a run is held to what it was shown, that is what Details shows
   const isHeldRun = held !== undefined && (isRunning || canRetry);
   // the first batch carries the credits swap
   const creditsLanded = progress?.steps.some((step) => step.id === STEP_ID.predict(1) && step.state === "success");
   const shownMoves = moved
     ? movesFrom(
-        moved.plans,
-        held?.plans,
+        quotedPlans(moved.plans, moved.quotes),
+        held && quotedPlans(held.plans, held.quotes),
         moved.markets.map((market) => market.toLowerCase()),
       )
     : isHeldRun
-      ? movesFrom(held.plans)
+      ? movesFrom(quotedPlans(held.plans, held.quotes))
       : preview.moves;
   const shownCredits = moved?.credits ?? (isHeldRun ? held.credits : creditsQuote);
   const creditsWas = moved?.credits ? held?.credits : undefined;

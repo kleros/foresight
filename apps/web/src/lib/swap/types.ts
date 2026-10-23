@@ -23,6 +23,8 @@ export interface SwapQuoteRequest {
   amountOutAtLimit: bigint;
   /** The pool's fee in millionths of the input, as read with its price. */
   poolFee: bigint;
+  /** What the leg was shown to pay for this input; the swap may then pay no less than it, less `slippageBps`. */
+  heldOut?: bigint;
 }
 
 export interface SwapQuote {

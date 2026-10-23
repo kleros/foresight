@@ -337,6 +337,15 @@ describe("createLensQuoter against a node that answers the asked swap with its o
     expect(params(result.data).amountOutMinimum).toBe(495n);
   });
 
+  it("signs no less than the output the leg was held to, less slippage, when the live quote pays less", async () => {
+    answer(0n, 1_800n);
+
+    // Lens quotes 500 and the leg was shown 520: 1% slippage on the shown 520 keeps 514, above the quote's 495
+    const result = await quoter().quote(request({ amountOutAtLimit: 900n, slippageBps: 100, heldOut: 520n }));
+
+    expect(params(result.data).amountOutMinimum).toBe(514n);
+  });
+
   it("signs the deadline it asked Lens for, not the one Lens answers", async () => {
     answer(495n, 2n ** 255n);
 

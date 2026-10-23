@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
+import type { SwapQuoteRequest } from "@/lib/swap/types";
+
+import { SLIPPAGE_BPS } from "../../oracle/tolerances";
+import { MIN_LEG_WEI, previewTrades } from "../../utils/plan";
 import { sqrtPriceX96FromPrice } from "../../utils/poolMath";
 import { planPredict, PlansMovedError, STEP_ID, type PredictDeps } from "../plan";
 import type { OptionChainState, PredictOption, ShownPlans } from "../types";
-import { chainState, ctx, fakeReader, option, poolQuoter, snapshot, WAD } from "./support/fakes";
+import { chainState, ctx, fakeReader, option, poolQuoter, snapshot, WAD, type FakeQuoter } from "./support/fakes";
 
 const OPTIONS = [option(1), option(2)];
 const run = snapshot({ options: OPTIONS, deposit: 3n * WAD, collateralIn: 3n * WAD });
@@ -78,6 +82,30 @@ describe("a predict batch held to the plans the popup showed", () => {
     },
   );
 
+  it("asks each leg's minimum of the output shown for it, when the quotes pay a little less", async () => {
+    const plans = await shownPlans();
+    const pool = poolQuoter(OPTIONS, shownState);
+    const requests: SwapQuoteRequest[] = [];
+    // half a percent under the plan shown: inside the tolerance, so the batch is built
+    const quoter = {
+      quote: async (request: SwapQuoteRequest) => {
+        requests.push(request);
+        const quote = await pool.quote(request);
+        return { ...quote, amountOut: (quote.amountOut * 9_950n) / 10_000n };
+      },
+    };
+
+    const built = await build({ reader: fakeReader({ state: shownState }), quoter, heldTo: () => ({ plans }) });
+
+    expect(built).toMatchObject({ to: ctx().executor });
+    const plan = plans[OPTIONS[0]!.childMarket.toLowerCase()]!;
+    const sell = requests.find((request) => request.tokenIn === OPTIONS[0]!.upToken)!;
+    expect(sell.heldOut).toBe(plan.sells[0]!.underlyingOut);
+    const buy = requests.find((request) => request.tokenOut === OPTIONS[0]!.downToken)!;
+    expect(buy.heldOut).toBeGreaterThan(0n);
+    expect(buy.heldOut!).toBeLessThanOrEqual(plan.buys[0]!.outcomeOut);
+  });
+
   it("is built when a quote pays more than shown", async () => {
     const plans = await shownPlans();
 
@@ -88,5 +116,48 @@ describe("a predict batch held to the plans the popup showed", () => {
     });
 
     expect(built).toMatchObject({ to: ctx().executor });
+  });
+});
+
+describe("a predict batch held to a plan whose buy sits just above the dust floor", () => {
+  const only = OPTIONS[0]!;
+  /** The least split whose plan still buys, so the buy is a little over `MIN_LEG_WEI`. */
+  const split = (() => {
+    for (let amount = MIN_LEG_WEI; amount < 2n * MIN_LEG_WEI; amount += 10n ** 12n) {
+      const plan = previewTrades(
+        {
+          pools: shownState().pools,
+          targetPriceWad: only.targetPriceWad,
+          held: shownState().held,
+          splitAmount: amount,
+        },
+        SLIPPAGE_BPS,
+      )!;
+      if (plan.buys.length === 1) return amount + 10n ** 13n;
+    }
+    throw new Error("No split buys.");
+  })();
+  const small = snapshot({ options: [only], deposit: split, collateralIn: split });
+  const buildSmall = async (deps: PredictDeps) => {
+    const step = planPredict(small, deps).find((each) => each.id === STEP_ID.predict(1))!;
+    return Promise.resolve(step.build(ctx(), small)).catch((caught: unknown) => caught);
+  };
+
+  it("stops at moved when a sell quoted a little short leaves too little for the buy shown", async () => {
+    const plans = (
+      (await buildSmall({
+        reader: fakeReader({ state: shownState }),
+        quoter: poolQuoter([only], shownState),
+        heldTo: () => ({ plans: {} }),
+      })) as PlansMovedError
+    ).moved.plans;
+    // UP moves half a percent between the build's read and its quotes: inside the tolerance, past the buy's margin
+    const moved = movedState("up", (WAD * 995n) / 1000n);
+    const reader = fakeReader({ state: (each) => (reader.asked.length > 1 ? moved(each) : shownState()) });
+    const quoter: FakeQuoter = poolQuoter([only], moved);
+
+    const error = await buildSmall({ reader, quoter, heldTo: () => ({ plans }) });
+
+    expect(error).toBeInstanceOf(PlansMovedError);
   });
 });

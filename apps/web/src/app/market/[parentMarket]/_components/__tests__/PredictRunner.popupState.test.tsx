@@ -437,6 +437,25 @@ describe("prices that moved when Predict read the pools again", () => {
     expect(driver.start).toHaveBeenCalledOnce();
   });
 
+  it("shows what the live quotes pay where they paid less than the plan", async () => {
+    const { detail, popup } = await pressPredict();
+    const scale = detail.options[0]!;
+    const key = scale.market.toLowerCase();
+    const quotes = {
+      [key]: { sells: [], buys: [{ side: "up" as const, amountIn: WAD, amountOut: (WAD * 98n) / 100n }] },
+    };
+    act(() =>
+      run.set({
+        ...idle,
+        stage: "moved",
+        moved: { markets: [scale.market], plans: { [key]: planTo(scale, 300) }, quotes },
+      }),
+    );
+    await userEvent.click(within(popup.getByTestId("predict-summary")).getAllByRole("button")[0]!);
+
+    expect(within(popup.getByTestId("predict-summary")).getAllByText(/0\.98 UP/).length).toBeGreaterThan(0);
+  });
+
   it("keeps the confirmed figures on show while the run goes", async () => {
     const { detail, popup } = await pressPredict();
     move(detail, 300);

@@ -137,7 +137,9 @@ export function createLensQuoter(
         request.poolFee,
         request.slippageBps,
       );
-      const amountOutMinimum = quotedMin > floor ? quotedMin : floor;
+      const heldMin =
+        request.heldOut === undefined ? 0n : (request.heldOut * (10_000n - BigInt(request.slippageBps))) / 10_000n;
+      const amountOutMinimum = [quotedMin, floor, heldMin].reduce((most, each) => (each > most ? each : most));
 
       return {
         amountIn: request.amount,

@@ -53,9 +53,11 @@ import {
   planSells,
   previewTrades,
   quotesShort,
+  shownLegs,
   type OptionSide,
   type PreviewTrades,
   type QuotedLeg,
+  type QuotedLegs,
   type SoldLeg,
   type SwapLeg,
 } from "../utils/plan";
@@ -126,7 +128,14 @@ export class AtEstimatesError extends Error {
 class OptionAtEstimate extends Error {}
 
 /** One option's live quotes pay less than the plan the run is held to. */
-class OptionQuotesShort extends Error {}
+class OptionQuotesShort extends Error {
+  constructor(
+    message: string,
+    readonly quoted: QuotedLegs,
+  ) {
+    super(message);
+  }
+}
 
 /** The quoter gave no answer, so whether a route exists is unknown; trying again may help. */
 export class QuoteFailedError extends Error {
@@ -197,8 +206,8 @@ async function optionCalls(
   mint: bigint,
   slippageBps: number,
   deps: PredictDeps,
-  /** The plan the popup showed for this option, which its quotes may fall short of by `toleranceBps`. */
-  shown: { plan: PreviewTrades; toleranceBps: number } | undefined,
+  /** What the popup showed for this option's legs, which its quotes may fall short of by `toleranceBps`. */
+  shown: { legs: QuotedLegs; toleranceBps: number } | undefined,
 ): Promise<ExecutorCall[]> {
   const splitAmount = state.underlying + mint;
   const target = { pools: state.pools, targetPriceWad: option.targetPriceWad, held: state.held, splitAmount };
@@ -218,6 +227,7 @@ async function optionCalls(
       amountInAtLimit: leg.amountInAtLimit,
       amountOutAtLimit: leg.amountOutAtLimit,
       poolFee: state.pools[leg.side].fee,
+      ...heldOut(shown?.legs.sells, leg),
     });
     sells.push({ tokenIn, quote });
     sold.push({ ...leg, underlyingOut: quote.amountOut });
@@ -238,14 +248,15 @@ async function optionCalls(
       amountInAtLimit: leg.amountInAtLimit,
       amountOutAtLimit: leg.amountOutAtLimit,
       poolFee: state.pools[leg.side].fee,
+      ...heldOut(shown?.legs.buys, leg),
     });
     buys.push({ tokenIn: option.underlying, quote });
     quoted.buys.push(quotedLeg(leg, quote));
   }
 
   // the pools were checked against the held plan when read; a pool moved after that shows only in the quotes
-  if (shown && quotesShort(shown.plan, quoted, shown.toleranceBps)) {
-    throw new OptionQuotesShort(`${option.childMarket}'s quotes pay less than the plan shown.`);
+  if (shown && quotesShort(shown.legs, quoted, shown.toleranceBps)) {
+    throw new OptionQuotesShort(`${option.childMarket}'s quotes pay less than the plan shown.`, quoted);
   }
 
   if (sells.length === 0 && buys.length === 0) {
@@ -267,12 +278,23 @@ async function optionCalls(
   });
 }
 
+/** What a leg spends: its amount, or less where its limit stops it, as the preview shows a leg. */
+const spentBy = (leg: SwapLeg): bigint => (leg.amountIn < leg.amountInAtLimit ? leg.amountIn : leg.amountInAtLimit);
+
 /** A leg as quoted, spending no more than its limit lets it, as the preview shows a leg. */
 const quotedLeg = (leg: SwapLeg, quote: SwapQuote): QuotedLeg => ({
   side: leg.side,
-  amountIn: leg.amountIn < leg.amountInAtLimit ? leg.amountIn : leg.amountInAtLimit,
+  amountIn: spentBy(leg),
   amountOut: quote.amountOut,
 });
+
+/** What the leg shown on `leg`'s side paid, for no more than `leg` spends; none where nothing was shown for it. */
+function heldOut(shown: readonly QuotedLeg[] | undefined, leg: SwapLeg): { heldOut?: bigint } {
+  const before = shown?.find((each) => each.side === leg.side);
+  if (before === undefined || before.amountIn === 0n) return {};
+  const spent = spentBy(leg);
+  return { heldOut: spent < before.amountIn ? (before.amountOut * spent) / before.amountIn : before.amountOut };
+}
 
 /** The credits leg of the first batch, and the collateral its xDAI mints at the parent. */
 interface CreditsLeg {
@@ -438,20 +460,24 @@ async function predictCalls(args: {
   let traded = 0;
   const reasons: unknown[] = [];
   const short: Address[] = [];
+  const shortQuotes: Record<string, QuotedLegs> = {};
   const toleranceBps = Math.min(slippageBps, MOVED_TOLERANCE_BPS);
   for (const [index, option] of options.entries()) {
     const state = states[index];
     if (state === undefined) continue;
 
     try {
-      const plan = held?.plans[option.childMarket.toLowerCase()];
-      const shown = plan ? { plan, toleranceBps } : undefined;
+      const key = option.childMarket.toLowerCase();
+      const plan = held?.plans[key];
+      // quotes confirmed at moved stand for the plan's figures: the pools as read can price below what a swap pays
+      const shown = plan ? { legs: held?.quotes?.[key] ?? shownLegs(plan), toleranceBps } : undefined;
       calls.push(...(await optionCalls(ctx, option, state, perOption, slippageBps, deps, shown)).map(withoutValue));
       traded += 1;
     } catch (reason) {
       if (reason instanceof QuoteFailedError) throw reason;
       if (reason instanceof OptionQuotesShort) {
         short.push(option.childMarket);
+        shortQuotes[option.childMarket.toLowerCase()] = reason.quoted;
         continue;
       }
       reasons.push(reason);
@@ -463,7 +489,7 @@ async function predictCalls(args: {
     const now = await deps.reader.optionStates({ options, executor: ctx.executor });
     const moved = movedFrom(held, options, now, perOption, slippageBps);
     const markets = [...short, ...moved.markets.filter((market) => !short.includes(market))];
-    throw new PlansMovedError({ ...moved, markets });
+    throw new PlansMovedError({ ...moved, markets, quotes: shortQuotes });
   }
 
   if (traded === 0) {
@@ -519,6 +545,7 @@ function movedFrom(
 const mergeMoved = (into: MovedPlans | undefined, next: MovedPlans): MovedPlans => ({
   markets: [...(into?.markets ?? []), ...next.markets],
   plans: { ...into?.plans, ...next.plans },
+  ...((into?.quotes ?? next.quotes) ? { quotes: { ...into?.quotes, ...next.quotes } } : {}),
   ...((next.credits ?? into?.credits) ? { credits: next.credits ?? into?.credits } : {}),
 });
 

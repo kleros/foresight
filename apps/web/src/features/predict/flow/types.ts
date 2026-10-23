@@ -5,7 +5,7 @@ import type { CreditsRoute } from "@/config/contracts";
 
 import type { PoolLiquidity } from "@/types/pool";
 
-import type { OutcomeBalances, PreviewTrades } from "../utils/plan";
+import type { OutcomeBalances, PreviewTrades, QuotedLegs } from "../utils/plan";
 
 /**
  * What a prediction is built from. Framework-free, like the rest of `flow/`: the reads and the
@@ -191,9 +191,14 @@ export interface CreditsSwapPreview {
 /** Each option's plan as the popup showed it, keyed by its lower-case child market. */
 export type ShownPlans = Readonly<Record<string, PreviewTrades>>;
 
+/** Each option's legs as quoted, keyed by its lower-case child market. */
+export type ShownQuotes = Readonly<Record<string, QuotedLegs>>;
+
 /** What a run is held to: the plans and the credits swap the visitor saw before signing. */
 export interface HeldTo {
   plans: ShownPlans;
+  /** Quotes the visitor confirmed at moved, which an option's quotes are held to in place of its plan's figures. */
+  quotes?: ShownQuotes;
   /** Absent where the popup showed no credits swap. */
   credits?: CreditsSwapPreview;
 }
@@ -202,6 +207,8 @@ export interface HeldTo {
 export interface MovedPlans {
   markets: Address[];
   plans: ShownPlans;
+  /** The live quotes of each option whose quotes paid less than its plan. */
+  quotes?: ShownQuotes;
   credits?: CreditsSwapPreview;
   /** Found by re-planning at slippage the visitor changed after the run stopped. */
   bySlippage?: true;

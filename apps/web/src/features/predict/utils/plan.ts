@@ -325,29 +325,53 @@ export interface QuotedLeg {
   amountOut: bigint;
 }
 
+/** One option's legs as quoted, or as a plan shows them. */
+export interface QuotedLegs {
+  sells: readonly QuotedLeg[];
+  buys: readonly QuotedLeg[];
+}
+
+/** `plan`'s legs, each with what it spends and what it pays. */
+export const shownLegs = (plan: PreviewTrades): QuotedLegs => ({
+  sells: plan.sells.map(({ side, amountIn, underlyingOut }) => ({ side, amountIn, amountOut: underlyingOut })),
+  buys: plan.buys.map(({ side, amountIn, outcomeOut }) => ({ side, amountIn, amountOut: outcomeOut })),
+});
+
+/** `plan` with each leg's spend and output as `quotes` give them; a leg they do not quote keeps the plan's. */
+export function withQuotes(plan: PreviewTrades, quotes: QuotedLegs): PreviewTrades {
+  const quoted = (legs: readonly QuotedLeg[], side: OptionSide) => legs.find((leg) => leg.side === side);
+  return {
+    ...plan,
+    sells: plan.sells.map((leg) => {
+      const now = quoted(quotes.sells, leg.side);
+      return now ? { ...leg, underlyingOut: now.amountOut } : leg;
+    }),
+    buys: plan.buys.map((leg) => {
+      const now = quoted(quotes.buys, leg.side);
+      return now ? { ...leg, amountIn: now.amountIn, outcomeOut: now.amountOut } : leg;
+    }),
+  };
+}
+
 /** `now` is more than `toleranceBps` below `shown`, as a share of `shown`. */
 const short = (shown: bigint, now: bigint, toleranceBps: number) =>
   now * 10_000n < shown * (10_000n - BigInt(toleranceBps));
 
 /**
- * Whether a live quote pays less than `shown`'s leg on the same side by more than `toleranceBps`,
- * or a buy spends less than shown. A leg only one of them has is left to the sells' check.
+ * Whether a live quote pays less than `shown`'s leg on the same side by more than `toleranceBps`, a buy spends less
+ * than shown, or a leg shown is not quoted at all. A quoted leg `shown` does not have is left to the pools' check.
  */
-export function quotesShort(
-  shown: PreviewTrades,
-  quoted: { sells: readonly QuotedLeg[]; buys: readonly QuotedLeg[] },
-  toleranceBps: number,
-): boolean {
-  const sellShort = quoted.sells.some((leg) => {
-    const before = shown.sells.find((each) => each.side === leg.side);
-    return before !== undefined && short(before.underlyingOut, leg.amountOut, toleranceBps);
-  });
-  const buyShort = quoted.buys.some((leg) => {
-    const before = shown.buys.find((each) => each.side === leg.side);
+export function quotesShort(shown: QuotedLegs, quoted: QuotedLegs, toleranceBps: number): boolean {
+  const legShort = (before: QuotedLeg, legs: readonly QuotedLeg[], buy: boolean) => {
+    const now = legs.find((each) => each.side === before.side);
+    if (now === undefined) return true;
     return (
-      before !== undefined &&
-      (short(before.outcomeOut, leg.amountOut, toleranceBps) || short(before.amountIn, leg.amountIn, toleranceBps))
+      short(before.amountOut, now.amountOut, toleranceBps) ||
+      (buy && short(before.amountIn, now.amountIn, toleranceBps))
     );
-  });
-  return sellShort || buyShort;
+  };
+  return (
+    shown.sells.some((leg) => legShort(leg, quoted.sells, false)) ||
+    shown.buys.some((leg) => legShort(leg, quoted.buys, true))
+  );
 }
