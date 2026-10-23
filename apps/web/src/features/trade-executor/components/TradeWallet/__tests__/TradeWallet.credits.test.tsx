@@ -127,7 +127,9 @@ describe("credits in the trade wallet's Withdraw", () => {
 
     held.get(EXECUTOR)!.set(CREDITS, 0n);
     await client.invalidateQueries();
-    await within(dialog).findByText(/Balance: 10/);
+    // the pick stays credits, at the zero balance it re-read as, until another token is picked
+    await within(dialog).findByText("Not enough balance.");
+    expect(within(dialog).getByRole("button", { name: /credits/ })).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole("button", { name: "Withdraw" }));
 
     expect(sent.withdraw).toEqual([]);

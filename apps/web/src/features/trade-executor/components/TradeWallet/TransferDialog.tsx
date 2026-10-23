@@ -67,11 +67,6 @@ export function TransferDialog({
   const useNative = selected === NATIVE && native !== undefined;
   const other = held.find((token) => token.balance > 0n && token.address === selected);
   const funds = useFunds(source, collateral.address);
-  const chosen = useNative && native ? native : (other ?? collateral);
-  const available = useNative ? funds.data?.native : other ? other.balance : (funds.data?.token ?? undefined);
-
-  const amount = parseAmount(input, chosen.decimals);
-  const exceedsAvailable = amount !== null && available !== undefined && amount > available;
 
   const tokens = [
     { id: COLLATERAL, symbol: collateral.symbol, decimals: collateral.decimals },
@@ -82,6 +77,19 @@ export function TransferDialog({
   ];
   // a picked token whose balance re-reads as zero leaves the list, and nothing is sent in its place
   const isPickOffered = tokens.some((token) => token.id === selected);
+  const stale = isPickOffered ? undefined : held.find((token) => token.address === selected);
+
+  const chosen = useNative && native ? native : (other ?? stale ?? collateral);
+  const available = !isPickOffered
+    ? stale?.balance
+    : useNative
+      ? funds.data?.native
+      : other
+        ? other.balance
+        : (funds.data?.token ?? undefined);
+
+  const amount = parseAmount(input, chosen.decimals);
+  const exceedsAvailable = amount !== null && available !== undefined && amount > available;
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -96,7 +104,7 @@ export function TransferDialog({
         <TokenAmountField
           value={input}
           onChange={setInput}
-          tokens={tokens}
+          tokens={stale ? [...tokens, { id: stale.address, symbol: stale.symbol, decimals: stale.decimals }] : tokens}
           selected={selected}
           onSelectToken={setSelected}
           available={available}
@@ -104,7 +112,7 @@ export function TransferDialog({
           error={
             exceedsAvailable ? overCap("Not enough balance.", available, chosen.decimals, chosen.symbol) : undefined
           }
-          isLoadingBalance={!other && funds.isPending}
+          isLoadingBalance={isPickOffered && !other && funds.isPending}
           isReadOnly={isPending}
           maxIsExact={maxIsExact}
         />
