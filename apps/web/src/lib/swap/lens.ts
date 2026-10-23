@@ -15,18 +15,13 @@ import {
 import { swaprRouterAddress } from "@/config/contracts";
 
 import { ALGEBRA_ROUTER_ABI } from "./algebraRouter";
+import { QUOTE_DEADLINE_SECONDS } from "./deadline";
 import { NoSwapRouteError, QuoteRefusedError, type ExactInputQuoter, type SwapQuoter } from "./types";
 
 /**
  * Seer's on-chain LensQuoter picks the route and returns the router call to make. Its execution
  * check overrides balances at ERC-20 slot 0 only, so for Wrapped1155 legs it checks nothing.
  */
-/**
- * Seconds. The SDK's own default is five minutes from the moment each leg is quoted, and a batch
- * of ten options is quoted leg by leg before the wallet even opens, so the first leg's clock
- * would run out while someone confirms on a hardware wallet.
- */
-const QUOTE_DEADLINE_SECONDS = 30n * 60n;
 
 const EXACT_INPUT_SINGLE = toFunctionSelector(ALGEBRA_ROUTER_ABI[0]);
 
@@ -71,10 +66,20 @@ function minOutAtLimit(
 /** The latest block's time, in seconds: what the router checks a deadline against, whatever the visitor's clock says. */
 const latestBlockTime = (client: PublicClient) => async () => (await client.getBlock({ blockTag: "latest" })).timestamp;
 
+/** The quote's validity from `now`, ending before `closesAt`; the router accepts a swap at the deadline itself. */
+function deadlineFrom(now: bigint, closesAt: number | null | undefined): bigint {
+  const valid = now + QUOTE_DEADLINE_SECONDS;
+  if (closesAt == null) return valid;
+  const last = BigInt(closesAt) - 1n;
+  return valid < last ? valid : last;
+}
+
 export function createLensQuoter(
   client: PublicClient,
   chainId: ChainId,
   chainNow: () => Promise<bigint> = latestBlockTime(client),
+  /** Unix seconds after which nothing it quotes may execute. */
+  closesAt?: number | null,
 ): SwapQuoter {
   const lens = new Lens(client, chainId);
   const router = swaprRouterAddress(chainId);
@@ -82,7 +87,7 @@ export function createLensQuoter(
   return {
     async quote(request) {
       if (router === undefined) throw new QuoteRefusedError(`No Swapr router is known on chain ${chainId}.`);
-      const deadline = (await chainNow()) + QUOTE_DEADLINE_SECONDS;
+      const deadline = deadlineFrom(await chainNow(), closesAt);
       const result = await lens
         .quote({
           tokenIn: request.tokenIn,
@@ -154,12 +159,14 @@ export function createLensExactInputQuoter(
   client: PublicClient,
   chainId: ChainId,
   chainNow: () => Promise<bigint> = latestBlockTime(client),
+  /** Unix seconds after which nothing it quotes may execute. */
+  closesAt?: number | null,
 ): ExactInputQuoter {
   const lens = new Lens(client, chainId);
 
   return {
     async quote(request) {
-      const deadline = (await chainNow()) + QUOTE_DEADLINE_SECONDS;
+      const deadline = deadlineFrom(await chainNow(), closesAt);
       const result = await lens.quote({ ...request, slippageBps: 0, deadline }).catch((error: unknown) => {
         if (!answeredNoRoute(error)) throw error;
         throw new NoSwapRouteError(`Lens found no route from ${request.tokenIn} to ${request.tokenOut}.`, {

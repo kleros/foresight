@@ -3,8 +3,7 @@ import type { PredictSlippage } from "../flow/types";
 /** Hundredths of a percent a quote may move against the trade wallet before the swap reverts, by default. */
 export const SLIPPAGE_BPS = 100;
 
-/** Seconds a quoted swap stays valid; a batch is quoted leg by leg before the wallet opens. */
-export const QUOTE_DEADLINE_SECONDS = 30 * 60;
+export { QUOTE_DEADLINE_SECONDS } from "@/lib/swap/deadline";
 
 /** Native balance an xDAI deposit and Max always leave for gas: 0.01 xDAI. */
 export const GAS_RESERVE_WEI = 10n ** 16n;

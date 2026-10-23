@@ -288,6 +288,8 @@ export function createPredictRun(args: {
 
       const owner = run.ctx.owner;
       const [nonce, fromBlock] = await Promise.all([args.reader.nextNonce(owner), args.reader.latestBlock()]);
+      // the build's reads and quotes can outlast the close; this is the last check before the wallet opens
+      await assertOpen();
       const send = { owner, nonce, fromBlock, tx };
       // held before the wallet opens: a prompt approved after the tab closed has no hash stored to find it by
       holdUnanswered(stepId, send);

@@ -347,6 +347,40 @@ describe("createLensQuoter against a node that answers the asked swap with its o
   });
 });
 
+describe("a quoter for a session that closes", () => {
+  beforeEach(() => {
+    quote.mockReset();
+    quote.mockResolvedValue({ ...lensResult, data: singleCall(495n) });
+  });
+
+  it("signs a trade leg's deadline no later than a second before the close", async () => {
+    const result = await createLensQuoter({} as PublicClient, 100, () => Promise.resolve(5_000n), 5_600).quote(
+      request(),
+    );
+
+    expect(params(result.data).deadline).toBe(5_599n);
+  });
+
+  it("signs the credits swap's deadline no later than a second before the close", async () => {
+    const result = await createLensExactInputQuoter(
+      {} as PublicClient,
+      100,
+      () => Promise.resolve(5_000n),
+      5_600,
+    ).quote({ tokenIn: TOKEN_IN, tokenOut: TOKEN_OUT, amount: 1000n, recipient: EXECUTOR });
+
+    expect(params(result.data).deadline).toBe(5_599n);
+  });
+
+  it("keeps the thirty minutes when the close is further off", async () => {
+    const result = await createLensQuoter({} as PublicClient, 100, () => Promise.resolve(5_000n), 99_000).quote(
+      request(),
+    );
+
+    expect(params(result.data).deadline).toBe(6_800n);
+  });
+});
+
 describe("createLensExactInputQuoter against a node that answers its own deadline", () => {
   beforeEach(() => {
     quote.mockReset();

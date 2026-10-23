@@ -74,4 +74,39 @@ describe("createPredictRun at the session's close", () => {
     expect(driver.getProgress().failure).toEqual({ reason: "closed", retryable: false });
     expect(chain.sends.map((tx) => tx.to)).toEqual([addresses.collateral]);
   });
+
+  it("opens no wallet once the close passes after the batch was built", async () => {
+    const clock = { now: CLOSES_AT - 30 };
+    const chain = chainAt(clock);
+    let batchBuilt = false;
+    const reader = {
+      ...chain.reader,
+      // the batch's reads before the wallet opens are the last, and the close passes while they answer
+      nextNonce: () => {
+        if (batchBuilt) clock.now = CLOSES_AT + 5;
+        return Promise.resolve(chain.sends.length);
+      },
+      optionStates: (args: Parameters<typeof chain.reader.optionStates>[0]) => {
+        // the route check reads them too, before anything is sent
+        if (chain.sends.length > 0) batchBuilt = true;
+        return chain.reader.optionStates(args);
+      },
+    };
+    const driver = createPredictRun({
+      gateway: chain.gateway,
+      reader,
+      quoter: fakeQuoter(),
+      flowId: "predict-close-built",
+      ctx: () => ctx(),
+      snapshot: () => snapshot(),
+      closesAt: CLOSES_AT,
+    });
+    drivers.push(driver);
+
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("halted"));
+
+    expect(driver.getProgress().failure).toEqual({ reason: "closed", retryable: false });
+    expect(chain.sends.map((tx) => tx.to)).toEqual([addresses.collateral]);
+  });
 });
