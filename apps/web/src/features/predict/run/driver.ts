@@ -713,7 +713,9 @@ export function createPredictRun(args: {
       if (hasUnanswered(orchestrator.getRun()?.snapshot ?? stored?.snapshot)) return;
       checking = undefined;
       claiming = undefined;
-      if (owned && (!stored || !foreign(stored.ctx, args.ctx()))) orchestrator.trash(args.flowId);
+      const mismatch = stored && foreign(stored.ctx, args.ctx());
+      // another wallet's or network's run is kept for it; one naming other contracts can never resume
+      if (owned && (!mismatch || mismatch === "unknown")) orchestrator.trash(args.flowId);
       recovered = false;
       reviewing = false;
       moneyMoved = false;

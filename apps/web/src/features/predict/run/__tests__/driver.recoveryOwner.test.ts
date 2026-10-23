@@ -245,6 +245,18 @@ describe("createPredictRun recovering a stored run whose contracts differ from t
     expect(driver.getProgress().stage).toBe("halted");
   });
 
+  it("forgets such a run once the halted popup is reset, as it can never be continued", async () => {
+    const store = savedRunOfA(pendingDeposit, ctx({ executor: ATTACKER }));
+    const { gateway, driver } = recover(store, live);
+
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("halted"));
+    driver.reset();
+
+    expect(store.load(FLOW_ID)).toBeNull();
+    expect(gateway.signRequests).toEqual([]);
+  });
+
   it("recovers a stored run whose addresses differ from the app's only in letter case", async () => {
     const upper = (address: Address) => address.toUpperCase().replace("0X", "0x") as Address;
     const store = savedRunOfA(
