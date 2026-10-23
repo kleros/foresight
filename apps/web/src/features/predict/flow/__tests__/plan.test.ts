@@ -2,7 +2,6 @@ import { decodeFunctionData, erc20Abi, type Address, type Hex, type TransactionR
 import { describe, expect, it } from "vitest";
 
 import { lensQuoterOn, nodeAnswers } from "@/lib/swap/__tests__/support/lensNode";
-
 import { withdrawTx } from "@/lib/trade-executor/funding";
 
 import { gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
