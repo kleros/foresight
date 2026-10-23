@@ -61,6 +61,8 @@ interface PredictDialogProps {
   leftOut: number;
   /** A run is between its first signature and its end. */
   isRunning: boolean;
+  /** The running step's transaction is stored as sent, so closing leaves it for the next popup to wait on. */
+  canClose?: boolean;
   /** A stopped run can pick up where it stopped, with the amount and estimates it was started with. */
   canRetry: boolean;
   /** The stopped run sent a transaction whose outcome is unknown; pressing on checks it first. */
@@ -174,6 +176,7 @@ export function PredictDialog({
   steps,
   leftOut,
   isRunning,
+  canClose = false,
   canRetry,
   isPending = false,
   recovered,
@@ -282,9 +285,9 @@ export function PredictDialog({
     <Modal
       ariaLabel="Predict"
       isOpen={isOpen}
-      // leaving part way through would abandon a run whose transactions are already on chain
-      isDismissable={!isRunning}
-      onOpenChange={(open) => (open || isRunning ? undefined : onClose())}
+      // a run part way through can be left only while it waits on a transaction stored as sent
+      isDismissable={!isRunning || canClose}
+      onOpenChange={(open) => (open || (isRunning && !canClose) ? undefined : onClose())}
       className={clsx(
         "fixed top-18 left-1/2 -translate-x-1/2 transform",
         "h-auto max-h-[calc(100dvh-5rem)] md:max-h-[calc(100dvh-5.5rem)]",
@@ -368,7 +371,7 @@ export function PredictDialog({
               text=""
               aria-label={settingsOpen ? "Close settings" : "Close"}
               icon={<CloseIcon className="text-fs-popup-text-2 size-4.5" />}
-              isDisabled={isRunning}
+              isDisabled={isRunning && !canClose}
               // under the Settings title the X closes the settings, not the prediction behind them
               onPress={settingsOpen ? () => setSettingsWanted(false) : onClose}
               className={clsx(

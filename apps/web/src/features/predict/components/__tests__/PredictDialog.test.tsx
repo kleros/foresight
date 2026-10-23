@@ -330,6 +330,16 @@ describe("predicting", () => {
     for (const remove of screen.getAllByRole("button", { name: /Remove/ })) expect(remove).toBeDisabled();
   });
 
+  it("lets a run whose transaction is stored as sent be closed while it confirms, as recovery picks it up", async () => {
+    const onClose = vi.fn();
+    render(<PredictDialog {...props()} onClose={onClose} isRunning canClose />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(onClose).toHaveBeenCalledOnce();
+    await userEvent.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
   it("says why a run stopped, and lets Predict pick it up again", async () => {
     const onPredict = vi.fn();
     render(

@@ -69,5 +69,7 @@ describe("createPredictRun while the deposit is out with the wallet", () => {
     const confirming = fundsRow(driver);
     expect(confirming?.view).toBe("running");
     expect(confirming?.subtitle).toBe("Confirming…");
+    // stored as sent, so the popup may close while its receipt is waited on
+    expect(driver.getProgress().sentHash).toBe(hash);
   });
 });

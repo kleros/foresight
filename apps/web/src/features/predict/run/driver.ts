@@ -493,6 +493,7 @@ export function createPredictRun(args: {
     });
 
     const pendingHash = pendingHashOf(run);
+    const sending = run?.status === "running" ? currentEntry(run.steps)?.outcome : undefined;
     const rows = steps.length > 0 ? steps : planned;
     const batchRows = rows.filter((row) => row.id.startsWith("predict-"));
 
@@ -507,6 +508,7 @@ export function createPredictRun(args: {
       batches: batchRows.length,
       failure,
       ...(pendingHash ? { pendingHash } : {}),
+      ...(sending?.status === "submitted" ? { sentHash: sending.hash } : {}),
       ...(moneyMoved ? { moneyMoved: true as const } : {}),
       ...(hasUnanswered(run?.snapshot) ? { unanswered: true as const } : {}),
       ...(recovered && run ? { recovered: run.snapshot } : {}),

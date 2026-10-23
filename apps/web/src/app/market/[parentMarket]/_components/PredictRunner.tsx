@@ -323,6 +323,7 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
       steps={steps}
       leftOut={progress?.leftOut.length ?? 0}
       isRunning={isRunning}
+      canClose={stage === "confirming" && Boolean(progress?.sentHash)}
       canRetry={canRetry}
       isPending={Boolean(pendingHash)}
       recovered={

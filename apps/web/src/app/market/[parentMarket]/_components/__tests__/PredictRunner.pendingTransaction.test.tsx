@@ -105,6 +105,7 @@ vi.mock("@/features/predict/components/PredictDialog", () => ({
     <div>
       <p data-testid="running">{String(props.isRunning)}</p>
       <p data-testid="can-retry">{String(props.canRetry)}</p>
+      <p data-testid="can-close">{String(Boolean(props.canClose))}</p>
       <p data-testid="failure">{props.steps.failure ?? ""}</p>
       <ul>
         {props.steps.rows.map((row) => (
@@ -391,6 +392,21 @@ describe("PredictRunner, closing a run whose transaction may still be pending", 
 
     expect(stepOutcome(store, STEP_ID.deposit)).toEqual({ status: "submitted", hash });
     expect(store.load<PredictSnapshot, PredictCtx>(FLOW_ID)?.snapshot).toEqual(before);
+  });
+});
+
+describe("PredictRunner while a sent transaction confirms", () => {
+  it("can be closed once the hash is stored, and leaves the run for the next popup to wait on", async () => {
+    const chain = fakeChain(["hold"]);
+    const popup = open(chain, store);
+    popup.predict();
+    await vi.waitFor(() => expect(chain.waitedOn).toHaveLength(1));
+    await vi.waitFor(() => expect(screen.getByTestId("can-close").textContent).toBe("true"));
+
+    popup.close();
+
+    expect(popup.onClose).toHaveBeenCalledOnce();
+    expect(stepOutcome(store, STEP_ID.deposit)).toEqual({ status: "submitted", hash: chain.sent(0) });
   });
 });
 
