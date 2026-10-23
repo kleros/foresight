@@ -142,3 +142,22 @@ describe("createPredictRun with the run live in another tab", () => {
     await vi.waitFor(async () => expect(await other.heldElsewhere(FLOW_ID)).toBe(false));
   });
 });
+
+describe("createPredictRun whose recover is run, disposed and run again, as React's StrictMode does", () => {
+  it("recovers the stored run rather than report it held in another tab", async () => {
+    const store = createFlowRunStore({ storage: createMemoryStorage() });
+    // a run left by an earlier popup, its deposit not yet signed
+    const earlier = driverIn(origin().tab(), wallet(true).gateway, store);
+    earlier.start();
+    await vi.waitFor(() => expect(earlier.getProgress().stage).toBe("signing"));
+    earlier.dispose();
+
+    const driver = driverIn(origin().tab(), wallet(false).gateway, store);
+    driver.recover();
+    driver.dispose();
+    driver.recover();
+
+    await vi.waitFor(() => expect(driver.getProgress().recovered).toBeDefined());
+    expect(driver.getProgress().failure?.reason).not.toBe("elsewhere");
+  });
+});

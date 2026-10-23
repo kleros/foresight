@@ -212,8 +212,10 @@ export function createPredictRun(args: {
   /** Set once this tab holds the stored run; until then nothing here restores, signs or trashes it. */
   let owned = !args.ownership;
   let release: (() => void) | undefined;
-  /** Set while this tab asks for the run; reset and dispose drop the answer. */
-  let claiming: object | undefined;
+  /** The claim waiting on the lock's answer; reset and dispose drop it, and its answer is let go unless re-asked. */
+  let claiming: { answer: Promise<(() => void) | null> } | undefined;
+  /** The lock's answer while it is unread; a claim made meanwhile waits on it rather than ask again and be refused. */
+  let asked: Promise<(() => void) | null> | undefined;
   /** Wallet requests not yet answered; this tab keeps the run until each is, whatever happens to the popup. */
   const walletRequests = new Set<Promise<unknown>>();
   let cached: PredictProgress;
@@ -762,11 +764,14 @@ export function createPredictRun(args: {
       then();
       return;
     }
-    const claim = {};
+    const answer = (asked ??= args.ownership!.claim(args.flowId));
+    const claim = { answer };
     claiming = claim;
-    void args.ownership!.claim(args.flowId).then((letGo) => {
+    void answer.then((letGo) => {
+      if (asked === answer) asked = undefined;
       if (claiming !== claim) {
-        letGo?.();
+        // a later claim waiting on this same answer takes it
+        if (claiming?.answer !== answer) letGo?.();
         return;
       }
       claiming = undefined;
