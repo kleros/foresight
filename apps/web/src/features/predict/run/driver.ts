@@ -412,6 +412,7 @@ export function createPredictRun(args: {
       failure,
       ...(pendingHash ? { pendingHash } : {}),
       ...(moneyMoved ? { moneyMoved: true as const } : {}),
+      ...(hasUnanswered(run?.snapshot) ? { unanswered: true as const } : {}),
       ...(recovered && run ? { recovered: run.snapshot } : {}),
       ...(moved ? { moved } : {}),
       ...(held ? { held } : {}),

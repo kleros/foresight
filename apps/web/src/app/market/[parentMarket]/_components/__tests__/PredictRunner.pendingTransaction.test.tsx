@@ -609,4 +609,49 @@ describe("PredictRunner, a deposit whose send errored after the wallet broadcast
 
     expect(chain.deposits()).toHaveLength(1);
   });
+
+  it("retries a trade wallet setup whose send errored after broadcast, once it lands, with one setup signed", async () => {
+    const chain = fakeChain(["hold"]);
+    const send = chain.gateway.sendTransaction;
+    chain.gateway.sendTransaction = async (tx, opts) => {
+      await send(tx, opts);
+      throw new Error("Transaction failed", {
+        cause: Object.assign(new Error("Internal JSON-RPC error."), { code: -32603 }),
+      });
+    };
+    const reader: PredictReader = {
+      ...chain.reader,
+      isExecutorDeployed: () => Promise.resolve(false),
+      nextNonce: () => Promise.resolve(chain.signRequests.length),
+      sentWithNonce: async ({ nonce }): Promise<SentTx> => {
+        const tx = chain.signRequests[nonce];
+        if (!tx) return { status: "none" };
+        const mined = await chain.gateway.getReceipt(chain.sent(nonce));
+        if (!mined) return { status: "pending" };
+        return {
+          status: "mined",
+          hash: mined.transactionHash,
+          to: tx.to,
+          value: tx.value ?? 0n,
+          input: tx.data ?? "0x",
+          success: true,
+        };
+      },
+    };
+    const fast = { waitMs: 20, pollMs: 5, graceMs: 20 };
+    const isSetup = (tx: FlowTx) => tx.to === addresses.factory;
+
+    const popup = open(chain, store, reader, fast);
+    await vi.waitFor(() => expect(running()).toBe(false));
+    popup.predict();
+    await vi.waitFor(() => expect(chain.signRequests.filter(isSetup)).toHaveLength(1));
+    await vi.waitFor(() => expect(screen.getByTestId("can-retry").textContent).toBe("true"));
+
+    chain.mine(chain.sent(0));
+    chain.gateway.sendTransaction = send;
+    popup.predict();
+    await vi.waitFor(() => expect(popup.onSuccess).toHaveBeenCalled(), SLOW);
+
+    expect(chain.signRequests.filter(isSetup)).toHaveLength(1);
+  });
 });
