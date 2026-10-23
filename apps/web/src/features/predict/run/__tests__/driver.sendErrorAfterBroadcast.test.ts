@@ -156,6 +156,24 @@ describe("createPredictRun when a send errors after the wallet broadcast it", ()
     expect(store.load(FLOW_ID)).toBeNull();
   });
 
+  it("holds a send whose internal error reads like a decline, since only a decline's code proves nothing went out", async () => {
+    const fake = chain({
+      error: () =>
+        new Error("Transaction failed", {
+          cause: Object.assign(new Error("Internal JSON-RPC error: request rejected"), { code: -32603 }),
+        }),
+      broadcastThenFail: isDeposit,
+    });
+    const { driver, store } = driverOn(fake);
+
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("halted"));
+    expect(driver.getProgress().failure?.reason).toBe("pending");
+
+    driver.reset();
+    expect(store.load(FLOW_ID)).not.toBeNull();
+  });
+
   it("reads no nonce for a rejection", async () => {
     const fake = chain({
       error: () => new UserRejectedRequestError(new Error("User denied transaction signature.")),

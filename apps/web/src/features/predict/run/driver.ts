@@ -4,6 +4,7 @@ import {
   classifyTxError,
   createTxOrchestrator,
   currentEntry,
+  isUserRejection,
   settledEntries,
   type FlowError,
   type FlowRunStore,
@@ -284,8 +285,8 @@ export function createPredictRun(args: {
       } catch (error) {
         // a disposed run keeps the send for whichever driver recovers it
         if (options?.signal?.aborted) throw error;
-        // a coded wallet error can still follow a broadcast; only a rejection proves nothing went out
-        if (classifyTxError(error) === "rejected") {
+        // a coded wallet error can still follow a broadcast; only a decline's code proves nothing went out
+        if (isUserRejection(error)) {
           forgetUnanswered(stepId);
           throw error;
         }

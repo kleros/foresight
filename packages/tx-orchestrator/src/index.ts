@@ -5,7 +5,14 @@
  */
 
 export { createTxOrchestrator, type SnapshotPatch, type TxOrchestrator } from "./orchestrator";
-export { classifyTxError, describeTxError, FlowStateError, isFatalCause, isRetryableRead } from "./errors";
+export {
+  classifyTxError,
+  describeTxError,
+  FlowStateError,
+  isFatalCause,
+  isRetryableRead,
+  isUserRejection,
+} from "./errors";
 export { createFlowScope, type FlowScope } from "./scope";
 export {
   createFlowRunStore,

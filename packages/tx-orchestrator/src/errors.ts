@@ -48,6 +48,13 @@ function isRejectionCode(code: unknown): boolean {
   return code === 4001 || code === "ACTION_REJECTED";
 }
 
+/** A decline as the wallet codes or names it; its wording alone can also come from an error after a broadcast. */
+export function isUserRejection(error: unknown): boolean {
+  return walkChain(error).some(
+    (link) => isRejectionCode(link.code) || (typeof link.name === "string" && USER_REJECTED_NAMES.has(link.name)),
+  );
+}
+
 const TRANSIENT_NAMES = new Set([
   "HttpRequestError",
   "TimeoutError",
@@ -79,10 +86,7 @@ function isTransientCode(error: ErrorLike): boolean {
 export function classifyTxError(error: unknown): Extract<TxErrorCause, "rejected" | "rpc" | "unknown"> {
   const links = walkChain(error);
 
-  for (const link of links) {
-    if (isRejectionCode(link.code)) return "rejected";
-    if (typeof link.name === "string" && USER_REJECTED_NAMES.has(link.name)) return "rejected";
-  }
+  if (isUserRejection(error)) return "rejected";
   const text = links.map(textOf).join(" ");
   if (REJECTION_TEXT.test(text)) return "rejected";
 
