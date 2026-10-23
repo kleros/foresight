@@ -80,10 +80,12 @@ export function TransferDialog({
       .filter((token) => token.balance > 0n)
       .map((token) => ({ id: token.address, symbol: token.symbol, decimals: token.decimals })),
   ];
+  // a picked token whose balance re-reads as zero leaves the list, and nothing is sent in its place
+  const isPickOffered = tokens.some((token) => token.id === selected);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (amount === null || exceedsAvailable) return;
+    if (amount === null || exceedsAvailable || !isPickOffered) return;
 
     onSubmit({ token: useNative ? "native" : (other?.address ?? collateral.address), amount });
   };
@@ -111,7 +113,7 @@ export function TransferDialog({
           type="submit"
           text={actionText}
           isLoading={isPending}
-          isDisabled={amount === null || exceedsAvailable || isPending || !source}
+          isDisabled={amount === null || exceedsAvailable || isPending || !source || !isPickOffered}
         />
       </Form>
     </Dialog>

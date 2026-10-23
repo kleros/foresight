@@ -76,11 +76,13 @@ const market: TradeWalletMarket = {
 const units = (amount: string) => parseUnits(amount, 18);
 
 function renderWallet() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={client}>
       <TradeWallet market={market} noun="city" />
     </QueryClientProvider>,
   );
+  return client;
 }
 
 beforeEach(() => {
@@ -104,6 +106,31 @@ describe("credits in the trade wallet's Withdraw", () => {
     expect(sent.withdraw).toEqual([
       { executor: EXECUTOR, recipient: OWNER, assets: [{ token: CREDITS, amount: units("3.123456789") }] },
     ]);
+  });
+
+  it("signs nothing when the picked credits re-read as zero while the dialog is open", async () => {
+    held.set(
+      EXECUTOR,
+      new Map([
+        [CREDITS, units("3")],
+        [COLLATERAL, units("10")],
+      ]),
+    );
+    const client = renderWallet();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Withdraw" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: /sDAI/ }));
+    await userEvent.click(await screen.findByRole("option", { name: "credits" }));
+    await within(dialog).findByText("Balance: 3 credits");
+    await userEvent.type(within(dialog).getByRole("spinbutton"), "2");
+
+    held.get(EXECUTOR)!.set(CREDITS, 0n);
+    await client.invalidateQueries();
+    await within(dialog).findByText(/Balance: 10/);
+    await userEvent.click(within(dialog).getByRole("button", { name: "Withdraw" }));
+
+    expect(sent.withdraw).toEqual([]);
   });
 
   it("offers no credits when the trade wallet holds none", async () => {
