@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { RunPhase, StepOutcome } from "@foresight/tx-orchestrator";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 
@@ -81,8 +81,9 @@ it.each([
 
   await userEvent.click(await screen.findByRole("button", { name: "Discard" }));
 
+  // Discard takes the run's lock before it deletes, so the card re-reads a moment later
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Resume" })).toBeNull());
   expect(createRunStore().load(predictFlowId("7", OWNER))).toBeNull();
-  expect(screen.queryByRole("button", { name: "Resume" })).toBeNull();
 });
 
 it("offers Resume but not Discard while the run's transaction awaits its receipt", async () => {

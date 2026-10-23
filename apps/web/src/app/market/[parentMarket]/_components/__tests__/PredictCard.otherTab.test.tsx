@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { act, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 
 import { ctx, snapshot, WAD } from "@/features/predict/flow/__tests__/support/fakes";
@@ -78,4 +79,15 @@ it("offers Resume and Discard once the other tab lets the run go", async () => {
   expect(await screen.findByRole("button", { name: "Discard" })).toBeEnabled();
   expect(screen.getByRole("button", { name: "Resume" })).toBeEnabled();
   expect(screen.queryByText(RUNNING_ELSEWHERE, { exact: false })).toBeNull();
+});
+
+it("keeps the run when another tab takes it between the card's check and the Discard", async () => {
+  plantLiveRun();
+  // the check answers that no tab holds it, and the lock is taken by the time Discard asks for it
+  other.holds = false;
+  render(<PredictCard session={session()} status="trading" marketEstimates={{}} />);
+
+  await userEvent.click(await screen.findByRole("button", { name: "Discard" }));
+
+  expect(createRunStore().load(FLOW_ID)).not.toBeNull();
 });

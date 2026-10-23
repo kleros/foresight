@@ -129,10 +129,16 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
     return () => clearInterval(timer);
   }, [interrupted, heldElsewhere]);
 
-  // re-read rather than clear: discardRun keeps a run whose transaction awaits a receipt
+  // re-read rather than clear: discardRun keeps a run whose transaction awaits a receipt. The run is held for the
+  // read and the delete, so no other tab can start signing it in between
   const discard = async () => {
-    if (address && !(await tabOwnership().heldElsewhere(predictFlowId(session.id, address)))) {
-      discardRun(createRunStore(), session.id, address);
+    const letGo = address ? await tabOwnership().claim(predictFlowId(session.id, address)) : null;
+    if (address && letGo) {
+      try {
+        discardRun(createRunStore(), session.id, address);
+      } finally {
+        letGo();
+      }
     }
     setReads((count) => count + 1);
   };
