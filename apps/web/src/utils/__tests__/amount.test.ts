@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatAmount, formatDisplayAmount, ownedAmount, parseAmount } from "../amount";
+import { formatAmount, formatDisplayAmount, ownedAmount, parseAmount, scaleAmount } from "../amount";
 
 describe("parseAmount", () => {
   it("scales a decimal by the token's precision", () => {
@@ -78,5 +78,14 @@ describe("ownedAmount", () => {
   it("names a non-zero amount below the fourth decimal, and shows nothing held as 0", () => {
     expect(ownedAmount(10_000_000_000_000n, 18)).toBe("less than 0.0001");
     expect(ownedAmount(0n, 18)).toBe("0");
+  });
+});
+
+describe("scaleAmount", () => {
+  it("scales the decimal a number reads as, at both ends where it prints in exponent notation", () => {
+    expect(scaleAmount(0.27, 18)).toBe(270000000000000000n);
+    expect(scaleAmount(5e-8, 18)).toBe(50000000000n);
+    expect(scaleAmount(1.5e21, 0)).toBe(1500000000000000000000n);
+    expect(scaleAmount(-2.5, 1)).toBe(-25n);
   });
 });

@@ -16,16 +16,24 @@ export function parseAmount(raw: string, decimals: number): bigint | null {
 }
 
 /**
- * A number to its token's base units. Scaling by hand rather than through `parseUnits`: every
- * decimal string a number produces goes exponential somewhere — below 1e-7 with `String`, at
- * 1e21 and above even with `toFixed` — and both ends are reachable.
+ * `value` as the shortest plain decimal that reads back as it, which is what was typed or stepped to. `String` gives
+ * that decimal, but in exponent notation below 1e-6 and from 1e21, which `parseUnits` refuses, so it is written out.
  */
+function plainDecimal(value: number): string {
+  const [mantissa = "0", exponent = "0"] = String(value).toLowerCase().split("e");
+  const sign = mantissa.startsWith("-") ? "-" : "";
+  const [whole = "0", fraction = ""] = mantissa.replace("-", "").split(".");
+  const digits = whole + fraction;
+  const point = whole.length + Number(exponent);
+  if (point <= 0) return `${sign}0.${"0".repeat(-point)}${digits}`;
+  if (point >= digits.length) return `${sign}${digits}${"0".repeat(point - digits.length)}`;
+  return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`;
+}
+
+/** A number to its token's base units, from its decimal rather than float arithmetic, rounded past `decimals`. */
 export function scaleAmount(value: number, decimals: number): bigint {
   if (!Number.isFinite(value)) return 0n;
-
-  const unit = 10n ** BigInt(decimals);
-  const whole = Math.trunc(value);
-  return BigInt(whole) * unit + BigInt(Math.round((value - whole) * Number(unit)));
+  return parseUnits(plainDecimal(value), decimals);
 }
 
 /** Decimals `formatAmount` shows by default; anything finer is cut. */

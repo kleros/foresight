@@ -25,6 +25,11 @@ describe("estimateToPriceWad", () => {
     expect(estimateToPriceWad(900, DUNE)).toBe(MAX_PRICE_WAD);
   });
 
+  it("is exact for a step on a fractional scale, with no float rounding in the wei", () => {
+    expect(estimateToPriceWad(0.27, { lowerBound: 0, upperBound: 1 })).toBe(270000000000000000n);
+    expect(estimateToPriceWad(0.000000271, { lowerBound: 0, upperBound: 0.000001 })).toBe(271000000000000000n);
+  });
+
   it("survives an estimate small enough to stringify as exponential", () => {
     // String(5e-11) is "5e-11", which parseEther refuses
     expect(estimateToPriceWad(5e-11, { lowerBound: 0, upperBound: 1 })).toBe(MIN_PRICE_WAD);
