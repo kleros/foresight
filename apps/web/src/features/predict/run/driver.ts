@@ -89,7 +89,7 @@ const sameSlippage = (a: PredictSlippage, b: PredictSlippage) =>
 const sameAddress = (a: unknown, b: Address | null) =>
   b === null ? a === null : typeof a === "string" && a.toLowerCase() === b.toLowerCase();
 
-/** The contracts a saved run would sign against, as the app names them now. */
+/** True when every contract a saved run would sign against is the one the app names now. */
 function sameContracts(saved: PredictCtx, current: PredictCtx): boolean {
   const pairs: Array<[unknown, Address | null]> = [
     [saved.executor, current.executor],
