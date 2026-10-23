@@ -206,7 +206,8 @@ export function PredictSummary({
   mint?: {
     amount: bigint;
     noun: string;
-    /** Credits' share is quoted, so the amount is an estimate. */ isEstimated?: true;
+    /** Credits' share is quoted, so the amount is an estimate. */
+    isEstimated?: true;
   };
   isOpen: boolean;
   onToggle: () => void;
