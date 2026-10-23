@@ -142,8 +142,15 @@ describe("parseEstimateCsv", () => {
     );
   });
 
-  it("names the row missing a value", () => {
-    expect(() => parseEstimateCsv("name,estimate\nVilleneuve,", scales)).toThrow("Row 2: both columns need a value");
+  it("reads an empty estimate as no estimate for that option", () => {
+    expect(parseEstimateCsv('name,estimate\nVilleneuve,\n"Gerwig, Greta",300', scales)).toEqual([
+      { scale: villeneuve, value: null },
+      { scale: gerwig, value: 300 },
+    ]);
+  });
+
+  it("names the row missing a name", () => {
+    expect(() => parseEstimateCsv("name,estimate\n,250", scales)).toThrow("Row 2: the name is missing.");
   });
 });
 
@@ -183,6 +190,10 @@ describe("serializeEstimateCsv with a name a spreadsheet would run as a formula"
 
     expect(csv.split("\n")[1]).toBe("'=1+1,50");
     expect(parseEstimateCsv(csv, [quoted, scaleNamed("=1+1", 1)])).toEqual([{ scale: quoted, value: 50 }]);
+  });
+
+  it("writes an option with no estimate as an empty cell", () => {
+    expect(serializeEstimateCsv([{ name: "Villeneuve", estimate: null }]).split("\n")[1]).toBe("Villeneuve,");
   });
 
   it("writes a negative estimate as a number", () => {

@@ -56,13 +56,17 @@ const asText = (cell: string) => quote(FORMULA_START.test(cell) ? `'${cell}` : c
 /** Excel reads a CSV without a byte-order mark as the system's ANSI code page; `trim()` drops it on upload. */
 const UTF8_BOM = "\uFEFF";
 
-export function serializeEstimateCsv(rows: { name: string; estimate: number }[]): string {
-  return UTF8_BOM + [CSV_COLUMNS.join(","), ...rows.map((row) => `${asText(row.name)},${row.estimate}`)].join("\n");
+/** A null estimate is written as an empty cell, which the upload reads as no estimate. */
+export function serializeEstimateCsv(rows: { name: string; estimate: number | null }[]): string {
+  return (
+    UTF8_BOM + [CSV_COLUMNS.join(","), ...rows.map((row) => `${asText(row.name)},${row.estimate ?? ""}`)].join("\n")
+  );
 }
 
 interface ParsedEstimate {
   scale: OptionScale;
-  value: number;
+  /** Null for a row whose estimate cell is empty. */
+  value: number | null;
 }
 
 /**
@@ -86,13 +90,17 @@ export function parseEstimateCsv(text: string, scales: OptionScale[]): ParsedEst
     const line = index + 2;
     const name = (cells[nameAt] ?? "").trim();
     const raw = (cells[estimateAt] ?? "").trim();
-    if (!name || !raw) throw new Error(`Row ${line}: both columns need a value.`);
+    if (!name) throw new Error(`Row ${line}: the name is missing.`);
 
     const key = name.toLowerCase();
     const scale =
       byName.get(key) ??
       (key.startsWith("'") && FORMULA_START.test(key.slice(1)) ? byName.get(key.slice(1).trim()) : undefined);
     if (!scale) throw new Error(`Row ${line}: there is no option named "${name}".`);
+    if (!raw) {
+      parsed.set(scale.market.toLowerCase(), { scale, value: null });
+      return;
+    }
 
     const value = Number(raw);
     if (!Number.isFinite(value)) throw new Error(`Row ${line}: "${raw}" is not a number.`);

@@ -74,7 +74,7 @@ describe("EstimateCsvDialog", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
-  it("offers a template with every option at your estimate where set and the market's otherwise", async () => {
+  it("offers a template with your estimate where set and an empty cell otherwise", async () => {
     useEstimateStore.getState().setEstimate(PARENT, FIRST, 250);
     await openDialog();
 
@@ -82,9 +82,53 @@ describe("EstimateCsvDialog", () => {
 
     expect(downloadTextFile).toHaveBeenCalledWith(
       "estimates-template.csv",
-      "\uFEFFname,estimate\nVilleneuve,250\nGerwig,280",
+      "\uFEFFname,estimate\nVilleneuve,250\nGerwig,",
       "text/csv",
     );
+  });
+
+  it("stores only the row edited in a template taken while the market was unknown", async () => {
+    render(<EstimateCsvDialog parentMarket={PARENT} scales={scales} marketEstimates={{}} noun="directors" />);
+    await userEvent.click(screen.getByRole("button", { name: "Upload estimates (CSV)" }));
+    await userEvent.click(screen.getByRole("button", { name: "Download CSV template" }));
+    const template = vi.mocked(downloadTextFile).mock.calls[0]![1];
+
+    await userEvent.upload(fileInput(), csvFile(template.replace(/^Villeneuve,.*$/m, "Villeneuve,300")));
+    await userEvent.click(screen.getByRole("button", { name: "Load estimates" }));
+
+    expect(useEstimateStore.getState().estimates[PARENT] ?? {}).toEqual({ [FIRST]: 300 });
+  });
+
+  it("stores nothing from an untouched template after the market has moved", async () => {
+    const { rerender } = render(
+      <EstimateCsvDialog parentMarket={PARENT} scales={scales} marketEstimates={marketEstimates} noun="directors" />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Upload estimates (CSV)" }));
+    await userEvent.click(screen.getByRole("button", { name: "Download CSV template" }));
+    const template = vi.mocked(downloadTextFile).mock.calls[0]![1];
+    rerender(
+      <EstimateCsvDialog
+        parentMarket={PARENT}
+        scales={scales}
+        marketEstimates={{ [FIRST]: 313, [SECOND]: 279 }}
+        noun="directors"
+      />,
+    );
+
+    await userEvent.upload(fileInput(), csvFile(template));
+    await userEvent.click(screen.getByRole("button", { name: "Load estimates" }));
+
+    expect(useEstimateStore.getState().estimates[PARENT] ?? {}).toEqual({});
+  });
+
+  it("clears a saved estimate whose row is left empty", async () => {
+    useEstimateStore.getState().setEstimate(PARENT, FIRST, 250);
+    await openDialog();
+
+    await userEvent.upload(fileInput(), csvFile("name,estimate\nVilleneuve,\nGerwig,300"));
+    await userEvent.click(screen.getByRole("button", { name: "Load estimates" }));
+
+    expect(useEstimateStore.getState().estimates[PARENT]).toEqual({ [SECOND]: 300 });
   });
 
   it("cannot load before a file is chosen", async () => {

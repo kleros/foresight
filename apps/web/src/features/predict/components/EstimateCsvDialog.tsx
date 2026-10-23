@@ -44,7 +44,7 @@ export function EstimateCsvDialog({ parentMarket, scales, marketEstimates, noun,
 
   const templateRows = scales.map((scale) => ({
     name: scale.name,
-    estimate: estimates[scale.market.toLowerCase()] ?? marketEstimates[scale.market.toLowerCase()] ?? scale.lowerBound,
+    estimate: estimates[scale.market.toLowerCase()] ?? null,
   }));
 
   const load = async () => {
@@ -52,9 +52,10 @@ export function EstimateCsvDialog({ parentMarket, scales, marketEstimates, noun,
     try {
       const parsed = parseEstimateCsv(await file.text(), scales);
       for (const { scale, value } of parsed) {
-        // a row at the market's own number is no prediction, same as the slider left there
-        if (value === marketEstimates[scale.market.toLowerCase()]) clearEstimate(parentMarket, scale.market);
-        else setEstimate(parentMarket, scale.market, value);
+        // an empty row, or one at the market's own number, is no prediction, same as the slider left there
+        if (value === null || value === marketEstimates[scale.market.toLowerCase()]) {
+          clearEstimate(parentMarket, scale.market);
+        } else setEstimate(parentMarket, scale.market, value);
       }
       successToast("Estimates loaded.");
       close();
@@ -84,7 +85,7 @@ export function EstimateCsvDialog({ parentMarket, scales, marketEstimates, noun,
           <h3 className="text-fs-text-primary text-sm">Required columns</h3>
           <pre className="border-fs-border rounded-fs bg-fs-surface text-fs-text-primary overflow-x-auto border p-4 text-sm">
             <span className="text-fs-text-secondary">{CSV_COLUMNS.join(",")}</span>
-            {templateRows.slice(0, 2).map((row) => `\n${row.name},${row.estimate}`)}
+            {templateRows.slice(0, 2).map((row) => `\n${row.name},${row.estimate ?? ""}`)}
             {templateRows.length > 2 ? <span className="text-fs-text-secondary">{"\n…"}</span> : null}
           </pre>
           <p className="text-fs-text-primary text-sm">
