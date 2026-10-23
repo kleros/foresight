@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@kleros/ui-components-library";
 import clsx from "clsx";
@@ -15,9 +15,11 @@ import {
   hasPendingTransaction,
   predictFlowId,
 } from "@/features/predict/run/interrupted";
+import { tabOwnership } from "@/features/predict/run/ownership";
 import { useSessionEstimates } from "@/features/predict/stores/estimateStore";
 import type { SelectedEstimate } from "@/features/predict/types";
 import { selectedEstimates } from "@/features/predict/utils/estimates";
+import { RUNNING_ELSEWHERE } from "@/features/predict/utils/predictSteps";
 import type { SessionDetail, SessionStatus } from "@/features/sessions/types";
 import { optionNoun, optionNounSingular } from "@/features/sessions/utils/optionNoun";
 
@@ -44,6 +46,9 @@ const PredictSuccessDialog = dynamic(
 );
 
 const CTA = "predict-cta predict-card-cta";
+
+/** How often a run another tab holds is asked about again, since letting go of it writes nothing. */
+const HELD_ELSEWHERE_POLL_MS = 2_000;
 
 // a stored run's reason is said in the run's own row, beside its Resume
 const blockerText = (blocker: Exclude<PredictBlocker, "unfinished">, noun: string): string =>
@@ -77,11 +82,26 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
   const interrupted = stored && stored.owner === address ? stored.run : undefined;
   const [isPending, setIsPending] = useState(false);
   const [reads, setReads] = useState(0);
+  // whether another open tab drives the stored run; unknown until a tab is asked
+  const [heldElsewhere, setHeldElsewhere] = useState<boolean>();
+  const asked = useRef(0);
+  const isHeld = heldElsewhere !== false;
 
   const readStored = () => {
     const store = createRunStore();
-    setStored({ owner: address, run: address ? findInterruptedRun(store, session.id, address) : null });
+    const run = address ? findInterruptedRun(store, session.id, address) : null;
+    setStored({ owner: address, run });
     setIsPending(address ? hasPendingTransaction(store, session.id, address) : false);
+    const ask = ++asked.current;
+    if (!run || !address) {
+      setHeldElsewhere(false);
+      return;
+    }
+    void tabOwnership()
+      .heldElsewhere(predictFlowId(session.id, address))
+      .then((held) => {
+        if (asked.current === ask) setHeldElsewhere(held);
+      });
   };
 
   // read after mount and after the popup, which may have finished or discarded the run; while it is open the card
@@ -102,9 +122,18 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
     return () => window.removeEventListener("storage", onStorage);
   }, [address, session.id]);
 
+  // a tab that closes or lets go of the run writes nothing, so a held run is asked about again
+  useEffect(() => {
+    if (!interrupted || !heldElsewhere) return;
+    const timer = setInterval(() => setReads((count) => count + 1), HELD_ELSEWHERE_POLL_MS);
+    return () => clearInterval(timer);
+  }, [interrupted, heldElsewhere]);
+
   // re-read rather than clear: discardRun keeps a run whose transaction awaits a receipt
-  const discard = () => {
-    if (address) discardRun(createRunStore(), session.id, address);
+  const discard = async () => {
+    if (address && !(await tabOwnership().heldElsewhere(predictFlowId(session.id, address)))) {
+      discardRun(createRunStore(), session.id, address);
+    }
     setReads((count) => count + 1);
   };
 
@@ -202,7 +231,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
           {shown.length > 0 && pausedRun === null ? <Picks selected={shown} /> : null}
           <div className="shrink-0 md:max-lg:order-first">
             {pausedRun ? (
-              <Button className={CTA} text="Resume" onPress={() => setOpened(toPredict)} />
+              <Button className={CTA} text="Resume" isDisabled={isHeld} onPress={() => setOpened(toPredict)} />
             ) : (
               <>
                 <div className="md:hidden">{predict("Predict")}</div>
@@ -223,16 +252,19 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
           <div className="flex w-full flex-wrap items-center justify-between gap-3">
             <p className="text-fs-text-secondary text-sm">
               {runShown(pausedRun)}
-              {isPending ? " A transaction from it may still be pending." : null}
+              {heldElsewhere ? ` ${RUNNING_ELSEWHERE}` : null}
+              {isPending && !heldElsewhere ? " A transaction from it may still be pending." : null}
               {/* a run whose transaction awaits a receipt offers no Discard */}
-              {blocker === "unfinished"
+              {blocker === "unfinished" && !heldElsewhere
                 ? isPending
                   ? " Resume it before starting a new one."
                   : " Resume or discard it before starting a new one."
                 : null}
             </p>
             <div className="flex gap-3">
-              {isPending ? null : <Button small variant="secondary" text="Discard" onPress={discard} />}
+              {isPending || heldElsewhere ? null : (
+                <Button small variant="secondary" text="Discard" isDisabled={isHeld} onPress={() => void discard()} />
+              )}
               <div className="md:hidden">
                 <Button className="predict-held" small variant="secondary" text="Predict" isDisabled />
               </div>

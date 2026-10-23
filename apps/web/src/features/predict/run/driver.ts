@@ -18,6 +18,7 @@ import { chainText, OUT_OF_FUNDS, REVERTS } from "@/utils/txErrorText";
 import type { ExactInputQuoter, SwapQuoter } from "@/lib/swap/types";
 
 import { hasUnanswered } from "./interrupted";
+import type { RunOwnership } from "./ownership";
 import type { PredictDriver, PredictFailureReason, PredictProgress, PredictStepRow } from "./types";
 import {
   assertRoutes,
@@ -106,6 +107,8 @@ export function createPredictRun(args: {
   now?: () => number;
   /** How long, and how often, the chain is read for a send that errored. */
   unansweredSend?: { waitMs: number; pollMs: number; graceMs?: number };
+  /** Which tab drives the stored run; without it this driver takes it as its own. */
+  ownership?: RunOwnership;
 }): PredictDriver {
   const listeners = new Set<() => void>();
   /** Options left out by each batch not yet settled, by step id; a settled batch's are kept in the run's snapshot. */
@@ -135,6 +138,11 @@ export function createPredictRun(args: {
   let movedByBuild: MovedPlans | undefined;
   /** Slippage a retry took up, stored with the run only once `confirm` accepts the plans it gives. */
   let pendingSlippage: PredictSlippage | undefined;
+  /** Set once this tab holds the stored run; until then nothing here restores, signs or trashes it. */
+  let owned = !args.ownership;
+  let release: (() => void) | undefined;
+  /** Set while this tab asks for the run; reset and dispose drop the answer. */
+  let claiming: object | undefined;
   let cached: PredictProgress;
 
   const deps: PredictDeps = {
@@ -571,15 +579,38 @@ export function createPredictRun(args: {
       carryOn?.();
     })();
 
-  return {
-    start(heldTo) {
-      if (checking || orchestrator.getStatus() !== "idle") return;
-      // A stored run has steps that may already be on chain, and `start` would refuse anyway.
-      if (args.store?.load(args.flowId)) {
-        recoverRun();
+  /** Runs `then` once this tab holds the run, or reports it held by another tab. */
+  function claimed(then: () => void) {
+    if (owned) {
+      then();
+      return;
+    }
+    const claim = {};
+    claiming = claim;
+    void args.ownership!.claim(args.flowId).then((letGo) => {
+      if (claiming !== claim) {
+        letGo?.();
         return;
       }
-      startRun(heldTo);
+      claiming = undefined;
+      if (!letGo) {
+        report("elsewhere", () => claimed(then));
+        return;
+      }
+      release = letGo;
+      owned = true;
+      then();
+    });
+  }
+
+  return {
+    start(heldTo) {
+      if (checking || claiming || orchestrator.getStatus() !== "idle") return;
+      claimed(() => {
+        // A stored run has steps that may already be on chain, and `start` would refuse anyway.
+        if (args.store?.load(args.flowId)) recoverRun();
+        else startRun(heldTo);
+      });
     },
 
     confirm() {
@@ -603,8 +634,8 @@ export function createPredictRun(args: {
     },
 
     recover() {
-      if (checking || orchestrator.getStatus() !== "idle") return;
-      recoverRun();
+      if (checking || claiming || orchestrator.getStatus() !== "idle" || !args.store?.load(args.flowId)) return;
+      claimed(recoverRun);
     },
 
     resume() {
@@ -634,7 +665,8 @@ export function createPredictRun(args: {
       const stored = args.store?.load<PredictSnapshot, PredictCtx>(args.flowId);
       if (hasUnanswered(orchestrator.getRun()?.snapshot ?? stored?.snapshot)) return;
       checking = undefined;
-      if (!stored || !foreign(stored.ctx, args.ctx())) orchestrator.trash(args.flowId);
+      claiming = undefined;
+      if (owned && (!stored || !foreign(stored.ctx, args.ctx()))) orchestrator.trash(args.flowId);
       recovered = false;
       reviewing = false;
       moneyMoved = false;
@@ -650,7 +682,11 @@ export function createPredictRun(args: {
 
     dispose() {
       checking = undefined;
+      claiming = undefined;
       orchestrator.dispose();
+      release?.();
+      release = undefined;
+      owned = !args.ownership;
     },
 
     getProgress: () => cached,

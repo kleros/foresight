@@ -1,0 +1,81 @@
+import type { ReactNode } from "react";
+
+import { act, render, screen } from "@testing-library/react";
+import { beforeEach, expect, it, vi } from "vitest";
+
+import { ctx, snapshot, WAD } from "@/features/predict/flow/__tests__/support/fakes";
+import { predictFlowId } from "@/features/predict/run/interrupted";
+import { RUNNING_ELSEWHERE } from "@/features/predict/utils/predictSteps";
+import { sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
+import { toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
+
+import { createRunStore } from "@/lib/flowRunStore";
+
+import { DEFAULT_CHAIN_ID } from "@/config/chains";
+
+import { GATEWAY } from "@/testing/fixtures";
+
+import { PredictCard } from "../PredictCard";
+
+const OWNER = "0xa11ce000000000000000000000000000000a11ce";
+const FLOW_ID = predictFlowId("7", OWNER);
+
+/** Whether another tab answers that it holds the run. */
+const other = vi.hoisted(() => ({ holds: true }));
+
+vi.mock("wagmi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("wagmi")>()),
+  useAccount: () => ({ address: OWNER }),
+}));
+vi.mock("@/components/wallet/EnsureChain", () => ({ default: ({ children }: { children: ReactNode }) => children }));
+vi.mock("@/features/predict/run/ownership", () => ({
+  tabOwnership: () => ({ claim: () => Promise.resolve(null), heldElsewhere: () => Promise.resolve(other.holds) }),
+}));
+
+const session = () => toSessionDetail({ ...sessionDetailColumns, id: "7", children: [] }, GATEWAY);
+
+/** What tab A leaves in shared storage while its wallet prompt for the deposit is open. */
+function plantLiveRun() {
+  createRunStore().save({
+    flowId: FLOW_ID,
+    adapterId: "predict-flow",
+    snapshot: snapshot({ deposit: WAD * 3n }),
+    ctx: ctx({ owner: OWNER, chainId: DEFAULT_CHAIN_ID }),
+    steps: [
+      { stepId: "create-wallet", label: "Set up", outcome: { status: "skipped" } },
+      { stepId: "deposit", label: "Add funds", outcome: { status: "awaiting-signature" } },
+      { stepId: "predict-1", label: "Predict", outcome: { status: "pending" } },
+    ],
+    status: "running",
+  });
+}
+
+beforeEach(() => {
+  window.localStorage.clear();
+  other.holds = true;
+});
+
+it("shows a run another tab is driving as running there, with Resume and Discard held", async () => {
+  plantLiveRun();
+  render(<PredictCard session={session()} status="trading" marketEstimates={{}} />);
+
+  expect(await screen.findByText(RUNNING_ELSEWHERE, { exact: false })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Resume" })).toBeDisabled();
+  expect(createRunStore().load(FLOW_ID)).not.toBeNull();
+});
+
+it("offers Resume and Discard once the other tab lets the run go", async () => {
+  plantLiveRun();
+  render(<PredictCard session={session()} status="trading" marketEstimates={{}} />);
+  await screen.findByText(RUNNING_ELSEWHERE, { exact: false });
+
+  other.holds = false;
+  act(() => {
+    window.dispatchEvent(new StorageEvent("storage", { key: `foresight.tx-flow.${FLOW_ID}` }));
+  });
+
+  expect(await screen.findByRole("button", { name: "Discard" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Resume" })).toBeEnabled();
+  expect(screen.queryByText(RUNNING_ELSEWHERE, { exact: false })).toBeNull();
+});

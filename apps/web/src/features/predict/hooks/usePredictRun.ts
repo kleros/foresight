@@ -17,6 +17,7 @@ import type { CreditsRoute } from "@/config/contracts";
 import type { PredictCtx, PredictOption, PredictRequest, PredictSlippage } from "../flow/types";
 import { createPredictRun } from "../run/driver";
 import { predictFlowId } from "../run/interrupted";
+import { tabOwnership } from "../run/ownership";
 import { createPredictReader } from "../run/reader";
 import type { PredictDriver, PredictProgress } from "../run/types";
 
@@ -93,6 +94,7 @@ export function usePredictRun(input: PredictRunInput | null): {
       creditsQuoter: createLensExactInputQuoter(publicClient, DEFAULT_CHAIN_ID as 100),
       store,
       flowId,
+      ownership: tabOwnership(),
       ctx: (): PredictCtx => {
         const now = latest.current;
         if (!now) throw new Error("This session is no longer open for predictions.");

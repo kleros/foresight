@@ -1,0 +1,117 @@
+import { createFlowRunStore, createMemoryStorage, type FlowTx, type TxGateway } from "@foresight/tx-orchestrator";
+import type { Hash, TransactionReceipt } from "viem";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { addresses, ctx, fakeQuoter, fakeReader, snapshot } from "../../flow/__tests__/support/fakes";
+import { createPredictRun } from "../driver";
+import { predictFlowId } from "../interrupted";
+import { createRunOwnership, type RunLocks, type RunOwnership } from "../ownership";
+import type { PredictDriver } from "../types";
+
+const FLOW_ID = predictFlowId("session-1", addresses.owner);
+
+const drivers: PredictDriver[] = [];
+afterEach(() => {
+  for (const driver of drivers.splice(0)) driver.dispose();
+});
+
+/** One origin's Web Locks, shared by its tabs: a lock is held until its callback's promise settles. */
+function origin() {
+  const held = new Set<string>();
+  const locks: RunLocks = {
+    request: (async (name: string, _options: LockOptions, callback: (lock: Lock | null) => unknown) => {
+      if (held.has(name)) return callback(null);
+      held.add(name);
+      try {
+        return await callback({ name, mode: "exclusive" } as Lock);
+      } finally {
+        held.delete(name);
+      }
+    }) as RunLocks["request"],
+    query: () => Promise.resolve({ held: [...held].map((name) => ({ name, mode: "exclusive", clientId: "" })) }),
+  };
+  /** One browser tab of this origin. */
+  return { tab: (): RunOwnership => createRunOwnership(locks) };
+}
+
+/** A wallet whose prompts stay open when `hold` is set, as a visitor leaves one unanswered. */
+function wallet(hold: boolean) {
+  const sends: FlowTx[] = [];
+  const receipt = (hash: Hash) =>
+    ({ transactionHash: hash, status: "success", blockNumber: 19_000_000n, logs: [] }) as unknown as TransactionReceipt;
+  const gateway: TxGateway = {
+    sendTransaction: (tx) => {
+      sends.push(tx);
+      if (hold) return new Promise<Hash>(() => {});
+      return Promise.resolve(`0x${sends.length.toString(16).padStart(64, "0")}` as Hash);
+    },
+    waitForReceipt: ({ hash }) => Promise.resolve(receipt(hash)),
+    getReceipt: (hash) => Promise.resolve(receipt(hash)),
+    isKnown: () => Promise.resolve(true),
+  };
+  return { gateway, sends };
+}
+
+function driverIn(ownership: RunOwnership, gateway: TxGateway, store: ReturnType<typeof createFlowRunStore>) {
+  const driver = createPredictRun({
+    gateway,
+    reader: fakeReader({ deployed: true }),
+    quoter: fakeQuoter(),
+    flowId: FLOW_ID,
+    ctx: () => ctx(),
+    snapshot: () => snapshot(),
+    store,
+    ownership,
+  });
+  drivers.push(driver);
+  return driver;
+}
+
+describe("run ownership across tabs", () => {
+  it("tells another tab a claimed run is held, never this one, and lets it go on release", async () => {
+    const site = origin();
+    const [a, b] = [site.tab(), site.tab()];
+
+    const release = await a.claim(FLOW_ID);
+    expect(release).not.toBeNull();
+    expect(await b.claim(FLOW_ID)).toBeNull();
+    expect(await b.heldElsewhere(FLOW_ID)).toBe(true);
+    expect(await a.heldElsewhere(FLOW_ID)).toBe(false);
+
+    release!();
+    await vi.waitFor(async () => expect(await b.heldElsewhere(FLOW_ID)).toBe(false));
+  });
+});
+
+describe("createPredictRun with the run live in another tab", () => {
+  it("neither resumes nor discards it, and signs nothing until that tab lets go", async () => {
+    const store = createFlowRunStore({ storage: createMemoryStorage() });
+    const site = origin();
+    const [ownA, ownB] = [site.tab(), site.tab()];
+    const walletA = wallet(true);
+    const walletB = wallet(false);
+
+    const a = driverIn(ownA, walletA.gateway, store);
+    a.start();
+    await vi.waitFor(() => expect(a.getProgress().stage).toBe("signing"));
+
+    const b = driverIn(ownB, walletB.gateway, store);
+    b.recover();
+    await vi.waitFor(() => expect(b.getProgress().failure?.reason).toBe("elsewhere"));
+    b.retry();
+    b.reset();
+    b.start();
+    await vi.waitFor(() => expect(b.getProgress().failure?.reason).toBe("elsewhere"));
+
+    expect(walletB.sends).toEqual([]);
+    expect(store.load(FLOW_ID)).not.toBeNull();
+    expect(a.getProgress().stage).toBe("signing");
+
+    a.dispose();
+    await vi.waitFor(async () => expect(await ownB.heldElsewhere(FLOW_ID)).toBe(false));
+    b.reset();
+    b.start();
+    await vi.waitFor(() => expect(b.getProgress().recovered).toBeDefined());
+    expect(b.getProgress().failure?.reason).not.toBe("elsewhere");
+  });
+});

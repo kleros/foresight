@@ -34,6 +34,9 @@ export interface PredictSteps {
 /** The credits swap has no quote or route, so a run spending credits cannot be planned. */
 export const CREDITS_UNAVAILABLE = "Credits can't be spent now. Untick them to use your own funds.";
 
+/** A stored run another open tab is driving; the card and the popup both say it. */
+export const RUNNING_ELSEWHERE = "This prediction is running in another tab. Finish or close it there.";
+
 /** The chain's own errors name gas and contracts, which the popup never shows. */
 const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], string> = {
   rejected: "You declined in your wallet.",
@@ -51,6 +54,7 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
   pending: "A transaction from your wallet is still confirming. Try again once it lands.",
   "wrong-wallet": "Started from another wallet. Connect it to finish.",
   "wrong-chain": "Started on another network. Switch to it to finish.",
+  elsewhere: RUNNING_ELSEWHERE,
 };
 
 /** Once the credits are in the trade wallet the run is locked to them, so only waiting helps. */

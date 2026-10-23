@@ -12,6 +12,7 @@ import type { HeldTo, MovedPlans, PredictSnapshot } from "../flow/types";
  * `deposit-unconfirmed`: a recovered run's deposit may have been signed with no hash kept.
  * `pending`: the wallet has a transaction not yet mined, which may be the step about to be signed again.
  * `wrong-wallet`, `wrong-chain`: a saved run belongs to another wallet or network than the connected one.
+ * `elsewhere`: another open tab is driving the saved run.
  */
 export type PredictFailureReason =
   | TxErrorCause
@@ -24,7 +25,8 @@ export type PredictFailureReason =
   | "deposit-unconfirmed"
   | "pending"
   | "wrong-wallet"
-  | "wrong-chain";
+  | "wrong-chain"
+  | "elsewhere";
 
 /** What the popup shows while a prediction runs. */
 export type PredictStage =
