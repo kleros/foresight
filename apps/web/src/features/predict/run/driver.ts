@@ -53,6 +53,9 @@ import type {
 /** The trade wallet, or the wallet's credits, hold less than the prediction was shown to draw on. */
 class TradeWalletShortError extends Error {}
 
+/** The chain's clock has passed the session's close. */
+class SessionClosedError extends Error {}
+
 /**
  * How long, and how often, the chain is read for a send that errored. A lost answer is waited on for `waitMs`;
  * a coded error for `graceMs`, since the wallet's own node may see the transaction before this app's does.
@@ -109,6 +112,8 @@ export function createPredictRun(args: {
   unansweredSend?: { waitMs: number; pollMs: number; graceMs?: number };
   /** Which tab drives the stored run; without it this driver takes it as its own. */
   ownership?: RunOwnership;
+  /** When the session stops trading, in unix seconds; nothing is signed once the chain's clock reaches it. */
+  closesAt?: number | null;
 }): PredictDriver {
   const listeners = new Set<() => void>();
   /** Options left out by each batch not yet settled, by step id; a settled batch's are kept in the run's snapshot. */
@@ -119,7 +124,7 @@ export function createPredictRun(args: {
   /** Set while the routes are checked, before the orchestrator has a run; reset and dispose clear it. */
   let checking: object | undefined;
   /** The reason a step failed with, which the orchestrator's own causes cannot carry. */
-  let buildFailure: "no-route" | "at-estimates" | "quote" | "funds" | "credits" | "pending" | undefined;
+  let buildFailure: "no-route" | "at-estimates" | "quote" | "funds" | "credits" | "pending" | "closed" | undefined;
   /** Set while a sent transaction's outcome is read from the chain; the run itself stays stopped meanwhile. */
   let reconciling = false;
   /** Set once a stored run is restored, until it is thrown away: the popup shows its snapshot, not the form. */
@@ -226,10 +231,23 @@ export function createPredictRun(args: {
     },
   };
 
-  /** Each step first asks whether a send of its that errored has since been mined. */
-  function checkingUnanswered(steps: TxStep<PredictSnapshot, PredictCtx>[]): TxStep<PredictSnapshot, PredictCtx>[] {
+  /** Throws once the chain's clock has reached the session's close. */
+  async function assertOpen() {
+    if (args.closesAt == null) return;
+    if ((await args.reader.latestTimestamp()) >= BigInt(args.closesAt)) throw new SessionClosedError();
+  }
+
+  /**
+   * Each step first asks whether a send of its that errored has since been mined, and is built only while the
+   * session is open.
+   */
+  function guardedSteps(steps: TxStep<PredictSnapshot, PredictCtx>[]): TxStep<PredictSnapshot, PredictCtx>[] {
     return steps.map((step) => ({
       ...step,
+      build: async (ctx, snap) => {
+        await assertOpen();
+        return step.build(ctx, snap);
+      },
       canSkip: async (ctx, snap) => {
         const send = snap.unanswered?.[step.id];
         if (send) {
@@ -260,6 +278,10 @@ export function createPredictRun(args: {
     // transient and leave nothing behind, so they pause for a retry rather than ending the run.
     // A missing route is fatal to the orchestrator and a failed quote pauses it.
     classifyError: (error) => {
+      if (error instanceof SessionClosedError) {
+        buildFailure = "closed";
+        return "unknown";
+      }
       if (error instanceof PlansMovedError) {
         movedByBuild = error.moved;
         return "rpc";
@@ -415,6 +437,7 @@ export function createPredictRun(args: {
         else if (error instanceof CreditsUnavailableError) report("credits");
         else if (error instanceof TxPendingError) report("pending", action);
         else if (error instanceof TradeWalletShortError) report("balance");
+        else if (error instanceof SessionClosedError) report("closed");
         else if (error instanceof PredictConfigError) report("unknown");
         else report(classifyTxError(error), action);
       });
@@ -453,7 +476,7 @@ export function createPredictRun(args: {
       return;
     }
 
-    const steps = checkingUnanswered(planPredict(stored.snapshot, deps));
+    const steps = guardedSteps(planPredict(stored.snapshot, deps));
     const restored = orchestrator.restore({ flowId: args.flowId, steps });
     if (!restored) return;
 
@@ -524,9 +547,10 @@ export function createPredictRun(args: {
       notify();
 
       const checked = await (async () => {
+        await assertOpen();
         const optionsPerBatch = size ?? (await sizeBatches(ctx, requested, deps, await args.reader.blockGasLimit()));
         const sized = { ...requested, optionsPerBatch };
-        const steps = checkingUnanswered(planPredict(sized, deps));
+        const steps = guardedSteps(planPredict(sized, deps));
         // The rows exist before the run does, so the popup shows the list while the routes are checked.
         if (checking === check) {
           plannedSize = optionsPerBatch;

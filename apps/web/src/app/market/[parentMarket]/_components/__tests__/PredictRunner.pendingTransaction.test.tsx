@@ -257,7 +257,13 @@ function open(
     <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
   );
   const view = render(
-    <PredictRunner session={detail} selected={selectedOn(detail)} onClose={onClose} onSuccess={onSuccess} />,
+    <PredictRunner
+      session={detail}
+      status="trading"
+      selected={selectedOn(detail)}
+      onClose={onClose}
+      onSuccess={onSuccess}
+    />,
     { wrapper },
   );
 

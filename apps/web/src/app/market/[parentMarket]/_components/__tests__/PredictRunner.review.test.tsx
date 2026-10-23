@@ -181,6 +181,7 @@ vi.mock("@/features/predict/run/reader", async () => {
       previewDeposit: (assets: bigint) => Promise.resolve(assets),
       vaultValue: (shares: bigint) => Promise.resolve(shares),
       latestBlock: () => Promise.resolve(1n),
+      latestTimestamp: () => Promise.resolve(0n),
       blockGasLimit: () => Promise.resolve(17_000_000n),
       estimateGas: () => Promise.reject(new Error("execution reverted")),
       landedSince: () => Promise.resolve([]),
@@ -312,7 +313,7 @@ function renderRunner() {
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
   const view: RenderResult = render(
-    <PredictRunner session={detail} selected={selected} onClose={vi.fn()} onSuccess={onSuccess} />,
+    <PredictRunner session={detail} status="trading" selected={selected} onClose={vi.fn()} onSuccess={onSuccess} />,
     { wrapper },
   );
   return { ...view, onSuccess };

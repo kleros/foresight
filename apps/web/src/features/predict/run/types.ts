@@ -13,6 +13,7 @@ import type { HeldTo, MovedPlans, PredictSnapshot } from "../flow/types";
  * `pending`: the wallet has a transaction not yet mined, which may be the step about to be signed again.
  * `wrong-wallet`, `wrong-chain`: a saved run belongs to another wallet or network than the connected one.
  * `elsewhere`: another open tab is driving the saved run.
+ * `closed`: the session's close time has passed on the chain's clock, so nothing more is signed.
  */
 export type PredictFailureReason =
   | TxErrorCause
@@ -26,7 +27,8 @@ export type PredictFailureReason =
   | "pending"
   | "wrong-wallet"
   | "wrong-chain"
-  | "elsewhere";
+  | "elsewhere"
+  | "closed";
 
 /** What the popup shows while a prediction runs. */
 export type PredictStage =

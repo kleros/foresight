@@ -53,6 +53,7 @@ export function usePredictExecution(args: {
       ? {
           sessionId: session.id,
           parentMarket: session.parentMarket,
+          closesAt: session.closesAt ? Math.floor(session.closesAt.getTime() / 1000) : null,
           collateral: collateralToken,
           router,
           factory,

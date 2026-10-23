@@ -166,6 +166,7 @@ export function fakeReader(
     previewDeposit: (assets) => Promise.resolve((assets * WAD) / VAULT_RATE),
     vaultValue: (shares) => Promise.resolve((shares * VAULT_RATE) / WAD),
     latestBlock: () => Promise.resolve(1n),
+    latestTimestamp: () => Promise.resolve(0n),
     blockGasLimit: () => Promise.resolve(opts.blockGasLimit ?? 17_000_000n),
     landedSince: () => Promise.resolve(typeof opts.landed === "function" ? opts.landed() : (opts.landed ?? [])),
     hasPending: () => Promise.resolve(opts.pending?.() ?? false),

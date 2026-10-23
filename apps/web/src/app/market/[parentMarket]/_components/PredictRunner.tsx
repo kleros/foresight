@@ -15,9 +15,15 @@ import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import { useSlippageStore } from "@/features/predict/stores/slippageStore";
 import type { PayToken, SelectedEstimate } from "@/features/predict/types";
 import { roundToDisplay, shownSplit } from "@/features/predict/utils/funding";
-import { CREDITS_UNAVAILABLE, fundsToAdd, predictSteps, type FundsToAdd } from "@/features/predict/utils/predictSteps";
+import {
+  CREDITS_UNAVAILABLE,
+  fundsToAdd,
+  predictSteps,
+  SESSION_CLOSED,
+  type FundsToAdd,
+} from "@/features/predict/utils/predictSteps";
 import { resolveSlippage } from "@/features/predict/utils/slippage";
-import type { SessionDetail } from "@/features/sessions/types";
+import type { SessionDetail, SessionStatus } from "@/features/sessions/types";
 import { optionNounSingular } from "@/features/sessions/utils/optionNoun";
 import { useExecutor } from "@/features/trade-executor/api/getExecutor";
 
@@ -33,6 +39,8 @@ import { toPriceMove, usePricePreview } from "./usePricePreview";
 
 interface PredictRunnerProps {
   session: SessionDetail;
+  /** The page's status, which flips to closed at the close; the driver checks the chain's clock before signing. */
+  status: SessionStatus;
   selected: SelectedEstimate[];
   onClose: () => void;
   /** Options the run left out for lack of a route, and what it placed; the run is reset by the time this is called. */
@@ -45,7 +53,8 @@ const NATIVE: PayTokenChoice = { id: "native", symbol: "xDAI", decimals: 18 };
  * Everything behind the predict button, mounted only once it is pressed: the wallet, the run and
  * the popup. Kept out of the page so the route does not carry the orchestrator and the quoter.
  */
-export function PredictRunner({ session, selected, onClose, onSuccess }: PredictRunnerProps) {
+export function PredictRunner({ session, status, selected, onClose, onSuccess }: PredictRunnerProps) {
+  const isClosed = status === "closed";
   const { address: owner, chainId } = useAccount();
 
   const [amount, setAmount] = useState<bigint>();
@@ -224,6 +233,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
   const creditsWas = moved?.credits ? held?.credits : undefined;
 
   const predict = () => {
+    if (isClosed) return;
     if (moved) {
       driver?.confirm();
       return;
@@ -265,6 +275,7 @@ export function PredictRunner({ session, selected, onClose, onSuccess }: Predict
   const shownNotice = isRunning
     ? undefined
     : notice({
+        isClosed,
         owner,
         onRightChain: chainId === DEFAULT_CHAIN_ID,
         ready,
@@ -351,6 +362,7 @@ const PRICES_FAILED_AGAIN = "Prices still could not be read.";
 
 /** Why this prediction cannot be made, in the words of the thing the visitor has to do. */
 function notice(args: {
+  isClosed: boolean;
   owner?: string;
   onRightChain: boolean;
   ready: boolean;
@@ -359,6 +371,7 @@ function notice(args: {
   /** A read after a failed one failed too. */
   pricesFailedAgain: boolean;
 }): string | undefined {
+  if (args.isClosed) return SESSION_CLOSED;
   if (!args.owner) return "Connect a wallet to predict.";
   if (!args.onRightChain) return "Switch to Gnosis to predict.";
   if (!args.ready) return "This session cannot be traded yet.";

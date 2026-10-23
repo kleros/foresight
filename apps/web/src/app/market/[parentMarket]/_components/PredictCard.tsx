@@ -279,6 +279,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
         {isOpen ? (
           <PredictRunner
             session={session}
+            status={status}
             selected={opened}
             onClose={closePopup}
             onSuccess={(leftOut: Address[], run: PlacedPrediction) => {

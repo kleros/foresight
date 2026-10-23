@@ -13,6 +13,7 @@ import { snapEstimate } from "@/features/predict/utils/estimates";
 import { useSession } from "@/features/sessions/api/getSession";
 import { useSessionChart } from "@/features/sessions/api/getSessionChart";
 import { useSessionStats } from "@/features/sessions/api/getSessionStats";
+import { useRenderAtClose } from "@/features/sessions/hooks/useRenderAtClose";
 import { latestEstimates } from "@/features/sessions/utils/latestEstimates";
 import { optionNoun, optionNounSingular } from "@/features/sessions/utils/optionNoun";
 import { sessionStatus } from "@/features/sessions/utils/toSessionDetail";
@@ -38,6 +39,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
   const stats = useSessionStats(session.data?.id);
   const chart = useSessionChart(session.data ?? undefined);
   const positions = useOptionPositions(session.data ?? undefined);
+  useRenderAtClose(session.data?.closesAt);
   useEstimateHydration();
 
   if (!isAddress(parentMarket, { strict: false }) || session.data === null) {

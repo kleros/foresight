@@ -16,7 +16,7 @@ import { creditLines, creditsOffer } from "@/features/predict/utils/credits";
 import { planFunding } from "@/features/predict/utils/funding";
 import { sessionChartKey } from "@/features/sessions/api/getSessionChart";
 import { sessionStatsKey } from "@/features/sessions/api/getSessionStats";
-import type { SessionDetail } from "@/features/sessions/types";
+import type { SessionDetail, SessionStatus } from "@/features/sessions/types";
 import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 import { toSessionDetail, type SessionDetailRow } from "@/features/sessions/utils/toSessionDetail";
 import { executorKey } from "@/features/trade-executor/api/getExecutor";
@@ -131,7 +131,7 @@ const selectedOn = (detail: SessionDetail, value: number): SelectedEstimate[] =>
   { scale: detail.options[0]!, value, marketEstimate: 250, direction: "higher" },
 ];
 
-function mount(detail: SessionDetail = session()) {
+function mount(detail: SessionDetail = session(), status: SessionStatus = "trading") {
   const queryClient = new QueryClient();
   const invalidate = vi.spyOn(queryClient, "invalidateQueries");
   const onClose = vi.fn();
@@ -139,12 +139,25 @@ function mount(detail: SessionDetail = session()) {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
-  const ui = () => (
-    <PredictRunner session={detail} selected={selectedOn(detail, 312)} onClose={onClose} onSuccess={onSuccess} />
+  const ui = (at: SessionStatus = status) => (
+    <PredictRunner
+      session={detail}
+      status={at}
+      selected={selectedOn(detail, 312)}
+      onClose={onClose}
+      onSuccess={onSuccess}
+    />
   );
   const view = render(ui(), { wrapper });
   const invalidatedKeys = () => invalidate.mock.calls.map(([filters]) => filters?.queryKey);
-  return { ...view, rerenderAt: () => view.rerender(ui()), invalidatedKeys, onClose, onSuccess, queryClient };
+  return {
+    ...view,
+    rerenderAt: (at?: SessionStatus) => view.rerender(ui(at)),
+    invalidatedKeys,
+    onClose,
+    onSuccess,
+    queryClient,
+  };
 }
 
 // The runner reads only the address and chain off the account.
@@ -752,4 +765,36 @@ describe("PredictRunner, draft removals and the default token", () => {
     expect(screen.getByTestId("token")).toHaveTextContent("xDAI");
     expect(screen.getByTestId("amount")).toHaveTextContent(/^5000000000000000000$/);
   });
+});
+
+describe("PredictRunner, a popup left open across the session's close", () => {
+  it("says the session has closed once the page flips to closed, and signs nothing on Predict", () => {
+    const detail = session({ openingTime: String(Math.floor(Date.now() / 1000) + 60) });
+    const view = mount(detail);
+    expect(screen.getByTestId("notice")).toBeEmptyDOMElement();
+    expect(lastInput?.closesAt).toBe(Math.floor(detail.closesAt!.getTime() / 1000));
+
+    view.rerenderAt("closed");
+    fireEvent.click(screen.getByText("predict"));
+
+    expect(screen.getByTestId("notice")).toHaveTextContent("This session has closed.");
+    expect(driver.start).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a moved run", { ...progressAt("moved"), moved: { markets: [], plans: {} } }, "confirm"],
+    ["a run under review", progressAt("review"), "resume"],
+    ["a run to try again", { ...progressAt("halted", true), moneyMoved: true }, "retry"],
+  ] satisfies Array<[string, PredictProgress, keyof PredictDriver]>)(
+    "does not go on with %s once the session has closed",
+    (_name, at, action) => {
+      progress = at;
+      mount(session(), "closed");
+
+      fireEvent.click(screen.getByText("predict"));
+
+      expect(driver[action]).not.toHaveBeenCalled();
+      expect(driver.start).not.toHaveBeenCalled();
+    },
+  );
 });

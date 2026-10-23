@@ -47,6 +47,7 @@ const EXECUTOR_A = addresses.executor;
 
 const input = (owner: Address, executor: Address): PredictRunInput => ({
   sessionId: SESSION_ID,
+  closesAt: null,
   parentMarket: addresses.parentMarket,
   collateral: addresses.collateral,
   router: addresses.router,

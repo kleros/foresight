@@ -207,3 +207,33 @@ describe("MarketPage on a trading session", () => {
     expect(screen.queryByText(NO_LIQUIDITY)).toBeNull();
   });
 });
+
+describe("MarketPage at the close", () => {
+  it("locks trading when the close time passes, with nothing else re-rendering the page", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const closesAt = Math.floor(Date.now() / 1000) + 60;
+      fetchMock.mockImplementation(async (document) => {
+        if (queryName(document) === "SessionDetail") {
+          return {
+            Session: [{ ...sessionDetailColumns, openingTime: String(closesAt), children: [sessionChildRow()] }],
+          };
+        }
+        if (queryName(document) === "SessionChart") return new Promise(() => {});
+        return { Prediction: [], Pool: [] };
+      });
+
+      renderPage();
+      await screen.findByRole("heading", { level: 1, name: "Dune: Part Three, director" });
+      expect(screen.queryAllByText("Trading has closed.")).toEqual([]);
+
+      await act(async () => {
+        vi.advanceTimersByTime(61_000);
+      });
+
+      expect(screen.getAllByText("Trading has closed.").length).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

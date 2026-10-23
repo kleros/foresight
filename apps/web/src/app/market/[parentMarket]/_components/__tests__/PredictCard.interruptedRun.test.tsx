@@ -179,6 +179,7 @@ vi.mock("@/features/predict/run/reader", async () => {
       previewDeposit: (assets: bigint) => Promise.resolve(assets),
       vaultValue: (shares: bigint) => Promise.resolve(shares),
       latestBlock: () => Promise.resolve(1n),
+      latestTimestamp: () => Promise.resolve(0n),
       blockGasLimit: () => Promise.resolve(17_000_000n),
       estimateGas: () => Promise.reject(new Error("execution reverted")),
       landedSince: () => Promise.resolve([]),
@@ -289,6 +290,7 @@ async function firstVisit(answers: Array<"accept" | "reject">, opts: { holdMinin
   const view = render(
     <PredictRunner
       session={detail}
+      status="trading"
       selected={selectedAt(detail, SAVED.estimate)}
       onClose={vi.fn()}
       onSuccess={vi.fn()}
