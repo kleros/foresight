@@ -1246,6 +1246,8 @@ interface ScenarioRun {
   estimates: bigint[];
   /** A fresh driver on the storage as the tab left it, as a reload opens it. */
   reopen: () => import("../../run/types").PredictDriver;
+  /** The tab closed after its transaction landed and before the hash reached the app. */
+  tabClosed: boolean;
 }
 
 /** The tab closed at this send; the storage it left is what a reload reads. */
@@ -1583,6 +1585,7 @@ describe("money kept by every predict run, against a gnosis fork", () => {
     let lostAnswer = scenario.lostAnswer;
     let lateBatch: Promise<void> | undefined;
     let leftBehind: FlowRunStorage | undefined;
+    let tabClosed = false;
     const flowId = `predict-money-${owner.address}-${Date.now()}`;
     const gateway = createViemTxGateway({
       client,
@@ -1636,7 +1639,9 @@ describe("money kept by every predict run, against a gnosis fork", () => {
         if ((isBatch && closeTab === "after-batch") || (isDeposit && closeTab === "after-deposit")) {
           closeTab = undefined;
           leftBehind = copyStorage(storage);
-          throw new TabClosedError();
+          tabClosed = true;
+          // a closed tab never hears the wallet's answer
+          return new Promise<Hash>(() => {});
         }
         return hash;
       },
@@ -1662,7 +1667,7 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       plans: Object.fromEntries([...preview].map(([market, plan]) => [market.toLowerCase(), plan!])),
       ...(creditsSwap ? { credits: creditsSwap } : {}),
     });
-    await vi.waitFor(() => expect(["halted", "complete"]).toContain(driver.getProgress().stage), {
+    await vi.waitFor(() => tabClosed || expect(["halted", "complete"]).toContain(driver.getProgress().stage), {
       timeout: 300_000,
       interval: 250,
     });
@@ -1683,6 +1688,7 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       preview,
       creditsSwap,
       estimates,
+      tabClosed,
       reopen: () => {
         if (!leftBehind) throw new Error("The tab never closed.");
         driver.dispose();
@@ -2299,7 +2305,9 @@ describe("money kept by every predict run, against a gnosis fork", () => {
           closeTab,
         });
         expect(run.request).toMatchObject({ creditsFromEoa: parseEther("5"), creditsToSpend: parseEther("5") });
-        expect(run.progress.stage).toBe("halted");
+        if (closeTab === "after-batch")
+          expect(run.tabClosed, "the tab closed before the batch's hash came back").toBe(true);
+        else expect(run.progress.stage).toBe("halted");
         expect(await balance(route.token, run.ctx.executor), "the trade wallet's credits as the tab closed").toBe(
           closeTab === "before-batch" ? parseEther("5") : 0n,
         );
@@ -2470,7 +2478,7 @@ describe("money kept by every predict run, against a gnosis fork", () => {
         options: nudged(1),
         closeTab: "after-deposit",
       });
-      expect(run.progress.stage).toBe("halted");
+      expect(run.tabClosed, "the tab closed before the deposit's hash came back").toBe(true);
       const executor = run.ctx.executor;
       const deposits = () => run.sent.filter(({ tx }) => tx.to.toLowerCase() === run.ctx.sDaiAdapter!.toLowerCase());
       expect(deposits(), "the deposit landed as the tab closed").toHaveLength(1);
