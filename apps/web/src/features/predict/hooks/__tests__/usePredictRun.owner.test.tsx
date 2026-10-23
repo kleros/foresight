@@ -5,7 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
-import { addresses, option, WAD } from "../../flow/__tests__/support/fakes";
+import { createRunStore } from "@/lib/flowRunStore";
+
+import { addresses, ctx, option, snapshot, WAD } from "../../flow/__tests__/support/fakes";
+import { STEP_ID } from "../../flow/plan";
+import type { PredictCtx, PredictSnapshot } from "../../flow/types";
+import { predictFlowId } from "../../run/interrupted";
 import { usePredictRun, type PredictRunInput } from "../usePredictRun";
 
 vi.mock("@wagmi/core", async (importOriginal) => ({
@@ -57,6 +62,7 @@ const input = (owner: Address, executor: Address): PredictRunInput => ({
   sDaiAdapter: addresses.sDaiAdapter,
   credits: null,
   options: () => [option(1)],
+  sessionOptions: () => [option(1), option(2)],
   funding: () => ({
     deposit: WAD,
     depositNative: false,
@@ -118,5 +124,35 @@ describe("usePredictRun when the wallet changes between steps", () => {
       expect(tx.account).toBe(OWNER_A);
       expect(tx.chainId).toBe(DEFAULT_CHAIN_ID);
     }
+  });
+});
+
+describe("usePredictRun recovering a stored run", () => {
+  it("halts with nothing signed when a stored option names another token than the session's", async () => {
+    createRunStore().save<PredictSnapshot, PredictCtx>({
+      flowId: predictFlowId(SESSION_ID, OWNER_A),
+      adapterId: "predict-flow",
+      status: "paused",
+      reason: "rejected",
+      // the app's own contracts, so only the option differs
+      ctx: ctx({ chainId: DEFAULT_CHAIN_ID, credits: null }),
+      snapshot: snapshot({
+        options: [{ ...option(1), downToken: "0x00000000000000000000000000000000000000ad" }],
+        deposit: WAD,
+        collateralIn: WAD,
+        collateralBefore: 0n,
+      }),
+      steps: [
+        { stepId: STEP_ID.createExecutor, label: "Set up your trade wallet", outcome: { status: "skipped" } },
+        { stepId: STEP_ID.deposit, label: "Add money to your trade wallet", outcome: { status: "pending" } },
+        { stepId: STEP_ID.predict(1), label: "Making your prediction", outcome: { status: "pending" } },
+      ],
+    });
+    const { result } = renderHook(() => usePredictRun(input(OWNER_A, EXECUTOR_A)));
+
+    act(() => result.current.driver!.start());
+
+    await vi.waitFor(() => expect(result.current.progress?.failure?.reason).toBe("unknown"));
+    expect(sendMock).not.toHaveBeenCalled();
   });
 });

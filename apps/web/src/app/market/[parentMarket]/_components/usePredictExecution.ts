@@ -18,7 +18,7 @@ import { fundsKeyPrefix } from "@/features/trade-executor/api/getFunds";
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
 import { creditsRoute, gnosisRouterAddress, sDaiDepositRoute, tradeExecutorFactoryAddress } from "@/config/contracts";
 
-import { toPredictOptions } from "./toPredictOptions";
+import { sessionOptionTokens, toPredictOptions } from "./toPredictOptions";
 
 /** The prediction run for this session, and the caches it refreshes when a run completes or stops. */
 export function usePredictExecution(args: {
@@ -62,6 +62,7 @@ export function usePredictExecution(args: {
           sDaiAdapter: sDaiDepositRoute(collateralToken, DEFAULT_CHAIN_ID)?.sDaiAdapter ?? null,
           credits: creditsRoute(collateralToken, DEFAULT_CHAIN_ID),
           options: () => toPredictOptions(session, selected),
+          sessionOptions: () => sessionOptionTokens(session),
           funding: () => {
             const { funding, native } = fundingRef.current;
             return funding

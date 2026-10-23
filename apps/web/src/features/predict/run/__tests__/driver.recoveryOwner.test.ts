@@ -9,9 +9,9 @@ import {
 import { type Address, type Hash, type TransactionReceipt } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { addresses, ctx, fakeQuoter, fakeReader, snapshot, WAD } from "../../flow/__tests__/support/fakes";
+import { addresses, ctx, fakeQuoter, fakeReader, option, snapshot, WAD } from "../../flow/__tests__/support/fakes";
 import { STEP_ID } from "../../flow/plan";
-import type { PredictCtx, PredictSnapshot } from "../../flow/types";
+import type { PredictCtx, PredictOption, PredictSnapshot } from "../../flow/types";
 import { predictSteps } from "../../utils/predictSteps";
 import { createPredictRun } from "../driver";
 import type { PredictDriver, PredictFailureReason, PredictProgress } from "../types";
@@ -83,7 +83,7 @@ afterEach(() => {
   for (const driver of drivers.splice(0)) driver.dispose();
 });
 
-function recover(store: FlowRunStore, current: PredictCtx) {
+function recover(store: FlowRunStore, current: PredictCtx, sessionOptions?: () => PredictOption[]) {
   const gateway = fakeGateway();
   const driver = createPredictRun({
     gateway,
@@ -93,6 +93,7 @@ function recover(store: FlowRunStore, current: PredictCtx) {
     flowId: FLOW_ID,
     ctx: () => current,
     snapshot: savedSnapshot,
+    sessionOptions,
   });
   drivers.push(driver);
   return { gateway, driver };
@@ -266,6 +267,55 @@ describe("createPredictRun recovering a stored run whose contracts differ from t
     const { gateway, driver } = recover(store, live);
 
     driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("review"));
+    expect(gateway.signRequests).toEqual([]);
+  });
+});
+
+/** A run planted under A's key with the app's contracts, whose first option names `stored` instead. */
+function plantedOptions(stored: PredictOption): FlowRunStore {
+  const store = createFlowRunStore({ storage: createMemoryStorage() });
+  store.save<PredictSnapshot, PredictCtx>({
+    flowId: FLOW_ID,
+    adapterId: "predict-flow",
+    status: "paused",
+    reason: "rejected",
+    ctx: ctx(),
+    snapshot: { ...savedSnapshot(), options: [stored] },
+    steps: pendingDeposit,
+  });
+  return store;
+}
+
+describe("createPredictRun recovering a stored run whose options differ from the session's", () => {
+  const session = () => [option(1), option(2)];
+
+  it.each([
+    ["DOWN token", { ...option(1), downToken: ATTACKER }],
+    ["UP token", { ...option(1), upToken: ATTACKER }],
+    ["underlying", { ...option(1), underlying: ATTACKER }],
+    ["INVALID token", { ...option(1), invalidToken: ATTACKER }],
+    ["market, which the session does not have", { ...option(1), childMarket: ATTACKER }],
+  ])("halts as unknown with nothing signed when the stored %s differs", async (_, stored) => {
+    const store = plantedOptions(stored);
+    const { gateway, driver } = recover(store, live, session);
+
+    driver.start();
+    await vi.waitFor(() => expect(["halted", "review"]).toContain(driver.getProgress().stage));
+    driver.resume();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(gateway.signRequests).toEqual([]);
+    expect(driver.getProgress().failure?.reason).toBe("unknown");
+  });
+
+  it("recovers a stored option whose addresses differ from the session's only in letter case", async () => {
+    const upper = (address: Address) => address.toUpperCase().replace("0X", "0x") as Address;
+    const store = plantedOptions({ ...option(1), downToken: upper(option(1).downToken) });
+    const { gateway, driver } = recover(store, live, session);
+
+    driver.start();
+
     await vi.waitFor(() => expect(driver.getProgress().stage).toBe("review"));
     expect(gateway.signRequests).toEqual([]);
   });

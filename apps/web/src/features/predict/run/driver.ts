@@ -45,12 +45,16 @@ import type {
   MovedPlans,
   PlannedRequest,
   PredictCtx,
+  PredictOption,
   PredictReader,
   PredictRequest,
   PredictSlippage,
   PredictSnapshot,
   UnansweredSend,
 } from "../flow/types";
+
+/** An option's market and the tokens a run approves and swaps for it. */
+export type OptionTokens = Omit<PredictOption, "targetPriceWad">;
 
 /** The trade wallet, or the wallet's credits, hold less than the prediction was shown to draw on. */
 class TradeWalletShortError extends Error {}
@@ -111,6 +115,19 @@ function sameContracts(saved: PredictCtx, current: PredictCtx): boolean {
   return pairs.every(([a, b]) => sameAddress(a, b));
 }
 
+/** True when every saved option names the market and tokens the session has for it. */
+function sameOptions(saved: readonly PredictOption[], session: readonly OptionTokens[]): boolean {
+  return saved.every((option) => {
+    const known = session.find((each) => sameAddress(option.childMarket, each.childMarket));
+    return (
+      known !== undefined &&
+      (["underlying", "upToken", "downToken", "invalidToken"] as const).every((key) =>
+        sameAddress(option[key], known[key]),
+      )
+    );
+  });
+}
+
 /** Why a saved run cannot be continued from the connected wallet, if it cannot. */
 function foreign(saved: PredictCtx, current: PredictCtx): "wrong-wallet" | "wrong-chain" | "unknown" | undefined {
   if (String(saved.owner).toLowerCase() !== current.owner.toLowerCase()) return "wrong-wallet";
@@ -140,6 +157,8 @@ export function createPredictRun(args: {
   ownership?: RunOwnership;
   /** When the session stops trading, in unix seconds; nothing is signed once the chain's clock reaches it. */
   closesAt?: number | null;
+  /** Every option of the session, which a stored run's options must match before it is restored. */
+  sessionOptions?: () => readonly OptionTokens[];
 }): PredictDriver {
   const listeners = new Set<() => void>();
   /** Options left out by each batch not yet settled, by step id; a settled batch's are kept in the run's snapshot. */
@@ -497,6 +516,11 @@ export function createPredictRun(args: {
     const mismatch = foreign(stored.ctx, args.ctx());
     if (mismatch) {
       report(mismatch);
+      return;
+    }
+    const session = args.sessionOptions?.();
+    if (session && !sameOptions(stored.snapshot.options, session)) {
+      report("unknown");
       return;
     }
 

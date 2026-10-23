@@ -1,5 +1,6 @@
 import type { ListedEstimate } from "@/features/predict/components/PredictList";
 import type { PredictOption } from "@/features/predict/flow/types";
+import type { OptionTokens } from "@/features/predict/run/driver";
 import type { SelectedEstimate } from "@/features/predict/types";
 import type { SessionDetail } from "@/features/sessions/types";
 
@@ -24,6 +25,23 @@ export function toPredictOptions(session: SessionDetail, selected: SelectedEstim
       },
     ];
   });
+}
+
+/** Every option of the session that has all its tokens, as a run names them. */
+export function sessionOptionTokens(session: SessionDetail): OptionTokens[] {
+  return session.options.flatMap((option) =>
+    option.upToken && option.downToken && option.underlyingToken && option.invalidToken
+      ? [
+          {
+            childMarket: option.market,
+            underlying: option.underlyingToken,
+            upToken: option.upToken,
+            downToken: option.downToken,
+            invalidToken: option.invalidToken,
+          },
+        ]
+      : [],
+  );
 }
 
 /** A stored run's options as the estimates they were made from. */

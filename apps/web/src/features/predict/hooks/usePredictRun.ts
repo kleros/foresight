@@ -15,7 +15,7 @@ import { DEFAULT_CHAIN_ID } from "@/config/chains";
 import type { CreditsRoute } from "@/config/contracts";
 
 import type { PredictCtx, PredictOption, PredictRequest, PredictSlippage } from "../flow/types";
-import { createPredictRun } from "../run/driver";
+import { createPredictRun, type OptionTokens } from "../run/driver";
 import { predictFlowId } from "../run/interrupted";
 import { tabOwnership } from "../run/ownership";
 import { createPredictReader } from "../run/reader";
@@ -38,6 +38,8 @@ export interface PredictRunInput {
   credits: CreditsRoute | null;
   /** What the visitor set, already turned into target prices. */
   options: () => PredictOption[];
+  /** Every option of the session with its tokens, which a stored run is checked against. */
+  sessionOptions: () => readonly OptionTokens[];
   /**
    * The money the popup shows, read when Predict is pressed. An xDAI deposit's collateral is read
    * back once it lands; `collateralIn` is the estimate until then.
@@ -124,6 +126,11 @@ export function usePredictRun(input: PredictRunInput | null): {
         };
       },
       slippage: () => latest.current?.slippage(),
+      sessionOptions: () => {
+        const now = latest.current;
+        if (!now) throw new Error("This session is no longer open for predictions.");
+        return now.sessionOptions();
+      },
       onComplete: () => latest.current?.onComplete?.(),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuilt on identity, read through the ref otherwise
