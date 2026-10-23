@@ -74,7 +74,7 @@ export interface PredictProgress {
   sentHash?: Hash;
   /** This run sent a deposit or a prediction, so retrying it signs its snapshot, not the form. */
   moneyMoved?: true;
-  /** A send that errored is held with the run until its nonce is read; only a retry reads it. */
+  /** A send the wallet was asked for is held with the run, with no hash stored, until its nonce is read. */
   unanswered?: true;
   /** The snapshot of a run restored from storage. It, not the popup's form, is what the run signs. */
   recovered?: PredictSnapshot;
