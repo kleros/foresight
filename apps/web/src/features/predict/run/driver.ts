@@ -51,6 +51,7 @@ import type {
   PredictRequest,
   PredictSlippage,
   PredictSnapshot,
+  SentTx,
   UnansweredSend,
 } from "../flow/types";
 
@@ -148,6 +149,13 @@ function foreign(saved: PredictCtx, current: PredictCtx): "wrong-wallet" | "wron
   return undefined;
 }
 
+/** The nonce read for `send` went to another of the owner's transactions; the wallet may have sent it under a later one. */
+const takenElsewhere = (found: SentTx, send: UnansweredSend) =>
+  found.status === "taken" || (found.status === "mined" && !isTx(found, send.tx));
+
+/** Later nonces searched for a send whose own was taken: the owner's sends made while its prompt was open. */
+const NONCE_LOOKAHEAD = 8;
+
 /** Drives one prediction: the orchestrator's run, flattened into what the popup reads. */
 export function createPredictRun(args: {
   gateway: TxGateway;
@@ -222,6 +230,16 @@ export function createPredictRun(args: {
 
   const waiting = { ...UNANSWERED_SEND, ...args.unansweredSend };
 
+  /** How `send` ended, under the nonce read for it or, where another send took that, a later one. */
+  async function sentAs(send: UnansweredSend): Promise<SentTx> {
+    let found: SentTx = { status: "taken" };
+    for (let nonce = send.nonce; nonce < send.nonce + NONCE_LOOKAHEAD; nonce++) {
+      found = await args.reader.sentWithNonce({ ...send, nonce });
+      if (!takenElsewhere(found, send)) return found;
+    }
+    return found;
+  }
+
   /** The hash the chain mined `send` under, `"outstanding"` if it is unmined or unread when the wait runs out. */
   async function answerOf(
     send: UnansweredSend,
@@ -231,7 +249,7 @@ export function createPredictRun(args: {
     const deadline = Date.now() + waitMs;
     let outstanding = true;
     while (!signal?.aborted) {
-      const found = await args.reader.sentWithNonce(send).catch(() => undefined);
+      const found = await sentAs(send).catch(() => undefined);
       if (found?.status === "mined") return isTx(found, send.tx) ? found.hash : undefined;
       if (found?.status === "taken") return undefined;
       if (found) outstanding = found.status === "pending";
@@ -324,7 +342,7 @@ export function createPredictRun(args: {
       canSkip: async (ctx, snap) => {
         const send = snap.unanswered?.[step.id];
         if (send) {
-          const found = await args.reader.sentWithNonce(send);
+          const found = await sentAs(send);
           if (found.status === "pending") throw new TxPendingError();
           // forgotten once the skip is stored, so no record holds the step pending without it
           if (found.status === "mined" && found.success && isTx(found, send.tx)) return true;
