@@ -1,3 +1,4 @@
+import type { FlowTx } from "@foresight/tx-orchestrator";
 import type { Address, Hash, Hex } from "viem";
 
 import type { CreditsRoute } from "@/config/contracts";
@@ -129,6 +130,17 @@ export interface PredictSnapshot {
   optionsPerBatch: number;
   /** Options that settled batches left out for lack of a route; absent until one does. */
   leftOut?: Address[];
+  /** Sends that errored after they may have gone out, by step id, until their nonce says how they ended. */
+  unanswered?: Record<string, UnansweredSend>;
+}
+
+/** A send whose wallet call errored, which the chain may still mine under `nonce`. */
+export interface UnansweredSend {
+  owner: Address;
+  nonce: number;
+  /** The latest block as the send went out; the transaction can land no earlier. */
+  fromBlock: bigint;
+  tx: FlowTx;
 }
 
 /** What the visitor asked for; the run adds what it reads from the chain when it starts. */

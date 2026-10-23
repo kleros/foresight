@@ -44,6 +44,8 @@ async function haltOn(error: Error, opts: { failAt?: number; reader?: PredictRea
     flowId: `predict-send-failure-${drivers.length}`,
     ctx: () => ctx(),
     snapshot: () => snapshot(),
+    // the node took no nonce for a refused send, so the read after it gives up at once
+    unansweredSend: { waitMs: 10, pollMs: 5, graceMs: 10 },
   });
   drivers.push(driver);
   driver.start();

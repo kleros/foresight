@@ -173,6 +173,8 @@ function drive(chain: ReturnType<typeof moneyChain>, req: Request, store?: FlowR
     store,
     ctx: () => ctx(),
     snapshot: () => req,
+    // this chain shows no nonce taken, so an errored send is read once and given up on
+    unansweredSend: { waitMs: 10, pollMs: 5, graceMs: 10 },
   });
   drivers.push(driver);
   return driver;

@@ -7,7 +7,6 @@ import {
   settledEntries,
   type FlowError,
   type FlowRunStore,
-  type FlowTx,
   type OrchestratorRun,
   type TxGateway,
   type TxStep,
@@ -18,6 +17,7 @@ import { chainText, OUT_OF_FUNDS, REVERTS } from "@/utils/txErrorText";
 
 import type { ExactInputQuoter, SwapQuoter } from "@/lib/swap/types";
 
+import { hasUnanswered } from "./interrupted";
 import type { PredictDriver, PredictFailureReason, PredictProgress, PredictStepRow } from "./types";
 import {
   assertRoutes,
@@ -46,22 +46,17 @@ import type {
   PredictRequest,
   PredictSlippage,
   PredictSnapshot,
+  UnansweredSend,
 } from "../flow/types";
 
 /** The trade wallet, or the wallet's credits, hold less than the prediction was shown to draw on. */
 class TradeWalletShortError extends Error {}
 
-/** A send the wallet never answered, which the chain may still mine under `nonce`. */
-interface UnansweredSend {
-  owner: Address;
-  nonce: number;
-  /** The latest block as the send went out; the transaction can land no earlier. */
-  fromBlock: bigint;
-  tx: FlowTx;
-}
-
-/** How long, and how often, the chain is read for a send the wallet never answered. */
-const UNANSWERED_SEND = { waitMs: 120_000, pollMs: 2_000 };
+/**
+ * How long, and how often, the chain is read for a send that errored. A lost answer is waited on for `waitMs`;
+ * a coded error for `graceMs`, since the wallet's own node may see the transaction before this app's does.
+ */
+const UNANSWERED_SEND = { waitMs: 120_000, pollMs: 2_000, graceMs: 4_000 };
 
 const TRANSPORT_FAILURES = new Set(["TimeoutError", "HttpRequestError"]);
 
@@ -109,8 +104,8 @@ export function createPredictRun(args: {
   store?: FlowRunStore;
   onComplete?: () => void;
   now?: () => number;
-  /** How long, and how often, the chain is read for a send the wallet never answered. */
-  unansweredSend?: { waitMs: number; pollMs: number };
+  /** How long, and how often, the chain is read for a send that errored. */
+  unansweredSend?: { waitMs: number; pollMs: number; graceMs?: number };
 }): PredictDriver {
   const listeners = new Set<() => void>();
   /** Options left out by each batch not yet settled, by step id; a settled batch's are kept in the run's snapshot. */
@@ -130,10 +125,8 @@ export function createPredictRun(args: {
   let reviewing = false;
   /** Set once this run sends a transaction that moves money; a failed step put back to pending does not clear it. */
   let moneyMoved = false;
-  /** Set while the chain is read for a send the wallet never answered. */
+  /** Set while the chain is read for a send that errored. */
   let awaitingUnanswered = false;
-  /** Sends the wallet never answered and the chain had not mined when the run stopped, by step id. */
-  const unansweredSends = new Map<string, UnansweredSend>();
   /** What the run is held to; none for a recovered run. */
   let held: HeldTo | undefined;
   /** Set when a batch found the pools giving another plan than `held`; cleared by `confirm` and `reset`. */
@@ -155,24 +148,47 @@ export function createPredictRun(args: {
     },
   };
 
-  const waiting = args.unansweredSend ?? UNANSWERED_SEND;
+  const waiting = { ...UNANSWERED_SEND, ...args.unansweredSend };
 
-  /** The hash the chain mined `send` under, or a `TxPendingError` if it is still unmined when the wait runs out. */
-  async function answerOf(send: UnansweredSend, signal?: AbortSignal): Promise<Hash | TxPendingError | undefined> {
-    const deadline = Date.now() + waiting.waitMs;
-    let pending = false;
+  /** The hash the chain mined `send` under, `"outstanding"` if it is unmined or unread when the wait runs out. */
+  async function answerOf(
+    send: UnansweredSend,
+    waitMs: number,
+    signal?: AbortSignal,
+  ): Promise<Hash | "outstanding" | undefined> {
+    const deadline = Date.now() + waitMs;
+    let outstanding = true;
     while (!signal?.aborted) {
       const found = await args.reader.sentWithNonce(send).catch(() => undefined);
       if (found?.status === "mined") return isTx(found, send.tx) ? found.hash : undefined;
       if (found?.status === "taken") return undefined;
-      if (found) pending = found.status === "pending";
+      if (found) outstanding = found.status === "pending";
       if (Date.now() >= deadline) break;
       await sleep(waiting.pollMs, signal);
     }
-    return pending ? new TxPendingError() : undefined;
+    return outstanding ? "outstanding" : undefined;
   }
 
-  /** The wallet's send, carried on with the chain's own record of it when the wallet's answer is lost. */
+  /** Stores `send` with the run, so neither a reset nor a reload forgets it before its nonce is read. */
+  function holdUnanswered(stepId: string, send: UnansweredSend) {
+    orchestrator.updateSnapshot((prev) => ({ ...prev, unanswered: { ...prev.unanswered, [stepId]: send } }), {
+      source: "adapter",
+    });
+    if (stepId !== STEP_ID.createExecutor) moneyMoved = true;
+  }
+
+  function forgetUnanswered(stepId: string) {
+    orchestrator.updateSnapshot(
+      (prev) => {
+        const { [stepId]: _settled, ...rest } = prev.unanswered ?? {};
+        const { unanswered: _all, ...without } = prev;
+        return Object.keys(rest).length > 0 ? { ...without, unanswered: rest } : without;
+      },
+      { source: "adapter" },
+    );
+  }
+
+  /** The wallet's send, carried on with the chain's own record of it when the send errors. */
   const gateway: TxGateway = {
     ...args.gateway,
     async sendTransaction(tx, options) {
@@ -185,30 +201,33 @@ export function createPredictRun(args: {
       try {
         return await args.gateway.sendTransaction(tx, options);
       } catch (error) {
-        if (!unanswered(error)) throw error;
+        // a coded wallet error can still follow a broadcast; only a rejection proves nothing went out
+        if (classifyTxError(error) === "rejected") throw error;
+        const lost = unanswered(error);
         const send = { owner, nonce, fromBlock, tx };
         awaitingUnanswered = true;
         notify();
-        const answer = await answerOf(send, options?.signal).finally(() => {
+        const answer = await answerOf(send, lost ? waiting.waitMs : waiting.graceMs, options?.signal).finally(() => {
           awaitingUnanswered = false;
         });
-        if (typeof answer === "string") return answer;
-        unansweredSends.set(stepId, send);
-        throw answer ?? error;
+        if (answer !== undefined && answer !== "outstanding") return answer;
+        if (answer === undefined && !lost) throw error;
+        holdUnanswered(stepId, send);
+        throw answer === "outstanding" ? new TxPendingError() : error;
       }
     },
   };
 
-  /** Each step first asks whether a send of its that the wallet never answered has since been mined. */
+  /** Each step first asks whether a send of its that errored has since been mined. */
   function checkingUnanswered(steps: TxStep<PredictSnapshot, PredictCtx>[]): TxStep<PredictSnapshot, PredictCtx>[] {
     return steps.map((step) => ({
       ...step,
       canSkip: async (ctx, snap) => {
-        const send = unansweredSends.get(step.id);
+        const send = snap.unanswered?.[step.id];
         if (send) {
           const found = await args.reader.sentWithNonce(send);
           if (found.status === "pending") throw new TxPendingError();
-          unansweredSends.delete(step.id);
+          forgetUnanswered(step.id);
           if (found.status === "mined" && found.success && isTx(found, send.tx)) return true;
         }
         return step.canSkip ? step.canSkip(ctx, snap) : false;
@@ -492,7 +511,6 @@ export function createPredictRun(args: {
 
       const requested: PredictRequest = args.snapshot();
       const ctx = args.ctx();
-      unansweredSends.clear();
       const check = {};
       checking = check;
       notify();
@@ -613,15 +631,15 @@ export function createPredictRun(args: {
     },
 
     reset() {
-      checking = undefined;
       const stored = args.store?.load<PredictSnapshot, PredictCtx>(args.flowId);
+      if (hasUnanswered(orchestrator.getRun()?.snapshot ?? stored?.snapshot)) return;
+      checking = undefined;
       if (!stored || !foreign(stored.ctx, args.ctx())) orchestrator.trash(args.flowId);
       recovered = false;
       reviewing = false;
       moneyMoved = false;
       buildFailure = undefined;
       leavingOut.clear();
-      unansweredSends.clear();
       planned = [];
       held = undefined;
       moved = undefined;

@@ -91,7 +91,7 @@ export interface PredictDriver {
   /** Continues a run under review. */
   resume(): void;
   retry(): void;
-  /** Throws the run away, including anything persisted. Not for a run with a `pendingHash`. */
+  /** Throws the run away, including anything persisted. Not for a run with a `pendingHash`; refused while a send that errored is unresolved. */
   reset(): void;
   dispose(): void;
   getProgress(): PredictProgress;

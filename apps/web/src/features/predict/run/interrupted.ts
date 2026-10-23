@@ -22,16 +22,20 @@ export function findInterruptedRun(store: FlowRunStore, sessionId: string, owner
   return sessionRun(store, sessionId, owner)?.snapshot ?? null;
 }
 
-const awaitsReceipt = (run: PersistedFlowRun<PredictSnapshot, PredictCtx>) =>
-  run.steps.some((step) => step.outcome.status === "submitted");
+/** True while `snapshot` holds a send that errored and whose nonce has not been read as settled. */
+export const hasUnanswered = (snapshot: Readonly<PredictSnapshot> | undefined): boolean =>
+  Object.keys(snapshot?.unanswered ?? {}).length > 0;
 
-/** True while `owner`'s stored run holds a broadcast hash with no receipt; only resuming reconciles it. */
+const awaitsReceipt = (run: PersistedFlowRun<PredictSnapshot, PredictCtx>) =>
+  run.steps.some((step) => step.outcome.status === "submitted") || hasUnanswered(run.snapshot);
+
+/** True while `owner`'s stored run holds a broadcast hash with no receipt, or a send with no answer; only resuming reconciles it. */
 export function hasPendingTransaction(store: FlowRunStore, sessionId: string, owner: Address): boolean {
   const run = sessionRun(store, sessionId, owner);
   return Boolean(run && awaitsReceipt(run));
 }
 
-/** Forgets `owner`'s stored run for this session unless it awaits a receipt; another owner's run is left alone. */
+/** Forgets `owner`'s stored run for this session unless it awaits a receipt or an answer; another owner's run is left alone. */
 export function discardRun(store: FlowRunStore, sessionId: string, owner: Address) {
   const run = sessionRun(store, sessionId, owner);
   if (run && !awaitsReceipt(run)) store.clear(predictFlowId(sessionId, owner));

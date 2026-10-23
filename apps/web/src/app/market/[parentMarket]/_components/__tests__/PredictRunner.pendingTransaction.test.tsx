@@ -16,7 +16,7 @@ import { useAccount } from "wagmi";
 import type { PredictDialog } from "@/features/predict/components/PredictDialog";
 import { addresses, ctx, fakeReader, poolQuoter, snapshot, WAD } from "@/features/predict/flow/__tests__/support/fakes";
 import { STEP_ID } from "@/features/predict/flow/plan";
-import type { PredictCtx, PredictSnapshot } from "@/features/predict/flow/types";
+import type { PredictCtx, PredictReader, PredictSnapshot, SentTx } from "@/features/predict/flow/types";
 import { createPredictRun } from "@/features/predict/run/driver";
 import type { PredictDriver } from "@/features/predict/run/types";
 import type { SelectedEstimate } from "@/features/predict/types";
@@ -104,6 +104,7 @@ vi.mock("@/features/predict/components/PredictDialog", () => ({
   PredictDialog: (props: DialogProps) => (
     <div>
       <p data-testid="running">{String(props.isRunning)}</p>
+      <p data-testid="can-retry">{String(props.canRetry)}</p>
       <p data-testid="failure">{props.steps.failure ?? ""}</p>
       <ul>
         {props.steps.rows.map((row) => (
@@ -231,7 +232,12 @@ const selectedOn = (detail: SessionDetail): SelectedEstimate[] => [
 ];
 
 /** Opens the popup on a fresh driver over `chain` and `store`, as pressing the predict button does. */
-function open(chain: Chain, store: FlowRunStore, reader = chain.reader) {
+function open(
+  chain: Chain,
+  store: FlowRunStore,
+  reader: PredictReader = chain.reader,
+  unansweredSend?: { waitMs: number; pollMs: number; graceMs: number },
+) {
   harness.makeDriver = () =>
     createPredictRun({
       gateway: chain.gateway,
@@ -241,6 +247,7 @@ function open(chain: Chain, store: FlowRunStore, reader = chain.reader) {
       flowId: FLOW_ID,
       ctx: (): PredictCtx => ctx(),
       snapshot: (): PredictSnapshot => SNAP,
+      unansweredSend,
     });
 
   const detail = session();
@@ -546,5 +553,54 @@ describe("PredictRunner, clearing a run that finished", () => {
 
     expect(chain.deposits()).toHaveLength(2);
     second.close();
+  });
+});
+
+describe("PredictRunner, a deposit whose send errored after the wallet broadcast it", () => {
+  it("offers Try the rest, keeps the run on Close, and the next popup signs the deposit once", async () => {
+    const chain = fakeChain(["hold"]);
+    const send = chain.gateway.sendTransaction;
+    chain.gateway.sendTransaction = async (tx, opts) => {
+      await send(tx, opts);
+      throw new Error("Transaction failed", {
+        cause: Object.assign(new Error("Internal JSON-RPC error."), { code: -32603 }),
+      });
+    };
+    // the nonce a send takes is its index; the wallet's node holds it until it mines
+    const reader: PredictReader = {
+      ...chain.reader,
+      nextNonce: () => Promise.resolve(chain.signRequests.length),
+      sentWithNonce: async ({ nonce }): Promise<SentTx> => {
+        const tx = chain.signRequests[nonce];
+        if (!tx) return { status: "none" };
+        const mined = await chain.gateway.getReceipt(chain.sent(nonce));
+        if (!mined) return { status: "pending" };
+        return {
+          status: "mined",
+          hash: mined.transactionHash,
+          to: tx.to,
+          value: tx.value ?? 0n,
+          input: tx.data ?? "0x",
+          success: true,
+        };
+      },
+    };
+    const fast = { waitMs: 20, pollMs: 5, graceMs: 20 };
+
+    const first = open(chain, store, reader, fast);
+    await vi.waitFor(() => expect(running()).toBe(false));
+    first.predict();
+    await vi.waitFor(() => expect(screen.getByTestId("can-retry").textContent).toBe("true"));
+    first.close();
+    expect(store.load(FLOW_ID)).not.toBeNull();
+
+    chain.mine(chain.sent(0));
+    chain.gateway.sendTransaction = send;
+    const next = open(chain, store, reader, fast);
+    await vi.waitFor(() => expect(running()).toBe(false));
+    next.predict();
+    await vi.waitFor(() => expect(next.onSuccess).toHaveBeenCalled(), SLOW);
+
+    expect(chain.deposits()).toHaveLength(1);
   });
 });
