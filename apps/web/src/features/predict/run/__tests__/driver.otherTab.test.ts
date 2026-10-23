@@ -34,22 +34,26 @@ function origin() {
   return { tab: (): RunOwnership => createRunOwnership(locks) };
 }
 
-/** A wallet whose prompts stay open when `hold` is set, as a visitor leaves one unanswered. */
+/** A wallet whose prompts stay open when `hold` is set, as a visitor leaves one unanswered, until `decline()`. */
 function wallet(hold: boolean) {
   const sends: FlowTx[] = [];
+  const open: Array<(error: Error) => void> = [];
   const receipt = (hash: Hash) =>
     ({ transactionHash: hash, status: "success", blockNumber: 19_000_000n, logs: [] }) as unknown as TransactionReceipt;
   const gateway: TxGateway = {
     sendTransaction: (tx) => {
       sends.push(tx);
-      if (hold) return new Promise<Hash>(() => {});
+      if (hold) return new Promise<Hash>((_, reject) => open.push(reject));
       return Promise.resolve(`0x${sends.length.toString(16).padStart(64, "0")}` as Hash);
     },
     waitForReceipt: ({ hash }) => Promise.resolve(receipt(hash)),
     getReceipt: (hash) => Promise.resolve(receipt(hash)),
     isKnown: () => Promise.resolve(true),
   };
-  return { gateway, sends };
+  const decline = () => {
+    for (const reject of open.splice(0)) reject(Object.assign(new Error("User rejected the request."), { code: 4001 }));
+  };
+  return { gateway, sends, decline };
 }
 
 function driverIn(ownership: RunOwnership, gateway: TxGateway, store: ReturnType<typeof createFlowRunStore>) {
@@ -107,11 +111,34 @@ describe("createPredictRun with the run live in another tab", () => {
     expect(store.load(FLOW_ID)).not.toBeNull();
     expect(a.getProgress().stage).toBe("signing");
 
+    // the tab lets go once the prompt it left open is answered
     a.dispose();
+    walletA.decline();
     await vi.waitFor(async () => expect(await ownB.heldElsewhere(FLOW_ID)).toBe(false));
     b.reset();
     b.start();
     await vi.waitFor(() => expect(b.getProgress().recovered).toBeDefined());
     expect(b.getProgress().failure?.reason).not.toBe("elsewhere");
+  });
+
+  it("holds the run while a wallet prompt it opened stays open after the popup is disposed", async () => {
+    const site = origin();
+    let answer: ((hash: Hash) => void) | undefined;
+    const gateway: TxGateway = {
+      ...wallet(false).gateway,
+      sendTransaction: () => new Promise<Hash>((resolve) => (answer = resolve)),
+    };
+    const store = createFlowRunStore({ storage: createMemoryStorage() });
+    const driver = driverIn(site.tab(), gateway, store);
+    driver.start();
+    await vi.waitFor(() => expect(answer).toBeDefined());
+
+    driver.dispose();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const other = site.tab();
+    expect(await other.heldElsewhere(FLOW_ID)).toBe(true);
+
+    answer!(`0x${"1".padStart(64, "0")}`);
+    await vi.waitFor(async () => expect(await other.heldElsewhere(FLOW_ID)).toBe(false));
   });
 });

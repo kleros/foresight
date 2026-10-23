@@ -81,6 +81,17 @@ function unanswered(error: unknown): boolean {
   return false;
 }
 
+/** `promise`, or an AbortError once `signal` aborts, whichever comes first. */
+function unlessAborted<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return promise;
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(new DOMException("The run was disposed.", "AbortError"));
+    if (signal.aborted) abort();
+    signal.addEventListener("abort", abort, { once: true });
+    promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+  });
+}
+
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve) => {
     const timer = setTimeout(resolve, ms);
@@ -193,6 +204,8 @@ export function createPredictRun(args: {
   let release: (() => void) | undefined;
   /** Set while this tab asks for the run; reset and dispose drop the answer. */
   let claiming: object | undefined;
+  /** Wallet requests not yet answered; this tab keeps the run until each is, whatever happens to the popup. */
+  const walletRequests = new Set<Promise<unknown>>();
   let cached: PredictProgress;
 
   const deps: PredictDeps = {
@@ -259,8 +272,15 @@ export function createPredictRun(args: {
       const send = { owner, nonce, fromBlock, tx };
       // held before the wallet opens: a prompt approved after the tab closed has no hash stored to find it by
       holdUnanswered(stepId, send);
+      // the wallet's prompt outlives the run, so it is sent with no signal to drop it
+      const request = args.gateway.sendTransaction(tx);
+      walletRequests.add(request);
+      void request.then(
+        () => walletRequests.delete(request),
+        () => walletRequests.delete(request),
+      );
       try {
-        return await args.gateway.sendTransaction(tx, options);
+        return await unlessAborted(request, options?.signal);
       } catch (error) {
         // a disposed run keeps the send for whichever driver recovers it
         if (options?.signal?.aborted) throw error;
@@ -770,9 +790,11 @@ export function createPredictRun(args: {
       checking = undefined;
       claiming = undefined;
       orchestrator.dispose();
-      release?.();
+      const letGo = release;
       release = undefined;
       owned = !args.ownership;
+      if (walletRequests.size === 0) letGo?.();
+      else void Promise.allSettled([...walletRequests]).then(() => letGo?.());
     },
 
     getProgress: () => cached,
