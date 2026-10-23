@@ -132,11 +132,11 @@ export interface PredictSnapshot {
   optionsPerBatch: number;
   /** Options that settled batches left out for lack of a route; absent until one does. */
   leftOut?: Address[];
-  /** Sends that errored after they may have gone out, by step id, until their nonce says how they ended. */
+  /** Sends the wallet was asked for and no hash is stored for, by step id, until their nonce says how they ended. */
   unanswered?: Record<string, UnansweredSend>;
 }
 
-/** A send whose wallet call errored, which the chain may still mine under `nonce`. */
+/** A send the wallet was asked for, which the chain may mine under `nonce`. */
 export interface UnansweredSend {
   owner: Address;
   nonce: number;

@@ -232,10 +232,10 @@ export function createPredictRun(args: {
     orchestrator.updateSnapshot((prev) => ({ ...prev, unanswered: { ...prev.unanswered, [stepId]: send } }), {
       source: "adapter",
     });
-    if (stepId !== STEP_ID.createExecutor) moneyMoved = true;
   }
 
   function forgetUnanswered(stepId: string) {
+    if (!orchestrator.getRun()?.snapshot.unanswered?.[stepId]) return;
     orchestrator.updateSnapshot(
       (prev) => {
         const { [stepId]: _settled, ...rest } = prev.unanswered ?? {};
@@ -256,21 +256,31 @@ export function createPredictRun(args: {
 
       const owner = run.ctx.owner;
       const [nonce, fromBlock] = await Promise.all([args.reader.nextNonce(owner), args.reader.latestBlock()]);
+      const send = { owner, nonce, fromBlock, tx };
+      // held before the wallet opens: a prompt approved after the tab closed has no hash stored to find it by
+      holdUnanswered(stepId, send);
       try {
         return await args.gateway.sendTransaction(tx, options);
       } catch (error) {
+        // a disposed run keeps the send for whichever driver recovers it
+        if (options?.signal?.aborted) throw error;
         // a coded wallet error can still follow a broadcast; only a rejection proves nothing went out
-        if (classifyTxError(error) === "rejected") throw error;
+        if (classifyTxError(error) === "rejected") {
+          forgetUnanswered(stepId);
+          throw error;
+        }
         const lost = unanswered(error);
-        const send = { owner, nonce, fromBlock, tx };
         awaitingUnanswered = true;
         notify();
         const answer = await answerOf(send, lost ? waiting.waitMs : waiting.graceMs, options?.signal).finally(() => {
           awaitingUnanswered = false;
         });
         if (answer !== undefined && answer !== "outstanding") return answer;
-        if (answer === undefined && !lost) throw error;
-        holdUnanswered(stepId, send);
+        if (answer === undefined && !lost) {
+          forgetUnanswered(stepId);
+          throw error;
+        }
+        if (stepId !== STEP_ID.createExecutor) moneyMoved = true;
         throw answer === "outstanding" ? new TxPendingError() : error;
       }
     },
@@ -443,6 +453,8 @@ export function createPredictRun(args: {
   orchestrator.subscribe(notify);
   orchestrator.on("step:submitted", (event) => {
     if (event.stepId !== STEP_ID.createExecutor) moneyMoved = true;
+    // the hash is stored by now, and the receipt settles the step from here
+    forgetUnanswered(event.stepId);
   });
   orchestrator.on("flow:paused", () => {
     if (movedByBuild) {
