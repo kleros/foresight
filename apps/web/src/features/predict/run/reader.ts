@@ -37,11 +37,20 @@ export function createPredictReader(args: {
       args.client.getTransactionCount({ address: owner, blockTag: "pending" }),
     ]);
 
-  /** The owner's mined and broadcast counts, both from the wallet's node where it answers, else both from the app's. */
+  /** The owner's mined and broadcast counts, each the higher of the wallet's node and the app's where both answer. */
   async function nonceCounts(owner: Address): Promise<[mined: number, broadcast: number]> {
     const wallet = args.walletNonce;
     if (!wallet) return appCounts(owner);
-    return Promise.all([wallet(owner, "latest"), wallet(owner, "pending")]).catch(() => appCounts(owner));
+    const [fromWallet, fromApp] = await Promise.allSettled([
+      Promise.all([wallet(owner, "latest"), wallet(owner, "pending")]),
+      appCounts(owner),
+    ]);
+    if (fromWallet.status === "rejected") {
+      if (fromApp.status === "rejected") throw fromApp.reason;
+      return fromApp.value;
+    }
+    if (fromApp.status === "rejected") return fromWallet.value;
+    return [Math.max(fromWallet.value[0], fromApp.value[0]), Math.max(fromWallet.value[1], fromApp.value[1])];
   }
 
   const balanceOf = (token: Address, holder: Address) =>

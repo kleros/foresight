@@ -1,12 +1,16 @@
 import { createFlowRunStore, createMemoryStorage, type FlowTx, type TxGateway } from "@foresight/tx-orchestrator";
-import { UserRejectedRequestError, type Hash, type TransactionReceipt } from "viem";
+import { UserRejectedRequestError, type Address, type Hash, type PublicClient, type TransactionReceipt } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { addresses, ctx, fakeQuoter, fakeReader, snapshot, WAD } from "../../flow/__tests__/support/fakes";
 import type { LandedTx, SentTx } from "../../flow/types";
 import { createPredictRun } from "../driver";
 import { discardRun, hasPendingTransaction, predictFlowId } from "../interrupted";
+import { createPredictReader } from "../reader";
 import type { PredictDriver } from "../types";
+
+// the indexer's client reads the app's environment, and no nonce read goes near it
+vi.mock("../../api/getOptionPools", () => ({ fetchSessionPools: vi.fn(), optionPoolRefs: vi.fn() }));
 
 const SESSION = "session-1";
 const FLOW_ID = predictFlowId(SESSION, addresses.owner);
@@ -67,8 +71,42 @@ function chain(opts: {
         .map(({ tx }) => ({ to: tx.to, value: tx.value ?? 0n, input: tx.data ?? "0x", collateralReceived: WAD })),
     );
 
+  /** The owner's count after block `at`, or with every broadcast where `at` is pending. */
+  const countAt = (at: bigint | "pending") =>
+    at === "pending" ? byNonce.length : byNonce.filter((sent) => sent.block !== undefined && sent.block <= at).length;
+
+  /** The app's node over the same chain, as the reader reads it. */
+  const client = {
+    getTransactionCount: ({ blockTag, blockNumber }: { blockTag?: "latest" | "pending"; blockNumber?: bigint }) =>
+      Promise.resolve(countAt(blockNumber ?? (blockTag === "pending" ? "pending" : head))),
+    getBlockNumber: () => Promise.resolve(head),
+    getBlock: ({ blockNumber }: { blockNumber: bigint }) =>
+      Promise.resolve({
+        number: blockNumber,
+        transactions: byNonce.flatMap((sent, nonce) =>
+          sent.block === blockNumber
+            ? [
+                {
+                  from: addresses.owner,
+                  nonce,
+                  hash: sent.hash,
+                  to: sent.tx.to,
+                  value: 0n,
+                  input: sent.tx.data ?? "0x",
+                },
+              ]
+            : [],
+        ),
+      }),
+    getTransactionReceipt: () => Promise.resolve({ status: "success" }),
+  } as unknown as PublicClient;
+
   return {
     gateway,
+    client,
+    /** The owner's counts on a node `lag()` blocks behind the head, which has seen no broadcast past them. */
+    countsBehind: (lag: () => bigint) => (_owner: Address, _tag: "latest" | "pending") =>
+      Promise.resolve(countAt(head - lag())),
     deposits: () => sends.filter(isDeposit).length,
     land: () => {
       for (const sent of byNonce) if (sent.block === undefined) sent.block = ++head;
@@ -237,6 +275,35 @@ describe("createPredictRun when a send errors after the wallet broadcast it", ()
 
     driver.reset();
     expect(store.load(FLOW_ID)).not.toBeNull();
+  });
+
+  it("holds a send whose nonce the wallet's node, a block behind as it is sent, reads as one already used", async () => {
+    const fake = chain({ error: internalError, failBeforeBroadcast: isDeposit });
+    fake.takeNonce();
+    let lag = 1n;
+    const nodes = createPredictReader({
+      client: fake.client,
+      sessionId: SESSION,
+      collateral: addresses.collateral,
+      walletNonce: fake.countsBehind(() => lag),
+    });
+    const { nextNonce, sentWithNonce, hasPending } = nodes;
+    const gateway = {
+      ...fake.gateway,
+      sendTransaction: (tx: FlowTx) => {
+        lag = 0n;
+        return fake.gateway.sendTransaction(tx);
+      },
+    };
+    const { driver } = driverOn({ ...fake, gateway, reader: { ...fake.reader, nextNonce, sentWithNonce, hasPending } });
+
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("halted"));
+    expect(driver.getProgress().failure).toEqual({ reason: "held", retryable: true });
+
+    driver.retry();
+    await vi.waitFor(() => expect(driver.getProgress().failure?.reason).toBe("held"));
+    expect(fake.deposits()).toBe(1);
   });
 
   it("reads no nonce for a rejection", async () => {

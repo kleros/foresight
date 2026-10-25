@@ -110,6 +110,15 @@ describe("createPredictReader's nonce reads through the wallet's provider", () =
     expect(await reader.sentWithNonce({ owner: OWNER, nonce: 1, fromBlock: 50n })).toEqual({ status: "pending" });
   });
 
+  it("counts what the app's node has mined when the wallet's node is behind it", async () => {
+    const { client } = chainClient(100n, { 0: 10n, 1: 60n });
+    const reader = createPredictReader({ client, sessionId: "1", collateral: TARGET, walletNonce: walletCounts(1, 1) });
+
+    expect(await reader.nextNonce(OWNER)).toBe(2);
+    expect(await reader.sentWithNonce({ owner: OWNER, nonce: 1, fromBlock: 50n })).toMatchObject({ status: "mined" });
+    expect(await reader.hasPending(OWNER)).toBe(false);
+  });
+
   it("reads from the app's node when the wallet's read fails", async () => {
     const { client } = chainClient(100n, { 0: 10n });
     const walletNonce = vi.fn(() => Promise.reject(new Error("method not supported")));
