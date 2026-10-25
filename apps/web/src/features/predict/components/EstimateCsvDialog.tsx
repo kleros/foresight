@@ -52,10 +52,10 @@ export function EstimateCsvDialog({ parentMarket, scales, marketEstimates, noun,
     try {
       const parsed = parseEstimateCsv(await file.text(), scales);
       for (const { scale, value } of parsed) {
-        // an empty row, or one at the market's own number, is no prediction, same as the slider left there
-        if (value === null || value === marketEstimates[scale.market.toLowerCase()]) {
-          clearEstimate(parentMarket, scale.market);
-        } else setEstimate(parentMarket, scale.market, value);
+        if (value === null) continue;
+        // a row at the market's own number is no prediction, same as the slider left there
+        if (value === marketEstimates[scale.market.toLowerCase()]) clearEstimate(parentMarket, scale.market);
+        else setEstimate(parentMarket, scale.market, value);
       }
       successToast("Estimates loaded.");
       close();

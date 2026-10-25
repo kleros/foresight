@@ -121,14 +121,14 @@ describe("EstimateCsvDialog", () => {
     expect(useEstimateStore.getState().estimates[PARENT] ?? {}).toEqual({});
   });
 
-  it("clears a saved estimate whose row is left empty", async () => {
+  it("leaves a saved estimate alone whose row is left empty", async () => {
     useEstimateStore.getState().setEstimate(PARENT, FIRST, 250);
     await openDialog();
 
     await userEvent.upload(fileInput(), csvFile("name,estimate\nVilleneuve,\nGerwig,300"));
     await userEvent.click(screen.getByRole("button", { name: "Load estimates" }));
 
-    expect(useEstimateStore.getState().estimates[PARENT]).toEqual({ [SECOND]: 300 });
+    expect(useEstimateStore.getState().estimates[PARENT]).toEqual({ [FIRST]: 250, [SECOND]: 300 });
   });
 
   it("cannot load before a file is chosen", async () => {
