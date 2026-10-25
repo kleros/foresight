@@ -21,8 +21,6 @@ import { createPredictRun, SEND_HOLD_MS } from "@/features/predict/run/driver";
 import type { PredictDriver } from "@/features/predict/run/types";
 import type { SelectedEstimate } from "@/features/predict/types";
 import { SIGN_AGAIN_ASK } from "@/features/predict/utils/predictSteps";
-
-const UNSEEN_COPY = "The network can't find your last transaction yet. Check again, or discard it.";
 import type { SessionDetail } from "@/features/sessions/types";
 import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 import { toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
@@ -32,6 +30,8 @@ import { DEFAULT_CHAIN_ID } from "@/config/chains";
 import { GATEWAY } from "@/testing/fixtures";
 
 import { PredictRunner } from "../PredictRunner";
+
+const UNSEEN_COPY = "The network can't find your last transaction yet. Check again, or discard it.";
 
 const OWNER = "0x9999999999999999999999999999999999999999" as Address;
 const EXECUTOR = "0x8888888888888888888888888888888888888888" as Address;

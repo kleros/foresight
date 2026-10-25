@@ -13,7 +13,7 @@ import {
   snapshot,
   WAD,
 } from "../../flow/__tests__/support/fakes";
-import type { LandedTx, PredictRequest, SentTx } from "../../flow/types";
+import type { LandedTx, PredictReader, PredictRequest, SentTx } from "../../flow/types";
 import { createPredictRun } from "../driver";
 import { discardRun, hasPendingTransaction, predictFlowId } from "../interrupted";
 import { createPredictReader } from "../reader";
@@ -162,7 +162,7 @@ const HOLD_MS = 600_000;
 const clock = { at: 1_700_000_000_000 };
 
 function driverOn(
-  fake: Pick<ReturnType<typeof chain>, "gateway" | "reader">,
+  fake: { gateway: TxGateway; reader: PredictReader },
   store = createFlowRunStore({ storage: createMemoryStorage() }),
   request: PredictRequest = snapshot(),
 ) {

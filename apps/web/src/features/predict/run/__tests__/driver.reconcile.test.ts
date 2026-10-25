@@ -132,9 +132,9 @@ describe("createPredictRun when a batch's receipt was never seen", () => {
       waitError: () => new Error("node said something odd", { cause: "opaque" }),
       lookup: "dropped",
     });
-    let minedAs: SentTx | undefined;
+    const chain: { minedAs?: SentTx } = {};
     const driver = setup(gateway, undefined, undefined, ({ nonce }) =>
-      Promise.resolve(nonce === 0 && minedAs ? minedAs : { status: "none" }),
+      Promise.resolve(nonce === 0 && chain.minedAs ? chain.minedAs : { status: "none" }),
     );
 
     driver.start();
@@ -143,7 +143,7 @@ describe("createPredictRun when a batch's receipt was never seen", () => {
     driver.retry();
     await vi.waitFor(() => expect(driver.getProgress().failure?.reason).toBe("resign"));
     const batch = gateway.signRequests[2]!;
-    minedAs = {
+    chain.minedAs = {
       status: "mined",
       hash: `0x${"a".repeat(64)}`,
       to: batch.to,

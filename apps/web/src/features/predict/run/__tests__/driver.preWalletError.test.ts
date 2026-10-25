@@ -31,7 +31,7 @@ const accountNotFound = () =>
   Object.assign(new Error("Could not find an Account to execute with this Action."), { name: "AccountNotFoundError" });
 
 /** As viem's sendTransaction wraps what it throws before the wallet is asked. */
-const executing = (cause: Error) => new TransactionExecutionError(cause as never, { chain: gnosis });
+const executing = (cause: Error) => new TransactionExecutionError(cause as never, { account: null, chain: gnosis });
 
 const PRE_WALLET: Array<[string, () => Error, PredictFailureReason]> = [
   ["ChainMismatchError", () => executing(new ChainMismatchError({ chain: gnosis, currentChainId: 1 })), "wrong-chain"],
