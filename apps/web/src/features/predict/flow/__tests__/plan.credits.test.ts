@@ -6,6 +6,7 @@ import { withdrawTx } from "@/lib/trade-executor/funding";
 import { gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
 
 import { CREDITS_SLIPPAGE_BPS } from "../../oracle/tolerances";
+import { departures, sessionTokensOf } from "../allowed";
 import {
   assertRoutes,
   CreditsUnavailableError,
@@ -19,7 +20,6 @@ import {
   type PredictDeps,
 } from "../plan";
 import type { LandedTx, PredictCtx, PredictSnapshot } from "../types";
-import { departures, resolvedFrom } from "./support/allowed";
 import {
   addresses,
   ALGEBRA_ROUTER_ABI,
@@ -210,16 +210,12 @@ describe("the first batch of a credits run", () => {
 
   it("keeps every call to the allow-list, the owner's trade wallet and the value rule (A5, A6, P5)", async () => {
     const snap = creditsRun();
-    const steps = planPredict(snap, deps({ quoter: fakeQuoter({ asSwapr: true }) }));
-    const one = option(1);
-    const sessionTokens = [addresses.collateral, one.underlying, one.upToken, one.downToken, one.invalidToken];
+    const steps = planPredict(snap, deps({ quoter: fakeQuoter() }));
+    const sessionTokens = sessionTokensOf(ctx(), snap.options);
 
     for (const step of steps) {
       const tx = await step.build(ctx(), snap);
-      expect(
-        departures({ tx, ctx: ctx(), resolved: resolvedFrom(ctx(), addresses.swapRouter), sessionTokens }),
-        step.id,
-      ).toEqual([]);
+      expect(departures({ tx, ctx: ctx(), sessionTokens, from: addresses.owner }), step.id).toEqual([]);
     }
   });
 

@@ -14,6 +14,7 @@ import type { HeldTo, MovedPlans, PredictSnapshot } from "../flow/types";
  * `wrong-wallet`, `wrong-chain`: a saved run belongs to another wallet or network than the connected one.
  * `elsewhere`: another open tab is driving the saved run.
  * `closed`: the session's close time has passed on the chain's clock, so nothing more is signed.
+ * `unlisted`: a transaction departs from the chain's allow-list, the owner rule or the native-value rule, so it was not sent.
  */
 export type PredictFailureReason =
   | TxErrorCause
@@ -28,7 +29,8 @@ export type PredictFailureReason =
   | "wrong-wallet"
   | "wrong-chain"
   | "elsewhere"
-  | "closed";
+  | "closed"
+  | "unlisted";
 
 /** What the popup shows while a prediction runs. */
 export type PredictStage =

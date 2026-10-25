@@ -23,6 +23,7 @@ import type { CreditsRoute } from "@/config/contracts";
 import { hasUnanswered } from "./interrupted";
 import type { RunOwnership } from "./ownership";
 import type { PredictDriver, PredictFailureReason, PredictProgress, PredictStepRow } from "./types";
+import { assertListed, sessionTokensOf, UnlistedTxError } from "../flow/allowed";
 import {
   assertRoutes,
   AtEstimatesError,
@@ -190,7 +191,8 @@ export function createPredictRun(args: {
   /** Set while the routes are checked, before the orchestrator has a run; reset and dispose clear it. */
   let checking: object | undefined;
   /** The reason a step failed with, which the orchestrator's own causes cannot carry. */
-  let buildFailure: "no-route" | "at-estimates" | "quote" | "funds" | "credits" | "pending" | "closed" | undefined;
+  let buildFailure:
+    "no-route" | "at-estimates" | "quote" | "funds" | "credits" | "pending" | "closed" | "unlisted" | undefined;
   /** Set while a sent transaction's outcome is read from the chain; the run itself stays stopped meanwhile. */
   let reconciling = false;
   /** Set once a stored run is restored, until it is thrown away: the popup shows its snapshot, not the form. */
@@ -287,7 +289,13 @@ export function createPredictRun(args: {
     async sendTransaction(tx, options) {
       const run = orchestrator.getRun();
       const stepId = run ? currentEntry(run.steps)?.stepId : undefined;
-      if (!run || stepId === undefined) return args.gateway.sendTransaction(tx, options);
+      if (!run || stepId === undefined) throw new UnlistedTxError(["no run to check it against"]);
+      assertListed({
+        tx,
+        ctx: run.ctx,
+        sessionTokens: sessionTokensOf(run.ctx, run.snapshot.options),
+        from: args.ctx().owner,
+      });
 
       const owner = run.ctx.owner;
       const [nonce, fromBlock] = await Promise.all([args.reader.nextNonce(owner), args.reader.latestBlock()]);
@@ -401,6 +409,10 @@ export function createPredictRun(args: {
     classifyError: (error) => {
       if (error instanceof SessionClosedError) {
         buildFailure = "closed";
+        return "unknown";
+      }
+      if (error instanceof UnlistedTxError) {
+        buildFailure = "unlisted";
         return "unknown";
       }
       if (error instanceof PlansMovedError) {
@@ -565,6 +577,7 @@ export function createPredictRun(args: {
         else if (error instanceof TxPendingError) report("pending", action);
         else if (error instanceof TradeWalletShortError) report("balance");
         else if (error instanceof SessionClosedError) report("closed");
+        else if (error instanceof UnlistedTxError) report("unlisted");
         else if (error instanceof PredictConfigError) report("unknown");
         else report(classifyTxError(error), action);
       });

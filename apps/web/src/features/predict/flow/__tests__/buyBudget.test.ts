@@ -1,6 +1,7 @@
 import { decodeFunctionData, erc20Abi, type Address, type Hex } from "viem";
 import { describe, expect, it } from "vitest";
 
+import { ALGEBRA_ROUTER_ABI } from "@/lib/swap/algebraRouter";
 import type { SwapQuote, SwapQuoter } from "@/lib/swap/types";
 
 import { gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
@@ -69,7 +70,7 @@ function replayWorstCase(
         pendingBuy = 0n;
         continue;
       }
-      const tokenOut = `0x${call.data.slice(42, 82)}` as Address;
+      const [{ tokenOut }] = decodeFunctionData({ abi: ALGEBRA_ROUTER_ABI, data: call.data }).args;
       const underlying = options.find((each) => each.underlying.toLowerCase() === tokenOut.toLowerCase())!.underlying;
       move(underlying, worstFill(quote, slippageBps));
       continue;

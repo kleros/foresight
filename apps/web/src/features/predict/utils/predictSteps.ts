@@ -59,6 +59,7 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
   "wrong-chain": "Started on another network. Switch to it to finish.",
   elsewhere: RUNNING_ELSEWHERE,
   closed: SESSION_CLOSED,
+  unlisted: "This transaction isn't one Foresight sends, so it wasn't sent.",
 };
 
 /** Once the credits are in the trade wallet the run is locked to them, so only waiting helps. */

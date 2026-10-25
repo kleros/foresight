@@ -6,7 +6,6 @@ import {
   erc20Abi,
   zeroAddress,
   type Address,
-  type Hex,
   type Log,
 } from "viem";
 
@@ -43,15 +42,15 @@ export const DEEP = 10n ** 30n;
 export const addresses = {
   owner: "0x0000000000000000000000000000000000000001" as Address,
   executor: "0x0000000000000000000000000000000000000002" as Address,
-  factory: "0x0000000000000000000000000000000000000003" as Address,
-  router: "0x0000000000000000000000000000000000000004" as Address,
+  factory: "0x28e3afBdF711755c4400e3d7F74Df5d3cc9C369C" as Address,
+  router: "0xeC9048b59b3467415b1a38F63416407eA0c70fB8" as Address,
   collateral: "0x0000000000000000000000000000000000000005" as Address,
   parentMarket: "0x0000000000000000000000000000000000000006" as Address,
-  sDaiAdapter: "0x0000000000000000000000000000000000000007" as Address,
-  swapRouter: "0x0000000000000000000000000000000000000008" as Address,
-  credits: "0x0000000000000000000000000000000000000009" as Address,
-  manager: "0x000000000000000000000000000000000000000A" as Address,
-  wxdai: "0x000000000000000000000000000000000000000b" as Address,
+  sDaiAdapter: "0xD499b51fcFc66bd31248ef4b28d656d67E591A94" as Address,
+  swapRouter: "0xfFB643E73f280B97809A8b41f7232AB401a04ee1" as Address,
+  credits: "0x09E7014D2c15Eb8C5ee25853FE6842FF5E2c94f9" as Address,
+  manager: "0x17592eFE59a318A6B0AFE32145ee04eAFeeA8A61" as Address,
+  wxdai: "0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d" as Address,
 } as const;
 
 export const ctx = (overrides: Partial<PredictCtx> = {}): PredictCtx => ({
@@ -184,16 +183,10 @@ export interface FakeQuoter extends SwapQuoter {
 }
 
 /**
- * Pays out half of what goes in, and encodes the pair it was asked for in its calldata so a test
- * can tell one leg's swap from another's.
+ * Pays out half of what goes in, as Swapr's `exactInputSingle` with the request's recipient and limit, as the
+ * Lens quoter signs it; the calldata names the pair, so a test can tell one leg's swap from another's.
  */
-export function fakeQuoter(
-  opts: {
-    refuse?: (request: SwapQuoteRequest) => boolean;
-    /** Encodes Swapr's `exactInputSingle` with the request's recipient and limit, as the Lens quoter signs it. */
-    asSwapr?: boolean;
-  } = {},
-): FakeQuoter {
+export function fakeQuoter(opts: { refuse?: (request: SwapQuoteRequest) => boolean } = {}): FakeQuoter {
   const requests: SwapQuoteRequest[] = [];
 
   return {
@@ -206,23 +199,21 @@ export function fakeQuoter(
         amountIn: request.amount,
         amountOut: request.amount / 2n,
         router: addresses.swapRouter,
-        data: opts.asSwapr
-          ? encodeFunctionData({
-              abi: ALGEBRA_ROUTER_ABI,
-              functionName: "exactInputSingle",
-              args: [
-                {
-                  tokenIn: request.tokenIn,
-                  tokenOut: request.tokenOut,
-                  recipient: request.recipient,
-                  deadline: 1_700_001_800n,
-                  amountIn: request.amount,
-                  amountOutMinimum: request.amount / 2n,
-                  limitSqrtPrice: request.limitSqrtPrice,
-                },
-              ],
-            })
-          : (`0x${request.tokenIn.slice(2)}${request.tokenOut.slice(2)}` as Hex),
+        data: encodeFunctionData({
+          abi: ALGEBRA_ROUTER_ABI,
+          functionName: "exactInputSingle",
+          args: [
+            {
+              tokenIn: request.tokenIn,
+              tokenOut: request.tokenOut,
+              recipient: request.recipient,
+              deadline: 1_700_001_800n,
+              amountIn: request.amount,
+              amountOutMinimum: request.amount / 2n,
+              limitSqrtPrice: request.limitSqrtPrice,
+            },
+          ],
+        }),
         value: 0n,
       };
       return Promise.resolve(quote);

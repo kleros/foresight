@@ -18,6 +18,12 @@ vi.mock("@wagmi/core", async (importOriginal) => ({
   sendTransaction: vi.fn(),
 }));
 
+/* Gnosis, whose allow-list names the fakes' contracts; a test build otherwise defaults to the local chain. */
+vi.mock("@/config/chains", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/config/chains")>()),
+  DEFAULT_CHAIN_ID: 100,
+}));
+
 /* The real config builds AppKit connectors from env this suite does not supply. */
 vi.mock("@/lib/web3/wagmi", () => ({ wagmiConfig: {} }));
 

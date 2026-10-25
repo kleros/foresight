@@ -235,6 +235,23 @@ describe("predictSteps during a run", () => {
     expect(rows[2]?.view).toBe("failed");
   });
 
+  it("says a batch off the allow-list was not sent, and crosses the prediction", () => {
+    const result = steps({
+      progress: progress({
+        stage: "halted",
+        steps: [
+          { id: "create-wallet", label: "", state: "success" },
+          { id: "deposit", label: "", state: "success" },
+          { id: "predict-1", label: "", state: "error" },
+        ],
+        failure: { reason: "unlisted", retryable: false },
+      }),
+    });
+
+    expect(result.failure).toBe("This transaction isn't one Foresight sends, so it wasn't sent.");
+    expect(result.rows[2]?.view).toBe("failed");
+  });
+
   it("has no failure to report while the run is going", () => {
     expect(steps({ progress: progress() }).failure).toBeUndefined();
   });
