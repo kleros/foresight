@@ -85,7 +85,10 @@ class SignAgainError extends Error {}
 
 const TRANSPORT_FAILURES = new Set(["TimeoutError", "HttpRequestError"]);
 
-/** Raised by viem or wagmi, or coded by the provider per EIP-1193, before the request reaches the wallet. */
+/**
+ * Raised by viem or wagmi before the request reaches the wallet. Provider codes (4100, 4900, 4901)
+ * are left out: a wallet can answer one after it broadcast, e.g. a WalletConnect session dropping.
+ */
 const NOT_SENT_NAMES: Record<string, "wrong-chain" | "wrong-wallet"> = {
   ChainMismatchError: "wrong-chain",
   ConnectorChainMismatchError: "wrong-chain",
@@ -95,19 +98,13 @@ const NOT_SENT_NAMES: Record<string, "wrong-chain" | "wrong-wallet"> = {
   ConnectorAccountNotFoundError: "wrong-wallet",
   ConnectorUnavailableReconnectingError: "wrong-wallet",
 };
-const NOT_SENT_CODES: Record<number, "wrong-chain" | "wrong-wallet"> = {
-  4100: "wrong-wallet",
-  4900: "wrong-wallet",
-  4901: "wrong-chain",
-};
 
-/** Why the wallet was never asked for the send, where the client or provider says so; nothing went out. */
+/** Why the wallet was never asked for the send, where the client says so; nothing went out. */
 function notSent(error: unknown): "wrong-chain" | "wrong-wallet" | undefined {
   let link: unknown = error;
   for (let depth = 0; typeof link === "object" && link !== null && depth < 10; depth++) {
-    const { name, code, cause } = link as { name?: unknown; code?: unknown; cause?: unknown };
+    const { name, cause } = link as { name?: unknown; cause?: unknown };
     if (typeof name === "string" && Object.hasOwn(NOT_SENT_NAMES, name)) return NOT_SENT_NAMES[name];
-    if (typeof code === "number" && Object.hasOwn(NOT_SENT_CODES, code)) return NOT_SENT_CODES[code];
     link = cause;
   }
   return undefined;

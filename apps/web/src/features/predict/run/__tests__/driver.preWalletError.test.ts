@@ -47,15 +47,21 @@ const PRE_WALLET: Array<[string, () => Error, PredictFailureReason]> = [
     () => new ConnectorUnavailableReconnectingError({ connector }),
     "wrong-wallet",
   ],
-  ["EIP-1193 4100", () => executing(new UnauthorizedProviderError(new Error("unauthorized"))), "wrong-wallet"],
-  ["EIP-1193 4900", () => executing(new ProviderDisconnectedError(new Error("disconnected"))), "wrong-wallet"],
-  ["EIP-1193 4901", () => executing(new ChainDisconnectedError(new Error("chain disconnected"))), "wrong-chain"],
+];
+
+const PROVIDER_CODED: Array<[string, () => Error]> = [
+  ["EIP-1193 4100", () => executing(new UnauthorizedProviderError(new Error("unauthorized")))],
+  ["EIP-1193 4900", () => executing(new ProviderDisconnectedError(new Error("disconnected")))],
+  ["EIP-1193 4901", () => executing(new ChainDisconnectedError(new Error("chain disconnected")))],
 ];
 
 const isDeposit = (tx: FlowTx) => tx.to === addresses.collateral;
 
-/** A chain that mines each send at once, whose first deposit the client refuses before the wallet sees it. */
-function chain(error: () => Error) {
+/**
+ * A chain that mines each send at once, whose first deposit errors with `error`: refused before the
+ * wallet sees it, or (`broadcast`) after the deposit has already been mined.
+ */
+function chain(error: () => Error, { broadcast = false } = {}) {
   const mined: Array<{ hash: Hash; tx: FlowTx }> = [];
   const sends: FlowTx[] = [];
   let refused = false;
@@ -66,11 +72,12 @@ function chain(error: () => Error) {
   const gateway: TxGateway = {
     sendTransaction: (tx) => {
       sends.push(tx);
+      const hash = `0x${(mined.length + 1).toString(16).padStart(64, "0")}` as Hash;
       if (isDeposit(tx) && !refused) {
         refused = true;
+        if (broadcast) mined.push({ hash, tx });
         return Promise.reject(error());
       }
-      const hash = `0x${(mined.length + 1).toString(16).padStart(64, "0")}` as Hash;
       mined.push({ hash, tx });
       return Promise.resolve(hash);
     },
@@ -128,6 +135,26 @@ describe("createPredictRun when the client refuses a send before the wallet is a
     driver.retry();
     await vi.waitFor(() => expect(driver.getProgress().stage).toBe("complete"));
     expect(fake.deposits()).toBe(2);
+  });
+
+  it.each(PROVIDER_CODED)("%s after the deposit was broadcast keeps it and signs it once", async (_name, error) => {
+    const fake = chain(error, { broadcast: true });
+    const store = createFlowRunStore({ storage: createMemoryStorage() });
+    const driver = createPredictRun({
+      gateway: fake.gateway,
+      reader: fake.reader,
+      quoter: fakeQuoter(),
+      flowId: FLOW_ID,
+      ctx: () => ctx(),
+      snapshot: () => snapshot(),
+      store,
+      unansweredSend: { waitMs: 20, pollMs: 5 },
+    });
+    drivers.push(driver);
+
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("complete"));
+    expect(fake.deposits()).toBe(1);
   });
 
   it("lets Close and the card's Discard drop the run it stopped", async () => {
