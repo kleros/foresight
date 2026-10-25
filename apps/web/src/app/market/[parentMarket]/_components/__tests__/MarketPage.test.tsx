@@ -14,6 +14,10 @@ import { addresses } from "@/testing/fixtures";
 
 import { MarketPage } from "../MarketPage";
 
+vi.mock("@/lib/web3/public-client", () => ({ publicClient: {} }));
+vi.mock("@/features/sessions/api/verifySession", () => ({
+  verifySession: async (_client: unknown, _chain: number, row: unknown) => row,
+}));
 vi.mock("@/lib/graphql/batcher", () => ({ fetchGraphql: vi.fn() }));
 /* The factory cannot reference imports, so GATEWAY's value is restated. */
 vi.mock("@/config/ipfs", () => ({ IPFS_GATEWAY: "https://cdn.example.link/ipfs" }));

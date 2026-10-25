@@ -246,10 +246,13 @@ export function createPredictRun(args: {
     | undefined;
   /** Set while a sent transaction's outcome is read from the chain; the run itself stays stopped meanwhile. */
   let reconciling = false;
+  let discarding = false;
+  let disposeAfterDiscard = false;
   /** Set once a stored run is restored, until it is thrown away: the popup shows its snapshot, not the form. */
   let recovered = false;
   /** A restored run, reconciled, waiting for the visitor to resume it. */
   let reviewing = false;
+  let inconsistentSteps = false;
   /** Set once this run sends a transaction that moves money; a failed step put back to pending does not clear it. */
   let moneyMoved = false;
   /** Set while the chain is read for a send that errored. */
@@ -293,13 +296,18 @@ export function createPredictRun(args: {
    * How `send` ended, under the nonce read for it or, where another send took that, a later one. `taken` means
    * its own nonce went to another transaction and none after it holds this one.
    */
+  const nonceSearch = new WeakMap<UnansweredSend, number>();
   async function sentAs(send: UnansweredSend): Promise<SentTx> {
-    for (let nonce = send.nonce; nonce < send.nonce + NONCE_LOOKAHEAD; nonce++) {
+    const start = nonceSearch.get(send) ?? send.nonce;
+    for (let nonce = start; nonce < start + NONCE_LOOKAHEAD; nonce++) {
       const found = await args.reader.sentWithNonce({ ...send, nonce });
-      if (takenElsewhere(found, send)) continue;
+      if (takenElsewhere(found, send)) {
+        nonceSearch.set(send, nonce + 1);
+        continue;
+      }
       return found.status === "none" && nonce > send.nonce ? { status: "taken" } : found;
     }
-    return { status: "taken" };
+    return { status: "pending" };
   }
 
   /** True while `send`'s hold runs; a record stored with no time compares false and is asked about. */
@@ -435,8 +443,7 @@ export function createPredictRun(args: {
           if (found.status === "pending") throw new TxPendingError();
           // forgotten once the skip is stored, so no record holds the step pending without it
           if (found.status === "mined" && found.success) return true;
-          // past the close the build stops the run, so the hold is let go for Close to discard it
-          if (found.status === "none" && !(await sessionClosed())) {
+          if (found.status === "none") {
             if (holding(send)) throw new HeldSendError();
             if (!answered) throw new SignAgainError();
           }
@@ -459,20 +466,7 @@ export function createPredictRun(args: {
   const orchestrator = createTxOrchestrator<PredictSnapshot, PredictCtx>({
     adapterId: "predict-flow",
     gateway,
-    hooks: {
-      ...hooks,
-      async afterStep(context) {
-        try {
-          return await hooks.afterStep!(context);
-        } catch (error) {
-          // the deposit is settled and its hook never runs again, so the mint left unread is owed until it is read
-          if (context.completed.stepId === STEP_ID.deposit && context.snapshot.depositNative) {
-            orchestrator.updateSnapshot({ mintOwed: true }, { source: "adapter" });
-          }
-          throw error;
-        }
-      },
-    },
+    hooks,
     store: args.store,
     now: args.now,
     // A build reads the chain and the indexer before it signs anything. Those failures are
@@ -680,12 +674,21 @@ export function createPredictRun(args: {
     return action;
   }
 
-  /** Reads the collateral a settled xDAI deposit minted, where its hook could not, before anything is split. */
+  function needsMintFinalization() {
+    const run = orchestrator.getRun();
+    return (
+      run?.snapshot.depositNative &&
+      !run.snapshot.mintFinalized &&
+      settledEntries(run.steps).some((entry) => entry.stepId === STEP_ID.deposit)
+    );
+  }
+
+  /** A settled native deposit must have its actual mint recorded before a batch is built. */
   async function settleOwedMint() {
     const run = orchestrator.getRun();
-    if (!run?.snapshot.mintOwed) return;
+    if (!run || !needsMintFinalization()) return;
     const patch = await depositMintPatch(deps, run.ctx, run.snapshot);
-    orchestrator.updateSnapshot(({ mintOwed: _read, ...rest }) => ({ ...rest, ...patch }), { source: "adapter" });
+    orchestrator.updateSnapshot(patch, { source: "adapter", durable: true });
   }
 
   /** The visitor's answer to the ask: `stepId` is signed again if its held send's nonce still reads unused. */
@@ -696,9 +699,7 @@ export function createPredictRun(args: {
 
   // resumed in the same tick where nothing is owed, so the run is running as soon as a retry returns
   const resumeRun = detached(() =>
-    orchestrator.getRun()?.snapshot.mintOwed
-      ? settleOwedMint().then(() => orchestrator.resume())
-      : orchestrator.resume(),
+    needsMintFinalization() ? settleOwedMint().then(() => orchestrator.resume()) : orchestrator.resume(),
   );
 
   /** Lets go of `stepId`'s hash, so the step is signed again on resume. */
@@ -747,7 +748,7 @@ export function createPredictRun(args: {
       reconciling = false;
     });
     // a revert is reported through `flow:failed`
-    if (found.outcome === "reverted") return;
+    if (found.outcome === "reverted" || found.outcome === "cancelled") return;
     if (found.outcome === "unseen" && found.stepId !== undefined && found.hash !== undefined) {
       await settleUnseen(found.stepId, found.hash, found.stepId === signAgainStep);
       return;
@@ -782,7 +783,13 @@ export function createPredictRun(args: {
     const hash = step.outcome.status === "submitted" ? step.outcome.hash : undefined;
     if (hash) {
       const settled = await outcomeOf(hash);
-      if (settled) return settled;
+      if (settled) {
+        return step.outcome.status === "submitted" &&
+          step.outcome.replacementReason &&
+          step.outcome.replacementReason !== "repriced"
+          ? { status: "pending" }
+          : settled;
+      }
       if (!send) {
         const known = await args.gateway.isKnown(hash).catch(() => true);
         return !known && now() - persistedAt > DEFAULT_RUN_TTL_MS ? { status: "pending" } : undefined;
@@ -844,6 +851,16 @@ export function createPredictRun(args: {
     }
 
     const steps = guardedSteps(planPredict(stored.snapshot, deps));
+    const savedIds = new Set(stored.steps.map((step) => step.stepId));
+    if (
+      stored.steps.length !== steps.length ||
+      savedIds.size !== steps.length ||
+      steps.some((step) => !savedIds.has(step.id))
+    ) {
+      inconsistentSteps = true;
+      report("unknown");
+      return;
+    }
     const restored = orchestrator.restore({ flowId: args.flowId, steps });
     if (!restored) return;
 
@@ -857,7 +874,7 @@ export function createPredictRun(args: {
     const found = await orchestrator.reconcileInFlight().finally(() => {
       reconciling = false;
     });
-    if (found.outcome === "reverted") return;
+    if (found.outcome === "reverted" || found.outcome === "cancelled") return;
     // Past the close nothing can be signed, so a held send is settled by running the steps, whose builds stop the run.
     if (hasUnanswered(orchestrator.getRun()?.snapshot) && (await sessionClosed())) {
       await orchestrator.resume();
@@ -1027,7 +1044,7 @@ export function createPredictRun(args: {
         ),
       );
       const next: HeldTo = {
-        plans: { ...held?.plans, ...now.plans },
+        ...(held?.plans || Object.keys(now.plans).length > 0 ? { plans: { ...held?.plans, ...now.plans } } : {}),
         ...(Object.keys(quotes).length > 0 ? { quotes } : {}),
         ...((now.credits ?? held?.credits) ? { credits: now.credits ?? held?.credits } : {}),
       };
@@ -1050,20 +1067,22 @@ export function createPredictRun(args: {
       claimed(recoverRun);
     },
 
-    resume() {
+    resume(heldTo) {
       if (!reviewing) return;
+      held = heldTo;
       reviewing = false;
       // The chain is read again: a transaction pending at review may have mined or dropped since.
       reconcileRun();
     },
 
-    retry() {
+    retry(heldTo) {
+      if (heldTo) held = heldTo;
       const again = retryFailed;
       // A batch that is rebuilt gives its options another go; a sent one's left-out options stand until its receipt is read.
       const run = orchestrator.getRun();
       const sent = run && pendingHashOf(run) ? currentEntry(run.steps)?.stepId : undefined;
       for (const stepId of [...leavingOut.keys()]) if (stepId !== sent) leavingOut.delete(stepId);
-      const settings = args.slippage?.();
+      const settings = recovered ? undefined : args.slippage?.();
       report(undefined);
       // a sent batch is settled first, at the slippage it was signed with
       if (run && !sent && held && settings && !sameSlippage(run.snapshot.slippage, settings)) {
@@ -1074,6 +1093,7 @@ export function createPredictRun(args: {
     },
 
     reset() {
+      if (inconsistentSteps) return;
       const stored = args.store?.load<PredictSnapshot, PredictCtx>(args.flowId);
       if (hasUnanswered(orchestrator.getRun()?.snapshot ?? stored?.snapshot)) return;
       // the transaction still confirming may be this run's own, which only its pinned block finds once it lands
@@ -1102,15 +1122,46 @@ export function createPredictRun(args: {
     },
 
     discard() {
+      if (discarding) return;
       const run = orchestrator.getRun();
       const stepId = run && pendingHashOf(run) ? currentEntry(run.steps)?.stepId : undefined;
       if (stepId === undefined || (failure?.reason !== "unseen" && failure?.reason !== "resign")) return;
-      releaseHash(stepId);
-      report(undefined);
-      driver.reset();
+      discarding = true;
+      detached(async () => {
+        reconciling = true;
+        notify();
+        try {
+          const found = await orchestrator.reconcileInFlight();
+          if (found.outcome === "pending") {
+            report("pending", reconcileRun);
+            return;
+          }
+          if (found.outcome === "unseen") {
+            const send = orchestrator.getRun()?.snapshot.sent?.[stepId];
+            const answer = send ? await sentAs(send) : undefined;
+            if (answer?.status !== "taken") {
+              report(answer?.status === "pending" || answer?.status === "mined" ? "pending" : "unseen", reconcileRun);
+              return;
+            }
+            releaseHash(stepId);
+          }
+          report(undefined);
+          driver.reset();
+        } finally {
+          reconciling = false;
+          discarding = false;
+          notify();
+          if (disposeAfterDiscard) driver.dispose();
+        }
+      })();
     },
 
     dispose() {
+      // Discard needs the run and its ownership until reconciliation and deletion finish.
+      if (discarding) {
+        disposeAfterDiscard = true;
+        return;
+      }
       checking = undefined;
       claiming = undefined;
       orchestrator.dispose();

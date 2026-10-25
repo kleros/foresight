@@ -87,14 +87,42 @@ describe("createFlowRunStore", () => {
     expect(s.load("draft-1")).toBeNull();
   });
 
-  it("auto-trashes an expired run rather than offering to resume it", () => {
+  it.each(["load", "list"] as const)("%s cannot delete a newer journal after capturing an expired record", (read) => {
+    const writer = store();
+    writer.save(aRun());
+    const key = storage.keys()[0]!;
+    const expired = storage.getItem(key)!;
+    clock += 73 * HOUR;
+    writer.save(aRun({ steps: [{ stepId: "deposit", label: "Deposit", outcome: { status: "awaiting-signature" } }] }));
+    const journal = storage.getItem(key);
+    let firstRead = true;
+    const reader = createFlowRunStore({
+      now: () => clock,
+      storage: {
+        ...storage,
+        getItem: (requested) => {
+          if (requested === key && firstRead) {
+            firstRead = false;
+            return expired;
+          }
+          return storage.getItem(requested);
+        },
+      },
+    });
+
+    if (read === "load") expect(reader.load("draft-1")).toBeNull();
+    else expect(reader.list()).toEqual([]);
+    expect(storage.getItem(key)).toBe(journal);
+    expect(writer.load("draft-1")?.steps[0]?.outcome.status).toBe("awaiting-signature");
+  });
+
+  it("hides an expired run without deleting its record", () => {
     const s = store();
     s.save(aRun());
     clock += 72 * HOUR + 1;
 
     expect(s.load("draft-1")).toBeNull();
-    // Gone from storage too, an expired run must not reappear in the gate.
-    expect(storage.keys()).toHaveLength(0);
+    expect(storage.keys()).toHaveLength(1);
   });
 
   it("keeps an expired run while a step holds a hash with no receipt read, or a wallet prompt", () => {
@@ -116,7 +144,7 @@ describe("createFlowRunStore", () => {
     ).toEqual(["prompted", "sent"]);
   });
 
-  it("keeps an expired run the caller says is still unsettled, and prunes it once it is not", () => {
+  it("keeps an expired run readable while the caller says it is unsettled", () => {
     let unsettled = true;
     const s = createFlowRunStore({ storage, ttlMs: 72 * HOUR, now: () => clock, unsettled: () => unsettled });
     s.save(aRun());
@@ -125,7 +153,7 @@ describe("createFlowRunStore", () => {
     expect(s.load("draft-1")).not.toBeNull();
     unsettled = false;
     expect(s.load("draft-1")).toBeNull();
-    expect(storage.keys()).toHaveLength(0);
+    expect(storage.keys()).toHaveLength(1);
   });
 
   it("updates the expiry time for a run which is resumed", () => {
@@ -138,23 +166,23 @@ describe("createFlowRunStore", () => {
     expect(s.load("draft-1")).not.toBeNull();
   });
 
-  it("lists live runs and prunes expired ones", () => {
+  it("lists live runs without deleting expired records", () => {
     const s = store();
     s.save(aRun({ flowId: "old" }));
     clock += 73 * HOUR;
     s.save(aRun({ flowId: "fresh" }));
 
     expect(s.list().map((r) => r.flowId)).toEqual(["fresh"]);
-    expect(storage.keys()).toHaveLength(1);
+    expect(storage.keys()).toHaveLength(2);
   });
 
-  it("drops unreadable/broken storage items", () => {
+  it("ignores unreadable storage items without deleting them", () => {
     const s = store();
     s.save(aRun());
     storage.setItem(storage.keys()[0] as string, "{ not json");
 
     expect(s.load("draft-1")).toBeNull();
-    expect(storage.keys()).toHaveLength(0);
+    expect(storage.keys()).toHaveLength(1);
   });
 
   it("drops a run written by an older schema", () => {
@@ -176,8 +204,7 @@ describe("createFlowRunStore", () => {
     );
 
     expect(store().load("draft-1")).toBeNull();
-    // Removed too, or every later load hits the same wall.
-    expect(storage.getItem("foresight.tx-flow.draft-1")).toBeNull();
+    expect(storage.getItem("foresight.tx-flow.draft-1")).not.toBeNull();
   });
 
   it("drops a record whose steps are not step summaries", () => {

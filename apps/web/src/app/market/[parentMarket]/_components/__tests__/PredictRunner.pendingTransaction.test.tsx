@@ -729,7 +729,7 @@ describe("PredictRunner, a deposit whose send errored and whose nonce stayed unu
 });
 
 describe("PredictRunner, a stored deposit hash no node finds", () => {
-  it("keeps it with Check again and Discard while its nonce reads unused, and Discard forgets the run", async () => {
+  it("keeps it with Check again and Discard while its nonce reads unused, and Discard retains its evidence", async () => {
     const chain = fakeChain();
     const hash = `0x${"2".repeat(64)}` as Hash;
     const clock = { at: 1_700_000_000_000 };
@@ -768,7 +768,7 @@ describe("PredictRunner, a stored deposit hash no node finds", () => {
 
     fireEvent.click(screen.getByText("discard"));
 
-    expect(store.load(FLOW_ID)).toBeNull();
+    expect(store.load(FLOW_ID)).not.toBeNull();
     expect(popup.onClose).toHaveBeenCalled();
     expect(chain.deposits()).toHaveLength(0);
   });

@@ -19,8 +19,7 @@ const TRANSFER = getAbiItem({ abi: erc20Abi, name: "Transfer" });
 const UNPRICED: PoolLiquidity = { sqrtPriceX96: 0n, tick: 0, liquidity: 0n, fee: 0n, ticks: [], outcomeIsToken0: true };
 
 /**
- * What the plan reads before it builds. Everything that decides an amount comes from the chain:
- * the indexer only says where the pools are.
+ * What the plan reads before it builds. Pool identities, token ordering and balances come from the chain.
  */
 export function createPredictReader(args: {
   client: PublicClient;
@@ -208,7 +207,7 @@ export function createPredictReader(args: {
 
     async optionStates({ options, executor }) {
       const [refs, balances] = await Promise.all([
-        fetchSessionPools(args.sessionId),
+        fetchSessionPools(args.client, options),
         fetchTokenBalances(args.client, {
           holder: executor,
           tokens: options.flatMap((option) => [

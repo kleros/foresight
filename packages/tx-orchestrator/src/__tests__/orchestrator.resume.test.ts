@@ -146,6 +146,31 @@ describe("reconciling a transaction that was in flight", () => {
     expect(second.types()).toContain("step:confirmed");
   });
 
+  it.each(["cancelled", "replaced", "repriced"] as const)(
+    "preserves a stored %s replacement reason when resuming without reconciliation",
+    async (replacementReason) => {
+      const { first, hash } = await pausedMidFlight();
+      const saved = first.store.load<TestSnapshot, TestCtx>("flow-1")!;
+      const submitted = saved.steps.find((entry) => entry.outcome.status === "submitted")!;
+      submitted.outcome = { status: "submitted", hash: hash as `0x${string}`, replacementReason };
+      first.store.save(saved);
+      const second = reload(first);
+      second.gateway.setChainState(hash as `0x${string}`, { receipt: "success", known: true });
+      second.orchestrator.restore({ flowId: "flow-1", steps: [step("a"), step("b")] });
+
+      await second.orchestrator.resume();
+
+      if (replacementReason === "repriced") {
+        expect(second.orchestrator.getStatus()).toBe("completed");
+        expect(second.gateway.signRequests).toHaveLength(1);
+      } else {
+        expect(second.orchestrator.getStatus()).toBe("paused");
+        expect(doneIds(second.orchestrator.getRun())).toEqual([]);
+        expect(second.gateway.signRequests).toEqual([]);
+      }
+    },
+  );
+
   it("reports a revert that happened while away", async () => {
     const { first, hash } = await pausedMidFlight();
     const second = reload(first);

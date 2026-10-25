@@ -1,50 +1,87 @@
 "use client";
 
-import type { Address } from "viem";
+import { isAddressEqual, parseAbi, zeroAddress, type Address, type PublicClient } from "viem";
 
-import { fetchGraphql } from "@/lib/graphql/batcher";
-import { graphql } from "@/lib/graphql/generated";
 import type { PoolRef } from "@/lib/swap/algebraPool";
 
-/**
- * Where each option's two pools are, and which way round their tokens sit. Both are fixed once
- * the pool exists, so the indexer is the cheapest place to look them up; the price and the
- * liquidity are read from the chain, where they are current.
- */
-const SESSION_POOLS = graphql(`
-  query SessionPools($sessionId: String!) {
-    Pool(where: { childMarket: { session_id: { _eq: $sessionId } } }) {
-      id
-      childMarket_id
-      outcomeIndex
-      outcomeIsToken0
-    }
-  }
-`);
+import { DEFAULT_CHAIN_ID } from "@/config/chains";
+import { swaprFactoryAddress } from "@/config/contracts";
 
-/** outcomeIndex 1 is UP and 0 is DOWN, the order Seer wraps a scalar market's outcomes in. */
-const UP_OUTCOME = 1;
+import type { PredictOption } from "../flow/types";
+
+const FACTORY_ABI = parseAbi(["function poolByPair(address tokenA, address tokenB) view returns (address)"]);
+const POOL_ABI = parseAbi(["function token0() view returns (address)", "function token1() view returns (address)"]);
 
 export type OptionPoolRefs = { up?: PoolRef; down?: PoolRef };
-
 export type PoolRefsByMarket = Record<string, OptionPoolRefs>;
 
-export async function fetchSessionPools(sessionId: string): Promise<PoolRefsByMarket> {
-  const result = await fetchGraphql(SESSION_POOLS, { sessionId });
+const references = new WeakMap<PublicClient, Map<string, Promise<PoolRef | undefined>>>();
 
-  const byMarket: PoolRefsByMarket = {};
-  for (const pool of result.Pool) {
-    const side = pool.outcomeIndex === UP_OUTCOME ? "up" : "down";
-    byMarket[pool.childMarket_id] = {
-      ...byMarket[pool.childMarket_id],
-      [side]: { address: pool.id as Address, outcomeIsToken0: pool.outcomeIsToken0 },
-    };
+async function poolRef(
+  client: PublicClient,
+  factory: Address,
+  outcome: Address,
+  underlying: Address,
+): Promise<PoolRef | undefined> {
+  let cache = references.get(client);
+  if (!cache) references.set(client, (cache = new Map()));
+  const key = `${factory}:${outcome}:${underlying}`.toLowerCase();
+  const cached = cache.get(key);
+  if (cached) return cached;
+  const reading = (async () => {
+    const address = await client.readContract({
+      address: factory,
+      abi: FACTORY_ABI,
+      functionName: "poolByPair",
+      args: [outcome, underlying],
+    });
+    if (isAddressEqual(address, zeroAddress)) return undefined;
+    const [token0, token1] = await Promise.all([
+      client.readContract({ address, abi: POOL_ABI, functionName: "token0" }),
+      client.readContract({ address, abi: POOL_ABI, functionName: "token1" }),
+    ]);
+    const outcomeIsToken0 = isAddressEqual(outcome, token0);
+    if (
+      !isAddressEqual(outcome, outcomeIsToken0 ? token0 : token1) ||
+      !isAddressEqual(underlying, outcomeIsToken0 ? token1 : token0)
+    ) {
+      throw new Error("The trading pool does not match this option's tokens.");
+    }
+    return { address, outcomeIsToken0 };
+  })();
+  cache.set(key, reading);
+  try {
+    const ref = await reading;
+    // A missing pool can be created later; an existing pool's identity and tokens cannot change.
+    if (!ref) cache.delete(key);
+    return ref;
+  } catch (error) {
+    cache.delete(key);
+    throw error;
   }
-
-  return byMarket;
 }
 
-/** An option whose pools were never created has neither side, which leaves both untradeable. */
+/** Canonical references shared by preview and execution, cached per client and token pair. */
+export async function fetchSessionPools(
+  client: PublicClient,
+  options: readonly Pick<PredictOption, "childMarket" | "upToken" | "downToken" | "underlying">[],
+): Promise<PoolRefsByMarket> {
+  const factory = swaprFactoryAddress(client.chain?.id ?? DEFAULT_CHAIN_ID);
+  if (!factory) throw new Error("This network has no trading pool factory.");
+  return Object.fromEntries(
+    await Promise.all(
+      options.map(async (option) => {
+        const [up, down] = await Promise.all([
+          poolRef(client, factory, option.upToken, option.underlying),
+          poolRef(client, factory, option.downToken, option.underlying),
+        ]);
+        return [option.childMarket.toLowerCase(), { up, down }];
+      }),
+    ),
+  );
+}
+
+/** An option without a pool has no tradeable side. */
 export function optionPoolRefs(byMarket: PoolRefsByMarket, childMarket: string): OptionPoolRefs {
   return byMarket[childMarket.toLowerCase()] ?? {};
 }

@@ -288,12 +288,12 @@ const quotedLeg = (leg: SwapLeg, quote: SwapQuote): QuotedLeg => ({
   amountOut: quote.amountOut,
 });
 
-/** What the leg shown on `leg`'s side paid, for no more than `leg` spends; none where nothing was shown for it. */
+/** The shown exchange rate applied to what this leg spends. */
 function heldOut(shown: readonly QuotedLeg[] | undefined, leg: SwapLeg): { heldOut?: bigint } {
   const before = shown?.find((each) => each.side === leg.side);
   if (before === undefined || before.amountIn === 0n) return {};
   const spent = spentBy(leg);
-  return { heldOut: spent < before.amountIn ? (before.amountOut * spent) / before.amountIn : before.amountOut };
+  return { heldOut: (before.amountOut * spent) / before.amountIn };
 }
 
 /** The credits leg of the first batch, and the collateral its xDAI mints at the parent. */
@@ -474,7 +474,7 @@ async function predictCalls(args: {
 
     try {
       const key = option.childMarket.toLowerCase();
-      const plan = held?.plans[key];
+      const plan = held?.plans?.[key];
       // quotes confirmed at moved stand for the plan's figures: the pools as read can price below what a swap pays
       const shown = plan ? { legs: held?.quotes?.[key] ?? shownLegs(plan), toleranceBps } : undefined;
       calls.push(...(await optionCalls(ctx, option, state, perOption, slippageBps, deps, shown)).map(withoutValue));
@@ -523,6 +523,7 @@ function movedFrom(
   perOption: bigint,
   slippageBps: number,
 ): MovedPlans {
+  if (!held.plans) return { markets: [], plans: {} };
   const tolerance = Math.min(slippageBps, MOVED_TOLERANCE_BPS);
   const plans: Record<string, PreviewTrades> = {};
   const markets: Address[] = [];
@@ -869,7 +870,12 @@ export function createPredictHooks(
 
       // The adapter mints whatever the xDAI was worth, which only the deposit's own logs show.
       if (receipt)
-        return { snapshotPatch: { collateralIn: collateralInto(receipt.logs, ctx) + tradeWalletShare(snapshot) } };
+        return {
+          snapshotPatch: {
+            collateralIn: collateralInto(receipt.logs, ctx) + tradeWalletShare(snapshot),
+            mintFinalized: true,
+          },
+        };
       return { snapshotPatch: await depositMintPatch(deps, ctx, snapshot) };
     },
   };
@@ -880,12 +886,12 @@ export async function depositMintPatch(
   deps: Pick<PredictDeps, "reader">,
   ctx: PredictCtx,
   snapshot: Readonly<PredictSnapshot>,
-): Promise<Pick<PredictSnapshot, "collateralIn">> {
+): Promise<Pick<PredictSnapshot, "collateralIn" | "mintFinalized">> {
   const minted = (await landedSince(deps, ctx, snapshot)).find((landed) =>
     isTx(landed, depositStepTx(ctx, snapshot)),
   )?.collateralReceived;
   if (minted === undefined) throw new Error("The deposit's transaction was not found on chain.");
-  return { collateralIn: minted + tradeWalletShare(snapshot) };
+  return { collateralIn: minted + tradeWalletShare(snapshot), mintFinalized: true };
 }
 
 /**

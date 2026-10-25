@@ -14,7 +14,7 @@ import type { HeldTo, ShownPlans, ShownQuotes } from "@/features/predict/run/typ
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 import { useSlippageStore } from "@/features/predict/stores/slippageStore";
 import type { PayToken, SelectedEstimate } from "@/features/predict/types";
-import { roundToDisplay, shownSplit } from "@/features/predict/utils/funding";
+import { recoveryFunding, roundToDisplay, shownSplit } from "@/features/predict/utils/funding";
 import { withQuotes } from "@/features/predict/utils/plan";
 import {
   CREDITS_UNAVAILABLE,
@@ -67,6 +67,7 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
   const [removed, setRemoved] = useState<string[]>([]);
   // what the steps say is being added, held from the press so a refreshed balance cannot rewrite it
   const [frozenToAdd, setFrozenToAdd] = useState<FundsToAdd>();
+  const [frozenCredits, setFrozenCredits] = useState(0n);
 
   const clearEstimate = useEstimateStore((state) => state.clearEstimate);
   const executor = useExecutor();
@@ -100,22 +101,6 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
   const slippageSettings = useSlippageStore((state) => state.settings);
   const setSlippage = useSlippageStore((state) => state.setSlippage);
   const slippage = resolveSlippage(slippageSettings);
-  const creditsIn = funding?.creditsIn ?? 0n;
-  const { preview: creditsQuote, failed: creditsFailed } = useCreditsSwapPreview({
-    sessionId: session.id,
-    collateral: collateralToken,
-    tradeWallet: predicted,
-    credits: creditsIn,
-    creditsBps: slippage.creditsBps,
-  });
-  const preview = usePricePreview({
-    session,
-    selected: kept,
-    tradeWallet: predicted,
-    collateralIn: funding ? shownSplit(funding, creditsQuote?.minted) : undefined,
-    slippageBps: slippage.tradeBps,
-  });
-
   const { driver, progress, ready } = usePredictExecution({
     session,
     selected: kept,
@@ -132,6 +117,22 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
   const retryable = stage === "halted" && Boolean(progress?.failure?.retryable);
   const moved = stage === "moved" ? progress?.moved : undefined;
   const held = progress?.held;
+
+  const creditsIn = funding?.creditsIn ?? 0n;
+  const { preview: creditsQuote, failed: creditsFailed } = useCreditsSwapPreview({
+    sessionId: session.id,
+    collateral: collateralToken,
+    tradeWallet: predicted,
+    credits: recovered ? (progress?.batchesDone === 0 ? recovered.creditsToSpend : 0n) : creditsIn,
+    creditsBps: recovered?.slippage.creditsBps ?? slippage.creditsBps,
+  });
+  const preview = usePricePreview({
+    session,
+    selected: kept,
+    tradeWallet: predicted,
+    collateralIn: funding ? shownSplit(funding, creditsQuote?.minted) : undefined,
+    slippageBps: slippage.tradeBps,
+  });
 
   useEffect(() => {
     driver?.recover();
@@ -203,7 +204,7 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
         Boolean(progress?.unanswered) ||
         progress?.failure?.reason === "pending");
 
-  // a hash no node finds can be let go, with its run, once the visitor chooses to
+  // Discard checks the chain and keeps unresolved sends for recovery.
   const canDiscard =
     stage === "halted" &&
     Boolean(pendingHash) &&
@@ -239,20 +240,24 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
       Object.entries(plans).map(([key, plan]) => [key, quotes?.[key] ? withQuotes(plan, quotes[key]) : plan]),
     );
   // while a run is held to what it was shown, that is what Details shows
-  const isHeldRun = held !== undefined && (isRunning || canRetry);
+  const isHeldRun = held !== undefined && (isRunning || canRetry || moved !== undefined);
   // the first batch carries the credits swap
   const creditsLanded = progress?.steps.some((step) => step.id === STEP_ID.predict(1) && step.state === "success");
   const shownMoves = moved
     ? movesFrom(
         quotedPlans(moved.plans, moved.quotes),
-        held && quotedPlans(held.plans, held.quotes),
+        held && quotedPlans(held.plans ?? {}, held.quotes),
         moved.markets.map((market) => market.toLowerCase()),
       )
     : isHeldRun
-      ? movesFrom(quotedPlans(held.plans, held.quotes))
+      ? movesFrom(quotedPlans(held.plans ?? {}, held.quotes))
       : preview.moves;
   const shownCredits = moved?.credits ?? (isHeldRun ? held.credits : creditsQuote);
   const creditsWas = moved?.credits ? held?.credits : undefined;
+
+  const reviewsCredits = Boolean(recovered && recovered.creditsToSpend > 0n && !creditsLanded && !held?.credits);
+  const checksSend = Boolean(pendingHash || progress?.unanswered);
+  const recoveryPricesReady = !reviewsCredits || creditsQuote !== undefined || checksSend;
 
   const predict = () => {
     if (isClosed) return;
@@ -260,12 +265,14 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
       driver?.confirm();
       return;
     }
+    if (recovered && !recoveryPricesReady) return;
+    const reviewedCredits = reviewsCredits ? (creditsQuote ? { credits: creditsQuote } : {}) : undefined;
     if (stage === "review") {
-      driver?.resume();
+      driver?.resume(reviewedCredits);
       return;
     }
     if (canRetry) {
-      driver?.retry();
+      driver?.retry(reviewedCredits);
       return;
     }
     // a stored run is resumed or closed, never replaced by the form behind it
@@ -273,6 +280,7 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
     if (stage === "halted" && !pendingHash) driver?.reset();
     for (const market of removed) clearEstimate(session.parentMarket, market);
     setFrozenToAdd(fundsToAdd(funding, token, collateral));
+    setFrozenCredits(creditsIn);
     const heldTo: HeldTo = {
       plans: preview.plans,
       ...(creditsIn > 0n && creditsQuote ? { credits: creditsQuote } : {}),
@@ -302,7 +310,8 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
         onRightChain: chainId === DEFAULT_CHAIN_ID,
         walletMismatch: executor.error instanceof TradeWalletMismatchError ? executor.error.message : undefined,
         ready,
-        creditsFailed: creditsFailed && startsNew,
+        isRecovery: Boolean(recovered),
+        creditsFailed: creditsFailed && (startsNew || (reviewsCredits && !checksSend)),
         pricesFailed: preview.failed && startsNew,
         pricesFailedAgain: preview.failedAgain,
       });
@@ -344,6 +353,10 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
       recovered={
         recovered && {
           deposit: recovered.deposit,
+          funding: recoveryFunding(recovered),
+          depositSettled:
+            progress?.steps.some((step) => step.id === STEP_ID.deposit && step.state === "success") ?? false,
+          firstBatchSettled: creditsLanded ?? false,
           token: runToken,
           ...(recovered.depositNative && recovered.deposit > 0n
             ? { deposited: recovered.collateralIn - tradeWalletShare(recovered) }
@@ -356,13 +369,14 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
       }
       notice={shownNotice}
       slippage={{ settings: slippageSettings, onChange: setSlippage }}
+      firstBatchSettled={creditsLanded}
       creditsSwap={
-        shownCredits && (creditsIn > 0n || moved?.credits || isHeldRun)
+        shownCredits && (creditsIn > 0n || recovered?.creditsToSpend || moved?.credits || isHeldRun)
           ? {
-              credits: creditsIn,
+              credits: recovered?.creditsToSpend ?? (isHeldRun ? frozenCredits : creditsIn),
               preview: shownCredits,
               ...(creditsWas ? { was: creditsWas } : {}),
-              ...(isHeldRun && creditsLanded ? { landed: true as const } : {}),
+              ...(creditsLanded ? { landed: true as const } : {}),
             }
           : undefined
       }
@@ -373,7 +387,7 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
           ...(moved.bySlippage ? { bySlippage: true as const } : {}),
         }
       }
-      pricesReady={preview.ready}
+      pricesReady={recovered ? recoveryPricesReady : preview.ready}
       // reset refuses a run holding a send, so Back would do nothing
       onBack={moved && !progress?.moneyMoved && !progress?.unanswered ? () => driver?.reset() : undefined}
       // only where the prices are what stands in the way
@@ -396,6 +410,7 @@ function notice(args: {
   walletMismatch?: string;
   ready: boolean;
   creditsFailed: boolean;
+  isRecovery: boolean;
   pricesFailed: boolean;
   /** A read after a failed one failed too. */
   pricesFailedAgain: boolean;
@@ -406,6 +421,8 @@ function notice(args: {
   if (args.walletMismatch) return args.walletMismatch;
   if (!args.ready) return "This session cannot be traded yet.";
   if (args.pricesFailed) return args.pricesFailedAgain ? PRICES_FAILED_AGAIN : PRICES_FAILED;
-  if (args.creditsFailed) return CREDITS_UNAVAILABLE;
+  if (args.creditsFailed) {
+    return args.isRecovery ? "Could not get a price for your credits. Try resuming later." : CREDITS_UNAVAILABLE;
+  }
   return undefined;
 }

@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { addresses, ctx, fakeQuoter, fakeReader, option, snapshot, WAD } from "../../flow/__tests__/support/fakes";
 import { STEP_ID } from "../../flow/plan";
-import type { PredictCtx, PredictOption, PredictSnapshot, SentTx, UnansweredSend } from "../../flow/types";
+import type { PredictCtx, PredictOption, PredictSnapshot, PredictReader, UnansweredSend } from "../../flow/types";
 import { createPredictRun, SEND_HOLD_MS } from "../driver";
 import { discardRun, findInterruptedRun, hasPendingTransaction, predictFlowId, unsettledRun } from "../interrupted";
 import type { PredictDriver } from "../types";
@@ -79,7 +79,7 @@ function recover(
   chain: {
     receipts?: Partial<Record<Hash, TransactionReceipt>>;
     known?: boolean;
-    sentWithNonce?: () => Promise<SentTx>;
+    sentWithNonce?: PredictReader["sentWithNonce"];
     sessionOptions?: () => PredictOption[];
   },
 ) {
@@ -129,7 +129,9 @@ const depositOutcome = (store: ReturnType<typeof stored>) =>
 describe("createPredictRun recovering a run that names other contracts and still holds a send", () => {
   it("lets Close forget a hash no node finds once another transaction took its nonce", async () => {
     const store = stored({ steps: depositAs({ status: "submitted", hash: DEPOSIT_HASH }), sent: send() });
-    const { driver, signRequests } = recover(store, { sentWithNonce: () => Promise.resolve({ status: "taken" }) });
+    const { driver, signRequests } = recover(store, {
+      sentWithNonce: ({ nonce }) => Promise.resolve({ status: nonce === 4 ? "taken" : "none" }),
+    });
 
     await recovered(driver);
     driver.reset();
@@ -200,7 +202,9 @@ describe("createPredictRun recovering a run that names other contracts and still
 
   it("lets Close forget a held send with no hash once another transaction took its nonce", async () => {
     const store = stored({ steps: depositAs({ status: "pending" }), unanswered: send() });
-    const { driver } = recover(store, { sentWithNonce: () => Promise.resolve({ status: "taken" }) });
+    const { driver } = recover(store, {
+      sentWithNonce: ({ nonce }) => Promise.resolve({ status: nonce === 4 ? "taken" : "none" }),
+    });
 
     await recovered(driver);
     closeAndDiscard(driver, store);
@@ -269,7 +273,7 @@ describe("createPredictRun recovering a run whose options differ from the sessio
       options: [{ ...option(1), downToken: ATTACKER }],
     });
     const { driver } = recover(store, {
-      sentWithNonce: () => Promise.resolve({ status: "taken" }),
+      sentWithNonce: ({ nonce }) => Promise.resolve({ status: nonce === 4 ? "taken" : "none" }),
       sessionOptions: () => [option(1)],
     });
 

@@ -1,7 +1,7 @@
 import { cutToOwned, formatAmount, formatDisplayAmount, OWNED_DECIMALS } from "@/utils/amount";
 
 import type { CreditLine } from "./credits";
-import type { PredictRequest } from "../flow/types";
+import type { PredictRequest, PredictSnapshot } from "../flow/types";
 import { GAS_RESERVE_WEI } from "../oracle/tolerances";
 import type { PayToken } from "../types";
 
@@ -139,9 +139,20 @@ export function fundingRequest(
  * The collateral each option splits, as the run signs it: the sDAI as is, and what the credits swap's
  * floor mints, from its quote. Undefined while a run spending credits has no quote yet.
  */
-export function shownSplit(funding: Funding, creditsMinted: bigint | undefined): bigint | undefined {
+export function shownSplit(
+  funding: Pick<Funding, "collateralIn" | "creditsIn">,
+  creditsMinted: bigint | undefined,
+): bigint | undefined {
   if (funding.creditsIn > 0n && creditsMinted === undefined) return undefined;
   return funding.collateralIn - funding.creditsIn + (creditsMinted ?? 0n);
+}
+
+export function recoveryFunding(snapshot: PredictSnapshot) {
+  return {
+    collateralIn: snapshot.collateralIn + snapshot.creditsToSpend,
+    creditsIn: snapshot.creditsToSpend,
+    fromTradeWallet: min(snapshot.collateralIn, snapshot.collateralBefore),
+  };
 }
 
 /** Rounded down to the decimals the popup shows, so the signed amount is the shown amount. */

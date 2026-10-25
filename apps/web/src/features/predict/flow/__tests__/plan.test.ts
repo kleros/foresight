@@ -544,7 +544,7 @@ describe("createPredictHooks", () => {
       pending: [],
     });
 
-    expect(result).toEqual({ snapshotPatch: { collateralIn: WAD * 7n } });
+    expect(result).toEqual({ snapshotPatch: { collateralIn: WAD * 7n, mintFinalized: true } });
   });
 
   it.each([
@@ -563,7 +563,7 @@ describe("createPredictHooks", () => {
         pending: [],
       });
 
-      expect(result).toEqual({ snapshotPatch: { collateralIn: expected } });
+      expect(result).toEqual({ snapshotPatch: { collateralIn: expected, mintFinalized: true } });
     },
   );
 
@@ -582,7 +582,7 @@ describe("createPredictHooks", () => {
       pending: [],
     });
 
-    expect(result).toEqual({ snapshotPatch: { collateralIn: WAD * 4n } });
+    expect(result).toEqual({ snapshotPatch: { collateralIn: WAD * 4n, mintFinalized: true } });
   });
 
   it("takes a collateral deposit at the amount that was asked for", async () => {

@@ -32,7 +32,7 @@ export type DeployFailure = {
 export type DeployResume = {
   stepId: string;
   label: string;
-  outcome: "none" | "unknown" | "pending" | "confirmed" | "reverted" | "dropped";
+  outcome: "none" | "unknown" | "pending" | "confirmed" | "reverted" | "cancelled" | "dropped";
   /** False means continuing may pay for work already on chain. */
   canSelfCheck: boolean;
   hash?: string;
