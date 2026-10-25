@@ -60,6 +60,8 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
   elsewhere: RUNNING_ELSEWHERE,
   closed: SESSION_CLOSED,
   unlisted: "This transaction isn't one Foresight sends, so it wasn't sent.",
+  storage:
+    "This browser couldn't save the prediction's progress, so no wallet prompt was opened. Free up storage or leave private browsing, then try again.",
 };
 
 /** Once the credits are in the trade wallet the run is locked to them, so only waiting helps. */

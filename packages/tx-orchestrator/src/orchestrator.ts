@@ -1,6 +1,6 @@
 import { createFlowDriver } from "./driver";
 import { createEmitter, createNotifier, type EventOfType } from "./emitter";
-import { classifyTxError, FlowStateError } from "./errors";
+import { classifyTxError, FlowStateError, StorageWriteError } from "./errors";
 import { createReceiptWatcher } from "./receiptWatcher";
 import { reconcileInFlight } from "./reconcile";
 import { createRunState, restoreRun, type SnapshotPatch } from "./runState";
@@ -60,7 +60,8 @@ export interface TxOrchestrator<TSnapshot, TCtx> {
   /** Swaps out everything not yet run. Naming a confirmed step throws. */
   replacePending(steps: TxStep<TSnapshot, TCtx>[]): void;
 
-  updateSnapshot(patch: SnapshotPatch<TSnapshot>, meta: { source: SnapshotSource }): void;
+  /** With `durable`, throws `StorageWriteError` when the patched run cannot be written. */
+  updateSnapshot(patch: SnapshotPatch<TSnapshot>, meta: { source: SnapshotSource; durable?: boolean }): void;
 
   /** Stops at the next safe checkpoint. A broadcast transaction is left on chain, its hash persisted. */
   pause(): void;
@@ -234,7 +235,7 @@ export function createTxOrchestrator<TSnapshot, TCtx>(opts: {
         );
       }
       state.patchSnapshot(patch, meta.source);
-      state.persist();
+      if (!state.persist() && meta.durable) throw new StorageWriteError();
     },
 
     pause() {

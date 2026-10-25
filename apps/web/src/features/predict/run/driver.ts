@@ -6,6 +6,7 @@ import {
   currentEntry,
   isUserRejection,
   settledEntries,
+  StorageWriteError,
   type FlowError,
   type FlowRunStore,
   type OrchestratorRun,
@@ -192,7 +193,16 @@ export function createPredictRun(args: {
   let checking: object | undefined;
   /** The reason a step failed with, which the orchestrator's own causes cannot carry. */
   let buildFailure:
-    "no-route" | "at-estimates" | "quote" | "funds" | "credits" | "pending" | "closed" | "unlisted" | undefined;
+    | "no-route"
+    | "at-estimates"
+    | "quote"
+    | "funds"
+    | "credits"
+    | "pending"
+    | "closed"
+    | "unlisted"
+    | "storage"
+    | undefined;
   /** Set while a sent transaction's outcome is read from the chain; the run itself stays stopped meanwhile. */
   let reconciling = false;
   /** Set once a stored run is restored, until it is thrown away: the popup shows its snapshot, not the form. */
@@ -268,6 +278,7 @@ export function createPredictRun(args: {
   function holdUnanswered(stepId: string, send: UnansweredSend) {
     orchestrator.updateSnapshot((prev) => ({ ...prev, unanswered: { ...prev.unanswered, [stepId]: send } }), {
       source: "adapter",
+      durable: true,
     });
   }
 
@@ -303,7 +314,12 @@ export function createPredictRun(args: {
       await assertOpen();
       const send = { owner, nonce, fromBlock, tx };
       // held before the wallet opens: a prompt approved after the tab closed has no hash stored to find it by
-      holdUnanswered(stepId, send);
+      try {
+        holdUnanswered(stepId, send);
+      } catch (error) {
+        if (error instanceof StorageWriteError) forgetUnanswered(stepId);
+        throw error;
+      }
       // the wallet's prompt outlives the run, so it is sent with no signal to drop it
       const request = args.gateway.sendTransaction(tx);
       walletRequests.add(request);
@@ -407,6 +423,10 @@ export function createPredictRun(args: {
     // transient and leave nothing behind, so they pause for a retry rather than ending the run.
     // A missing route is fatal to the orchestrator and a failed quote pauses it.
     classifyError: (error) => {
+      if (error instanceof StorageWriteError) {
+        buildFailure = "storage";
+        return "rpc";
+      }
       if (error instanceof SessionClosedError) {
         buildFailure = "closed";
         return "unknown";

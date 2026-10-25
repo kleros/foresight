@@ -41,8 +41,8 @@ export interface RunState<TSnapshot, TCtx> {
   setOutcome(stepId: string, outcome: StepOutcome): void;
   /** Patches snapshot and notifies. The only path a snapshot changes by. */
   patchSnapshot(patch: SnapshotPatch<TSnapshot>, source: SnapshotSource): void;
-  /** Writes the run as it stands. A completed run is cleared instead of saved. */
-  persist(): void;
+  /** Writes the run as it stands. A completed run is cleared instead of saved. False when the store refused it. */
+  persist(): boolean;
   clearStorage(flowId: string): void;
 }
 
@@ -56,19 +56,21 @@ export function createRunState<TSnapshot, TCtx>(opts: {
   /** Said once per run: a broken store fails on every write, not just one. */
   let warnedAboutStorage = false;
 
-  /** A store that cannot write costs the safety net, not the run. */
-  function touchStorage(write: () => void): void {
-    if (!store) return;
+  /** A failed write is logged and announced once; the caller decides whether the run can go on without it. */
+  function touchStorage(write: () => void): boolean {
+    if (!store) return true;
     try {
       write();
+      return true;
     } catch (error) {
       console.error("[tx-orchestrator] the run could not be written to storage", error);
-      if (warnedAboutStorage) return;
+      if (warnedAboutStorage) return false;
       warnedAboutStorage = true;
       emit({
         type: "inform",
         message: "This flow could not be saved, so it cannot be resumed if the tab closes.",
       });
+      return false;
     }
   }
 
@@ -128,12 +130,9 @@ export function createRunState<TSnapshot, TCtx>(opts: {
     },
 
     persist() {
-      if (!run || !store) return;
+      if (!run || !store) return true;
       const current = run;
-      if (current.status === "completed") {
-        touchStorage(() => store.clear(current.flowId));
-        return;
-      }
+      if (current.status === "completed") return touchStorage(() => store.clear(current.flowId));
       const phase: Extract<RunPhase, { status: "running" | "paused" | "failed" }> =
         current.status === "paused"
           ? { status: "paused", reason: current.reason, ...(current.error ? { error: current.error } : {}) }
@@ -141,7 +140,7 @@ export function createRunState<TSnapshot, TCtx>(opts: {
             ? { status: "failed", error: current.error }
             : { status: "running" };
 
-      touchStorage(() =>
+      return touchStorage(() =>
         store.save<TSnapshot, TCtx>({
           flowId: current.flowId,
           adapterId: current.adapterId,
@@ -153,7 +152,7 @@ export function createRunState<TSnapshot, TCtx>(opts: {
       );
     },
 
-    clearStorage: (flowId) => touchStorage(() => store?.clear(flowId)),
+    clearStorage: (flowId) => void touchStorage(() => store?.clear(flowId)),
   };
 }
 

@@ -8,6 +8,14 @@ export class FlowStateError extends Error {
   }
 }
 
+/** The run could not be written to storage before a wallet prompt, so the prompt was not opened. */
+export class StorageWriteError extends Error {
+  constructor(options?: { cause?: unknown }) {
+    super("The run could not be saved before the wallet prompt.", options);
+    this.name = "StorageWriteError";
+  }
+}
+
 type ErrorLike = {
   name?: unknown;
   code?: unknown;
@@ -86,6 +94,8 @@ function isTransientCode(error: ErrorLike): boolean {
 export function classifyTxError(error: unknown): Extract<TxErrorCause, "rejected" | "rpc" | "unknown"> {
   const links = walkChain(error);
 
+  // a write that may succeed once storage frees up; nothing was signed
+  if (error instanceof StorageWriteError) return "rpc";
   if (isUserRejection(error)) return "rejected";
   const text = links.map(textOf).join(" ");
   if (REJECTION_TEXT.test(text)) return "rejected";

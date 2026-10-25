@@ -12,6 +12,7 @@ export {
   isFatalCause,
   isRetryableRead,
   isUserRejection,
+  StorageWriteError,
 } from "./errors";
 export { createFlowScope, type FlowScope } from "./scope";
 export {

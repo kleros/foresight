@@ -39,7 +39,9 @@ One key per run, `foresight.tx-flow.<flowId>` by default, holding the snapshot, 
 
 Steps are stored as `{ stepId, label, outcome }` with no builder, which is why `restore` needs a fresh plan.
 
-A store that cannot write does not stop the run. An `inform` fires once saying the run cannot be resumed if the tab closes, and the steps carry on. Stopping would be worse, since resume reads the same storage. The same applies to a store that cannot clear.
+The `awaiting-signature` write before each wallet prompt is the only record that a prompt may be out there, so when the store refuses it the step opens no wallet: the run pauses with a `StorageWriteError`, classified `rpc`, and a retry writes it again. An adapter that keeps its own record of a send before the prompt passes `durable: true` to `updateSnapshot`, which throws `StorageWriteError` when that write fails.
+
+Every other write that fails does not stop the run. An `inform` fires once saying the run cannot be resumed if the tab closes, and the steps carry on: what is already on chain is better finished than left with no record. The same applies to a store that cannot clear.
 
 Four things drop a stored run on read, each removing the record so the next read is clean:
 

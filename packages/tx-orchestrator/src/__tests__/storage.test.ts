@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { encodeState } from "../codec";
+import { StorageWriteError } from "../errors";
 import { createFlowRunStore, createMemoryStorage, fromWebStorage, type FlowRunStorage } from "../storage";
 import type { PersistedFlowRunInput } from "../types";
 import { harness, step } from "./support/harness";
@@ -320,25 +321,54 @@ describe("fromWebStorage", () => {
 });
 
 /**
- * A store that cannot write is a lost safety net, not a lost flow. Stopping the
- * run would be worse than useless: resume reads the same storage, so a run
- * stopped here could never be picked up again.
+ * The write before the wallet opens is the only record that a prompt may be out there, so a run whose
+ * store refuses it opens no wallet. Every later write only costs the safety net, and the run carries on.
  */
 describe("a run whose storage refuses to write", () => {
-  it("finishes anyway, and says once what was given up", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    const full: FlowRunStorage = {
-      ...createMemoryStorage(),
-      setItem: () => {
-        throw new DOMException("quota", "QuotaExceededError");
+  const refusing = (refuses: (value: string) => boolean): FlowRunStorage => {
+    const memory = createMemoryStorage();
+    return {
+      ...memory,
+      setItem: (key, value) => {
+        if (refuses(value)) throw new DOMException("quota", "QuotaExceededError");
+        memory.setItem(key, value);
       },
     };
-    const h = harness({ storage: full });
+  };
+
+  it("opens no wallet when the write before the prompt fails, and pauses to be tried again", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const h = harness({ storage: refusing(() => true) });
+
+    await h.start([step("a"), step("b")]);
+
+    expect(h.gateway.signRequests).toEqual([]);
+    expect(h.orchestrator.getStatus()).toBe("paused");
+    const run = h.orchestrator.getRun();
+    expect(run?.status === "paused" && run.error).toMatchObject({ stepId: "a", cause: "rpc" });
+  });
+
+  it("finishes when only writes after the prompt fail, and says once what was given up", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const h = harness({ storage: refusing((value) => value.includes('"submitted"')) });
 
     await h.start([step("a"), step("b")]);
 
     expect(h.orchestrator.getStatus()).toBe("completed");
-    // Many failed writes, one message.
+    expect(h.gateway.signRequests).toHaveLength(2);
     expect(h.events.filter((event) => event.type === "inform")).toHaveLength(1);
+  });
+
+  it("throws from a snapshot update asked to be durable when it cannot be saved", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    let full = false;
+    const h = harness({ storage: refusing(() => full), scripts: [{ sign: "reject" }] });
+    await h.start([step("a")]);
+    full = true;
+
+    expect(() => h.orchestrator.updateSnapshot({ title: "Arrakis" }, { source: "adapter", durable: true })).toThrow(
+      StorageWriteError,
+    );
+    expect(() => h.orchestrator.updateSnapshot({ title: "Arrakis" }, { source: "adapter" })).not.toThrow();
   });
 });

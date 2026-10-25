@@ -91,6 +91,7 @@ function chain(opts: { hangAt?: number } = {}) {
   return {
     gateway,
     batchSends: () => sends.filter(isBatch).length,
+    sends: () => sends.length,
     prompted: () => new Promise<void>((resolve) => (open ? resolve() : (onPrompt = resolve))),
     /** The visitor approves the open prompt after the tab that asked is gone. */
     approve: () => broadcast(open!),
@@ -228,5 +229,28 @@ describe("createPredictRun settling a held send it finds mined", () => {
     expect(
       written.filter(({ status, held }) => (status === "pending" || status === "awaiting-signature") && !held),
     ).toEqual([]);
+  });
+});
+
+describe("createPredictRun with storage that refuses the send's record", () => {
+  it("opens no wallet, stops at storage, and leaves nothing held", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const fake = chain();
+    const memory = createMemoryStorage();
+    const refusing: FlowRunStorage = {
+      ...memory,
+      setItem: (key, value) => {
+        if (value.includes('"unanswered"')) throw new DOMException("quota", "QuotaExceededError");
+        memory.setItem(key, value);
+      },
+    };
+    const { driver } = driverOn(fake, refusing);
+
+    driver.start();
+
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("halted"));
+    expect(driver.getProgress().failure).toEqual({ reason: "storage", retryable: true });
+    expect(driver.getProgress().unanswered).toBeUndefined();
+    expect(fake.sends()).toBe(0);
   });
 });

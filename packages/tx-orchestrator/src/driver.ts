@@ -1,6 +1,6 @@
 import type { Hash, TransactionReceipt } from "viem";
 
-import { describeTxError, isFatalCause } from "./errors";
+import { describeTxError, isFatalCause, StorageWriteError } from "./errors";
 import type { ReceiptWatcher } from "./receiptWatcher";
 import type { RunState } from "./runState";
 import type { FlowScope } from "./scope";
@@ -135,7 +135,12 @@ export function createFlowDriver<TSnapshot, TCtx>(deps: {
     }
 
     state.setOutcome(entry.stepId, { status: "awaiting-signature" });
-    state.persist();
+    // without this record a prompt approved after the tab closes leaves no trace, so no prompt opens
+    if (!state.persist()) {
+      const error = new StorageWriteError();
+      stop({ stepId: entry.stepId, message: describeTxError(error), cause: classify(error), reason: "error" });
+      return undefined;
+    }
 
     const live = state.get();
     if (!live) return undefined;
