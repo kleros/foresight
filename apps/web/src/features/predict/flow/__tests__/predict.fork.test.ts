@@ -1252,6 +1252,8 @@ interface ScenarioRun {
   tabClosed: boolean;
   /** How often the run stopped at Prices moved and was confirmed. */
   confirmed: number;
+  /** Moves every driver's clock past a held send's hold, as the visitor waiting it out would. */
+  passHold: () => void;
 }
 
 /** The tab closed at this send; the storage it left is what a reload reads. */
@@ -1590,6 +1592,7 @@ describe("money kept by every predict run, against a gnosis fork", () => {
     let lateBatch: Promise<void> | undefined;
     let leftBehind: FlowRunStorage | undefined;
     let tabClosed = false;
+    let waited = 0;
     const flowId = `predict-money-${owner.address}-${Date.now()}`;
     const gateway = createViemTxGateway({
       client,
@@ -1660,6 +1663,7 @@ describe("money kept by every predict run, against a gnosis fork", () => {
         store: createFlowRunStore({ storage: from }),
         ctx: () => ctx,
         snapshot: () => request,
+        now: () => Date.now() + waited,
         ...(scenario.lostAnswer?.waitMs === undefined
           ? {}
           : { unansweredSend: { waitMs: scenario.lostAnswer.waitMs, pollMs: 100 } }),
@@ -1702,6 +1706,9 @@ describe("money kept by every predict run, against a gnosis fork", () => {
       estimates,
       tabClosed,
       confirmed,
+      passHold: () => {
+        waited += app.SEND_HOLD_MS;
+      },
       reopen: () => {
         if (!leftBehind) throw new Error("The tab never closed.");
         driver.dispose();
@@ -2373,6 +2380,18 @@ describe("money kept by every predict run, against a gnosis fork", () => {
           timeout: 300_000,
           interval: 250,
         });
+        if (closeTab === "before-batch") {
+          // the batch's prompt closed with the tab unanswered, so it is signed only once the hold passes and the visitor says so
+          expect(reloaded.getProgress().failure?.reason).toBe("held");
+          run.passHold();
+          reloaded.retry();
+          await vi.waitFor(() => expect(reloaded.getProgress().failure?.reason).toBe("resign"), { timeout: 60_000 });
+          reloaded.retry();
+          await vi.waitFor(() => expect(["halted", "complete"]).toContain(reloaded.getProgress().stage), {
+            timeout: 300_000,
+            interval: 250,
+          });
+        }
 
         const transfers = run.sent.filter(({ tx }) => tx.to.toLowerCase() === route.token.toLowerCase());
         expect(transfers, "the credits moved once").toHaveLength(1);
