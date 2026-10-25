@@ -255,6 +255,8 @@ export function createPredictRun(args: {
   let moneyMoved = false;
   /** Set while the chain is read for a send that errored. */
   let awaitingUnanswered = false;
+  /** The step whose held send the visitor said to sign again; its nonce is read once more before it is let go. */
+  let signAgainFor: string | undefined;
   /** What the run is held to; none for a recovered run. */
   let held: HeldTo | undefined;
   /** Set when a batch found the pools giving another plan than `held`; cleared by `confirm` and `reset`. */
@@ -426,6 +428,8 @@ export function createPredictRun(args: {
         return step.build(ctx, snap);
       },
       canSkip: async (ctx, snap) => {
+        const answered = signAgainFor === step.id;
+        if (answered) signAgainFor = undefined;
         const send = snap.unanswered?.[step.id];
         if (send) {
           const found = await sentAs(send);
@@ -434,7 +438,8 @@ export function createPredictRun(args: {
           if (found.status === "mined" && found.success) return true;
           // past the close the build stops the run, so the hold is let go for Close to discard it
           if (found.status === "none" && !(await sessionClosed())) {
-            throw holding(send) ? new HeldSendError() : new SignAgainError();
+            if (holding(send)) throw new HeldSendError();
+            if (!answered) throw new SignAgainError();
           }
           forgetUnanswered(step.id);
         }
@@ -684,9 +689,9 @@ export function createPredictRun(args: {
     orchestrator.updateSnapshot(({ mintOwed: _read, ...rest }) => ({ ...rest, ...patch }), { source: "adapter" });
   }
 
-  /** The visitor's answer to the ask: `stepId`'s held send is let go and the step is signed again. */
+  /** The visitor's answer to the ask: `stepId` is signed again if its held send's nonce still reads unused. */
   function signAgain(stepId: string) {
-    forgetUnanswered(stepId);
+    signAgainFor = stepId;
     resumeRun();
   }
 
@@ -707,7 +712,7 @@ export function createPredictRun(args: {
    * A hash the node does not know is kept while its nonce reads unused, for the hold its send started; a nonce taken
    * by another transaction lets it go, and a nonce still unused past the hold, or never stored, asks first.
    */
-  async function settleUnseen(stepId: string, hash: Hash) {
+  async function settleUnseen(stepId: string, hash: Hash, answered: boolean) {
     const send = orchestrator.getRun()?.snapshot.sent?.[stepId];
     const found = send ? await sentAs(send) : undefined;
     if (found?.status === "mined" && found.hash.toLowerCase() !== hash.toLowerCase()) {
@@ -725,15 +730,18 @@ export function createPredictRun(args: {
       return;
     }
     if (send && holding(send)) report("unseen", reconcileRun);
-    else
-      report("resign", () => {
-        releaseHash(stepId);
-        resumeRun();
-      });
+    else if (answered) {
+      releaseHash(stepId);
+      await settleOwedMint();
+      await orchestrator.resume();
+    } else report("resign", () => signAgainAfter(stepId));
   }
 
-  /** Settles a sent transaction whose receipt was never seen, then carries on only if it mined or may still. */
-  const reconcileRun = detached(async () => {
+  /**
+   * Settles a sent transaction whose receipt was never seen, then carries on only if it mined or may still. With
+   * `signAgainStep`, a hash for that step that is still unseen past its hold is let go and the step signed again.
+   */
+  async function reconcile(signAgainStep?: string) {
     reconciling = true;
     notify();
     const found = await orchestrator.reconcileInFlight().finally(() => {
@@ -742,12 +750,17 @@ export function createPredictRun(args: {
     // a revert is reported through `flow:failed`
     if (found.outcome === "reverted") return;
     if (found.outcome === "unseen" && found.stepId !== undefined && found.hash !== undefined) {
-      await settleUnseen(found.stepId, found.hash);
+      await settleUnseen(found.stepId, found.hash, found.stepId === signAgainStep);
       return;
     }
     await settleOwedMint();
     await orchestrator.resume();
-  });
+  }
+
+  const reconcileRun = detached(() => reconcile());
+
+  /** The visitor's answer to the ask for a hash no node finds: the chain is read again before the step is signed. */
+  const signAgainAfter = (stepId: string) => detached(() => reconcile(stepId))();
 
   /** Stores each of `stored`'s submitted steps whose receipt reads as settled, for a run that can never resume. */
   async function forgetSettledHashes(stored: PersistedFlowRun<PredictSnapshot, PredictCtx>) {
@@ -1041,6 +1054,7 @@ export function createPredictRun(args: {
       reviewing = false;
       moneyMoved = false;
       buildFailure = undefined;
+      signAgainFor = undefined;
       leavingOut.clear();
       planned = [];
       held = undefined;

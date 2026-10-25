@@ -2,8 +2,18 @@ import { createFlowRunStore, createMemoryStorage, type FlowTx, type TxGateway } 
 import { UserRejectedRequestError, type Address, type Hash, type PublicClient, type TransactionReceipt } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { addresses, ctx, fakeQuoter, fakeReader, snapshot, WAD } from "../../flow/__tests__/support/fakes";
-import type { LandedTx, SentTx } from "../../flow/types";
+import {
+  addresses,
+  chainState,
+  ctx,
+  fakeQuoter,
+  fakeReader,
+  gasLimitFor,
+  option,
+  snapshot,
+  WAD,
+} from "../../flow/__tests__/support/fakes";
+import type { LandedTx, PredictRequest, SentTx } from "../../flow/types";
 import { createPredictRun } from "../driver";
 import { discardRun, hasPendingTransaction, predictFlowId } from "../interrupted";
 import { createPredictReader } from "../reader";
@@ -108,6 +118,16 @@ function chain(opts: {
     countsBehind: (lag: () => bigint) => (_owner: Address, _tag: "latest" | "pending") =>
       Promise.resolve(countAt(head - lag())),
     deposits: () => sends.filter(isDeposit).length,
+    batches: () => sends.filter((tx) => tx.to === addresses.executor),
+    /** Mines `tx`, which no read had seen, under the owner's next nonce; `pending` leaves it broadcast. */
+    surfaces: (tx: FlowTx, pending = false) => {
+      const nonce = byNonce.length;
+      byNonce.push({
+        hash: `0x${(nonce + 1).toString(16).padStart(64, "0")}` as Hash,
+        tx,
+        ...(pending ? {} : { block: ++head }),
+      });
+    },
     land: () => {
       for (const sent of byNonce) if (sent.block === undefined) sent.block = ++head;
     },
@@ -141,14 +161,18 @@ const HOLD_MS = 600_000;
 
 const clock = { at: 1_700_000_000_000 };
 
-function driverOn(fake: ReturnType<typeof chain>, store = createFlowRunStore({ storage: createMemoryStorage() })) {
+function driverOn(
+  fake: Pick<ReturnType<typeof chain>, "gateway" | "reader">,
+  store = createFlowRunStore({ storage: createMemoryStorage() }),
+  request: PredictRequest = snapshot(),
+) {
   const driver = createPredictRun({
     gateway: fake.gateway,
     reader: fake.reader,
     quoter: fakeQuoter(),
     flowId: FLOW_ID,
     ctx: () => ctx(),
-    snapshot: () => snapshot(),
+    snapshot: () => request,
     store,
     now: () => clock.at,
     unansweredSend: { waitMs: 20, pollMs: 5 },
@@ -319,6 +343,60 @@ describe("createPredictRun when a send errors after the wallet broadcast it", ()
 
     expect(driver.getProgress().failure?.reason).toBe("rejected");
     expect(sentWithNonce).not.toHaveBeenCalled();
+  });
+});
+
+describe("createPredictRun when the visitor answers Sign again", () => {
+  /** Two batches; the second's send errors before any read sees it, and is held. */
+  async function heldSecondBatch() {
+    const fake = chain({
+      error: internalError,
+      failBeforeBroadcast: (tx) => tx.to === addresses.executor && fake.batches().length === 2,
+    });
+    const reader = {
+      ...fake.reader,
+      optionStates: fakeReader({ state: () => chainState({ underlying: WAD }) }).optionStates,
+      blockGasLimit: () => Promise.resolve(gasLimitFor(1)),
+    };
+    const { driver } = driverOn(
+      { gateway: fake.gateway, reader },
+      undefined,
+      snapshot({ options: [option(1), option(2)] }),
+    );
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().failure?.reason).toBe("held"));
+    clock.at += HOLD_MS;
+    driver.retry();
+    await vi.waitFor(() => expect(driver.getProgress().failure?.reason).toBe("resign"));
+    expect(fake.batches()).toHaveLength(2);
+    return { fake, driver, held: fake.batches()[1]! };
+  }
+
+  it("signs nothing when the held batch mined while the ask was shown", async () => {
+    const { fake, driver, held } = await heldSecondBatch();
+    fake.surfaces(held);
+
+    driver.retry();
+    await vi.waitFor(() => expect(["halted", "complete"]).toContain(driver.getProgress().stage));
+    expect(driver.getProgress().stage).toBe("complete");
+    expect(fake.batches()).toHaveLength(2);
+  });
+
+  it("says it is pending when the held batch was broadcast while the ask was shown", async () => {
+    const { fake, driver, held } = await heldSecondBatch();
+    fake.surfaces(held, true);
+
+    driver.retry();
+    await vi.waitFor(() => expect(driver.getProgress().failure?.reason).toBe("pending"));
+    expect(fake.batches()).toHaveLength(2);
+  });
+
+  it("signs the batch again when its nonce still reads unused", async () => {
+    const { fake, driver } = await heldSecondBatch();
+
+    driver.retry();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("complete"));
+    expect(fake.batches()).toHaveLength(3);
   });
 });
 

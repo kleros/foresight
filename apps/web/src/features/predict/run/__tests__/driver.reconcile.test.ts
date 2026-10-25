@@ -127,6 +127,58 @@ describe("createPredictRun when a batch's receipt was never seen", () => {
     expect(isBatch(gateway.signRequests[3]!)).toBe(true);
   });
 
+  it("on the answer to the ask, signs nothing when the batch mined under its nonce meanwhile", async () => {
+    const gateway = unseenBatchGateway({
+      waitError: () => new Error("node said something odd", { cause: "opaque" }),
+      lookup: "dropped",
+    });
+    let minedAs: SentTx | undefined;
+    const driver = setup(gateway, undefined, undefined, ({ nonce }) =>
+      Promise.resolve(nonce === 0 && minedAs ? minedAs : { status: "none" }),
+    );
+
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().pendingHash).toBeDefined());
+    clock.at += SEND_HOLD_MS;
+    driver.retry();
+    await vi.waitFor(() => expect(driver.getProgress().failure?.reason).toBe("resign"));
+    const batch = gateway.signRequests[2]!;
+    minedAs = {
+      status: "mined",
+      hash: `0x${"a".repeat(64)}`,
+      to: batch.to,
+      value: batch.value ?? 0n,
+      input: batch.data ?? "0x",
+      success: true,
+    };
+
+    driver.retry();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("complete"));
+    expect(gateway.signRequests).toHaveLength(3);
+  });
+
+  it("on the answer to the ask, says it is pending when the batch was broadcast meanwhile", async () => {
+    const gateway = unseenBatchGateway({
+      waitError: () => new Error("node said something odd", { cause: "opaque" }),
+      lookup: "dropped",
+    });
+    let broadcast = false;
+    const driver = setup(gateway, undefined, undefined, ({ nonce }) =>
+      Promise.resolve(nonce === 0 && broadcast ? { status: "pending" } : { status: "none" }),
+    );
+
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().pendingHash).toBeDefined());
+    clock.at += SEND_HOLD_MS;
+    driver.retry();
+    await vi.waitFor(() => expect(driver.getProgress().failure?.reason).toBe("resign"));
+    broadcast = true;
+
+    driver.retry();
+    await vi.waitFor(() => expect(driver.getProgress().failure?.reason).toBe("pending"));
+    expect(gateway.signRequests).toHaveLength(3);
+  });
+
   it("lets the hash go once its nonce went to another transaction, and rebuilds the batch on the next press", async () => {
     const gateway = unseenBatchGateway({
       waitError: () => new Error("node said something odd", { cause: "opaque" }),
