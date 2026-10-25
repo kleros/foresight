@@ -4,6 +4,7 @@ import {
   classifyTxError,
   createTxOrchestrator,
   currentEntry,
+  DEFAULT_RUN_TTL_MS,
   isUserRejection,
   settledEntries,
   StorageWriteError,
@@ -11,6 +12,7 @@ import {
   type FlowRunStore,
   type OrchestratorRun,
   type PersistedFlowRun,
+  type StepOutcome,
   type StepSummary,
   type TxGateway,
   type TxStep,
@@ -762,27 +764,64 @@ export function createPredictRun(args: {
   /** The visitor's answer to the ask for a hash no node finds: the chain is read again before the step is signed. */
   const signAgainAfter = (stepId: string) => detached(() => reconcile(stepId))();
 
-  /** Stores each of `stored`'s submitted steps whose receipt reads as settled, for a run that can never resume. */
-  async function forgetSettledHashes(stored: PersistedFlowRun<PredictSnapshot, PredictCtx>) {
-    const steps = await Promise.all(
-      stored.steps.map(async (step): Promise<StepSummary> => {
-        if (step.outcome.status !== "submitted") return step;
-        const receipt = await args.gateway.getReceipt(step.outcome.hash).catch(() => null);
-        if (!receipt) return step;
-        return receipt.status === "success"
-          ? {
-              ...step,
-              outcome: { status: "confirmed", hash: receipt.transactionHash, blockNumber: receipt.blockNumber },
-            }
-          : { ...step, outcome: { status: "pending" } };
-      }),
-    );
-    if (steps.every((step, index) => step === stored.steps[index])) return;
+  /** How the transaction `hash` ended, by its receipt; undefined while it has none. */
+  async function outcomeOf(hash: Hash): Promise<StepOutcome | undefined> {
+    const receipt = await args.gateway.getReceipt(hash).catch(() => null);
+    if (!receipt) return undefined;
+    return receipt.status === "success"
+      ? { status: "confirmed", hash: receipt.transactionHash, blockNumber: receipt.blockNumber }
+      : { status: "pending" };
+  }
+
+  /**
+   * `step`'s outcome once the chain says how its hash or held send ended, or that it is dead; undefined while it may
+   * still land. A hash stored with no send is dead once no node knows it and the record is past the store's expiry.
+   */
+  async function strandedOutcome(
+    step: StepSummary,
+    send: UnansweredSend | undefined,
+    persistedAt: number,
+  ): Promise<StepOutcome | undefined> {
+    const hash = step.outcome.status === "submitted" ? step.outcome.hash : undefined;
+    if (hash) {
+      const settled = await outcomeOf(hash);
+      if (settled) return settled;
+      if (!send) {
+        const known = await args.gateway.isKnown(hash).catch(() => true);
+        return !known && now() - persistedAt > DEFAULT_RUN_TTL_MS ? { status: "pending" } : undefined;
+      }
+    }
+    if (!send) return step.outcome;
+    const found = await sentAs(send).catch(() => undefined);
+    if (found?.status === "mined") return outcomeOf(found.hash);
+    if (found?.status === "taken" || (found?.status === "none" && !holding(send))) {
+      return hash ? { status: "pending" } : step.outcome;
+    }
+    return undefined;
+  }
+
+  /** Stores what the chain says of each hash and held send of `stored`, a run that can never resume. */
+  async function settleStranded(stored: PersistedFlowRun<PredictSnapshot, PredictCtx>) {
+    let snapshot = stored.snapshot;
+    let changed = false;
+    const steps: StepSummary[] = [];
+    for (const step of stored.steps) {
+      const send = snapshot.sent?.[step.stepId] ?? snapshot.unanswered?.[step.stepId];
+      const outcome = await strandedOutcome(step, send, stored.persistedAt);
+      if (outcome === undefined || (outcome === step.outcome && !send)) {
+        steps.push(step);
+        continue;
+      }
+      changed = true;
+      steps.push({ ...step, outcome });
+      snapshot = without(without(snapshot, "sent", step.stepId), "unanswered", step.stepId);
+    }
+    if (!changed) return;
     const { version: _version, persistedAt: _persistedAt, expiresAt: _expiresAt, ...run } = stored;
     try {
-      args.store?.save({ ...run, steps });
+      args.store?.save({ ...run, steps, snapshot });
     } catch {
-      // a refused write leaves the hash stored, so the run stays kept
+      // a refused write leaves the record as it was, so the run stays kept
     }
   }
 
@@ -796,12 +835,13 @@ export function createPredictRun(args: {
     // Only the owner who saved a run, on the chain it was saved on, may sign the rest of it.
     const mismatch = foreign(stored.ctx, args.ctx());
     if (mismatch) {
-      if (mismatch === "unknown") await forgetSettledHashes(stored);
+      if (mismatch === "unknown") await settleStranded(stored);
       report(mismatch);
       return;
     }
     const session = args.sessionOptions?.();
     if (session && !sameOptions(stored.snapshot.options, session)) {
+      await settleStranded(stored);
       report("unknown");
       return;
     }
