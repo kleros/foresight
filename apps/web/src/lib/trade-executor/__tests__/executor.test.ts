@@ -57,7 +57,13 @@ describe("fetchExecutorState", () => {
   ] as const)("refuses %s the node names other than the factory's own derivation", async (_, executorOf, predicted) => {
     await expect(
       fetchExecutorState(factoryClient(executorOf, predicted), { factory: FACTORY, owner: OWNER }),
-    ).rejects.toBeInstanceOf(TradeWalletMismatchError);
+    ).rejects.toThrow(new TradeWalletMismatchError());
+  });
+
+  it("tells the visitor to change RPC when the node names another trade wallet", () => {
+    expect(new TradeWalletMismatchError().message).toBe(
+      "Your network named a different trade wallet. Switch to another RPC and try again.",
+    );
   });
 });
 

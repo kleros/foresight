@@ -6,8 +6,11 @@ import { useAccount } from "wagmi";
 
 import WithHelpTooltip from "@/components/ui/WithHelpTooltip";
 
+
 import { shortenAddress } from "@/utils/address";
 import { ownedAmount } from "@/utils/amount";
+
+import { TradeWalletMismatchError } from "@/lib/trade-executor/executor";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
 import { creditsContracts, creditsRoute, gnosisRouterAddress, sDaiDepositRoute } from "@/config/contracts";
@@ -76,6 +79,14 @@ export function TradeWallet({
   // reads all go to DEFAULT_CHAIN, so a wallet on another one would be shown someone else's balances
   if (!owner || chainId !== DEFAULT_CHAIN_ID) return null;
   if (executor.isPending) return <TradeWalletSkeleton />;
+  if (executor.error instanceof TradeWalletMismatchError) {
+    return (
+      <section aria-label="Trade wallet" className={clsx(TRADE_WALLET_CARD, "flex flex-col gap-1")}>
+        <h3 className="text-fs-text-primary text-sm font-semibold">Trade wallet</h3>
+        <p className="text-fs-tone-error-text text-sm">{executor.error.message}</p>
+      </section>
+    );
+  }
   // the predict flow is what creates it; until then there is nothing to show
   if (!deployed) return null;
 

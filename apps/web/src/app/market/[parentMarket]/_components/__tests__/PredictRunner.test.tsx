@@ -23,6 +23,7 @@ import { executorKey } from "@/features/trade-executor/api/getExecutor";
 import { fundsKeyPrefix } from "@/features/trade-executor/api/getFunds";
 
 import { fetchGraphql } from "@/lib/graphql/batcher";
+import { TradeWalletMismatchError } from "@/lib/trade-executor/executor";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
@@ -57,7 +58,7 @@ vi.mock("@/features/predict/hooks/usePredictRun", () => ({ usePredictRun: vi.fn(
 
 vi.mock("@/features/trade-executor/api/getExecutor", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/trade-executor/api/getExecutor")>()),
-  useExecutor: () => ({ data: { predicted: EXECUTOR, deployed: true } }),
+  useExecutor: () => executorRead,
 }));
 
 vi.mock("../usePredictFunding", () => ({ usePredictFunding: vi.fn() }));
@@ -121,6 +122,7 @@ const driver = {
   getProgress: vi.fn<PredictDriver["getProgress"]>(() => progressAt("idle")),
 } satisfies PredictDriver;
 
+let executorRead: { data?: { predicted: Address; deployed: boolean }; error?: Error } = {};
 let progress: PredictProgress | null = null;
 let lastInput: PredictRunInput | null = null;
 
@@ -167,6 +169,7 @@ const connected = (chainId: number = DEFAULT_CHAIN_ID) => account(OWNER, chainId
 
 beforeEach(() => {
   vi.clearAllMocks();
+  executorRead = { data: { predicted: EXECUTOR, deployed: true } };
   progress = null;
   lastInput = null;
   connected();
@@ -204,6 +207,15 @@ describe("PredictRunner, what the visitor is told", () => {
     mount(session({ collateralToken: null }));
 
     expect(screen.getByTestId("notice")).toHaveTextContent("This session cannot be traded yet.");
+  });
+
+  it("says the network named another trade wallet when its answer is not the one derived for the wallet", () => {
+    executorRead = { error: new TradeWalletMismatchError() };
+    mount();
+
+    expect(screen.getByTestId("notice")).toHaveTextContent(
+      "Your network named a different trade wallet. Switch to another RPC and try again.",
+    );
   });
 
   it("says nothing when the prediction can be made", () => {

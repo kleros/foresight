@@ -27,7 +27,7 @@ const SALT_KEY = "foresight.trade-executor.v1";
 /** The node named another trade wallet than the factory deploys for this owner, so nothing may be paid to it. */
 export class TradeWalletMismatchError extends Error {
   constructor() {
-    super("The network answered with another trade wallet than this wallet's.");
+    super("Your network named a different trade wallet. Switch to another RPC and try again.");
     this.name = "TradeWalletMismatchError";
   }
 }

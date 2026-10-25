@@ -4,6 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { parseUnits, type Address } from "viem";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { TradeWalletMismatchError } from "@/lib/trade-executor/executor";
+
 import { DEFAULT_CHAIN, DEFAULT_CHAIN_ID } from "@/config/chains";
 
 import type { TradeWalletMarket } from "../../../types";
@@ -28,6 +30,7 @@ let ownerHeld: Map<Address, bigint>;
 let positionRead: "pending" | "fail" | undefined;
 /** The same for a balanceOf of the collateral, by the owner or the trade wallet */
 let fundsRead: "pending" | "fail" | undefined;
+let executorRead: { isPending: boolean; data?: { predicted: Address; deployed: Address }; error?: Error };
 
 const balanceOf = (holder: Address) => (holder === EXECUTOR ? held : holder === OWNER ? ownerHeld : new Map());
 
@@ -50,7 +53,7 @@ vi.mock("wagmi", async (importOriginal) => ({
   useAccount: () => ({ address: OWNER, chainId: DEFAULT_CHAIN_ID, chain: DEFAULT_CHAIN }),
 }));
 vi.mock("../../../api/getExecutor", () => ({
-  useExecutor: () => ({ isPending: false, data: { predicted: EXECUTOR, deployed: EXECUTOR } }),
+  useExecutor: () => executorRead,
 }));
 vi.mock("@/config/contracts", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/config/contracts")>()),
@@ -109,10 +112,26 @@ beforeEach(() => {
   ownerHeld = new Map();
   positionRead = undefined;
   fundsRead = undefined;
+  executorRead = { isPending: false, data: { predicted: EXECUTOR, deployed: EXECUTOR } };
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 });
 
 describe("TradeWallet's row", () => {
+  it("says the network named another trade wallet in place of the row", () => {
+    executorRead = { isPending: false, error: new TradeWalletMismatchError() };
+    render(
+      <QueryClientProvider client={queryClient}>
+        <TradeWallet market={market} noun="city" />
+      </QueryClientProvider>,
+    );
+
+    const wallet = screen.getByRole("region", { name: "Trade wallet" });
+    expect(wallet).toHaveTextContent(
+      "Your network named a different trade wallet. Switch to another RPC and try again.",
+    );
+    expect(within(wallet).queryByRole("button")).toBeNull();
+  });
+
   it("is one line of the wallet, its address, its collateral balance, Deposit, Withdraw and Balances", async () => {
     renderWallet(market, { closed: true });
     const wallet = screen.getByRole("region", { name: "Trade wallet" });

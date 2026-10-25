@@ -28,6 +28,8 @@ import type { SessionDetail, SessionStatus } from "@/features/sessions/types";
 import { optionNounSingular } from "@/features/sessions/utils/optionNoun";
 import { useExecutor } from "@/features/trade-executor/api/getExecutor";
 
+import { TradeWalletMismatchError } from "@/lib/trade-executor/executor";
+
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
 import type { PlacedPrediction } from "./PredictSuccessView";
@@ -288,6 +290,7 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
         isClosed,
         owner,
         onRightChain: chainId === DEFAULT_CHAIN_ID,
+        walletMismatch: executor.error instanceof TradeWalletMismatchError ? executor.error.message : undefined,
         ready,
         creditsFailed: creditsFailed && startsNew,
         pricesFailed: preview.failed && startsNew,
@@ -377,6 +380,8 @@ function notice(args: {
   isClosed: boolean;
   owner?: string;
   onRightChain: boolean;
+  /** Said where the node's trade wallet is not the one derived for the owner. */
+  walletMismatch?: string;
   ready: boolean;
   creditsFailed: boolean;
   pricesFailed: boolean;
@@ -386,6 +391,7 @@ function notice(args: {
   if (args.isClosed) return SESSION_CLOSED;
   if (!args.owner) return "Connect a wallet to predict.";
   if (!args.onRightChain) return "Switch to Gnosis to predict.";
+  if (args.walletMismatch) return args.walletMismatch;
   if (!args.ready) return "This session cannot be traded yet.";
   if (args.pricesFailed) return args.pricesFailedAgain ? PRICES_FAILED_AGAIN : PRICES_FAILED;
   if (args.creditsFailed) return CREDITS_UNAVAILABLE;
