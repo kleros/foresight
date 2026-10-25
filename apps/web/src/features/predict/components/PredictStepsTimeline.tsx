@@ -15,13 +15,31 @@ const Views = createContext<Partial<Record<PredictStepRow["key"], StepView>>>({}
  * per row, defined once: the same type across views keeps the element, so its glyphs can cross-fade.
  */
 function WalletBullet() {
-  return <StepBullet number={1} view={useContext(Views).wallet ?? "idle"} />;
+  return <Bullet number={1} view={useContext(Views).wallet ?? "idle"} />;
 }
 function FundsBullet() {
-  return <StepBullet number={2} view={useContext(Views).funds ?? "idle"} />;
+  return <Bullet number={2} view={useContext(Views).funds ?? "idle"} />;
 }
 function PredictBullet() {
-  return <StepBullet number={3} view={useContext(Views).predict ?? "idle"} />;
+  return <Bullet number={3} view={useContext(Views).predict ?? "idle"} />;
+}
+
+/** What the bullet's glyph shows, for a screen reader; the glyph itself is hidden from one. */
+const VIEW_TEXT: Record<StepView, string> = {
+  idle: "to do",
+  running: "to do",
+  inactive: "to do",
+  done: "done",
+  failed: "stopped here",
+};
+
+function Bullet({ number, view }: { number: number; view: StepView }) {
+  return (
+    <>
+      <StepBullet number={number} view={view} />
+      <span className="sr-only">{VIEW_TEXT[view]}</span>
+    </>
+  );
 }
 const BULLETS: Record<PredictStepRow["key"], () => React.ReactNode> = {
   wallet: WalletBullet,

@@ -186,3 +186,28 @@ describe("the timeline's place in the popup", () => {
     expect(scroll).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("PredictStepsTimeline, for a screen reader", () => {
+  const withDeposit = (state: "pending" | "success" | "error", stage: PredictProgress["stage"]): PredictProgress => ({
+    stage,
+    steps: [
+      { id: "create-wallet", label: "", state: "success" },
+      { id: "deposit", label: "", state },
+      { id: "predict-1", label: "", state: "pending" },
+    ],
+    leftOut: [],
+    batchesDone: 0,
+    batches: 1,
+    ...(stage === "halted" ? { failure: { reason: "rejected" as const, retryable: true } } : {}),
+  });
+
+  it.each([
+    ["to do", withDeposit("pending", "idle")],
+    ["done", withDeposit("success", "quoting")],
+    ["stopped here", withDeposit("error", "halted")],
+  ])("says the row is %s in text the bullet's glyph only shows", (said, progress) => {
+    render(timeline(progress));
+
+    expect(within(item("Add funds")).getByText(said)).toHaveClass("sr-only");
+  });
+});
