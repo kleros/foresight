@@ -256,6 +256,29 @@ describe("the first batch of a credits run", () => {
     expect(params.amountOutMinimum).toBe((lossy * (10_000n - BigInt(CREDITS_SLIPPAGE_BPS))) / 10_000n);
   });
 
+  it("holds the credits swap to one xDAI a credit, less its slippage, when the pool quotes less than that", async () => {
+    // 2 credits at 1.25 less 20.08% quote 0.999 xDAI each
+    const used = deps({ creditsQuoter: fakeCreditsQuoter({ lossBps: 2008n }) });
+    const atPar = (2n * WAD * (10_000n - BigInt(CREDITS_SLIPPAGE_BPS))) / 10_000n;
+
+    const calls = valueCalls((await build(creditsRun(), used)).data!);
+    const [, swap] = decodeFunctionData({ abi: EXECUTE_ABI, data: calls[0]!.data }).args;
+    const [params] = decodeFunctionData({ abi: ALGEBRA_ROUTER_ABI, data: swap }).args;
+    expect(params.amountOutMinimum).toBe(atPar);
+    expect(calls[2]!.value).toBe(atPar);
+    expect((await previewCreditsSwap(ctx(), 2n * WAD, CREDITS_SLIPPAGE_BPS, used)).floor).toBe(atPar);
+  });
+
+  it("refuses a credits swap quoted under one xDAI a credit by more than its slippage", async () => {
+    // 2 credits at 1.25 less 21% quote 0.9875 xDAI each
+    const used = deps({ creditsQuoter: fakeCreditsQuoter({ lossBps: 2100n }) });
+
+    await expect(build(creditsRun(), used)).rejects.toBeInstanceOf(CreditsUnavailableError);
+    await expect(previewCreditsSwap(ctx(), 2n * WAD, CREDITS_SLIPPAGE_BPS, used)).rejects.toBeInstanceOf(
+      CreditsUnavailableError,
+    );
+  });
+
   it("holds the credits swap to the run's own credits slippage", async () => {
     const run = creditsRun({ slippage: { tradeBps: 100, creditsBps: 75 } });
 

@@ -45,7 +45,7 @@ import type {
   PredictSlippage,
   PredictSnapshot,
 } from "./types";
-import { DEFAULT_SLIPPAGE, MAX_SLIPPAGE_BPS } from "../oracle/tolerances";
+import { CREDITS_MIN_RATE_WAD, DEFAULT_SLIPPAGE, MAX_SLIPPAGE_BPS } from "../oracle/tolerances";
 import {
   atEstimate,
   planBuys,
@@ -346,8 +346,14 @@ async function quoteCreditsSwap(
     throw new CreditsUnavailableError("The credits swap was quoted for another route than the manager's.");
   }
 
+  const atMinRate = (amount * CREDITS_MIN_RATE_WAD) / 10n ** 18n;
+  const floor =
+    ((quote.amountOut > atMinRate ? quote.amountOut : atMinRate) * (10_000n - BigInt(creditsBps))) / 10_000n;
+  // a swap quoted under its floor would revert, so it is refused before anything is signed
+  if (quote.amountOut < floor) {
+    throw new CreditsUnavailableError("The credits swap is quoted below what the credits are worth.");
+  }
   const vaultValue = await deps.reader.vaultValue(amount);
-  const floor = (quote.amountOut * (10_000n - BigInt(creditsBps))) / 10_000n;
   const preview: CreditsSwapPreview = {
     amount,
     creditsBps,

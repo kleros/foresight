@@ -136,8 +136,8 @@ const complete = (driver: PredictDriver) => vi.waitFor(() => expect(driver.getPr
 const atMoved = (driver: PredictDriver) => vi.waitFor(() => expect(driver.getProgress().stage).toBe("moved"));
 
 describe("a run held to what Details showed", () => {
-  it("signs the per-option split Details showed when the credits swap loses 30%", async () => {
-    const { driver, sent, preview } = setup({ request: creditsRun, state: AS_SHOWN, creditsLossBps: () => 3000n });
+  it("signs the per-option split Details showed when the credits swap loses 15%", async () => {
+    const { driver, sent, preview } = setup({ request: creditsRun, state: AS_SHOWN, creditsLossBps: () => 1500n });
     const credits = await preview();
 
     driver.start({ plans: { [KEY]: planOn(AS_SHOWN, credits.minted) }, credits });
@@ -162,7 +162,7 @@ describe("a run held to what Details showed", () => {
     let loss = 5n;
     const { driver, sent, preview } = setup({ request: creditsRun, state: AS_SHOWN, creditsLossBps: () => loss });
     const credits = await preview();
-    loss = 3000n;
+    loss = 1500n;
 
     driver.start({ plans: { [KEY]: planOn(AS_SHOWN, credits.minted) }, credits });
     await atMoved(driver);

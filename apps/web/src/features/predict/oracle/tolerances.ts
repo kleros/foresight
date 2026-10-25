@@ -20,6 +20,9 @@ export const DUST_WEI = 10n ** 6n;
  */
 export const CREDITS_SLIPPAGE_BPS = 20;
 
+/** The least WXDAI wei the credits swap takes as one sDAI's worth, which no node's answer can lower: sDAI's rate starts at 1 and only rises. */
+export const CREDITS_MIN_RATE_WAD = 10n ** 18n;
+
 /** The slippage a run uses unless the visitor sets their own. */
 export const DEFAULT_SLIPPAGE: PredictSlippage = { tradeBps: SLIPPAGE_BPS, creditsBps: CREDITS_SLIPPAGE_BPS };
 

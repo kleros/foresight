@@ -182,7 +182,7 @@ export interface CreditsSwapPreview {
   quoted: bigint;
   /** xDAI the credits' collateral redeems for at the vault's rate. */
   vaultValue: bigint;
-  /** The least the swap may pay, `creditsBps` below the quote. */
+  /** The least the swap may pay: `creditsBps` below the quote, or below one xDAI a credit where that is more. */
   floor: bigint;
   /** What the pool's fee and price take against the vault rate; none when the pool pays more. */
   loss: bigint;
