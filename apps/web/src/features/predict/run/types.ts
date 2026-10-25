@@ -11,7 +11,8 @@ import type { HeldTo, MovedPlans, PredictSnapshot } from "../flow/types";
  * `credits`: the credits manager cannot cover the credits, or no route swaps them as it requires.
  * `deposit-unconfirmed`: a recovered run's deposit may have been signed with no hash kept.
  * `pending`: the wallet has a transaction not yet mined, which may be the step about to be signed again.
- * `wrong-wallet`, `wrong-chain`: a saved run belongs to another wallet or network than the connected one.
+ * `wrong-wallet`, `wrong-chain`: a saved run belongs to another wallet or network than the connected one, or the
+ * client refused a send before the wallet was asked because the wallet was not connected or on another network.
  * `elsewhere`: another open tab is driving the saved run.
  * `closed`: the session's close time has passed on the chain's clock, so nothing more is signed.
  * `unlisted`: a transaction departs from the chain's allow-list, the owner rule or the native-value rule, so it was not sent.

@@ -83,6 +83,34 @@ class SignAgainError extends Error {}
 
 const TRANSPORT_FAILURES = new Set(["TimeoutError", "HttpRequestError"]);
 
+/** Raised by viem or wagmi, or coded by the provider per EIP-1193, before the request reaches the wallet. */
+const NOT_SENT_NAMES: Record<string, "wrong-chain" | "wrong-wallet"> = {
+  ChainMismatchError: "wrong-chain",
+  ConnectorChainMismatchError: "wrong-chain",
+  AccountNotFoundError: "wrong-wallet",
+  ConnectorNotConnectedError: "wrong-wallet",
+  ConnectorNotFoundError: "wrong-wallet",
+  ConnectorAccountNotFoundError: "wrong-wallet",
+  ConnectorUnavailableReconnectingError: "wrong-wallet",
+};
+const NOT_SENT_CODES: Record<number, "wrong-chain" | "wrong-wallet"> = {
+  4100: "wrong-wallet",
+  4900: "wrong-wallet",
+  4901: "wrong-chain",
+};
+
+/** Why the wallet was never asked for the send, where the client or provider says so; nothing went out. */
+function notSent(error: unknown): "wrong-chain" | "wrong-wallet" | undefined {
+  let link: unknown = error;
+  for (let depth = 0; typeof link === "object" && link !== null && depth < 10; depth++) {
+    const { name, code, cause } = link as { name?: unknown; code?: unknown; cause?: unknown };
+    if (typeof name === "string" && Object.hasOwn(NOT_SENT_NAMES, name)) return NOT_SENT_NAMES[name];
+    if (typeof code === "number" && Object.hasOwn(NOT_SENT_CODES, code)) return NOT_SENT_CODES[code];
+    link = cause;
+  }
+  return undefined;
+}
+
 /** The request timed out or never reached the node, so the transaction may have gone out. */
 function unanswered(error: unknown): boolean {
   let link: unknown = error;
@@ -214,6 +242,8 @@ export function createPredictRun(args: {
     | "storage"
     | "held"
     | "resign"
+    | "wrong-chain"
+    | "wrong-wallet"
     | undefined;
   /** Set while a sent transaction's outcome is read from the chain; the run itself stays stopped meanwhile. */
   let reconciling = false;
@@ -349,9 +379,9 @@ export function createPredictRun(args: {
       } catch (error) {
         // a disposed run keeps the send for whichever driver recovers it
         if (options?.signal?.aborted) throw error;
-        // a coded wallet error can still follow a broadcast; a decline, or a node naming why it refused, did not
+        // a coded wallet error can still follow a broadcast; a decline, a wallet never asked, or a node naming why it refused, did not
         const text = chainText(error);
-        if (isUserRejection(error) || OUT_OF_FUNDS.test(text) || REVERTS.test(text)) {
+        if (isUserRejection(error) || notSent(error) || OUT_OF_FUNDS.test(text) || REVERTS.test(text)) {
           forgetUnanswered(stepId);
           throw error;
         }
@@ -463,6 +493,11 @@ export function createPredictRun(args: {
       }
       if (error instanceof PlansMovedError) {
         movedByBuild = error.moved;
+        return "rpc";
+      }
+      const refused = notSent(error);
+      if (refused) {
+        buildFailure = refused;
         return "rpc";
       }
       buildFailure =
