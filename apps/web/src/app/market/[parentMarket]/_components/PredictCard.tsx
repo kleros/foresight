@@ -20,7 +20,7 @@ import { tabOwnership } from "@/features/predict/run/ownership";
 import { useSessionEstimates } from "@/features/predict/stores/estimateStore";
 import type { SelectedEstimate } from "@/features/predict/types";
 import { selectedEstimates } from "@/features/predict/utils/estimates";
-import { RUNNING_ELSEWHERE } from "@/features/predict/utils/predictSteps";
+import { PROMPT_OPEN, RUNNING_ELSEWHERE } from "@/features/predict/utils/predictSteps";
 import type { SessionDetail, SessionStatus } from "@/features/sessions/types";
 import { optionNoun, optionNounSingular } from "@/features/sessions/utils/optionNoun";
 
@@ -46,7 +46,7 @@ const PredictSuccessDialog = dynamic(
 
 const CTA = "predict-cta predict-card-cta";
 
-/** How often a run another tab holds is asked about again, since letting go of it writes nothing. */
+/** How often a held run is asked about again, since letting go of it writes nothing. */
 const HELD_ELSEWHERE_POLL_MS = 2_000;
 
 // a stored run's reason is said in the run's own row, beside its Resume
@@ -83,6 +83,8 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
   const [reads, setReads] = useState(0);
   // whether another open tab drives the stored run; unknown until a tab is asked
   const [heldElsewhere, setHeldElsewhere] = useState<boolean>();
+  // whether this tab holds it for a wallet prompt a closed popup left open
+  const [heldHere, setHeldHere] = useState(false);
   const asked = useRef(0);
   const isHeld = heldElsewhere !== false;
 
@@ -94,10 +96,13 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
     const ask = ++asked.current;
     if (!run || !address) {
       setHeldElsewhere(false);
+      setHeldHere(false);
       return;
     }
+    const flowId = predictFlowId(session.id, address);
+    setHeldHere(tabOwnership().heldHere(flowId));
     void tabOwnership()
-      .heldElsewhere(predictFlowId(session.id, address))
+      .heldElsewhere(flowId)
       .then((held) => {
         if (asked.current === ask) setHeldElsewhere(held);
       });
@@ -123,10 +128,10 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
 
   // a tab that closes or lets go of the run writes nothing, so a held run is asked about again
   useEffect(() => {
-    if (!interrupted || !heldElsewhere) return;
+    if (!interrupted || !(heldElsewhere || heldHere)) return;
     const timer = setInterval(() => setReads((count) => count + 1), HELD_ELSEWHERE_POLL_MS);
     return () => clearInterval(timer);
-  }, [interrupted, heldElsewhere]);
+  }, [interrupted, heldElsewhere, heldHere]);
 
   // re-read rather than clear: discardRun keeps a run whose transaction awaits a receipt. The run is held for the
   // read and the delete, so no other tab can start signing it in between
@@ -258,9 +263,10 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
             <p className="text-fs-text-secondary text-sm">
               {runShown(pausedRun)}
               {heldElsewhere ? ` ${RUNNING_ELSEWHERE}` : null}
+              {heldHere && !heldElsewhere ? ` ${PROMPT_OPEN}` : null}
               {isPending && !heldElsewhere ? " A transaction from it may still be pending." : null}
               {/* a run whose transaction awaits a receipt offers no Discard */}
-              {blocker === "unfinished" && !heldElsewhere
+              {blocker === "unfinished" && !heldElsewhere && !heldHere
                 ? isPending
                   ? " Resume it before starting a new one."
                   : " Resume or discard it before starting a new one."
@@ -268,7 +274,13 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
             </p>
             <div className="flex gap-3">
               {isPending || heldElsewhere ? null : (
-                <Button small variant="secondary" text="Discard" isDisabled={isHeld} onPress={() => void discard()} />
+                <Button
+                  small
+                  variant="secondary"
+                  text="Discard"
+                  isDisabled={isHeld || heldHere}
+                  onPress={() => void discard()}
+                />
               )}
               <div className="md:hidden">
                 <Button className="predict-held" small variant="secondary" text="Predict" isDisabled />

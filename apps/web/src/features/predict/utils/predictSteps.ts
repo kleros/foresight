@@ -40,6 +40,9 @@ export const SESSION_CLOSED = "This session has closed.";
 /** A stored run another open tab is driving; the card and the popup both say it. */
 export const RUNNING_ELSEWHERE = "This prediction is running in another tab. Finish or close it there.";
 
+/** A stored run this tab holds for a wallet prompt that a closed popup left open; the card and the popup both say it. */
+export const PROMPT_OPEN = "A wallet prompt from this page is still open. Answer it in your wallet.";
+
 /** Said before a send that may still be open in the wallet is signed again. */
 export const SIGN_AGAIN_ASK =
   "A wallet prompt from this run may still be open. Check your wallet before signing again.";
@@ -62,6 +65,7 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
   "wrong-wallet": "Started from another wallet. Connect it to finish.",
   "wrong-chain": "Started on another network. Switch to it to finish.",
   elsewhere: RUNNING_ELSEWHERE,
+  "prompt-open": PROMPT_OPEN,
   closed: SESSION_CLOSED,
   unlisted: "This transaction isn't one Foresight sends, so it wasn't sent.",
   storage:

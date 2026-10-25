@@ -997,7 +997,7 @@ export function createPredictRun(args: {
       }
       claiming = undefined;
       if (!letGo) {
-        report("elsewhere", () => claimed(then));
+        report(args.ownership!.heldHere(args.flowId) ? "prompt-open" : "elsewhere", () => claimed(then));
         return;
       }
       release = letGo;

@@ -6,7 +6,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 import { ctx, snapshot, WAD } from "@/features/predict/flow/__tests__/support/fakes";
 import { predictFlowId } from "@/features/predict/run/interrupted";
-import { RUNNING_ELSEWHERE } from "@/features/predict/utils/predictSteps";
+import { PROMPT_OPEN, RUNNING_ELSEWHERE } from "@/features/predict/utils/predictSteps";
 import { sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 import { toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
 
@@ -21,8 +21,8 @@ import { PredictCard } from "../PredictCard";
 const OWNER = "0xa11ce000000000000000000000000000000a11ce";
 const FLOW_ID = predictFlowId("7", OWNER);
 
-/** Whether another tab answers that it holds the run. */
-const other = vi.hoisted(() => ({ holds: true }));
+/** Whether another tab answers that it holds the run, and whether this tab holds it. */
+const other = vi.hoisted(() => ({ holds: true, here: false }));
 
 vi.mock("wagmi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("wagmi")>()),
@@ -30,7 +30,11 @@ vi.mock("wagmi", async (importOriginal) => ({
 }));
 vi.mock("@/components/wallet/EnsureChain", () => ({ default: ({ children }: { children: ReactNode }) => children }));
 vi.mock("@/features/predict/run/ownership", () => ({
-  tabOwnership: () => ({ claim: () => Promise.resolve(null), heldElsewhere: () => Promise.resolve(other.holds) }),
+  tabOwnership: () => ({
+    claim: () => Promise.resolve(null),
+    heldElsewhere: () => Promise.resolve(other.holds),
+    heldHere: () => other.here,
+  }),
 }));
 
 const session = () => toSessionDetail({ ...sessionDetailColumns, id: "7", children: [] }, GATEWAY);
@@ -54,6 +58,7 @@ function plantLiveRun() {
 beforeEach(() => {
   window.localStorage.clear();
   other.holds = true;
+  other.here = false;
 });
 
 it("shows a run another tab is driving as running there, with Resume and Discard held", async () => {
@@ -90,4 +95,15 @@ it("keeps the run when another tab takes it between the card's check and the Dis
   await userEvent.click(await screen.findByRole("button", { name: "Discard" }));
 
   expect(createRunStore().load(FLOW_ID)).not.toBeNull();
+});
+
+it("says a wallet prompt from this page is still open while this tab holds the run, with Discard held", async () => {
+  plantLiveRun();
+  other.holds = false;
+  other.here = true;
+  render(<PredictCard session={session()} status="trading" marketEstimates={{}} />);
+
+  expect(await screen.findByText(PROMPT_OPEN, { exact: false })).toBeInTheDocument();
+  expect(screen.queryByText(RUNNING_ELSEWHERE, { exact: false })).toBeNull();
+  expect(screen.getByRole("button", { name: "Discard" })).toBeDisabled();
 });

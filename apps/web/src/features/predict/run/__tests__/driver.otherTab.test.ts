@@ -143,6 +143,27 @@ describe("createPredictRun with the run live in another tab", () => {
   });
 });
 
+describe("createPredictRun reopened in the tab whose closed popup left a wallet prompt open", () => {
+  it("says the prompt is still open here, not that another tab runs it, and recovers once it is answered", async () => {
+    const store = createFlowRunStore({ storage: createMemoryStorage() });
+    const tab = origin().tab();
+    const walletA = wallet(true);
+    const closed = driverIn(tab, walletA.gateway, store);
+    closed.start();
+    await vi.waitFor(() => expect(closed.getProgress().stage).toBe("signing"));
+    closed.dispose();
+
+    const reopened = driverIn(tab, wallet(false).gateway, store);
+    reopened.recover();
+    await vi.waitFor(() => expect(reopened.getProgress().failure?.reason).toBe("prompt-open"));
+
+    walletA.decline();
+    await vi.waitFor(() => expect(tab.heldHere(FLOW_ID)).toBe(false));
+    reopened.retry();
+    await vi.waitFor(() => expect(reopened.getProgress().recovered).toBeDefined());
+  });
+});
+
 describe("createPredictRun whose recover is run, disposed and run again, as React's StrictMode does", () => {
   it("recovers the stored run rather than report it held in another tab", async () => {
     const store = createFlowRunStore({ storage: createMemoryStorage() });
