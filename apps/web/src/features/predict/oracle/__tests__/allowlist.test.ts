@@ -7,6 +7,8 @@ import {
   gnosisRouterAbi,
   gnosisRouterAddress,
   sDaiAdapterAbi,
+  sDaiDepositRoute,
+  swaprRouterAddress,
   tradeExecutorAbi,
   tradeExecutorFactoryAbi,
   tradeExecutorFactoryAddress,
@@ -60,6 +62,8 @@ describe("the predict allow-list on Gnosis", () => {
       swaprRouter: list.swaprRouter,
     });
     expect(gnosisRouterAddress(100)).toBe(list.gnosisRouter);
+    expect(sDaiDepositRoute(sDai, 100)?.sDaiAdapter).toBe(list.sDaiAdapter);
+    expect(swaprRouterAddress(100)).toBe(list.swaprRouter);
     expect(tradeExecutorFactoryAddress(100)).toBe(list.tradeExecutorFactory);
   });
 });
