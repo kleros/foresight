@@ -57,7 +57,7 @@ const asText = (cell: string) => quote(FORMULA_START.test(cell) || cell.startsWi
 /** Excel reads a CSV without a byte-order mark as the system's ANSI code page; `trim()` drops it on upload. */
 const UTF8_BOM = "\uFEFF";
 
-/** A null estimate is written as an empty cell, which the upload reads as no estimate. */
+/** A null estimate is written as an empty cell, which the upload leaves alone. */
 export function serializeEstimateCsv(rows: { name: string; estimate: number | null }[]): string {
   return (
     UTF8_BOM + [CSV_COLUMNS.join(","), ...rows.map((row) => `${asText(row.name)},${row.estimate ?? ""}`)].join("\n")
@@ -66,7 +66,7 @@ export function serializeEstimateCsv(rows: { name: string; estimate: number | nu
 
 interface ParsedEstimate {
   scale: OptionScale;
-  /** Null for a row whose estimate cell is empty. */
+  /** Null for a row whose estimate cell is empty, which leaves that option's estimate as it is. */
   value: number | null;
 }
 
@@ -90,7 +90,11 @@ export function parseEstimateCsv(text: string, scales: OptionScale[]): ParsedEst
   rows.forEach((cells, index) => {
     const line = index + 2;
     // a row cut short, or a quote left open to the end of the file, has fewer cells than the header
-    if (cells.length !== columns.length) throw new Error(`Row ${line}: both columns need a value.`);
+    if (cells.length !== columns.length) {
+      throw new Error(
+        `Row ${line} has ${cells.length} ${cells.length === 1 ? "cell" : "cells"}; it needs ${columns.length}.`,
+      );
+    }
     const name = (cells[nameAt] ?? "").trim();
     const raw = (cells[estimateAt] ?? "").trim();
     if (!name) throw new Error(`Row ${line}: the name is missing.`);

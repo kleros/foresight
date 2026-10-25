@@ -154,13 +154,13 @@ describe("parseEstimateCsv", () => {
   });
 
   it.each([
-    ["cut off after a name", 'name,estimate\nGerwig,300\n"Villeneuve'],
-    ["with no estimate cell", "name,estimate\nVilleneuve"],
-    ["with a third cell", "name,estimate\nVilleneuve,250,1"],
-  ])("refuses a row %s, rather than read it as no estimate", (_, csv) => {
+    ["cut off after a name", 'name,estimate\nGerwig,300\n"Villeneuve', "Row 3 has 1 cell; it needs 2."],
+    ["with no estimate cell", "name,estimate\nVilleneuve", "Row 2 has 1 cell; it needs 2."],
+    ["with a third cell", "name,estimate\nVilleneuve,250,1", "Row 2 has 3 cells; it needs 2."],
+  ])("refuses a row %s, rather than read it as no estimate", (_, csv, message) => {
     const named = [{ ...gerwig, name: "Gerwig" }, villeneuve];
 
-    expect(() => parseEstimateCsv(csv, named)).toThrow(/^Row \d+: both columns need a value\.$/);
+    expect(() => parseEstimateCsv(csv, named)).toThrow(new Error(message));
   });
 });
 
