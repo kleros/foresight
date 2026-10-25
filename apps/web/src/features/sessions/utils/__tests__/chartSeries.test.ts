@@ -93,6 +93,37 @@ describe("buildChartSeries", () => {
     expect(values(buildChartSeries([series(points)], 0, 2 * S))).toEqual([300, 300, 300]);
   });
 
+  it("adds a point at every trade between grid steps", () => {
+    const points = [
+      { timestamp: 0, value: 125 },
+      { timestamp: 60, value: 100 },
+      { timestamp: 120, value: 150 },
+      { timestamp: 120, value: 175 },
+      { timestamp: S + 30, value: 200 },
+    ];
+
+    const built = buildChartSeries([series(points)], 0, 2 * S)[0]?.points;
+
+    expect(built).toEqual([
+      { timestamp: 0, value: 100 },
+      { timestamp: 60, value: 100 },
+      { timestamp: 120, value: 175 },
+      { timestamp: S, value: 175 },
+      { timestamp: S + 30, value: 200 },
+      { timestamp: 2 * S, value: 200 },
+    ]);
+  });
+
+  it("leaves out trades outside the drawn range", () => {
+    const points = [
+      { timestamp: 0, value: 125 },
+      { timestamp: 60, value: 100 },
+      { timestamp: 2 * S, value: 300 },
+    ];
+
+    expect(buildChartSeries([series(points)], 0, S)[0]?.points.map(({ timestamp }) => timestamp)).toEqual([0, 60, S]);
+  });
+
   it("draws a series with no points flat at the lower bound", () => {
     const empty = series([], { lowerBound: 100, upperBound: 500 });
 

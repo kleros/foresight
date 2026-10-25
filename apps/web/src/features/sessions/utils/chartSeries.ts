@@ -36,8 +36,10 @@ export function buildChartSeries(data: SessionChartData, startTime: number, endT
   return data.map(({ option, points }) => {
     const normalized = points.slice(firstTradedIndex(points, option));
     const first = normalized[0];
+    const tradeTimes = normalized.map((point) => point.timestamp).filter((t) => t > startTime && t < endTime);
+    const times = [...new Set([...timestamps, ...tradeTimes])].sort((a, b) => a - b);
 
-    const gridPoints = timestamps.map((timestamp) => {
+    const gridPoints = times.map((timestamp) => {
       if (first === undefined) return { timestamp, value: option.lowerBound };
 
       let closest = first;
