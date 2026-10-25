@@ -6,7 +6,6 @@ import { useAccount } from "wagmi";
 
 import WithHelpTooltip from "@/components/ui/WithHelpTooltip";
 
-
 import { shortenAddress } from "@/utils/address";
 import { ownedAmount } from "@/utils/amount";
 
