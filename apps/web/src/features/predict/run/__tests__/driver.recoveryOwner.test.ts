@@ -83,8 +83,13 @@ afterEach(() => {
   for (const driver of drivers.splice(0)) driver.dispose();
 });
 
-function recover(store: FlowRunStore, current: PredictCtx, sessionOptions?: () => PredictOption[]) {
-  const gateway = fakeGateway();
+function recover(
+  store: FlowRunStore,
+  current: PredictCtx,
+  sessionOptions?: () => PredictOption[],
+  receipt?: (hash: Hash) => Promise<TransactionReceipt | null>,
+) {
+  const gateway = { ...fakeGateway(), ...(receipt ? { getReceipt: receipt } : {}) };
   const driver = createPredictRun({
     gateway,
     reader: fakeReader({ deployed: true, collateral: WAD }),
@@ -258,9 +263,9 @@ describe("createPredictRun recovering a stored run whose contracts differ from t
     expect(gateway.signRequests).toEqual([]);
   });
 
-  it("keeps such a run through reset while it holds a broadcast hash no receipt has been read for", async () => {
+  it("keeps such a run through reset while its broadcast hash has no receipt", async () => {
     const store = savedRunOfA(submittedDeposit, ctx({ executor: ATTACKER }));
-    const { driver } = recover(store, live);
+    const { driver } = recover(store, live, undefined, () => Promise.resolve(null));
 
     driver.start();
     await vi.waitFor(() => expect(driver.getProgress().stage).toBe("halted"));
@@ -268,6 +273,28 @@ describe("createPredictRun recovering a stored run whose contracts differ from t
 
     expect(store.load(FLOW_ID)).not.toBeNull();
   });
+
+  it.each(["success", "reverted"] as const)(
+    "forgets its broadcast hash once the receipt reads %s, so reset and the card's Discard forget the run",
+    async (status) => {
+      const store = savedRunOfA(submittedDeposit, ctx({ executor: ATTACKER }));
+      const asked: Hash[] = [];
+      const { gateway, driver } = recover(store, live, undefined, (hash) => {
+        asked.push(hash);
+        return Promise.resolve({ transactionHash: hash, status, blockNumber: 19_000_000n } as TransactionReceipt);
+      });
+
+      driver.start();
+      await vi.waitFor(() => expect(driver.getProgress().failure?.reason).toBe("unknown"));
+      expect(asked).toEqual([DEPOSIT_HASH]);
+      const stored = store.load<PredictSnapshot, PredictCtx>(FLOW_ID)?.steps ?? [];
+      expect(stored.some((step) => step.outcome.status === "submitted")).toBe(false);
+      driver.reset();
+
+      expect(store.load(FLOW_ID)).toBeNull();
+      expect(gateway.signRequests).toEqual([]);
+    },
+  );
 
   it("recovers a stored run whose addresses differ from the app's only in letter case", async () => {
     const upper = (address: Address) => address.toUpperCase().replace("0X", "0x") as Address;

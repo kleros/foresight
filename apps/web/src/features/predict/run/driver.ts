@@ -10,6 +10,8 @@ import {
   type FlowError,
   type FlowRunStore,
   type OrchestratorRun,
+  type PersistedFlowRun,
+  type StepSummary,
   type TxGateway,
   type TxStep,
 } from "@foresight/tx-orchestrator";
@@ -712,6 +714,30 @@ export function createPredictRun(args: {
     await orchestrator.resume();
   });
 
+  /** Stores each of `stored`'s submitted steps whose receipt reads as settled, for a run that can never resume. */
+  async function forgetSettledHashes(stored: PersistedFlowRun<PredictSnapshot, PredictCtx>) {
+    const steps = await Promise.all(
+      stored.steps.map(async (step): Promise<StepSummary> => {
+        if (step.outcome.status !== "submitted") return step;
+        const receipt = await args.gateway.getReceipt(step.outcome.hash).catch(() => null);
+        if (!receipt) return step;
+        return receipt.status === "success"
+          ? {
+              ...step,
+              outcome: { status: "confirmed", hash: receipt.transactionHash, blockNumber: receipt.blockNumber },
+            }
+          : { ...step, outcome: { status: "pending" } };
+      }),
+    );
+    if (steps.every((step, index) => step === stored.steps[index])) return;
+    const { version: _version, persistedAt: _persistedAt, expiresAt: _expiresAt, ...run } = stored;
+    try {
+      args.store?.save({ ...run, steps });
+    } catch {
+      // a refused write leaves the hash stored, so the run stays kept
+    }
+  }
+
   /**
    * A run left behind by a closed tab. Its transactions may be on chain, so it is restored and
    * reconciled rather than thrown away, then held for review: nothing is signed until `resume`.
@@ -722,6 +748,7 @@ export function createPredictRun(args: {
     // Only the owner who saved a run, on the chain it was saved on, may sign the rest of it.
     const mismatch = foreign(stored.ctx, args.ctx());
     if (mismatch) {
+      if (mismatch === "unknown") await forgetSettledHashes(stored);
       report(mismatch);
       return;
     }
