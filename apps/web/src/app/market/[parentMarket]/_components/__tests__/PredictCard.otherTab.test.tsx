@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
 
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -35,6 +35,23 @@ vi.mock("@/features/predict/run/ownership", () => ({
     heldElsewhere: () => Promise.resolve(other.holds),
     heldHere: () => other.here,
   }),
+}));
+
+/* stands in for the popup: its driver holds the run from mount until it is disposed on unmount */
+vi.mock("../PredictRunner", () => ({
+  PredictRunner: ({ onClose }: { onClose: () => void }) => {
+    useEffect(() => {
+      other.here = true;
+      return () => {
+        other.here = false;
+      };
+    }, []);
+    return (
+      <div role="dialog">
+        <button onClick={onClose}>Close</button>
+      </div>
+    );
+  },
 }));
 
 const session = () => toSessionDetail({ ...sessionDetailColumns, id: "7", children: [] }, GATEWAY);
@@ -106,4 +123,23 @@ it("says a wallet prompt from this page is still open while this tab holds the r
   expect(await screen.findByText(PROMPT_OPEN, { exact: false })).toBeInTheDocument();
   expect(screen.queryByText(RUNNING_ELSEWHERE, { exact: false })).toBeNull();
   expect(screen.getByRole("button", { name: "Discard" })).toBeDisabled();
+});
+
+it("never says a prompt is open as a popup that held the run closes and lets it go", async () => {
+  plantLiveRun();
+  other.holds = false;
+  const { container } = render(<PredictCard session={session()} status="trading" marketEstimates={{}} />);
+  await userEvent.click(await screen.findByRole("button", { name: "Resume" }));
+  const shown: string[] = [];
+  const observer = new MutationObserver((records) => {
+    for (const record of records) for (const node of record.addedNodes) shown.push(node.textContent ?? "");
+  });
+  observer.observe(container, { childList: true, subtree: true, characterData: true });
+
+  await userEvent.click(screen.getByRole("button", { name: "Close" }));
+  await screen.findByRole("button", { name: "Discard" });
+  observer.disconnect();
+
+  expect(shown.join(" ")).not.toContain(PROMPT_OPEN);
+  expect(screen.getByRole("button", { name: "Discard" })).toBeEnabled();
 });

@@ -88,7 +88,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
   const asked = useRef(0);
   const isHeld = heldElsewhere !== false;
 
-  const readStored = () => {
+  const readStored = (isClosing = false) => {
     const store = predictRunStore();
     const run = address ? findInterruptedRun(store, session.id, address) : null;
     setStored({ owner: address, run });
@@ -100,7 +100,8 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
       return;
     }
     const flowId = predictFlowId(session.id, address);
-    setHeldHere(tabOwnership().heldHere(flowId));
+    // the closing popup's driver holds the run until it unmounts; the read after that sets it
+    if (!isClosing) setHeldHere(tabOwnership().heldHere(flowId));
     void tabOwnership()
       .heldElsewhere(flowId)
       .then((held) => {
@@ -149,7 +150,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
 
   // read in the same commit that closes the popup, so the card never shows a run the popup has since finished
   const closePopup = () => {
-    readStored();
+    readStored(true);
     setOpened(undefined);
   };
 
