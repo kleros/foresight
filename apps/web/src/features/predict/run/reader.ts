@@ -28,7 +28,22 @@ export function createPredictReader(args: {
   collateral: Address;
   /** Where the chain has Foresight credits for this collateral. */
   credits?: { token: Address; manager: Address } | null;
+  /** The owner's transaction count as the wallet's own node reads it, which sees its broadcasts first. */
+  walletNonce?: (owner: Address, blockTag: "latest" | "pending") => Promise<number>;
 }): PredictReader {
+  const appCounts = (owner: Address) =>
+    Promise.all([
+      args.client.getTransactionCount({ address: owner, blockTag: "latest" }),
+      args.client.getTransactionCount({ address: owner, blockTag: "pending" }),
+    ]);
+
+  /** The owner's mined and broadcast counts, both from the wallet's node where it answers, else both from the app's. */
+  async function nonceCounts(owner: Address): Promise<[mined: number, broadcast: number]> {
+    const wallet = args.walletNonce;
+    if (!wallet) return appCounts(owner);
+    return Promise.all([wallet(owner, "latest"), wallet(owner, "pending")]).catch(() => appCounts(owner));
+  }
+
   const balanceOf = (token: Address, holder: Address) =>
     args.client.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [holder] });
 
@@ -146,23 +161,24 @@ export function createPredictReader(args: {
     },
 
     async hasPending(owner) {
-      const [pending, latest] = await Promise.all([
-        args.client.getTransactionCount({ address: owner, blockTag: "pending" }),
-        args.client.getTransactionCount({ address: owner, blockTag: "latest" }),
-      ]);
+      const [latest, pending] = await nonceCounts(owner);
       return pending > latest;
     },
 
-    nextNonce(owner) {
-      return args.client.getTransactionCount({ address: owner, blockTag: "pending" });
+    async nextNonce(owner) {
+      return (await nonceCounts(owner))[1];
     },
 
     async sentWithNonce({ owner, nonce, fromBlock }) {
-      const [mined, broadcast] = await Promise.all([
-        args.client.getTransactionCount({ address: owner, blockTag: "latest" }),
-        args.client.getTransactionCount({ address: owner, blockTag: "pending" }),
-      ]);
+      const [mined, broadcast] = await nonceCounts(owner);
       if (mined <= nonce) return { status: broadcast > nonce ? "pending" : "none" };
+      // the blocks are searched on the app's node, which may not have reached the block the wallet's node mined it in
+      if (
+        args.walletNonce &&
+        (await args.client.getTransactionCount({ address: owner, blockTag: "latest" })) <= nonce
+      ) {
+        return { status: "pending" };
+      }
 
       const head = await args.client.getBlockNumber({ cacheTime: 0 });
       const minedIn = await blockMining(owner, nonce, fromBlock, head).catch(() => undefined);

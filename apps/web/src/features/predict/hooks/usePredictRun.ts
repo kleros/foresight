@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 
 import { createViemTxGateway, type FlowRunStore } from "@foresight/tx-orchestrator";
-import { sendTransaction } from "@wagmi/core";
+import { getConnectorClient, sendTransaction } from "@wagmi/core";
 import type { Address } from "viem";
+import { getTransactionCount } from "viem/actions";
 
 import { createLensExactInputQuoter, createLensQuoter } from "@/lib/swap/lens";
 import { publicClient } from "@/lib/web3/public-client";
@@ -92,6 +93,11 @@ export function usePredictRun(input: PredictRunInput | null): {
         sessionId: input.sessionId,
         collateral: input.collateral,
         credits: input.credits,
+        walletNonce: async (owner, blockTag) =>
+          getTransactionCount(await getConnectorClient(wagmiConfig, { account: owner, chainId: DEFAULT_CHAIN_ID }), {
+            address: owner,
+            blockTag,
+          }),
       }),
       quoter: createLensQuoter(publicClient, DEFAULT_CHAIN_ID as 100, undefined, input.closesAt),
       creditsQuoter: createLensExactInputQuoter(publicClient, DEFAULT_CHAIN_ID as 100, undefined, input.closesAt),

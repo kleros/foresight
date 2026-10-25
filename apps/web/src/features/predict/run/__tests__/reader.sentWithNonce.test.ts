@@ -79,3 +79,43 @@ describe("createPredictReader's sentWithNonce", () => {
     expect(await reader.sentWithNonce({ owner: OWNER, nonce: 1, fromBlock: 1_000n })).toEqual({ status: "taken" });
   });
 });
+
+describe("createPredictReader's nonce reads through the wallet's provider", () => {
+  const walletCounts = (latest: number, pending: number) =>
+    vi.fn((_owner: Address, blockTag: "latest" | "pending") =>
+      Promise.resolve(blockTag === "latest" ? latest : pending),
+    );
+
+  it("reads the next nonce from the wallet's node when it has one", async () => {
+    const { client } = chainClient(100n, { 0: 10n });
+    const walletNonce = walletCounts(1, 3);
+    const reader = createPredictReader({ client, sessionId: "1", collateral: TARGET, walletNonce });
+
+    expect(await reader.nextNonce(OWNER)).toBe(3);
+    expect(walletNonce).toHaveBeenCalledWith(OWNER, "pending");
+  });
+
+  it("sees a send pending on the wallet's node that the app's node does not know", async () => {
+    const { client } = chainClient(100n, { 0: 10n });
+    const reader = createPredictReader({ client, sessionId: "1", collateral: TARGET, walletNonce: walletCounts(1, 2) });
+
+    expect(await reader.sentWithNonce({ owner: OWNER, nonce: 1, fromBlock: 50n })).toEqual({ status: "pending" });
+    expect(await reader.hasPending(OWNER)).toBe(true);
+  });
+
+  it("calls a nonce the wallet's node has mined, but the app's node has not reached, pending rather than taken", async () => {
+    const { client } = chainClient(100n, { 0: 10n });
+    const reader = createPredictReader({ client, sessionId: "1", collateral: TARGET, walletNonce: walletCounts(2, 2) });
+
+    expect(await reader.sentWithNonce({ owner: OWNER, nonce: 1, fromBlock: 50n })).toEqual({ status: "pending" });
+  });
+
+  it("reads from the app's node when the wallet's read fails", async () => {
+    const { client } = chainClient(100n, { 0: 10n });
+    const walletNonce = vi.fn(() => Promise.reject(new Error("method not supported")));
+    const reader = createPredictReader({ client, sessionId: "1", collateral: TARGET, walletNonce });
+
+    expect(await reader.nextNonce(OWNER)).toBe(1);
+    expect(await reader.sentWithNonce({ owner: OWNER, nonce: 1, fromBlock: 50n })).toEqual({ status: "none" });
+  });
+});
