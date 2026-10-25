@@ -27,7 +27,7 @@ await orchestrator.resume();
 
 `pending`: still in the mempool. Resume adopts the hash rather than paying for a second transaction.
 
-`dropped`: the node has never heard of it. The step returns to `pending` and resume signs a fresh one.
+`unseen`: the node knows neither a receipt nor the transaction. The hash is kept, since a load-balanced or lagging node can miss a transaction another node holds, and resume would wait on it again. The adapter decides when it is dead, for example once the sender's nonce went to another transaction, and calls `releaseInFlight()`: with no argument the step returns to `pending` and resume signs a fresh one; with a hash the step waits on that one instead. `releaseInFlight()` refuses while the loop is going.
 
 `unknown`: a prompt was open and no hash was recorded. There is nothing to ask the chain, and a dismissed popup is indistinguishable from one approved after the tab died. The step is reset so resume prompts again, and the question is left to that step's `canSkip`. The result carries `canSelfCheck: false` when the step has none.
 

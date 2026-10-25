@@ -65,7 +65,6 @@ export async function reconcileInFlight<TSnapshot, TCtx>(args: {
     return { outcome: "pending", stepId, hash };
   }
 
-  state.setOutcome(stepId, { status: "pending" });
-  state.persist();
-  return { outcome: "dropped", stepId, hash };
+  // one node's not-found is not proof the transaction is gone; only `releaseInFlight` lets go of the hash
+  return { outcome: "unseen", stepId, hash };
 }

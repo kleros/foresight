@@ -7,6 +7,7 @@ import { createRunState, restoreRun, type SnapshotPatch } from "./runState";
 import { createFlowScope, type FlowScope } from "./scope";
 import { assertUniqueIds, inFlightEntry, liveEntries, liveSteps, planned, replaceLive, settledEntries } from "./steps";
 import type { FlowRunStore } from "./storage";
+import type { Hash } from "viem";
 import type {
   FlowHooks,
   FlowStatus,
@@ -84,6 +85,11 @@ export interface TxOrchestrator<TSnapshot, TCtx> {
   preflight(): Promise<ResumePreflightDiff>;
   /** Works out what happened to a transaction that was in flight when the flow was interrupted. */
   reconcileInFlight(): Promise<ReconcileResult>;
+  /**
+   * Lets go of the in-flight step's hash: with `minedAs`, the step waits on that hash instead; without, it is
+   * pending and resume signs it again. Refused while the run is going.
+   */
+  releaseInFlight(minedAs?: Hash): void;
 
   getRun(): OrchestratorRun<TSnapshot, TCtx> | null;
   getStatus(): FlowStatus;
@@ -292,6 +298,14 @@ export function createTxOrchestrator<TSnapshot, TCtx>(opts: {
       return reconcileInFlight({ state, gateway, emit, afterStep: driver.runAfterStep });
     },
 
+    releaseInFlight(minedAs) {
+      refuseWhileRunning("release a transaction");
+      const entry = inFlightEntry(state.require("release a transaction").steps);
+      if (entry?.outcome.status !== "submitted") return;
+      state.setOutcome(entry.stepId, minedAs ? { status: "submitted", hash: minedAs } : { status: "pending" });
+      state.persist();
+    },
+
     async preflight() {
       refuseWhileRunning("run preflight");
       const active = state.require("run preflight");
@@ -303,7 +317,7 @@ export function createTxOrchestrator<TSnapshot, TCtx>(opts: {
 
       const live = state.get();
       if (hooks.onResume && live) {
-        // Reconciled already, so `submitted` means genuinely out there.
+        // Reconciled already, so `submitted` is pending or unseen, never mined.
         const flying = inFlightEntry(live.steps);
 
         const result = await hooks.onResume({

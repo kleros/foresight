@@ -162,7 +162,7 @@ describe("reconciling a transaction that was in flight", () => {
     expect(inFlightHash(second.orchestrator.getRun())).toBe(hash);
   });
 
-  it("clears a dropped transaction so the step is signed again", async () => {
+  it("keeps a hash the node does not know, since another node may still hold it", async () => {
     const { first, hash } = await pausedMidFlight();
     const second = reload(first);
     second.orchestrator.restore({ flowId: "flow-1", steps: [step("a"), step("b")] });
@@ -170,9 +170,47 @@ describe("reconciling a transaction that was in flight", () => {
 
     const result = await second.orchestrator.reconcileInFlight();
 
-    expect(result.outcome).toBe("dropped");
-    // Back to pending: resume signs a fresh one rather than adopting a dead hash.
+    expect(result).toEqual({ outcome: "unseen", stepId: "a", hash });
+    expect(outcomeOf(second.orchestrator.getRun(), "a")).toEqual({ status: "submitted", hash });
+    expect(persistedHash(second.store.load("flow-1"))).toBe(hash);
+  });
+
+  it("signs the step again once the adapter releases its hash", async () => {
+    const { first, hash } = await pausedMidFlight();
+    const second = reload(first);
+    second.orchestrator.restore({ flowId: "flow-1", steps: [step("a"), step("b")] });
+    second.gateway.setChainState(hash as `0x${string}`, { receipt: null, known: false });
+    await second.orchestrator.reconcileInFlight();
+
+    second.orchestrator.releaseInFlight();
+
     expect(outcomeOf(second.orchestrator.getRun(), "a")).toEqual({ status: "pending" });
+    expect(persistedHash(second.store.load("flow-1"))).toBeUndefined();
+    await second.orchestrator.resume();
+    expect(second.gateway.signRequests).toHaveLength(2);
+  });
+
+  it("follows the hash the adapter found the step mined under", async () => {
+    const { first, hash } = await pausedMidFlight();
+    const second = reload(first);
+    second.orchestrator.restore({ flowId: "flow-1", steps: [step("a"), step("b")] });
+    second.gateway.setChainState(hash as `0x${string}`, { receipt: null, known: false });
+    await second.orchestrator.reconcileInFlight();
+    const repriced = "0x00000000000000000000000000000000000000000000000000000000000000ab" as const;
+    second.gateway.setChainState(repriced, { receipt: "success", known: true });
+
+    second.orchestrator.releaseInFlight(repriced);
+
+    expect(persistedHash(second.store.load("flow-1"))).toBe(repriced);
+    expect(await second.orchestrator.reconcileInFlight()).toMatchObject({ outcome: "confirmed", hash: repriced });
+  });
+
+  it("refuses to release a hash while the run is going", async () => {
+    const h = harness({ scripts: [{ mine: "hold" }] });
+    void h.start([step("a")]);
+    await settle();
+
+    expect(() => h.orchestrator.releaseInFlight()).toThrow(FlowStateError);
   });
 
   it("has nothing to reconcile when the run stopped at the wallet prompt", async () => {
@@ -302,16 +340,16 @@ describe("preflight", () => {
     expect(calls[0]?.inFlight).toEqual({ stepId: "a", hash });
   });
 
-  it("says nothing is in flight once the transaction has been dropped", async () => {
+  it("still names a hash the node does not know as in flight", async () => {
     const calls: OnResumeArgs[] = [];
-    const { first } = await pausedMidFlight();
-    // A fresh gateway has never heard of the hash, so reconciliation drops it.
+    const { first, hash } = await pausedMidFlight();
+    // a fresh gateway has never heard of the hash
     const second = harness({ storage: first.storage, hooks: { onResume: (args) => void calls.push(args) } });
     second.orchestrator.restore({ flowId: "flow-1", steps: [step("a"), step("b")] });
 
     await second.orchestrator.preflight();
 
-    expect(calls[0]?.inFlight).toBeUndefined();
+    expect(calls[0]?.inFlight).toEqual({ stepId: "a", hash });
   });
 
   it("keeps a transaction still in the mempool through a re-plan, rather than paying for it twice", async () => {

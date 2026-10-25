@@ -606,9 +606,10 @@ export function createPredictRun(args: {
     const found = await orchestrator.reconcileInFlight().finally(() => {
       reconciling = false;
     });
-    // A revert is reported through `flow:failed`; a dropped transaction is rebuilt only on the next press.
+    // A revert is reported through `flow:failed`; an unseen transaction is rebuilt only on the next press.
     if (found.outcome === "reverted") return;
-    if (found.outcome === "dropped") {
+    if (found.outcome === "unseen") {
+      orchestrator.releaseInFlight();
       report(errorOf(orchestrator.getRun())?.cause ?? "unknown", resumeRun);
       return;
     }
