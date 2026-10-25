@@ -19,7 +19,8 @@ import {
   snapshot,
   WAD,
 } from "../../flow/__tests__/support/fakes";
-import { createPredictRun } from "../driver";
+import type { PredictReader, SentTx } from "../../flow/types";
+import { createPredictRun, SEND_HOLD_MS } from "../driver";
 import type { PredictDriver } from "../types";
 
 /** The third send is the second batch; its receipt waits fail with `waitError` and its lookup says `lookup`. */
@@ -57,16 +58,25 @@ afterEach(() => {
   for (const driver of drivers.splice(0)) driver.dispose();
 });
 
-function setup(gateway: TxGateway, store?: FlowRunStore, flowId = `predict-reconcile-${drivers.length}`) {
+const clock = { at: 1_700_000_000_000 };
+
+function setup(
+  gateway: TxGateway,
+  store?: FlowRunStore,
+  flowId = `predict-reconcile-${drivers.length}`,
+  sentWithNonce?: PredictReader["sentWithNonce"],
+) {
+  const reader = fakeReader({
+    deployed: true,
+    collateral: 0n,
+    state: () => chainState({ underlying: WAD }),
+    blockGasLimit: gasLimitFor(1),
+  });
   const driver = createPredictRun({
     gateway,
     store,
-    reader: fakeReader({
-      deployed: true,
-      collateral: 0n,
-      state: () => chainState({ underlying: WAD }),
-      blockGasLimit: gasLimitFor(1),
-    }),
+    now: () => clock.at,
+    reader: sentWithNonce ? { ...reader, sentWithNonce } : reader,
     quoter: fakeQuoter(),
     flowId,
     ctx: () => ctx(),
@@ -77,7 +87,7 @@ function setup(gateway: TxGateway, store?: FlowRunStore, flowId = `predict-recon
 }
 
 describe("createPredictRun when a batch's receipt was never seen", () => {
-  it("halts for review, without signing, when the unseen batch was dropped, and rebuilds it on the next press", async () => {
+  it("keeps the hash while its nonce reads unused, offering Check again and signing nothing", async () => {
     const gateway = unseenBatchGateway({
       waitError: () => new Error("node said something odd", { cause: "opaque" }),
       lookup: "dropped",
@@ -86,19 +96,114 @@ describe("createPredictRun when a batch's receipt was never seen", () => {
 
     driver.start();
     await vi.waitFor(() => expect(driver.getProgress().pendingHash).toBeDefined());
-    expect(driver.getProgress().stage).toBe("halted");
+    const hash = driver.getProgress().pendingHash;
 
     driver.retry();
-    await vi.waitFor(() => expect(driver.getProgress().pendingHash).toBeUndefined());
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await vi.waitFor(() => expect(driver.getProgress().failure).toEqual({ reason: "unseen", retryable: true }));
+    clock.at += SEND_HOLD_MS - 1;
+    driver.retry();
+    await vi.waitFor(() => expect(driver.getProgress().failure?.reason).toBe("unseen"));
 
-    expect(driver.getProgress().stage).toBe("halted");
+    expect(driver.getProgress().pendingHash).toBe(hash);
+    expect(gateway.signRequests).toHaveLength(3);
+  });
+
+  it("asks before signing again once the nonce stayed unused for ten minutes, and signs on the answer", async () => {
+    const gateway = unseenBatchGateway({
+      waitError: () => new Error("node said something odd", { cause: "opaque" }),
+      lookup: "dropped",
+    });
+    const driver = setup(gateway);
+
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().pendingHash).toBeDefined());
+    clock.at += SEND_HOLD_MS;
+    driver.retry();
+    await vi.waitFor(() => expect(driver.getProgress().failure).toEqual({ reason: "resign", retryable: true }));
+    expect(gateway.signRequests).toHaveLength(3);
+
+    driver.retry();
+    await vi.waitFor(() => expect(gateway.signRequests).toHaveLength(4));
+    expect(isBatch(gateway.signRequests[3]!)).toBe(true);
+  });
+
+  it("lets the hash go once its nonce went to another transaction, and rebuilds the batch on the next press", async () => {
+    const gateway = unseenBatchGateway({
+      waitError: () => new Error("node said something odd", { cause: "opaque" }),
+      lookup: "dropped",
+    });
+    const other: SentTx = {
+      status: "mined",
+      hash: `0x${"e".repeat(64)}`,
+      to: addresses.owner,
+      value: 1n,
+      input: "0x",
+      success: true,
+    };
+    const driver = setup(gateway, undefined, undefined, ({ nonce }) =>
+      Promise.resolve(nonce === 0 && gateway.signRequests.length >= 3 ? other : { status: "none" }),
+    );
+
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().pendingHash).toBeDefined());
+    driver.retry();
+    await vi.waitFor(() => expect(driver.getProgress().pendingHash).toBeUndefined());
     expect(driver.getProgress().failure).toEqual({ reason: "unknown", retryable: true });
     expect(gateway.signRequests).toHaveLength(3);
 
     driver.retry();
     await vi.waitFor(() => expect(gateway.signRequests).toHaveLength(4));
     expect(isBatch(gateway.signRequests[3]!)).toBe(true);
+  });
+
+  it("waits on the hash the same transaction mined under when the wallet replaced it", async () => {
+    const gateway = unseenBatchGateway({
+      waitError: () => new Error("node said something odd", { cause: "opaque" }),
+      lookup: "dropped",
+    });
+    const replacement = `0x${"a".repeat(64)}` as Hash;
+    const driver = setup(gateway, undefined, undefined, ({ nonce }) => {
+      const batch = gateway.signRequests[2];
+      if (nonce !== 0 || !batch) return Promise.resolve({ status: "none" });
+      return Promise.resolve({
+        status: "mined",
+        hash: replacement,
+        to: batch.to,
+        value: batch.value ?? 0n,
+        input: batch.data ?? "0x",
+        success: true,
+      });
+    });
+
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().pendingHash).toBeDefined());
+    driver.retry();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("complete"));
+
+    expect(driver.getProgress().steps.at(-1)?.hash).toBe(replacement);
+    expect(gateway.signRequests).toHaveLength(3);
+  });
+
+  it("forgets the run on Discard, once the hash is held", async () => {
+    const store = createFlowRunStore({ storage: createMemoryStorage() });
+    const gateway = unseenBatchGateway({
+      waitError: () => new Error("node said something odd", { cause: "opaque" }),
+      lookup: "dropped",
+    });
+    const driver = setup(gateway, store, "predict-reconcile-discard");
+
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().pendingHash).toBeDefined());
+    driver.discard();
+    expect(store.load("predict-reconcile-discard")).not.toBeNull();
+
+    driver.retry();
+    await vi.waitFor(() => expect(driver.getProgress().failure?.reason).toBe("unseen"));
+    driver.discard();
+
+    expect(store.load("predict-reconcile-discard")).toBeNull();
+    expect(driver.getProgress().stage).toBe("idle");
+    expect(gateway.signRequests).toHaveLength(3);
   });
 
   it(

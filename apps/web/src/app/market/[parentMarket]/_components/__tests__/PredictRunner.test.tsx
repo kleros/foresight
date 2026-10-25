@@ -116,6 +116,7 @@ const driver = {
   resume: vi.fn<PredictDriver["resume"]>(),
   confirm: vi.fn<PredictDriver["confirm"]>(),
   retry: vi.fn<PredictDriver["retry"]>(),
+  discard: vi.fn<PredictDriver["discard"]>(),
   reset: vi.fn<PredictDriver["reset"]>(),
   dispose: vi.fn<PredictDriver["dispose"]>(),
   subscribe: vi.fn<PredictDriver["subscribe"]>(() => () => {}),

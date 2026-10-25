@@ -154,7 +154,7 @@ describe("createPredictRun with a stored run", () => {
     expect(driver.getProgress().recovered).toBeUndefined();
   });
 
-  it("checks the chain again on resume, and stops on a deposit dropped during the review", async () => {
+  it("checks the chain again on resume, and asks before signing again a deposit no node finds and whose nonce it never kept", async () => {
     const hash = `0x${"d".repeat(64)}` as Hash;
     let known = true;
     const gateway: TxGateway = {
@@ -171,7 +171,7 @@ describe("createPredictRun with a stored run", () => {
     driver.resume();
 
     await vi.waitFor(() => expect(driver.getProgress().stage).toBe("halted"));
-    expect(driver.getProgress().failure?.retryable).toBe(true);
-    expect(driver.getProgress().pendingHash).toBeUndefined();
+    expect(driver.getProgress().failure).toEqual({ reason: "resign", retryable: true });
+    expect(driver.getProgress().pendingHash).toBe(hash);
   });
 });

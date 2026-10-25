@@ -292,16 +292,21 @@ export function createPredictRun(args: {
     });
   }
 
+  /** `prev` without `stepId`'s entry in `key`, the map dropped once it is empty. */
+  function without(prev: PredictSnapshot, key: "unanswered" | "sent", stepId: string): PredictSnapshot {
+    const { [stepId]: _settled, ...rest } = prev[key] ?? {};
+    const { [key]: _all, ...others } = prev;
+    return Object.keys(rest).length > 0 ? { ...others, [key]: rest } : others;
+  }
+
   function forgetUnanswered(stepId: string) {
     if (!orchestrator.getRun()?.snapshot.unanswered?.[stepId]) return;
-    orchestrator.updateSnapshot(
-      (prev) => {
-        const { [stepId]: _settled, ...rest } = prev.unanswered ?? {};
-        const { unanswered: _all, ...without } = prev;
-        return Object.keys(rest).length > 0 ? { ...without, unanswered: rest } : without;
-      },
-      { source: "adapter" },
-    );
+    orchestrator.updateSnapshot((prev) => without(prev, "unanswered", stepId), { source: "adapter" });
+  }
+
+  function forgetSent(stepId: string) {
+    if (!orchestrator.getRun()?.snapshot.sent?.[stepId]) return;
+    orchestrator.updateSnapshot((prev) => without(prev, "sent", stepId), { source: "adapter" });
   }
 
   /** The wallet's send, carried on with the chain's own record of it when the send errors. */
@@ -575,10 +580,19 @@ export function createPredictRun(args: {
   orchestrator.subscribe(notify);
   orchestrator.on("step:submitted", (event) => {
     if (event.stepId !== STEP_ID.createExecutor) moneyMoved = true;
-    // the hash is stored by now, and the receipt settles the step from here
-    forgetUnanswered(event.stepId);
+    // the hash is stored by now; its send is kept for the nonce, which says whether a hash no node finds is dead
+    const send = orchestrator.getRun()?.snapshot.unanswered?.[event.stepId];
+    if (!send) return;
+    orchestrator.updateSnapshot(
+      (prev) => ({ ...without(prev, "unanswered", event.stepId), sent: { ...prev.sent, [event.stepId]: send } }),
+      { source: "adapter" },
+    );
   });
-  orchestrator.on("step:skipped", (event) => forgetUnanswered(event.stepId));
+  orchestrator.on("step:confirmed", (event) => forgetSent(event.stepId));
+  orchestrator.on("step:skipped", (event) => {
+    forgetUnanswered(event.stepId);
+    forgetSent(event.stepId);
+  });
   orchestrator.on("flow:paused", () => {
     if (movedByBuild) {
       moved = movedByBuild;
@@ -646,6 +660,41 @@ export function createPredictRun(args: {
       : orchestrator.resume(),
   );
 
+  /** Lets go of `stepId`'s hash, so the step is signed again on resume. */
+  function releaseHash(stepId: string) {
+    orchestrator.releaseInFlight();
+    forgetSent(stepId);
+  }
+
+  /**
+   * A hash the node does not know is kept while its nonce reads unused, for the hold its send started; a nonce taken
+   * by another transaction lets it go, and a nonce still unused past the hold, or never stored, asks first.
+   */
+  async function settleUnseen(stepId: string, hash: Hash) {
+    const send = orchestrator.getRun()?.snapshot.sent?.[stepId];
+    const found = send ? await sentAs(send) : undefined;
+    if (found?.status === "mined" && found.hash.toLowerCase() !== hash.toLowerCase()) {
+      orchestrator.releaseInFlight(found.hash);
+      await orchestrator.resume();
+      return;
+    }
+    if (found?.status === "mined" || found?.status === "pending") {
+      report("pending", reconcileRun);
+      return;
+    }
+    if (found?.status === "taken") {
+      releaseHash(stepId);
+      report(errorOf(orchestrator.getRun())?.cause ?? "unknown", resumeRun);
+      return;
+    }
+    if (send && holding(send)) report("unseen", reconcileRun);
+    else
+      report("resign", () => {
+        releaseHash(stepId);
+        resumeRun();
+      });
+  }
+
   /** Settles a sent transaction whose receipt was never seen, then carries on only if it mined or may still. */
   const reconcileRun = detached(async () => {
     reconciling = true;
@@ -653,11 +702,10 @@ export function createPredictRun(args: {
     const found = await orchestrator.reconcileInFlight().finally(() => {
       reconciling = false;
     });
-    // A revert is reported through `flow:failed`; an unseen transaction is rebuilt only on the next press.
+    // a revert is reported through `flow:failed`
     if (found.outcome === "reverted") return;
-    if (found.outcome === "unseen") {
-      orchestrator.releaseInFlight();
-      report(errorOf(orchestrator.getRun())?.cause ?? "unknown", resumeRun);
+    if (found.outcome === "unseen" && found.stepId !== undefined && found.hash !== undefined) {
+      await settleUnseen(found.stepId, found.hash);
       return;
     }
     await settleOwedMint();
@@ -846,7 +894,7 @@ export function createPredictRun(args: {
     });
   }
 
-  return {
+  const driver: PredictDriver = {
     start(heldTo) {
       if (checking || claiming || orchestrator.getStatus() !== "idle") return;
       claimed(() => {
@@ -940,6 +988,15 @@ export function createPredictRun(args: {
       report(undefined);
     },
 
+    discard() {
+      const run = orchestrator.getRun();
+      const stepId = run && pendingHashOf(run) ? currentEntry(run.steps)?.stepId : undefined;
+      if (stepId === undefined || (failure?.reason !== "unseen" && failure?.reason !== "resign")) return;
+      releaseHash(stepId);
+      report(undefined);
+      driver.reset();
+    },
+
     dispose() {
       checking = undefined;
       claiming = undefined;
@@ -958,4 +1015,5 @@ export function createPredictRun(args: {
       return () => void listeners.delete(listener);
     },
   };
+  return driver;
 }

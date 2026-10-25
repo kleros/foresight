@@ -136,6 +136,8 @@ export interface PredictSnapshot {
   mintOwed?: true;
   /** Sends the wallet was asked for and no hash is stored for, by step id, until their nonce says how they ended. */
   unanswered?: Record<string, UnansweredSend>;
+  /** The send behind each step stored as submitted, by step id, for the nonce its hash took. */
+  sent?: Record<string, UnansweredSend>;
 }
 
 /** A send the wallet was asked for, which the chain may mine under `nonce`. */

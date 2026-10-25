@@ -203,6 +203,16 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
         Boolean(progress?.unanswered) ||
         progress?.failure?.reason === "pending");
 
+  // a hash no node finds can be let go, with its run, once the visitor chooses to
+  const canDiscard =
+    stage === "halted" &&
+    Boolean(pendingHash) &&
+    (progress?.failure?.reason === "unseen" || progress?.failure?.reason === "resign");
+  const discard = () => {
+    driver?.discard();
+    onClose();
+  };
+
   const close = () => {
     if ((stage === "halted" && !pendingHash) || stage === "moved") driver?.reset();
     onClose();
@@ -330,6 +340,7 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
       canRetry={canRetry}
       isPending={Boolean(pendingHash) || (stage === "halted" && Boolean(progress?.unanswered))}
       asksToSignAgain={stage === "halted" && progress?.failure?.reason === "resign"}
+      onDiscard={canDiscard ? discard : undefined}
       recovered={
         recovered && {
           deposit: recovered.deposit,

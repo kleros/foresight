@@ -68,6 +68,7 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
     "This browser couldn't save the prediction's progress, so no wallet prompt was opened. Free up storage or leave private browsing, then try again.",
   held: "Your wallet may still send the last transaction. Check again in a few minutes.",
   resign: SIGN_AGAIN_ASK,
+  unseen: "The network can't find your last transaction yet. Check again, or discard it.",
 };
 
 /** Once the credits are in the trade wallet the run is locked to them, so only waiting helps. */
@@ -231,15 +232,18 @@ export function predictSteps(
       ? { ...stepRow, view: "failed" as const, subtitle: stepRow.key === "predict" ? partial : stepRow.subtitle }
       : stepRow,
   );
-  const reason = progress.pendingHash
-    ? PENDING_COPY
-    : progress.failure?.reason === "funds" && progress.moneyMoved
-      ? FEE_ONLY_OUT_OF_FUNDS_COPY
-      : progress.failure?.reason === "credits" && progress.moneyMoved
-        ? CREDITS_LOCKED_COPY
-        : progress.failure
-          ? FAILURE_COPY[progress.failure.reason]
-          : FAILURE_COPY.unknown;
+  // a hash no node finds is said as what the visitor can do with it
+  const unseen = progress.failure?.reason === "unseen" || progress.failure?.reason === "resign";
+  const reason =
+    progress.pendingHash && !unseen
+      ? PENDING_COPY
+      : progress.failure?.reason === "funds" && progress.moneyMoved
+        ? FEE_ONLY_OUT_OF_FUNDS_COPY
+        : progress.failure?.reason === "credits" && progress.moneyMoved
+          ? CREDITS_LOCKED_COPY
+          : progress.failure
+            ? FAILURE_COPY[progress.failure.reason]
+            : FAILURE_COPY.unknown;
   return { rows: marked, failure: reason, ...started, ...(mayLand ? { pending: true as const } : {}) };
 }
 

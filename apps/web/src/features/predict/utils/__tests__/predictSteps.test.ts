@@ -408,6 +408,21 @@ describe("statusLine", () => {
   });
 
   it.each([
+    ["unseen", "The network can't find your last transaction yet. Check again, or discard it."],
+    ["resign", "A wallet prompt from this run may still be open. Check your wallet before signing again."],
+  ] as const)("says what to do with a sent hash no node finds, at %s, rather than that it is sent", (reason, text) => {
+    const held = steps({
+      progress: progress({
+        stage: "halted",
+        failure: { reason, retryable: true },
+        pendingHash: `0x${"ab".repeat(32)}`,
+      }),
+    });
+
+    expect(statusLine({ steps: held, leftOut: 0 })).toEqual({ text, tone: "warning" });
+  });
+
+  it.each([
     ["rejected", "You declined in your wallet."],
     ["cancelled", "Cancelled or replaced in your wallet."],
     ["reverted", "The trade failed at these prices. Raise slippage in Settings and retry."],

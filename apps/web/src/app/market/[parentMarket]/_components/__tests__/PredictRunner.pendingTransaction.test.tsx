@@ -21,6 +21,8 @@ import { createPredictRun, SEND_HOLD_MS } from "@/features/predict/run/driver";
 import type { PredictDriver } from "@/features/predict/run/types";
 import type { SelectedEstimate } from "@/features/predict/types";
 import { SIGN_AGAIN_ASK } from "@/features/predict/utils/predictSteps";
+
+const UNSEEN_COPY = "The network can't find your last transaction yet. Check again, or discard it.";
 import type { SessionDetail } from "@/features/sessions/types";
 import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 import { toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
@@ -723,5 +725,51 @@ describe("PredictRunner, a deposit whose send errored and whose nonce stayed unu
     popup.predict();
     await vi.waitFor(() => expect(popup.onSuccess).toHaveBeenCalled(), SLOW);
     expect(chain.deposits()).toHaveLength(1);
+  });
+});
+
+describe("PredictRunner, a stored deposit hash no node finds", () => {
+  it("keeps it with Check again and Discard while its nonce reads unused, and Discard forgets the run", async () => {
+    const chain = fakeChain();
+    const hash = `0x${"2".repeat(64)}` as Hash;
+    const clock = { at: 1_700_000_000_000 };
+    store.save<PredictSnapshot, PredictCtx>({
+      flowId: FLOW_ID,
+      adapterId: "predict-flow",
+      status: "paused",
+      reason: "error",
+      ctx: ctx(),
+      snapshot: {
+        ...SNAP,
+        collateralAtStart: START_BALANCE,
+        sent: {
+          [STEP_ID.deposit]: {
+            owner: OWNER,
+            nonce: 0,
+            fromBlock: 1n,
+            tx: { to: addresses.collateral, data: "0x" },
+            heldAt: clock.at,
+          },
+        },
+      },
+      steps: [
+        { stepId: STEP_ID.createExecutor, label: "Set up your trade wallet", outcome: { status: "skipped" } },
+        { stepId: STEP_ID.deposit, label: "Add money to your trade wallet", outcome: { status: "submitted", hash } },
+        { stepId: STEP_ID.predict(1), label: "Making your prediction", outcome: { status: "pending" } },
+      ],
+    });
+
+    const popup = open(chain, store, chain.reader, undefined, () => clock.at);
+    await vi.waitFor(() => expect(running()).toBe(false));
+    popup.predict();
+    await vi.waitFor(() => expect(screen.getByTestId("failure").textContent).toBe(UNSEEN_COPY));
+    expect(screen.getByTestId("asks-to-sign-again").textContent).toBe("false");
+    expect(chain.deposits()).toHaveLength(0);
+
+    fireEvent.click(screen.getByText("discard"));
+
+    expect(store.load(FLOW_ID)).toBeNull();
+    expect(popup.onClose).toHaveBeenCalled();
+    expect(chain.deposits()).toHaveLength(0);
   });
 });
