@@ -105,7 +105,7 @@ describe("createPredictRun when another send takes the nonce read for a batch", 
       flowId: "nonce-taken",
       ctx: () => ctx(),
       snapshot: () => snapshot({ options: [option(1), option(2)] }),
-      unansweredSend: { waitMs: 20, pollMs: 5, graceMs: 20 },
+      unansweredSend: { waitMs: 20, pollMs: 5 },
     });
     drivers.push(driver);
 

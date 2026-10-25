@@ -329,6 +329,7 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
       canClose={stage === "confirming" && Boolean(progress?.sentHash)}
       canRetry={canRetry}
       isPending={Boolean(pendingHash) || (stage === "halted" && Boolean(progress?.unanswered))}
+      asksToSignAgain={stage === "halted" && progress?.failure?.reason === "resign"}
       recovered={
         recovered && {
           deposit: recovered.deposit,

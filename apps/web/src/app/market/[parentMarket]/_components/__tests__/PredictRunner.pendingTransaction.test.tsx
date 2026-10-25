@@ -17,9 +17,10 @@ import type { PredictDialog } from "@/features/predict/components/PredictDialog"
 import { addresses, ctx, fakeReader, poolQuoter, snapshot, WAD } from "@/features/predict/flow/__tests__/support/fakes";
 import { STEP_ID } from "@/features/predict/flow/plan";
 import type { PredictCtx, PredictReader, PredictSnapshot, SentTx } from "@/features/predict/flow/types";
-import { createPredictRun } from "@/features/predict/run/driver";
+import { createPredictRun, SEND_HOLD_MS } from "@/features/predict/run/driver";
 import type { PredictDriver } from "@/features/predict/run/types";
 import type { SelectedEstimate } from "@/features/predict/types";
+import { SIGN_AGAIN_ASK } from "@/features/predict/utils/predictSteps";
 import type { SessionDetail } from "@/features/sessions/types";
 import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 import { toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
@@ -107,6 +108,7 @@ vi.mock("@/features/predict/components/PredictDialog", () => ({
       <p data-testid="can-retry">{String(props.canRetry)}</p>
       <p data-testid="can-close">{String(Boolean(props.canClose))}</p>
       <p data-testid="failure">{props.steps.failure ?? ""}</p>
+      <p data-testid="asks-to-sign-again">{String(Boolean(props.asksToSignAgain))}</p>
       <ul>
         {props.steps.rows.map((row) => (
           <li key={row.key} data-testid="row">{`${row.key}|${row.view}|${row.title}|${row.subtitle}`}</li>
@@ -114,6 +116,7 @@ vi.mock("@/features/predict/components/PredictDialog", () => ({
       </ul>
       <button onClick={props.onClose}>close</button>
       <button onClick={props.onPredict}>predict</button>
+      {props.onDiscard ? <button onClick={props.onDiscard}>discard</button> : null}
     </div>
   ),
 }));
@@ -237,7 +240,8 @@ function open(
   chain: Chain,
   store: FlowRunStore,
   reader: PredictReader = chain.reader,
-  unansweredSend?: { waitMs: number; pollMs: number; graceMs: number },
+  unansweredSend?: { waitMs: number; pollMs: number },
+  now?: () => number,
 ) {
   harness.makeDriver = () =>
     createPredictRun({
@@ -249,6 +253,7 @@ function open(
       ctx: (): PredictCtx => ctx(),
       snapshot: (): PredictSnapshot => SNAP,
       unansweredSend,
+      now,
     });
 
   const detail = session();
@@ -622,7 +627,7 @@ describe("PredictRunner, a deposit whose send errored after the wallet broadcast
         };
       },
     };
-    const fast = { waitMs: 20, pollMs: 5, graceMs: 20 };
+    const fast = { waitMs: 20, pollMs: 5 };
 
     const first = open(chain, store, reader, fast);
     await vi.waitFor(() => expect(running()).toBe(false));
@@ -669,7 +674,7 @@ describe("PredictRunner, a deposit whose send errored after the wallet broadcast
         };
       },
     };
-    const fast = { waitMs: 20, pollMs: 5, graceMs: 20 };
+    const fast = { waitMs: 20, pollMs: 5 };
     const isSetup = (tx: FlowTx) => tx.to === addresses.factory;
 
     const popup = open(chain, store, reader, fast);
@@ -684,5 +689,39 @@ describe("PredictRunner, a deposit whose send errored after the wallet broadcast
     await vi.waitFor(() => expect(popup.onSuccess).toHaveBeenCalled(), SLOW);
 
     expect(chain.signRequests.filter(isSetup)).toHaveLength(1);
+  });
+});
+
+describe("PredictRunner, a deposit whose send errored and whose nonce stayed unused", () => {
+  it("holds it for ten minutes, then asks before signing again and signs on Sign again", async () => {
+    const chain = fakeChain();
+    const send = chain.gateway.sendTransaction;
+    let refused = false;
+    chain.gateway.sendTransaction = (tx, opts) => {
+      if (refused || !isDeposit(tx)) return send(tx, opts);
+      refused = true;
+      return Promise.reject(
+        new Error("Transaction failed", {
+          cause: Object.assign(new Error("Internal JSON-RPC error."), { code: -32603 }),
+        }),
+      );
+    };
+    const clock = { at: 1_700_000_000_000 };
+
+    const popup = open(chain, store, chain.reader, { waitMs: 20, pollMs: 5 }, () => clock.at);
+    await vi.waitFor(() => expect(running()).toBe(false));
+    popup.predict();
+    await vi.waitFor(() => expect(screen.getByTestId("can-retry").textContent).toBe("true"));
+    expect(screen.getByTestId("asks-to-sign-again").textContent).toBe("false");
+
+    clock.at += SEND_HOLD_MS;
+    popup.predict();
+    await vi.waitFor(() => expect(screen.getByTestId("asks-to-sign-again").textContent).toBe("true"));
+    expect(screen.getByTestId("failure").textContent).toBe(SIGN_AGAIN_ASK);
+    expect(chain.deposits()).toHaveLength(0);
+
+    popup.predict();
+    await vi.waitFor(() => expect(popup.onSuccess).toHaveBeenCalled(), SLOW);
+    expect(chain.deposits()).toHaveLength(1);
   });
 });

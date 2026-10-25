@@ -44,8 +44,7 @@ async function haltOn(error: Error, opts: { failAt?: number; reader?: PredictRea
     flowId: `predict-send-failure-${drivers.length}`,
     ctx: () => ctx(),
     snapshot: () => snapshot(),
-    // the node took no nonce for a refused send, so the read after it gives up at once
-    unansweredSend: { waitMs: 10, pollMs: 5, graceMs: 10 },
+    unansweredSend: { waitMs: 10, pollMs: 5 },
   });
   drivers.push(driver);
   driver.start();
@@ -118,10 +117,11 @@ describe("createPredictRun when the node refuses a send", () => {
     expect(message(progress)).not.toBe(NETWORK);
   });
 
-  it("still calls an internal error that names no cause a network problem", async () => {
+  it("holds a send whose internal error names no cause, since the wallet's node may have taken it", async () => {
     const progress = await haltOn(nodeRefusal("Internal error"));
 
-    expect(progress.failure).toEqual({ reason: "rpc", retryable: true });
+    expect(progress.failure).toEqual({ reason: "held", retryable: true });
+    expect(progress.unanswered).toBe(true);
   });
 });
 

@@ -145,6 +145,8 @@ export interface UnansweredSend {
   /** The latest block as the send went out; the transaction can land no earlier. */
   fromBlock: bigint;
   tx: FlowTx;
+  /** When it was stored, in ms since the epoch. */
+  heldAt: number;
 }
 
 /** What the visitor asked for; the run adds what it reads from the chain when it starts. */

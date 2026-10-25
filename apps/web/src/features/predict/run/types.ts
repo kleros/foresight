@@ -16,6 +16,8 @@ import type { HeldTo, MovedPlans, PredictSnapshot } from "../flow/types";
  * `closed`: the session's close time has passed on the chain's clock, so nothing more is signed.
  * `unlisted`: a transaction departs from the chain's allow-list, the owner rule or the native-value rule, so it was not sent.
  * `storage`: the send could not be saved before the wallet prompt, so no prompt was opened.
+ * `held`: a send that errored is held while its nonce reads unused, for ten minutes; nothing is signed for it meanwhile.
+ * `resign`: a held send's nonce stayed unused past its hold; retrying signs it again, which the visitor is asked first.
  */
 export type PredictFailureReason =
   | TxErrorCause
@@ -32,7 +34,9 @@ export type PredictFailureReason =
   | "elsewhere"
   | "closed"
   | "unlisted"
-  | "storage";
+  | "storage"
+  | "held"
+  | "resign";
 
 /** What the popup shows while a prediction runs. */
 export type PredictStage =

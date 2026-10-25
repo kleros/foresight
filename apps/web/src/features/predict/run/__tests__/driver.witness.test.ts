@@ -26,7 +26,7 @@ import {
   WAD,
 } from "../../flow/__tests__/support/fakes";
 import { STEP_ID } from "../../flow/plan";
-import type { LandedTx, PredictCtx, PredictSnapshot } from "../../flow/types";
+import type { LandedTx, PredictCtx, PredictSnapshot, SentTx } from "../../flow/types";
 import { createPredictRun } from "../driver";
 import type { PredictDriver } from "../types";
 
@@ -129,7 +129,22 @@ function moneyChain(start: { owner: bigint; executorCredits: bigint; collateral:
     landed: () => ledger,
     pending: () => held.size > 0,
   });
-  const reader = { ...base, collateralBalance: () => Promise.resolve(balances.collateral) };
+  const hashAt = (nonce: number) => `0x${(nonce + 1).toString(16).padStart(64, "0")}` as Hash;
+  const reader = {
+    ...base,
+    collateralBalance: () => Promise.resolve(balances.collateral),
+    // each send takes the owner's next nonce
+    nextNonce: () => Promise.resolve(signRequests.length),
+    sentWithNonce: ({ nonce }: { nonce: number }): Promise<SentTx> => {
+      const tx = signRequests[nonce];
+      const mined = chain.get(hashAt(nonce));
+      if (!tx) return Promise.resolve({ status: "none" });
+      if (!mined) return Promise.resolve({ status: "pending" });
+      const { to, value = 0n, data = "0x" } = tx;
+      const sent = { hash: hashAt(nonce), to, value, input: data, success: mined.status === "success" };
+      return Promise.resolve({ status: "mined", ...sent });
+    },
+  };
 
   return {
     gateway,
@@ -173,8 +188,7 @@ function drive(chain: ReturnType<typeof moneyChain>, req: Request, store?: FlowR
     store,
     ctx: () => ctx(),
     snapshot: () => req,
-    // this chain shows no nonce taken, so an errored send is read once and given up on
-    unansweredSend: { waitMs: 10, pollMs: 5, graceMs: 10 },
+    unansweredSend: { waitMs: 10, pollMs: 5 },
   });
   drivers.push(driver);
   return driver;

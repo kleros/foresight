@@ -67,6 +67,10 @@ interface PredictDialogProps {
   canRetry: boolean;
   /** The stopped run sent a transaction whose outcome is unknown; pressing on checks it first. */
   isPending?: boolean;
+  /** A held send may still be open in the wallet; pressing on signs its step again. */
+  asksToSignAgain?: boolean;
+  /** Lets go of a sent transaction the network cannot find, and the run with it. */
+  onDiscard?: () => void;
   /**
    * A stored run under review: its own deposit fills the locked amount form, Resume replaces Predict, and Details
    * names its own slippage, the credits swap's only while that swap is still to sign.
@@ -179,6 +183,8 @@ export function PredictDialog({
   canClose = false,
   canRetry,
   isPending = false,
+  asksToSignAgain = false,
+  onDiscard,
   recovered,
   notice,
   slippage,
@@ -280,6 +286,11 @@ export function PredictDialog({
   const goBack = onBack ? (
     <div className="fs-enter w-28 shrink-0 [@media(max-width:374px)]:w-full">
       <PredictButton text="Go back" quiet isDisabled={false} onPress={onBack} />
+    </div>
+  ) : null;
+  const discard = onDiscard ? (
+    <div className="fs-enter w-28 shrink-0 [@media(max-width:374px)]:w-full">
+      <PredictButton text="Discard" quiet isDisabled={false} onPress={onDiscard} />
     </div>
   ) : null;
 
@@ -516,21 +527,24 @@ export function PredictDialog({
             )}
           >
             {isMoved && onBack && !isStacked ? goBack : null}
+            {isStacked ? null : discard}
             <PredictButton
               text={
                 onRetryPrices
                   ? "Try again"
-                  : recovered
-                    ? "Resume"
-                    : isPending
-                      ? "Check again"
-                      : canRetry
-                        ? "Try the rest"
-                        : isMoved
-                          ? moved?.bySlippage
-                            ? CONFIRM_SLIPPAGE
-                            : CONFIRM_MOVED
-                          : "Predict"
+                  : asksToSignAgain
+                    ? "Sign again"
+                    : recovered
+                      ? "Resume"
+                      : isPending
+                        ? "Check again"
+                        : canRetry
+                          ? "Try the rest"
+                          : isMoved
+                            ? moved?.bySlippage
+                              ? CONFIRM_SLIPPAGE
+                              : CONFIRM_MOVED
+                            : "Predict"
               }
               busyText={
                 isRunning
@@ -557,6 +571,7 @@ export function PredictDialog({
               }
             />
             {isMoved && onBack && isStacked ? goBack : null}
+            {isStacked ? discard : null}
           </div>
         </div>
       </div>

@@ -67,9 +67,17 @@ class TradeWalletShortError extends Error {}
 /** The chain's clock has passed the session's close. */
 class SessionClosedError extends Error {}
 
-/** Chain reads for a send that errored: `waitMs` for a lost answer, `graceMs` for a coded error, which the
- * wallet's own node may have broadcast before this app's node sees it. */
-const UNANSWERED_SEND = { waitMs: 120_000, pollMs: 2_000, graceMs: 4_000 };
+/** How long, and how often, the chain is read for a send whose answer was lost before the run halts. */
+const UNANSWERED_SEND = { waitMs: 120_000, pollMs: 2_000 };
+
+/** A held send whose nonce stays unused this long, in ms, is signed again only once the visitor says so. */
+export const SEND_HOLD_MS = 600_000;
+
+/** A held send's nonce reads unused within its hold; nothing is signed for its step meanwhile. */
+class HeldSendError extends Error {}
+
+/** A held send's nonce stayed unused past its hold; the visitor is asked before its step is signed again. */
+class SignAgainError extends Error {}
 
 const TRANSPORT_FAILURES = new Set(["TimeoutError", "HttpRequestError"]);
 
@@ -174,8 +182,8 @@ export function createPredictRun(args: {
   store?: FlowRunStore;
   onComplete?: () => void;
   now?: () => number;
-  /** How long, and how often, the chain is read for a send that errored. */
-  unansweredSend?: { waitMs: number; pollMs: number; graceMs?: number };
+  /** How long, and how often, the chain is read for a send whose answer was lost. */
+  unansweredSend?: { waitMs: number; pollMs: number };
   /** Which tab drives the stored run; without it this driver takes it as its own. */
   ownership?: RunOwnership;
   /** When the session stops trading, in unix seconds; nothing is signed once the chain's clock reaches it. */
@@ -202,6 +210,8 @@ export function createPredictRun(args: {
     | "closed"
     | "unlisted"
     | "storage"
+    | "held"
+    | "resign"
     | undefined;
   /** Set while a sent transaction's outcome is read from the chain; the run itself stays stopped meanwhile. */
   let reconciling = false;
@@ -244,34 +254,34 @@ export function createPredictRun(args: {
   };
 
   const waiting = { ...UNANSWERED_SEND, ...args.unansweredSend };
+  const now = args.now ?? Date.now;
 
-  /** How `send` ended, under the nonce read for it or, where another send took that, a later one. */
+  /**
+   * How `send` ended, under the nonce read for it or, where another send took that, a later one. `taken` means
+   * its own nonce went to another transaction and none after it holds this one.
+   */
   async function sentAs(send: UnansweredSend): Promise<SentTx> {
-    let found: SentTx = { status: "taken" };
     for (let nonce = send.nonce; nonce < send.nonce + NONCE_LOOKAHEAD; nonce++) {
-      found = await args.reader.sentWithNonce({ ...send, nonce });
-      if (!takenElsewhere(found, send)) return found;
+      const found = await args.reader.sentWithNonce({ ...send, nonce });
+      if (takenElsewhere(found, send)) continue;
+      return found.status === "none" && nonce > send.nonce ? { status: "taken" } : found;
     }
-    return found;
+    return { status: "taken" };
   }
 
-  /** The hash the chain mined `send` under, `"outstanding"` if it is unmined or unread when the wait runs out. */
-  async function answerOf(
-    send: UnansweredSend,
-    waitMs: number,
-    signal?: AbortSignal,
-  ): Promise<Hash | "outstanding" | undefined> {
+  /** True while `send`'s hold runs; a record stored with no time compares false and is asked about. */
+  const holding = (send: UnansweredSend) => now() - send.heldAt < SEND_HOLD_MS;
+
+  /** How `send` ended as read until `waitMs` runs out or it mines; unread reads as pending. */
+  async function answerOf(send: UnansweredSend, waitMs: number, signal?: AbortSignal): Promise<SentTx> {
     const deadline = Date.now() + waitMs;
-    let outstanding = true;
+    let found: SentTx = { status: "pending" };
     while (!signal?.aborted) {
-      const found = await sentAs(send).catch(() => undefined);
-      if (found?.status === "mined") return isTx(found, send.tx) ? found.hash : undefined;
-      if (found?.status === "taken") return undefined;
-      if (found) outstanding = found.status === "pending";
-      if (Date.now() >= deadline) break;
+      found = (await sentAs(send).catch(() => undefined)) ?? found;
+      if (found.status === "mined" || Date.now() >= deadline) break;
       await sleep(waiting.pollMs, signal);
     }
-    return outstanding ? "outstanding" : undefined;
+    return found;
   }
 
   /** Stores `send` with the run, so neither a reset nor a reload forgets it before its nonce is read. */
@@ -312,7 +322,7 @@ export function createPredictRun(args: {
       const [nonce, fromBlock] = await Promise.all([args.reader.nextNonce(owner), args.reader.latestBlock()]);
       // the build's reads and quotes can outlast the close; this is the last check before the wallet opens
       await assertOpen();
-      const send = { owner, nonce, fromBlock, tx };
+      const send: UnansweredSend = { owner, nonce, fromBlock, tx, heldAt: now() };
       // held before the wallet opens: a prompt approved after the tab closed has no hash stored to find it by
       try {
         holdUnanswered(stepId, send);
@@ -332,24 +342,25 @@ export function createPredictRun(args: {
       } catch (error) {
         // a disposed run keeps the send for whichever driver recovers it
         if (options?.signal?.aborted) throw error;
-        // a coded wallet error can still follow a broadcast; only a decline's code proves nothing went out
-        if (isUserRejection(error)) {
+        // a coded wallet error can still follow a broadcast; a decline, or a node naming why it refused, did not
+        const text = chainText(error);
+        if (isUserRejection(error) || OUT_OF_FUNDS.test(text) || REVERTS.test(text)) {
           forgetUnanswered(stepId);
           throw error;
         }
-        const lost = unanswered(error);
+        // a lost answer is read until the wait runs out; a coded one is read once
         awaitingUnanswered = true;
         notify();
-        const answer = await answerOf(send, lost ? waiting.waitMs : waiting.graceMs, options?.signal).finally(() => {
+        const found = await answerOf(send, unanswered(error) ? waiting.waitMs : 0, options?.signal).finally(() => {
           awaitingUnanswered = false;
         });
-        if (answer !== undefined && answer !== "outstanding") return answer;
-        if (answer === undefined && !lost) {
+        if (found.status === "mined") return found.hash;
+        if (found.status === "taken") {
           forgetUnanswered(stepId);
           throw error;
         }
         if (stepId !== STEP_ID.createExecutor) moneyMoved = true;
-        throw answer === "outstanding" ? new TxPendingError() : error;
+        throw found.status === "pending" ? new TxPendingError() : new HeldSendError();
       }
     },
   };
@@ -383,7 +394,11 @@ export function createPredictRun(args: {
           const found = await sentAs(send);
           if (found.status === "pending") throw new TxPendingError();
           // forgotten once the skip is stored, so no record holds the step pending without it
-          if (found.status === "mined" && found.success && isTx(found, send.tx)) return true;
+          if (found.status === "mined" && found.success) return true;
+          // past the close the build stops the run, so the hold is let go for Close to discard it
+          if (found.status === "none" && !(await sessionClosed())) {
+            throw holding(send) ? new HeldSendError() : new SignAgainError();
+          }
           forgetUnanswered(step.id);
         }
         return step.canSkip ? step.canSkip(ctx, snap) : false;
@@ -434,6 +449,10 @@ export function createPredictRun(args: {
       if (error instanceof UnlistedTxError) {
         buildFailure = "unlisted";
         return "unknown";
+      }
+      if (error instanceof HeldSendError || error instanceof SignAgainError) {
+        buildFailure = error instanceof HeldSendError ? "held" : "resign";
+        return "rpc";
       }
       if (error instanceof PlansMovedError) {
         movedByBuild = error.moved;
@@ -571,7 +590,9 @@ export function createPredictRun(args: {
     const run = orchestrator.getRun();
     const reason = buildFailure ?? errorOf(run)?.cause;
     buildFailure = undefined;
-    report(reason, pendingHashOf(run) ? reconcileRun : resumeRun);
+    const stepId = errorOf(run)?.stepId;
+    if (reason === "resign" && stepId !== undefined) report(reason, () => signAgain(stepId));
+    else report(reason, pendingHashOf(run) ? reconcileRun : resumeRun);
   });
   orchestrator.on("flow:failed", (event) => {
     const reason = buildFailure ?? event.error.cause;
@@ -610,6 +631,12 @@ export function createPredictRun(args: {
     if (!run?.snapshot.mintOwed) return;
     const patch = await depositMintPatch(deps, run.ctx, run.snapshot);
     orchestrator.updateSnapshot(({ mintOwed: _read, ...rest }) => ({ ...rest, ...patch }), { source: "adapter" });
+  }
+
+  /** The visitor's answer to the ask: `stepId`'s held send is let go and the step is signed again. */
+  function signAgain(stepId: string) {
+    forgetUnanswered(stepId);
+    resumeRun();
   }
 
   // resumed in the same tick where nothing is owed, so the run is running as soon as a retry returns

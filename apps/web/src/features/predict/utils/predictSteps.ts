@@ -40,6 +40,10 @@ export const SESSION_CLOSED = "This session has closed.";
 /** A stored run another open tab is driving; the card and the popup both say it. */
 export const RUNNING_ELSEWHERE = "This prediction is running in another tab. Finish or close it there.";
 
+/** Said before a send that may still be open in the wallet is signed again. */
+export const SIGN_AGAIN_ASK =
+  "A wallet prompt from this run may still be open. Check your wallet before signing again.";
+
 /** The chain's own errors name gas and contracts, which the popup never shows. */
 const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], string> = {
   rejected: "You declined in your wallet.",
@@ -62,6 +66,8 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
   unlisted: "This transaction isn't one Foresight sends, so it wasn't sent.",
   storage:
     "This browser couldn't save the prediction's progress, so no wallet prompt was opened. Free up storage or leave private browsing, then try again.",
+  held: "Your wallet may still send the last transaction. Check again in a few minutes.",
+  resign: SIGN_AGAIN_ASK,
 };
 
 /** Once the credits are in the trade wallet the run is locked to them, so only waiting helps. */

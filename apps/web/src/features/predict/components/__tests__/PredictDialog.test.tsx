@@ -362,6 +362,34 @@ describe("predicting", () => {
     expect(screen.queryByRole("button", { name: "Try the rest" })).not.toBeInTheDocument();
   });
 
+  it("asks before a held send is signed again, under its own label, even on a recovered run", async () => {
+    const onPredict = vi.fn();
+    render(
+      <PredictDialog
+        {...props()}
+        canRetry
+        isPending
+        asksToSignAgain
+        recovered={{ deposit: 0n, token: sDai, slippage: { tradeBps: 100 } }}
+        onPredict={onPredict}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Check again" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Resume" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Sign again" }));
+    expect(onPredict).toHaveBeenCalledOnce();
+  });
+
+  it("offers Discard beside Check again where a sent transaction can be let go", async () => {
+    const onDiscard = vi.fn();
+    render(<PredictDialog {...props()} canRetry isPending onDiscard={onDiscard} />);
+
+    expect(screen.getByRole("button", { name: "Check again" })).toBeEnabled();
+    await userEvent.click(screen.getByRole("button", { name: "Discard" }));
+    expect(onDiscard).toHaveBeenCalledOnce();
+  });
+
   it("offers the rest of a stopped run on the amount and estimates it started with", async () => {
     const onPredict = vi.fn();
     render(

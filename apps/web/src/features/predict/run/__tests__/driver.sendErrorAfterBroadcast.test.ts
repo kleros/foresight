@@ -73,6 +73,15 @@ function chain(opts: {
     land: () => {
       for (const sent of byNonce) if (sent.block === undefined) sent.block = ++head;
     },
+    /** Mines a transfer elsewhere under the owner's next nonce. */
+    takeNonce: () => {
+      const nonce = byNonce.length;
+      byNonce.push({
+        hash: `0x${(nonce + 1).toString(16).padStart(64, "f")}` as Hash,
+        tx: { to: addresses.executor, data: "0x" },
+        block: ++head,
+      });
+    },
     reader: {
       ...fakeReader({ deployed: true }),
       latestBlock: () => Promise.resolve(head),
@@ -89,6 +98,11 @@ afterEach(() => {
   for (const driver of drivers.splice(0)) driver.dispose();
 });
 
+/** Ten minutes, the hold on a send whose nonce reads unused. */
+const HOLD_MS = 600_000;
+
+const clock = { at: 1_700_000_000_000 };
+
 function driverOn(fake: ReturnType<typeof chain>, store = createFlowRunStore({ storage: createMemoryStorage() })) {
   const driver = createPredictRun({
     gateway: fake.gateway,
@@ -98,7 +112,8 @@ function driverOn(fake: ReturnType<typeof chain>, store = createFlowRunStore({ s
     ctx: () => ctx(),
     snapshot: () => snapshot(),
     store,
-    unansweredSend: { waitMs: 20, pollMs: 5, graceMs: 20 },
+    now: () => clock.at,
+    unansweredSend: { waitMs: 20, pollMs: 5 },
   });
   drivers.push(driver);
   return { driver, store };
@@ -143,17 +158,67 @@ describe("createPredictRun when a send errors after the wallet broadcast it", ()
     expect(store.load(FLOW_ID)).not.toBeNull();
   });
 
-  it("still lets a refused send be reset when its nonce was never used", async () => {
+  it("holds a coded error whose nonce reads unused, and signs nothing again within ten minutes", async () => {
     const fake = chain({ error: internalError, failBeforeBroadcast: isDeposit });
     const { driver, store } = driverOn(fake);
 
     driver.start();
     await vi.waitFor(() => expect(driver.getProgress().stage).toBe("halted"));
-    expect(driver.getProgress().failure?.reason).not.toBe("pending");
-    expect(driver.getProgress().moneyMoved).toBeUndefined();
+    expect(driver.getProgress().failure).toEqual({ reason: "held", retryable: true });
+    expect(driver.getProgress().unanswered).toBe(true);
 
     driver.reset();
-    expect(store.load(FLOW_ID)).toBeNull();
+    expect(store.load(FLOW_ID)).not.toBeNull();
+
+    clock.at += HOLD_MS - 1;
+    driver.retry();
+    await vi.waitFor(() => expect(driver.getProgress().failure?.reason).toBe("held"));
+    expect(fake.deposits()).toBe(1);
+  });
+
+  it("asks before signing again once the nonce stays unused for ten minutes, and signs on the answer", async () => {
+    const fake = chain({ error: internalError, failBeforeBroadcast: isDeposit });
+    const { driver } = driverOn(fake);
+
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().failure?.reason).toBe("held"));
+    clock.at += HOLD_MS;
+    driver.retry();
+    await vi.waitFor(() => expect(driver.getProgress().failure).toEqual({ reason: "resign", retryable: true }));
+    expect(fake.deposits()).toBe(1);
+
+    driver.retry();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("complete"));
+    expect(fake.deposits()).toBe(2);
+  });
+
+  it("asks before signing again when it recovers a held send past ten minutes", async () => {
+    const fake = chain({ error: internalError, failBeforeBroadcast: isDeposit });
+    const { driver, store } = driverOn(fake);
+
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().failure?.reason).toBe("held"));
+    driver.dispose();
+    clock.at += HOLD_MS;
+
+    const { driver: next } = driverOn(fake, store);
+    next.recover();
+    await vi.waitFor(() => expect(next.getProgress().stage).toBe("review"));
+    next.resume();
+    await vi.waitFor(() => expect(next.getProgress().failure?.reason).toBe("resign"));
+    expect(fake.deposits()).toBe(1);
+  });
+
+  it("signs again without asking once another transaction took the held send's nonce", async () => {
+    const fake = chain({ error: internalError, failBeforeBroadcast: isDeposit });
+    const { driver } = driverOn(fake);
+
+    driver.start();
+    await vi.waitFor(() => expect(driver.getProgress().failure?.reason).toBe("held"));
+    fake.takeNonce();
+    driver.retry();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("complete"));
+    expect(fake.deposits()).toBe(2);
   });
 
   it("holds a send whose internal error reads like a decline, since only a decline's code proves nothing went out", async () => {
@@ -207,7 +272,7 @@ describe("createPredictRun recovering a held send after the session closed", () 
         snapshot: () => snapshot(),
         store,
         closesAt,
-        unansweredSend: { waitMs: 20, pollMs: 5, graceMs: 20 },
+        unansweredSend: { waitMs: 20, pollMs: 5 },
       });
       drivers.push(driver);
       return driver;

@@ -125,7 +125,7 @@ function driverOn(fake: ReturnType<typeof chain>, storage: FlowRunStorage = crea
     ctx: () => ctx(),
     snapshot: () => snapshot({ options: [option(1), option(2)] }),
     store,
-    unansweredSend: { waitMs: 20, pollMs: 5, graceMs: 20 },
+    unansweredSend: { waitMs: 20, pollMs: 5 },
   });
   drivers.push(driver);
   return { driver, store, storage };
