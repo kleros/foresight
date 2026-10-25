@@ -310,6 +310,7 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
         onRightChain: chainId === DEFAULT_CHAIN_ID,
         walletMismatch: executor.error instanceof TradeWalletMismatchError ? executor.error.message : undefined,
         ready,
+        isRecovery: Boolean(recovered),
         creditsFailed: creditsFailed && (startsNew || (reviewsCredits && !checksSend)),
         pricesFailed: preview.failed && startsNew,
         pricesFailedAgain: preview.failedAgain,
@@ -409,6 +410,7 @@ function notice(args: {
   walletMismatch?: string;
   ready: boolean;
   creditsFailed: boolean;
+  isRecovery: boolean;
   pricesFailed: boolean;
   /** A read after a failed one failed too. */
   pricesFailedAgain: boolean;
@@ -419,6 +421,8 @@ function notice(args: {
   if (args.walletMismatch) return args.walletMismatch;
   if (!args.ready) return "This session cannot be traded yet.";
   if (args.pricesFailed) return args.pricesFailedAgain ? PRICES_FAILED_AGAIN : PRICES_FAILED;
-  if (args.creditsFailed) return CREDITS_UNAVAILABLE;
+  if (args.creditsFailed) {
+    return args.isRecovery ? "Could not get a price for your credits. Try resuming later." : CREDITS_UNAVAILABLE;
+  }
   return undefined;
 }

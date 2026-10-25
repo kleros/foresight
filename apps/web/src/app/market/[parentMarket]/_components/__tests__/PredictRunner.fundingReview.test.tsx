@@ -3,10 +3,11 @@ import { useSyncExternalStore } from "react";
 import { createFlowRunStore, createMemoryStorage, type FlowTx, type TxGateway } from "@foresight/tx-orchestrator";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { decodeFunctionData, erc20Abi, type Hash, type TransactionReceipt } from "viem";
+import { decodeFunctionData, erc20Abi, type Hash, type PublicClient, type TransactionReceipt } from "viem";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  ALGEBRA_ROUTER_ABI,
   addresses,
   chainState,
   ctx,
@@ -29,6 +30,8 @@ import { previewTrades } from "@/features/predict/utils/plan";
 import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 import { toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
 
+import { createLensQuoter } from "@/lib/swap/lens";
+
 import { creditsManagerAbi, gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
 
 import { PredictRunner } from "@/app/market/[parentMarket]/_components/PredictRunner";
@@ -43,6 +46,14 @@ vi.mock("@/features/trade-executor/api/getExecutor", () => ({
 }));
 vi.mock("@/app/market/[parentMarket]/_components/useHasPredicted", () => ({ useHasPredicted: () => false }));
 
+const lensAnswer = vi.hoisted(() => vi.fn());
+vi.mock("@seer-pm/lens/client", async (original) => ({
+  ...(await original<typeof import("@seer-pm/lens/client")>()),
+  Lens: class {
+    quote = lensAnswer;
+  },
+}));
+
 let driver: PredictDriver;
 let latestFunding: Funding;
 let latestSlippage: PredictSlippage;
@@ -55,6 +66,7 @@ let firstLanded: boolean;
 let tradeCollateral: bigint;
 let swaps: CreditsSwapPreview;
 let quoteReady = true;
+let quoteFailed = false;
 let lossBps = 1_000n;
 let native = false;
 const OPTIONS = [option(1), option(2)];
@@ -82,7 +94,7 @@ vi.mock("@/app/market/[parentMarket]/_components/usePredictFunding", () => ({
 vi.mock("@/app/market/[parentMarket]/_components/useCreditsSwapPreview", () => ({
   useCreditsSwapPreview: ({ credits }: { credits: bigint }) => ({
     preview: credits > 0n && quoteReady ? swaps : undefined,
-    failed: false,
+    failed: quoteFailed,
   }),
 }));
 vi.mock("@/app/market/[parentMarket]/_components/usePricePreview", async (importOriginal) => ({
@@ -216,12 +228,22 @@ function setup({
     getReceipt: async (hash) => receipts.get(hash)!,
     isKnown: async () => true,
   };
+  const pools = poolQuoter(OPTIONS, state);
+  const lens = createLensQuoter({} as PublicClient, 100, async () => 1_700_000_000n);
   const make = () =>
     createPredictRun({
       gateway,
       reader,
       creditsQuoter,
-      quoter: poolQuoter(OPTIONS, state),
+      quoter: {
+        async quote(request) {
+          lensAnswer.mockImplementation(async () => {
+            const answer = await pools.quote(request);
+            return { ...answer, target: answer.router, msgValue: answer.value };
+          });
+          return lens.quote(request);
+        },
+      },
       store,
       flowId: "funding-review",
       ctx: () => ctx(),
@@ -240,6 +262,7 @@ function setup({
 beforeEach(() => {
   native = false;
   quoteReady = true;
+  quoteFailed = false;
   lossBps = 1_000n;
   useSlippageStore.setState({ settings: { tradeBps: null, creditsBps: null } });
 });
@@ -414,3 +437,66 @@ it.each([false, true])(
     expect(parentBase(sent[before]!)).toBeLessThan(swaps.floor);
   },
 );
+
+it.each([false, true])(
+  "resumes at the displayed slippage after global settings change (lost receipt: %s)",
+  async (lostReceipt) => {
+    const { sent, reader, creditsQuoter, make } = setup({ alreadyHeld: true, revertBatch: 1, lostReceipt });
+    swaps = await previewCreditsSwap(ctx(), nominal, 20, { reader, creditsQuoter });
+    minted = swaps.minted;
+    const first = mount();
+    if (lostReceipt) {
+      await userEvent.type(screen.getByRole("spinbutton"), (nominal / WAD).toString());
+      await userEvent.click(screen.getByRole("button", { name: "Predict" }));
+      await waitFor(() => expect(driver.getProgress().stage).toBe("confirming"));
+      expect(driver.getProgress().sentHash).toBeDefined();
+    } else await begin();
+    first.unmount();
+    driver.dispose();
+    useSlippageStore.setState({ settings: { tradeBps: 1_000, creditsBps: null } });
+    driver = make();
+    const resumed = mount();
+    await waitFor(() => expect(driver.getProgress().stage).toBe(lostReceipt ? "halted" : "review"));
+    expect(driver.getProgress().recovered?.slippage).toEqual({ tradeBps: 100, creditsBps: 20 });
+    expect(screen.getAllByTestId("slippage-row")[0]).toHaveTextContent("Max slippage1%");
+    const before = sent.length;
+    await userEvent.click(screen.getByRole("button", { name: "Resume" }));
+    await waitFor(() => expect(resumed.onSuccess).toHaveBeenCalledOnce());
+    const batch = decodeFunctionData({ abi: tradeExecutorAbi, data: sent[before]!.data! });
+    if (batch.functionName !== "batchValueExecute") throw new Error("Expected a credits batch");
+    const swap = batch.args[0].find((call) => call.to.toLowerCase() === addresses.swapRouter.toLowerCase())!;
+    const [params] = decodeFunctionData({ abi: ALGEBRA_ROUTER_ABI, data: swap.data }).args;
+    expect(params.amountOutMinimum).toBe(1_980_000_000_000_000_000n);
+    expect(parentBase(sent[before]!)).toBe(swaps.floor);
+  },
+);
+
+it("gives recovery quote failures guidance that does not require a hidden checkbox", async () => {
+  const { reader, creditsQuoter, make } = setup({ alreadyHeld: true, revertBatch: 1 });
+  swaps = await previewCreditsSwap(ctx(), nominal, 20, { reader, creditsQuoter });
+  minted = swaps.minted;
+  const first = mount();
+  await begin();
+  first.unmount();
+  driver.dispose();
+  driver = make();
+  quoteReady = false;
+  quoteFailed = true;
+  mount();
+  await waitFor(() => expect(driver.getProgress().stage).toBe("review"));
+  expect(screen.getByRole("status")).toHaveTextContent("Could not get a price for your credits. Try resuming later.");
+  expect(screen.queryByRole("checkbox")).toBeNull();
+  expect(screen.getByRole("button", { name: "Resume" })).toBeDisabled();
+});
+
+it("offers the editable credits checkbox when a new prediction's quote fails", async () => {
+  setup();
+  quoteReady = false;
+  quoteFailed = true;
+  mount();
+  await userEvent.type(screen.getByRole("spinbutton"), (nominal / WAD).toString());
+  expect(screen.getByRole("status")).toHaveTextContent(
+    "Credits can't be spent now. Untick them to use your own funds.",
+  );
+  expect(screen.getByRole("checkbox")).toBeEnabled();
+});

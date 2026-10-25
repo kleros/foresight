@@ -8,12 +8,7 @@ import { isLocalDeployChain } from "../config/deploy";
 export const SEED_CREDITS = parseEther("100");
 export const SEED_MANAGER_SDAI = parseEther("1000");
 
-/**
- * Local stand-in for Gnosis' credits: a mintable sDAI, the credits token and its manager.
- * Gnosis uses the live pair, whose addresses sit in deployments/external/gnosis.
- * The mock Seer factory names no collateral, so no local session matches this sDAI and the
- * popup never offers these credits; the app shows credits on the gnosis fork only.
- */
+// Local credits use separate collateral from mock sessions and have no whitelisted spend route.
 const deployCredits: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
   const { deployments, getNamedAccounts } = hre;
   const { deployer, alice, bob } = await getNamedAccounts();

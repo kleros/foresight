@@ -246,6 +246,8 @@ export function createPredictRun(args: {
     | undefined;
   /** Set while a sent transaction's outcome is read from the chain; the run itself stays stopped meanwhile. */
   let reconciling = false;
+  let discarding = false;
+  let disposeAfterDiscard = false;
   /** Set once a stored run is restored, until it is thrown away: the popup shows its snapshot, not the form. */
   let recovered = false;
   /** A restored run, reconciled, waiting for the visitor to resume it. */
@@ -1080,7 +1082,7 @@ export function createPredictRun(args: {
       const run = orchestrator.getRun();
       const sent = run && pendingHashOf(run) ? currentEntry(run.steps)?.stepId : undefined;
       for (const stepId of [...leavingOut.keys()]) if (stepId !== sent) leavingOut.delete(stepId);
-      const settings = args.slippage?.();
+      const settings = recovered ? undefined : args.slippage?.();
       report(undefined);
       // a sent batch is settled first, at the slippage it was signed with
       if (run && !sent && held && settings && !sameSlippage(run.snapshot.slippage, settings)) {
@@ -1120,9 +1122,11 @@ export function createPredictRun(args: {
     },
 
     discard() {
+      if (discarding) return;
       const run = orchestrator.getRun();
       const stepId = run && pendingHashOf(run) ? currentEntry(run.steps)?.stepId : undefined;
       if (stepId === undefined || (failure?.reason !== "unseen" && failure?.reason !== "resign")) return;
+      discarding = true;
       detached(async () => {
         reconciling = true;
         notify();
@@ -1145,12 +1149,19 @@ export function createPredictRun(args: {
           driver.reset();
         } finally {
           reconciling = false;
+          discarding = false;
           notify();
+          if (disposeAfterDiscard) driver.dispose();
         }
       })();
     },
 
     dispose() {
+      // Discard needs the run and its ownership until reconciliation and deletion finish.
+      if (discarding) {
+        disposeAfterDiscard = true;
+        return;
+      }
       checking = undefined;
       claiming = undefined;
       orchestrator.dispose();

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+import {ISeerMarketFactory} from "../interfaces/ISeerMarketFactory.sol";
+import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
+
 /// @title MockSeerMarket
 /// @notice Minimal stand-in for Seer `Market` exposing the views read off-chain.
 /// @dev Mirrors the storage layout semantics of Seer `Market`: `outcomes` excludes the
@@ -11,6 +14,8 @@ contract MockSeerMarket {
 
   /// @notice The market outcomes, doesn't include the INVALID_RESULT outcome.
   string[] public outcomes;
+
+  address[] private outcomeTokens;
 
   /// @notice Lower bound, only used for scalar markets.
   uint256 public lowerBound;
@@ -27,22 +32,27 @@ contract MockSeerMarket {
   /// @notice Reality question opening time, served through the getters below.
   uint32 internal openingTime;
 
-  constructor(
-    string memory _marketName,
-    string[] memory _outcomes,
-    uint256 _lowerBound,
-    uint256 _upperBound,
-    address _parentMarket,
-    uint256 _parentOutcome,
-    uint32 _openingTime
-  ) {
-    marketName = _marketName;
-    outcomes = _outcomes;
-    lowerBound = _lowerBound;
-    upperBound = _upperBound;
-    parentMarket = _parentMarket;
-    parentOutcome = _parentOutcome;
-    openingTime = _openingTime;
+  constructor(ISeerMarketFactory.CreateMarketParams memory params, address outcomeTokenImplementation) {
+    marketName = params.marketName;
+    outcomes = params.outcomes;
+    lowerBound = params.lowerBound;
+    upperBound = params.upperBound;
+    parentMarket = params.parentMarket;
+    parentOutcome = params.parentOutcome;
+    openingTime = params.openingTime;
+    for (uint256 i = 0; i <= params.outcomes.length; i++) {
+      outcomeTokens.push(Clones.clone(outcomeTokenImplementation));
+    }
+  }
+
+  function wrappedOutcome(uint256 index) external view returns (address wrapped1155, bytes memory data) {
+    return (outcomeTokens[index], "");
+  }
+
+  function parentWrappedOutcome() external view returns (address wrapped1155, bytes memory data) {
+    if (parentMarket != address(0)) {
+      return MockSeerMarket(parentMarket).wrappedOutcome(parentOutcome);
+    }
   }
 
   /// @notice Reality question ids; one, as Seer creates for a categorical market.
