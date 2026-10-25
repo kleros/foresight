@@ -69,7 +69,7 @@ interface PredictDialogProps {
   isPending?: boolean;
   /** A held send may still be open in the wallet; pressing on signs its step again. */
   asksToSignAgain?: boolean;
-  /** Lets go of a sent transaction the network cannot find, and the run with it. */
+  /** Checks a sent transaction before discarding; unresolved transactions stay saved. */
   onDiscard?: () => void;
   /**
    * A stored run under review: its own deposit fills the locked amount form, Resume replaces Predict, and Details
@@ -77,6 +77,9 @@ interface PredictDialogProps {
    */
   recovered?: {
     deposit: bigint;
+    funding: Pick<Funding, "collateralIn" | "creditsIn" | "fromTradeWallet">;
+    depositSettled: boolean;
+    firstBatchSettled: boolean;
     token: PayTokenChoice;
     /** The collateral an xDAI deposit becomes, said beside it; absent for a collateral deposit. */
     deposited?: bigint;
@@ -88,6 +91,7 @@ interface PredictDialogProps {
   slippage: { settings: SlippageSettings; onChange: (kind: SlippageKind, bps: number | null) => void };
   /** Credits the run would swap into xDAI and the swap as quoted now; absent where it spends none. */
   creditsSwap?: CreditsSwapShown;
+  firstBatchSettled?: boolean;
   /** What changed when the pools were read again before signing; the button then confirms the new figures. */
   moved?: { markets: number; credits: boolean; bySlippage?: true };
   /** Every option's plan is read, and the credits swap's quote where credits are spent, so Predict holds the run to them. */
@@ -189,6 +193,7 @@ export function PredictDialog({
   notice,
   slippage,
   creditsSwap,
+  firstBatchSettled = false,
   moved,
   pricesReady,
   onBack,
@@ -211,8 +216,11 @@ export function PredictDialog({
   // signs the funding read at Predict, so the funding alone is held through moved as well
   const shownFunding = useHeldWhile(funding, isLocked ? "run" : null);
   const shownPreview = useHeldWhile(preview, lock);
-  const shownCreditsSwap = useHeldWhile(creditsSwap, lock);
-  const swap = recovered ? undefined : shownCreditsSwap?.preview;
+  const shownCreditsSwap = useHeldWhile(creditsSwap, recovered && !isRunning && !isMoved ? null : lock);
+  const swap = shownCreditsSwap?.preview;
+  const mintFunding = recovered?.funding ?? shownFunding;
+  const mintAmount = mintFunding ? shownSplit(mintFunding, swap?.minted) : undefined;
+  const mintSettled = recovered?.firstBatchSettled ?? firstBatchSettled;
   const resolved = resolveSlippage(slippage.settings);
   // the swap lands with the first batch, after the figures were held, so whether it has is read live
   const swapLanded = Boolean(creditsSwap?.landed || shownCreditsSwap?.landed);
@@ -466,19 +474,43 @@ export function PredictDialog({
                 note={recovered ? recoveryNote(recovered, collateral) : undefined}
                 credits={credits}
               />
+              {recovered ? (
+                <dl
+                  data-testid="recovery-funding"
+                  className="text-fs-popup-text-2 mt-2 space-y-1 text-[13px] tabular-nums"
+                >
+                  <div className="flex justify-between gap-3">
+                    <dt>{recovered.depositSettled ? "Already deposited" : "New deposit"}</dt>
+                    <dd>
+                      {shownAmount(recovered.deposit, recovered.token.decimals)} {recovered.token.symbol}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt>{mintSettled ? "Trade-wallet collateral used" : "Trade-wallet collateral"}</dt>
+                    <dd>
+                      {shownAmount(recovered.funding.fromTradeWallet, collateral.decimals)} {collateral.symbol}
+                    </dd>
+                  </div>
+                  {recovered.funding.creditsIn > 0n ? (
+                    <div className="flex justify-between gap-3">
+                      <dt>{mintSettled ? "Credits already spent" : "Credits to spend"}</dt>
+                      <dd>{shownAmount(recovered.funding.creditsIn, collateral.decimals)} credits</dd>
+                    </div>
+                  ) : null}
+                </dl>
+              ) : null}
               <PredictSummary
                 selected={selected}
                 preview={shownPreview}
                 collateral={collateral}
-                // a stored run minted what it stored, not what this form holds
                 mint={
-                  recovered || !shownFunding
+                  mintSettled || mintAmount === undefined
                     ? undefined
                     : {
                         // credits split what their swap's floor mints, which the credits swap's quote estimates
-                        amount: shownSplit(shownFunding, swap?.minted) ?? shownFunding.collateralIn,
+                        amount: mintAmount,
                         noun: optionNoun,
-                        ...(shownFunding.creditsIn > 0n ? { isEstimated: true as const } : {}),
+                        ...((mintFunding?.creditsIn ?? 0n) > 0n ? { isEstimated: true as const } : {}),
                       }
                 }
                 isOpen={summaryOpen}
@@ -487,10 +519,13 @@ export function PredictDialog({
                 isPricing={
                   isPricing ||
                   isRetryingPrices ||
-                  (!pricesReady && !isLocked && notice === undefined && selected.length > 0)
+                  (!pricesReady &&
+                    (!isLocked || recovered !== undefined) &&
+                    notice === undefined &&
+                    selected.length > 0)
                 }
                 isEstimated={(runToken ?? token).id === "native"}
-                creditsSwap={recovered ? undefined : shownCreditsSwap}
+                creditsSwap={shownCreditsSwap && { ...shownCreditsSwap, ...(swapLanded ? { landed: true } : {}) }}
                 slippage={recovered?.slippage ?? inUse}
                 onOpenSettings={settingsLocked ? undefined : () => setSettingsWanted(true)}
               />
@@ -532,18 +567,18 @@ export function PredictDialog({
               text={
                 onRetryPrices
                   ? "Try again"
-                  : asksToSignAgain
-                    ? "Sign again"
-                    : recovered
-                      ? "Resume"
-                      : isPending
-                        ? "Check again"
-                        : canRetry
-                          ? "Try the rest"
-                          : isMoved
-                            ? moved?.bySlippage
-                              ? CONFIRM_SLIPPAGE
-                              : CONFIRM_MOVED
+                  : isMoved
+                    ? moved?.bySlippage
+                      ? CONFIRM_SLIPPAGE
+                      : CONFIRM_MOVED
+                    : asksToSignAgain
+                      ? "Sign again"
+                      : recovered
+                        ? "Resume"
+                        : isPending
+                          ? "Check again"
+                          : canRetry
+                            ? "Try the rest"
                             : "Predict"
               }
               busyText={
@@ -560,6 +595,7 @@ export function PredictDialog({
                 onRetryPrices
                   ? false
                   : notice !== undefined ||
+                    (recovered !== undefined && !pricesReady) ||
                     (!canRetry &&
                       !isMoved &&
                       (recovered !== undefined ||

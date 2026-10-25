@@ -71,6 +71,10 @@ const SWAPR_ROUTER_ADDRESSES: Record<number, Address> = { 100: "0xfFB643E73f280B
 
 export const swaprRouterAddress = (chainId: number): Address | undefined => SWAPR_ROUTER_ADDRESSES[chainId];
 
+const SWAPR_FACTORY_ADDRESSES: Record<number, Address> = { 100: "0xA0864cCA6E114013AB0e27cbd5B6f4c8947da766" };
+
+export const swaprFactoryAddress = (chainId: number): Address | undefined => SWAPR_FACTORY_ADDRESSES[chainId];
+
 export interface CreditsRoute {
   /** The credits token. */
   token: Address;

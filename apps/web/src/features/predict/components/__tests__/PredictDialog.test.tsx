@@ -370,7 +370,14 @@ describe("predicting", () => {
         canRetry
         isPending
         asksToSignAgain
-        recovered={{ deposit: 0n, token: sDai, slippage: { tradeBps: 100 } }}
+        recovered={{
+          funding: { collateralIn: 4n * WAD, creditsIn: 0n, fromTradeWallet: 0n },
+          depositSettled: true,
+          firstBatchSettled: true,
+          deposit: 0n,
+          token: sDai,
+          slippage: { tradeBps: 100 },
+        }}
         onPredict={onPredict}
       />,
     );
@@ -424,7 +431,14 @@ describe("predicting", () => {
       <PredictDialog
         {...props()}
         selected={[{ scale: scale(GERWIG, "Greta Gerwig"), value: 410 }]}
-        recovered={{ deposit: 7_250_000_000_000_000_001n, token: sDai, slippage: { tradeBps: 100 } }}
+        recovered={{
+          funding: { collateralIn: 4n * WAD, creditsIn: 0n, fromTradeWallet: 0n },
+          depositSettled: true,
+          firstBatchSettled: true,
+          deposit: 7_250_000_000_000_000_001n,
+          token: sDai,
+          slippage: { tradeBps: 100 },
+        }}
         canRetry
         onPredict={onPredict}
       />,
@@ -446,7 +460,15 @@ describe("predicting", () => {
     const { rerender } = render(
       <PredictDialog
         {...props()}
-        recovered={{ deposit: 4_375n * 10n ** 15n, token: xDai, deposited: 4n * WAD, slippage: { tradeBps: 100 } }}
+        recovered={{
+          funding: { collateralIn: 4n * WAD, creditsIn: 0n, fromTradeWallet: 0n },
+          depositSettled: true,
+          firstBatchSettled: true,
+          deposit: 4_375n * 10n ** 15n,
+          token: xDai,
+          deposited: 4n * WAD,
+          slippage: { tradeBps: 100 },
+        }}
         canRetry
       />,
     );
@@ -455,7 +477,14 @@ describe("predicting", () => {
     rerender(
       <PredictDialog
         {...props()}
-        recovered={{ deposit: 4n * WAD, token: sDai, slippage: { tradeBps: 100 } }}
+        recovered={{
+          funding: { collateralIn: 4n * WAD, creditsIn: 0n, fromTradeWallet: 0n },
+          depositSettled: true,
+          firstBatchSettled: true,
+          deposit: 4n * WAD,
+          token: sDai,
+          slippage: { tradeBps: 100 },
+        }}
         canRetry
       />,
     );
@@ -464,7 +493,18 @@ describe("predicting", () => {
 
   it("offers no remove on a stored run's estimates", () => {
     render(
-      <PredictDialog {...props()} recovered={{ deposit: WAD, token: sDai, slippage: { tradeBps: 100 } }} canRetry />,
+      <PredictDialog
+        {...props()}
+        recovered={{
+          funding: { collateralIn: 4n * WAD, creditsIn: 0n, fromTradeWallet: 0n },
+          depositSettled: true,
+          firstBatchSettled: true,
+          deposit: WAD,
+          token: sDai,
+          slippage: { tradeBps: 100 },
+        }}
+        canRetry
+      />,
     );
 
     expect(screen.queryByRole("button", { name: /Remove/ })).toBeNull();
@@ -474,7 +514,14 @@ describe("predicting", () => {
     render(
       <PredictDialog
         {...props()}
-        recovered={{ deposit: WAD, token: sDai, slippage: { tradeBps: 100 } }}
+        recovered={{
+          funding: { collateralIn: 4n * WAD, creditsIn: 0n, fromTradeWallet: 0n },
+          depositSettled: true,
+          firstBatchSettled: true,
+          deposit: WAD,
+          token: sDai,
+          slippage: { tradeBps: 100 },
+        }}
         canRetry={false}
       />,
     );
@@ -767,11 +814,18 @@ describe("the summary under the amount", () => {
     expect(screen.queryByTestId("trade-mint")).toBeNull();
   });
 
-  it("names no mint for a stored run, which minted what it stored", async () => {
+  it("names no upcoming mint for a stored run whose first batch settled", async () => {
     render(
       <PredictDialog
         {...props()}
-        recovered={{ deposit: 4n * WAD, token: sDai, slippage: { tradeBps: 100 } }}
+        recovered={{
+          funding: { collateralIn: 4n * WAD, creditsIn: 0n, fromTradeWallet: 0n },
+          depositSettled: true,
+          firstBatchSettled: true,
+          deposit: 4n * WAD,
+          token: sDai,
+          slippage: { tradeBps: 100 },
+        }}
         canRetry
       />,
     );
@@ -818,7 +872,14 @@ describe("the summary under the amount", () => {
       <PredictDialog
         {...props()}
         preview={preview}
-        recovered={{ deposit: 4n * WAD, token: sDai, slippage: { tradeBps: 100 } }}
+        recovered={{
+          funding: { collateralIn: 4n * WAD, creditsIn: 0n, fromTradeWallet: 0n },
+          depositSettled: true,
+          firstBatchSettled: true,
+          deposit: 4n * WAD,
+          token: sDai,
+          slippage: { tradeBps: 100 },
+        }}
       />,
     );
     expect(summaryHead()).toHaveAttribute("aria-expanded", "false");
@@ -1207,7 +1268,20 @@ describe("the settings", () => {
   it.each([
     ["while a run goes", { isRunning: true }],
     ["while a sent transaction is not confirmed", { canRetry: true, isPending: true }],
-    ["for a stored run", { canRetry: true, recovered: { deposit: WAD, token: sDai, slippage: { tradeBps: 100 } } }],
+    [
+      "for a stored run",
+      {
+        canRetry: true,
+        recovered: {
+          funding: { collateralIn: 4n * WAD, creditsIn: 0n, fromTradeWallet: 0n },
+          depositSettled: true,
+          firstBatchSettled: true,
+          deposit: WAD,
+          token: sDai,
+          slippage: { tradeBps: 100 },
+        },
+      },
+    ],
     ["while new prices wait to be confirmed", { moved: MOVED }],
   ])("cannot be opened %s", (_name, state) => {
     render(<PredictDialog {...props()} {...state} />);
@@ -1370,7 +1444,14 @@ describe("Details' slippage", () => {
       <PredictDialog
         {...props()}
         canRetry
-        recovered={{ deposit: WAD, token: sDai, slippage: { tradeBps: 300 } }}
+        recovered={{
+          funding: { collateralIn: 4n * WAD, creditsIn: 0n, fromTradeWallet: 0n },
+          depositSettled: true,
+          firstBatchSettled: true,
+          deposit: WAD,
+          token: sDai,
+          slippage: { tradeBps: 300 },
+        }}
         slippage={{ settings: { tradeBps: 5_000, creditsBps: null }, onChange: vi.fn() }}
       />,
     );
@@ -1383,7 +1464,14 @@ describe("Details' slippage", () => {
       <PredictDialog
         {...props()}
         canRetry
-        recovered={{ deposit: WAD, token: sDai, slippage: { tradeBps: 100, creditsBps: 50 } }}
+        recovered={{
+          funding: { collateralIn: 4n * WAD, creditsIn: 0n, fromTradeWallet: 0n },
+          depositSettled: true,
+          firstBatchSettled: true,
+          deposit: WAD,
+          token: sDai,
+          slippage: { tradeBps: 100, creditsBps: 50 },
+        }}
       />,
     );
 

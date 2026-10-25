@@ -236,7 +236,7 @@ describe("createPredictRun when a batch's receipt was never seen", () => {
     expect(gateway.signRequests).toHaveLength(3);
   });
 
-  it("forgets the run on Discard, once the hash is held", async () => {
+  it("keeps an unseen hash and its run on Discard", async () => {
     const store = createFlowRunStore({ storage: createMemoryStorage() });
     const gateway = unseenBatchGateway({
       waitError: () => new Error("node said something odd", { cause: "opaque" }),
@@ -253,8 +253,9 @@ describe("createPredictRun when a batch's receipt was never seen", () => {
     await vi.waitFor(() => expect(driver.getProgress().failure?.reason).toBe("unseen"));
     driver.discard();
 
-    expect(store.load("predict-reconcile-discard")).toBeNull();
-    expect(driver.getProgress().stage).toBe("idle");
+    await vi.waitFor(() => expect(driver.getProgress().failure?.reason).toBe("unseen"));
+    expect(store.load("predict-reconcile-discard")).not.toBeNull();
+    expect(driver.getProgress().stage).toBe("halted");
     expect(gateway.signRequests).toHaveLength(3);
   });
 

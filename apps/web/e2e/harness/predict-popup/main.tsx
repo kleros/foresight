@@ -395,6 +395,9 @@ function Harness() {
           state === "recovered"
             ? {
                 deposit: RECOVERED.deposit,
+                funding: { collateralIn: RECOVERED.deposit, creditsIn: 0n, fromTradeWallet: 0n },
+                depositSettled: true,
+                firstBatchSettled: true,
                 token: payToken,
                 // by default, 4 xDAI at the harness's 1.0937 xDAI an sDAI
                 ...(paysNative ? { deposited: parseUnits(depositedParam, 18) } : {}),

@@ -284,7 +284,9 @@ export function PredictSummary({
             {creditsSwap ? (
               <>
                 <p data-testid="credits-swap" className={clsx(ROW, "py-1.5")}>
-                  <span className="text-fs-popup-text-2 shrink-0">Credits swap</span>
+                  <span className="text-fs-popup-text-2 shrink-0">
+                    {creditsSwap.landed ? "Credits swapped" : "Credits swap"}
+                  </span>
                   <span className={clsx(VALUE, "font-medium")}>
                     {figure(creditsSwap.credits, collateral.decimals, false, ["credit", "credits"])}
                     <Arrow />

@@ -366,7 +366,11 @@ export function quotesShort(shown: QuotedLegs, quoted: QuotedLegs, toleranceBps:
     const now = legs.find((each) => each.side === before.side);
     if (now === undefined) return true;
     return (
-      short(before.amountOut, now.amountOut, toleranceBps) ||
+      short(
+        before.amountIn === 0n ? before.amountOut : (before.amountOut * now.amountIn) / before.amountIn,
+        now.amountOut,
+        toleranceBps,
+      ) ||
       (buy && short(before.amountIn, now.amountIn, toleranceBps))
     );
   };

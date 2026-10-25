@@ -19,9 +19,9 @@ export interface FlowRunStorage {
 
 export interface FlowRunStore {
   save<TSnapshot, TCtx>(run: PersistedFlowRunInput<TSnapshot, TCtx>): void;
-  /** `null` if absent, expired or unreadable, bad entry is removed. A run still in flight does not expire. */
+  /** `null` if absent, expired or unreadable. Reads never mutate storage; runs in flight do not expire. */
   load<TSnapshot, TCtx>(flowId: string): PersistedFlowRun<TSnapshot, TCtx> | null;
-  /** Every live run, expired ones pruned on the way. */
+  /** Every readable, live run. */
   list<TSnapshot, TCtx>(): PersistedFlowRun<TSnapshot, TCtx>[];
   clear(flowId: string): void;
   clearAll(): void;
@@ -42,7 +42,11 @@ function isStepOutcome(value: unknown): boolean {
     case "skipped":
       return true;
     case "submitted":
-      return typeof value.hash === "string";
+      return (
+        typeof value.hash === "string" &&
+        (value.replacementReason === undefined ||
+          ["repriced", "cancelled", "replaced"].includes(String(value.replacementReason)))
+      );
     case "confirmed":
       return typeof value.hash === "string" && typeof value.blockNumber === "bigint";
     default:
@@ -114,7 +118,7 @@ export function createFlowRunStore(opts: {
   const keyFor = (flowId: string) => `${namespace}.${flowId}`;
   const ownKeys = () => storage.keys().filter((k) => k.startsWith(`${namespace}.`));
 
-  /** Reads one key, discarding anything unusable. Never throws. */
+  /** Reads one key without deleting data another tab may have replaced. */
   function read<TSnapshot, TCtx>(key: string): PersistedFlowRun<TSnapshot, TCtx> | null {
     const raw = storage.getItem(key);
     if (raw === null) return null;
@@ -124,17 +128,14 @@ export function createFlowRunStore(opts: {
       parsed = decodeState(raw);
     } catch {
       // Corrupt storage must never be the reason the app fails to boot.
-      storage.removeItem(key);
       return null;
     }
 
     const expired = isUsableRecord(parsed) && now() > parsed.expiresAt && !inFlight(parsed) && !unsettled?.(parsed);
     if (!isUsableRecord(parsed) || parsed.version !== FLOW_RUN_SCHEMA_VERSION || expired) {
-      storage.removeItem(key);
       return null;
     }
     if (keyFor(parsed.flowId) !== key) {
-      storage.removeItem(key);
       return null;
     }
     return parsed as PersistedFlowRun<TSnapshot, TCtx>;

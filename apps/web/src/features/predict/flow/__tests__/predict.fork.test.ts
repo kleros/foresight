@@ -111,6 +111,14 @@ interface ForkSession {
   }>;
 }
 
+const poolOptions = (session: ForkSession) =>
+  session.children.map((child) => ({
+    childMarket: child.id,
+    underlying: child.underlyingToken,
+    upToken: child.upToken,
+    downToken: child.downToken,
+  }));
+
 async function newestSessionWithPools(): Promise<ForkSession> {
   const response = await fetch(HASURA_URL, {
     method: "POST",
@@ -192,7 +200,10 @@ describe("the predict flow, against a gnosis fork", () => {
       const { predicted } = await fetchExecutorState(client, { factory, owner: account.address });
 
       const child = session.children[0]!;
-      const before = await readPoolLiquidity(client, optionPoolRefs(await fetchSessionPools(session.id), child.id).up!);
+      const before = await readPoolLiquidity(
+        client,
+        optionPoolRefs(await fetchSessionPools(client, poolOptions(session)), child.id).up!,
+      );
       const priceBefore = priceFromSqrtPriceX96(before.sqrtPriceX96, before.outcomeIsToken0);
 
       // one option, asked to move well above where the pool sits; an earlier run on this session may
@@ -299,7 +310,10 @@ describe("the predict flow, against a gnosis fork", () => {
         sent: signed,
       });
 
-      const after = await readPoolLiquidity(client, optionPoolRefs(await fetchSessionPools(session.id), child.id).up!);
+      const after = await readPoolLiquidity(
+        client,
+        optionPoolRefs(await fetchSessionPools(client, poolOptions(session)), child.id).up!,
+      );
       const priceAfter = priceFromSqrtPriceX96(after.sqrtPriceX96, after.outcomeIsToken0);
 
       // the estimate is above the market, so the prediction has to have bid the UP token up
@@ -482,11 +496,11 @@ describe("price limits on every swap leg, against a gnosis fork", () => {
     targetPriceWad,
   });
 
-  // the indexer reads a rewind as a reorg and re-indexes what it rolled back, so a pool can be briefly absent
+  // A session can be indexed before its pools are created.
   const poolRef = async (child: ForkSession["children"][number], side: Side) => {
     const deadline = Date.now() + 60_000;
     for (;;) {
-      const ref = app.optionPoolRefs(await app.fetchSessionPools(session.id), child.id)[side];
+      const ref = app.optionPoolRefs(await app.fetchSessionPools(client, poolOptions(session)), child.id)[side];
       if (ref) return ref;
       if (Date.now() > deadline) throw new Error(`${child.id} has no ${side} pool.`);
       await new Promise((resolve) => setTimeout(resolve, 2_000));
@@ -1013,7 +1027,7 @@ describe("the split amount when the cached trade-wallet balance is stale, agains
   /** An option one MOVE above a child's UP pool, which sits far enough from 0 and 1 to take it. */
   async function roomyOption(): Promise<PredictOption> {
     for (const child of session.children) {
-      const ref = app.optionPoolRefs(await app.fetchSessionPools(session.id), child.id).up;
+      const ref = app.optionPoolRefs(await app.fetchSessionPools(client, poolOptions(session)), child.id).up;
       if (!ref) continue;
       const pool = await app.readPoolLiquidity(client, ref);
       const up = app.priceFromSqrtPriceX96(pool.sqrtPriceX96, pool.outcomeIsToken0);
@@ -1386,7 +1400,7 @@ describe("money kept by every predict run, against a gnosis fork", () => {
   const poolRef = async (childMarket: Address, side: "up" | "down") => {
     const deadline = Date.now() + 60_000;
     for (;;) {
-      const ref = app.optionPoolRefs(await app.fetchSessionPools(session.id), childMarket)[side];
+      const ref = app.optionPoolRefs(await app.fetchSessionPools(client, poolOptions(session)), childMarket)[side];
       if (ref) return ref;
       if (Date.now() > deadline) throw new Error(`${childMarket} has no ${side} pool.`);
       await new Promise((resolve) => setTimeout(resolve, 2_000));
@@ -1412,7 +1426,7 @@ describe("money kept by every predict run, against a gnosis fork", () => {
   async function roomyChildren() {
     const roomy: Array<{ child: Child; up: bigint; down: bigint }> = [];
     for (const child of session.children) {
-      const refs = app.optionPoolRefs(await app.fetchSessionPools(session.id), child.id);
+      const refs = app.optionPoolRefs(await app.fetchSessionPools(client, poolOptions(session)), child.id);
       if (!refs.up || !refs.down) continue;
       const [up, down] = [await poolPrice(child.id, "up"), await poolPrice(child.id, "down")];
       const inside = (price: bigint) => price > (WAD * 15n) / 100n && price < (WAD * 85n) / 100n;

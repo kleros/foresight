@@ -184,7 +184,10 @@ export function createFlowDriver<TSnapshot, TCtx>(deps: {
    * not, and stops the run.
    */
   async function settle(entry: Entry, hash: Hash, signal: AbortSignal): Promise<TransactionReceipt | undefined> {
-    let replacement: TxReplacement | undefined;
+    let replacement: TxReplacement | undefined =
+      entry.outcome.status === "submitted" && entry.outcome.replacementReason
+        ? { hash: entry.outcome.hash, reason: entry.outcome.replacementReason }
+        : undefined;
     let receipt: TransactionReceipt;
 
     try {
@@ -193,8 +196,15 @@ export function createFlowDriver<TSnapshot, TCtx>(deps: {
         signal,
         giveUp: () => pauseRequested,
         onReplaced: (seen) => {
-          replacement = seen;
-          state.setOutcome(entry.stepId, { status: "submitted", hash: seen.hash });
+          replacement = {
+            ...seen,
+            reason: replacement && replacement.reason !== "repriced" ? replacement.reason : seen.reason,
+          };
+          state.setOutcome(entry.stepId, {
+            status: "submitted",
+            hash: seen.hash,
+            replacementReason: replacement.reason,
+          });
           state.persist();
           emit({ type: "step:replaced", stepId: entry.stepId, from: hash, to: seen.hash, reason: seen.reason });
         },

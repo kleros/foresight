@@ -79,7 +79,7 @@ export type StepOutcome =
   /** The wallet is open. Nothing was broadcast, so there is nothing to reconcile. */
   | { status: "awaiting-signature" }
   /** Broadcast. The hash is on disk before this is announced. */
-  | { status: "submitted"; hash: Hash }
+  | { status: "submitted"; hash: Hash; replacementReason?: TxReplacementReason }
   | { status: "confirmed"; hash: Hash; blockNumber: bigint }
   | { status: "skipped" };
 
@@ -210,6 +210,8 @@ export type ReconcileOutcome =
   | "confirmed"
   /** It mined and reverted. */
   | "reverted"
+  /** A cancellation or unrelated transaction consumed its nonce. */
+  | "cancelled"
   /** Still in the mempool. */
   | "pending"
   /**

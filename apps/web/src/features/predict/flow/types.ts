@@ -132,8 +132,8 @@ export interface PredictSnapshot {
   optionsPerBatch: number;
   /** Options that settled batches left out for lack of a route; absent until one does. */
   leftOut?: Address[];
-  /** Set while an xDAI deposit is settled and the collateral it minted not yet read; the first batch waits on it. */
-  mintOwed?: true;
+  /** The native deposit's actual minted collateral is stored in `collateralIn`. */
+  mintFinalized?: true;
   /** Sends the wallet was asked for and no hash is stored for, by step id, until their nonce says how they ended. */
   unanswered?: Record<string, UnansweredSend>;
   /** The send behind each step stored as submitted, by step id, for the nonce its hash took. */
@@ -202,7 +202,8 @@ export type ShownQuotes = Readonly<Record<string, QuotedLegs>>;
 
 /** What a run is held to: the plans and the credits swap the visitor saw before signing. */
 export interface HeldTo {
-  plans: ShownPlans;
+  /** Absent when recovery reviews only the pending credits swap. */
+  plans?: ShownPlans;
   /** Quotes the visitor confirmed at moved, which an option's quotes are held to in place of its plan's figures. */
   quotes?: ShownQuotes;
   /** Absent where the popup showed no credits swap. */

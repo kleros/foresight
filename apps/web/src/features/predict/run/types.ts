@@ -94,7 +94,7 @@ export interface PredictProgress {
   recovered?: PredictSnapshot;
   /** At the `moved` stage: what changed since the run was held to `held`. */
   moved?: MovedPlans;
-  /** What the run was started or confirmed against; absent for a recovered run, which nothing was shown for. */
+  /** The plans and credits quote accepted at Predict, Resume or Confirm. */
   held?: HeldTo;
 }
 
@@ -110,10 +110,10 @@ export interface PredictDriver {
   confirm(): void;
   /** Loads a stored run for review, reconciled with the chain. Signs nothing. */
   recover(): void;
-  /** Continues a run under review. */
-  resume(): void;
-  retry(): void;
-  /** Lets go of a hash no node finds and throws the run away; only while it is held at `unseen` or `resign`. */
+  /** Continues a run under review, bound to its displayed quotes when supplied. */
+  resume(held?: HeldTo): void;
+  retry(held?: HeldTo): void;
+  /** Checks an unresolved hash before discarding; keeps the run while the transaction may still land. */
   discard(): void;
   /**
    * Throws the run away, including anything persisted. Refused while a step holds a hash with no receipt read or a held
