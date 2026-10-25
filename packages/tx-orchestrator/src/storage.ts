@@ -19,7 +19,7 @@ export interface FlowRunStorage {
 
 export interface FlowRunStore {
   save<TSnapshot, TCtx>(run: PersistedFlowRunInput<TSnapshot, TCtx>): void;
-  /** `null` if absent, expired or unreadable, bad entry is removed. */
+  /** `null` if absent, expired or unreadable, bad entry is removed. A run still in flight does not expire. */
   load<TSnapshot, TCtx>(flowId: string): PersistedFlowRun<TSnapshot, TCtx> | null;
   /** Every live run, expired ones pruned on the way. */
   list<TSnapshot, TCtx>(): PersistedFlowRun<TSnapshot, TCtx>[];
@@ -94,13 +94,19 @@ export function fromWebStorage(storage: Storage): FlowRunStorage {
   };
 }
 
+/** A step with a wallet prompt or a broadcast hash whose receipt has not been read. */
+const inFlight = (run: PersistedFlowRun<unknown, unknown>) =>
+  run.steps.some((step) => step.outcome.status === "submitted" || step.outcome.status === "awaiting-signature");
+
 export function createFlowRunStore(opts: {
   storage: FlowRunStorage;
   namespace?: string;
   ttlMs?: number;
   now?: () => number;
+  /** What else keeps a run past its expiry, beyond a step in flight, e.g. an adapter's held send. */
+  unsettled?: (run: PersistedFlowRun<unknown, unknown>) => boolean;
 }): FlowRunStore {
-  const { storage } = opts;
+  const { storage, unsettled } = opts;
   const namespace = opts.namespace ?? DEFAULT_NAMESPACE;
   const ttlMs = opts.ttlMs ?? DEFAULT_RUN_TTL_MS;
   const now = opts.now ?? (() => Date.now());
@@ -122,7 +128,8 @@ export function createFlowRunStore(opts: {
       return null;
     }
 
-    if (!isUsableRecord(parsed) || parsed.version !== FLOW_RUN_SCHEMA_VERSION || now() > parsed.expiresAt) {
+    const expired = isUsableRecord(parsed) && now() > parsed.expiresAt && !inFlight(parsed) && !unsettled?.(parsed);
+    if (!isUsableRecord(parsed) || parsed.version !== FLOW_RUN_SCHEMA_VERSION || expired) {
       storage.removeItem(key);
       return null;
     }

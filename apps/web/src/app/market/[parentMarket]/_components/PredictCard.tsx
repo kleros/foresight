@@ -13,6 +13,7 @@ import {
   discardRun,
   findInterruptedRun,
   hasPendingTransaction,
+  predictRunStore,
   predictFlowId,
 } from "@/features/predict/run/interrupted";
 import { tabOwnership } from "@/features/predict/run/ownership";
@@ -29,8 +30,6 @@ import EnsureChain from "@/components/wallet/EnsureChain";
 import { ownedAmount } from "@/utils/amount";
 import { formatEstimate } from "@/utils/formatEstimate";
 import { INERT } from "@/utils/inert";
-
-import { createRunStore } from "@/lib/flowRunStore";
 
 import { type PredictBlocker, predictBlocker } from "./predictBlocker";
 import type { PlacedPrediction } from "./PredictSuccessView";
@@ -88,7 +87,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
   const isHeld = heldElsewhere !== false;
 
   const readStored = () => {
-    const store = createRunStore();
+    const store = predictRunStore();
     const run = address ? findInterruptedRun(store, session.id, address) : null;
     setStored({ owner: address, run });
     setIsPending(address ? hasPendingTransaction(store, session.id, address) : false);
@@ -135,7 +134,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
     const letGo = address ? await tabOwnership().claim(predictFlowId(session.id, address)) : null;
     if (address && letGo) {
       try {
-        discardRun(createRunStore(), session.id, address);
+        discardRun(predictRunStore(), session.id, address);
       } finally {
         letGo();
       }

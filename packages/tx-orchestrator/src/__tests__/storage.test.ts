@@ -96,6 +96,37 @@ describe("createFlowRunStore", () => {
     expect(storage.keys()).toHaveLength(0);
   });
 
+  it("keeps an expired run while a step holds a hash with no receipt read, or a wallet prompt", () => {
+    const s = store();
+    const inFlight = (
+      stepId: string,
+      outcome: { status: "submitted"; hash: `0x${string}` } | { status: "awaiting-signature" },
+    ) => aRun({ flowId: stepId, steps: [{ stepId: "parent", label: "Deploy parent", outcome }] });
+    s.save(inFlight("sent", { status: "submitted", hash: "0xabc" }));
+    s.save(inFlight("prompted", { status: "awaiting-signature" }));
+    clock += 73 * HOUR;
+
+    expect(s.load("sent")).not.toBeNull();
+    expect(
+      s
+        .list()
+        .map((r) => r.flowId)
+        .sort(),
+    ).toEqual(["prompted", "sent"]);
+  });
+
+  it("keeps an expired run the caller says is still unsettled, and prunes it once it is not", () => {
+    let unsettled = true;
+    const s = createFlowRunStore({ storage, ttlMs: 72 * HOUR, now: () => clock, unsettled: () => unsettled });
+    s.save(aRun());
+    clock += 73 * HOUR;
+
+    expect(s.load("draft-1")).not.toBeNull();
+    unsettled = false;
+    expect(s.load("draft-1")).toBeNull();
+    expect(storage.keys()).toHaveLength(0);
+  });
+
   it("updates the expiry time for a run which is resumed", () => {
     const s = store();
     s.save(aRun());

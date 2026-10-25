@@ -1,6 +1,8 @@
 import type { FlowRunStore, PersistedFlowRun } from "@foresight/tx-orchestrator";
 import type { Address } from "viem";
 
+import { createRunStore } from "@/lib/flowRunStore";
+
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
 import type { PredictCtx, PredictSnapshot } from "../flow/types";
@@ -25,6 +27,13 @@ export function findInterruptedRun(store: FlowRunStore, sessionId: string, owner
 /** True while `snapshot` holds a send that errored and whose nonce has not been read as settled. */
 export const hasUnanswered = (snapshot: Readonly<PredictSnapshot> | undefined): boolean =>
   Object.keys(snapshot?.unanswered ?? {}).length > 0;
+
+/** A run that holds a send with no answer read stays stored past its expiry; the store prunes it once settled. */
+export const unsettledRun = (run: PersistedFlowRun<unknown, unknown>): boolean =>
+  hasUnanswered(run.snapshot as Readonly<PredictSnapshot> | undefined);
+
+/** This browser's store of prediction runs. */
+export const predictRunStore = (): FlowRunStore => createRunStore(unsettledRun);
 
 const awaitsReceipt = (run: PersistedFlowRun<PredictSnapshot, PredictCtx>) =>
   run.steps.some((step) => step.outcome.status === "submitted") || hasUnanswered(run.snapshot);

@@ -6,7 +6,6 @@ import { createViemTxGateway, type FlowRunStore } from "@foresight/tx-orchestrat
 import { sendTransaction } from "@wagmi/core";
 import type { Address } from "viem";
 
-import { createRunStore } from "@/lib/flowRunStore";
 import { createLensExactInputQuoter, createLensQuoter } from "@/lib/swap/lens";
 import { publicClient } from "@/lib/web3/public-client";
 import { wagmiConfig } from "@/lib/web3/wagmi";
@@ -16,7 +15,7 @@ import type { CreditsRoute } from "@/config/contracts";
 
 import type { PredictCtx, PredictOption, PredictRequest, PredictSlippage } from "../flow/types";
 import { createPredictRun, type OptionTokens } from "../run/driver";
-import { predictFlowId } from "../run/interrupted";
+import { predictFlowId, predictRunStore } from "../run/interrupted";
 import { tabOwnership } from "../run/ownership";
 import { createPredictReader } from "../run/reader";
 import type { PredictDriver, PredictProgress } from "../run/types";
@@ -63,7 +62,7 @@ export function usePredictRun(input: PredictRunInput | null): {
   if (input) latest.current = input;
 
   const storeRef = useRef<FlowRunStore | undefined>(undefined);
-  const store = (storeRef.current ??= createRunStore());
+  const store = (storeRef.current ??= predictRunStore());
 
   // Only a different session or a different owner is a different run. Everything else is read
   // through the ref when the button is pressed.

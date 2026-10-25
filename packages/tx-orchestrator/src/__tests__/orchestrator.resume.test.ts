@@ -102,13 +102,22 @@ describe("restoring a run for review", () => {
     expect(h.orchestrator.restore({ flowId: "never-ran", steps: [] })).toBeNull();
   });
 
-  it("finds nothing once the run has aged out, an expired run is trashed, not offered", async () => {
-    const { first } = await pausedMidFlight();
+  it("finds nothing once a run with nothing in flight has aged out, an expired run is trashed, not offered", async () => {
+    const first = harness({ scripts: [{}, { sign: "reject" }] });
+    await first.start([step("a"), step("b")]);
     const second = reload(first);
     second.advance(73 * HOUR);
 
     expect(second.orchestrator.restore({ flowId: "flow-1", steps: [step("a"), step("b")] })).toBeNull();
     expect(second.orchestrator.getStatus()).toBe("idle");
+  });
+
+  it("still offers an aged-out run whose transaction has no receipt read", async () => {
+    const { first } = await pausedMidFlight();
+    const second = reload(first);
+    second.advance(73 * HOUR);
+
+    expect(second.orchestrator.restore({ flowId: "flow-1", steps: [step("a"), step("b")] })).not.toBeNull();
   });
 
   it("lists incomplete runs for the gate that blocks a second flow", async () => {

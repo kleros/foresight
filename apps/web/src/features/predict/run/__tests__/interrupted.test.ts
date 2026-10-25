@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
 import { ctx, snapshot, WAD } from "../../flow/__tests__/support/fakes";
-import { discardRun, findInterruptedRun, hasPendingTransaction, predictFlowId } from "../interrupted";
+import { discardRun, findInterruptedRun, hasPendingTransaction, predictFlowId, unsettledRun } from "../interrupted";
 
 const OWNER = "0xA11ce000000000000000000000000000000A11CE";
 const OTHER = "0xb0b00000000000000000000000000000000000b0";
@@ -108,5 +108,35 @@ describe("a run with nothing awaiting a receipt", () => {
     const store = storeWith(predictFlowId("7", OWNER), OWNER, deposit, phase);
     discardRun(store, "7", OWNER);
     expect(store.load(predictFlowId("7", OWNER))).toBeNull();
+  });
+});
+
+describe("a stored run past its expiry", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const held = { owner: OWNER, nonce: 4, fromBlock: 10n, tx: { to: OTHER } } as const;
+
+  function agedStore(unanswered?: Record<string, typeof held>) {
+    let clock = 1_700_000_000_000;
+    const store = createFlowRunStore({ storage: createMemoryStorage(), now: () => clock, unsettled: unsettledRun });
+    store.save({
+      flowId: predictFlowId("7", OWNER),
+      adapterId: "predict-flow",
+      snapshot: { ...SAVED, ...(unanswered ? { unanswered } : {}) },
+      ctx: ctx({ owner: OWNER }),
+      steps: [{ stepId: "deposit", label: "Add funds", outcome: { status: "pending" } }],
+      status: "paused",
+      reason: "error",
+      error: { stepId: "deposit", message: "Internal error", cause: "rpc" },
+    });
+    clock += 4 * DAY;
+    return store;
+  }
+
+  it("is kept while it holds a send the wallet was asked for", () => {
+    expect(agedStore({ deposit: held }).load(predictFlowId("7", OWNER))).not.toBeNull();
+  });
+
+  it("is pruned once nothing in it is unsettled", () => {
+    expect(agedStore().load(predictFlowId("7", OWNER))).toBeNull();
   });
 });

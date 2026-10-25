@@ -43,7 +43,7 @@ A store that cannot write does not stop the run. An `inform` fires once saying t
 
 Four things drop a stored run on read, each removing the record so the next read is clean:
 
-- `expiresAt` in the past. 72 hours by default, configurable with `ttlMs`.
+- `expiresAt` in the past. 72 hours by default, configurable with `ttlMs`. A run with a step at `awaiting-signature` or `submitted` never expires, nor one the store's `unsettled` predicate names, such as an adapter's held send; it is pruned on the first read after it settles.
 - A `version` mismatch against `FLOW_RUN_SCHEMA_VERSION`. No migration path, on purpose: a run whose step ids meant something different in an older release could double-send. Bump the constant whenever a stored shape changes meaning.
 - Unparseable JSON.
 - A record that parses but is unusable: no snapshot, no step list, a paused record with no reason, an unrecognised outcome, a `submitted` step with no hash, a `confirmed` one with no block number, or a record filed under a key that does not match its own `flowId`. A half-written record left in place would throw on every load with no way back.
