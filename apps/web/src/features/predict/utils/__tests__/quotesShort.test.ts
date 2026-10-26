@@ -65,3 +65,34 @@ describe("quotesShort", () => {
     expect(quotesShort(shownLegs(shown), { sells: [], buys: [buy(600n, 2000n)] }, TOLERANCE_BPS)).toBe(true);
   });
 });
+
+describe("quote matching boundaries", () => {
+  it("matches sell quotes by side rather than response order", () => {
+    expect(
+      quotesShort(
+        { sells: [sell(400n)], buys: [] },
+        { sells: [{ side: "down", amountIn: 1000n, amountOut: 999n }, sell(300n)], buys: [] },
+        100,
+      ),
+    ).toBe(true);
+  });
+  it("compares a zero-input shown leg without dividing by zero", () => {
+    expect(
+      quotesShort({ sells: [{ ...sell(400n), amountIn: 0n }], buys: [] }, { sells: [sell(400n)], buys: [] }, 100),
+    ).toBe(false);
+  });
+  it("accepts a proportionally smaller sell without any buys", () => {
+    expect(
+      quotesShort(
+        { sells: [sell(400n)], buys: [] },
+        { sells: [{ side: "up", amountIn: 500n, amountOut: 200n }], buys: [] },
+        100,
+      ),
+    ).toBe(false);
+  });
+  it("accepts a fully paid buy without any sells", () => {
+    expect(quotesShort({ sells: [], buys: [buy(600n, 2000n)] }, { sells: [], buys: [buy(600n, 2000n)] }, 100)).toBe(
+      false,
+    );
+  });
+});

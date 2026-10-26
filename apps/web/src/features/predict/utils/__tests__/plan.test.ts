@@ -4,6 +4,7 @@ import type { PoolLiquidity } from "@/types/pool";
 
 import { MAX_SLIPPAGE_BPS, SLIPPAGE_BPS } from "../../oracle/tolerances";
 import {
+  atEstimate,
   buyBudgetShareBps,
   MIN_LEG_WEI,
   planBuys,
@@ -525,4 +526,115 @@ describe("planChanged", () => {
     const [buy] = shown.buys;
     expect(planChanged(shown, { ...shown, buys: [{ ...buy!, toTarget: !buy!.toTarget }] }, SLIPPAGE_BPS)).toBe(true);
   });
+});
+
+describe("price and amount review boundaries", () => {
+  it.each([
+    ["above", AT["1"], WAD / 4n],
+    ["below", AT["0.0625"], WAD / 4n],
+    ["unpriced", 0n, WAD / 4n],
+  ])("does not call an %s pool at its estimate", (_, price, targetPriceWad) => {
+    expect(atEstimate({ pools: { up: pool(price), down: pool(0n) }, targetPriceWad })).toBe(false);
+  });
+  it("requires every priced side to reach its estimate", () => {
+    expect(atEstimate({ pools: { up: pool(AT["0.25"]), down: pool(AT["1"]) }, targetPriceWad: WAD / 4n })).toBe(false);
+  });
+  it.each([
+    ["upper", 79232123823359799118286999568n, 1000000000000000000n],
+    ["lower", 79228162514264337593543950336n, 1000100000000000000n],
+  ])("accepts the exact %s one-tick boundary", (_, price, targetPriceWad) => {
+    expect(atEstimate({ pools: { up: pool(price), down: pool(0n) }, targetPriceWad })).toBe(true);
+  });
+  const shown: PreviewTrades = {
+    split: 0n,
+    merge: 0n,
+    from: 0n,
+    to: 0n,
+    feeValue: 0n,
+    sells: [{ side: "up", amountIn: 1000n, underlyingOut: 400n, fee: 0n, toTarget: false }],
+    buys: [{ side: "down", amountIn: 600n, outcomeOut: 2000n, fee: 0n, toTarget: false }],
+  };
+  it.each(["amountIn", "underlyingOut"] as const)("reviews a sell-only %s change", (field) => {
+    const now = { ...shown, sells: [{ ...shown.sells[0]!, [field]: 1n }] };
+    expect(planChanged(shown, now, 100)).toBe(true);
+  });
+  it.each(["amountIn", "outcomeOut"] as const)("reviews a buy-only %s change", (field) => {
+    const now = { ...shown, buys: [{ ...shown.buys[0]!, [field]: 1n }] };
+    expect(planChanged(shown, now, 100)).toBe(true);
+  });
+  it("holds identical empty leg lists", () => {
+    const empty = { ...shown, sells: [], buys: [] };
+    expect(planChanged(empty, empty, 100)).toBe(false);
+  });
+  it("consumes the remaining budget after the thin buy caps", () => {
+    const both = option({
+      pools: { up: pool(AT["0.25"], WAD), down: pool(AT["0.25"], WAD * 300n) },
+      targetPriceWad: WAD / 2n,
+      held: { up: 10n * WAD, down: 10n * WAD, invalid: 10n * WAD },
+      splitAmount: 0n,
+    });
+    const plan = planBuys(both, [], 100);
+    expect(plan.legs.reduce((total, leg) => total + leg.amountIn, 0n)).toBe(9800000000000000000n);
+    expect(plan.legs.find((leg) => leg.side === "up")!.amountIn).toBeLessThan(WAD);
+    expect(plan.legs.find((leg) => leg.side === "down")!.amountIn).toBeGreaterThan(9n * WAD);
+  });
+});
+
+describe("buy sizing boundaries", () => {
+  it.each([
+    [true, 2n ** 95n, 43395051798747794894315217862n],
+    [false, 2n ** 97n, 144650172662492649647717392875n],
+  ])("rounds the buy limit inside the target for token0=%s", (outcomeIsToken0, sqrtPriceX96, limit) => {
+    const target = option({
+      pools: { up: { ...pool(sqrtPriceX96, DEEP), outcomeIsToken0 }, down: pool(0n) },
+      targetPriceWad: (3n * WAD) / 10n,
+    });
+    expect(planBuys(target, [], 100).legs[0]!.limitSqrtPrice).toBe(limit);
+  });
+  it("retains a buy whose input equals the minimum leg", () => {
+    const amount = (MIN_LEG_WEI * 10000n + 9799n) / 9800n;
+    const target = option({
+      pools: { up: pool(AT["0.25"], DEEP), down: pool(0n) },
+      targetPriceWad: WAD / 2n,
+      splitAmount: amount,
+    });
+    expect(sized(planBuys(target, [], 100).legs)).toEqual([{ side: "up", amountIn: MIN_LEG_WEI }]);
+  });
+  it("retains the split amount for a sell-only preview", () => {
+    const target = option({ pools: { up: pool(AT["1"]), down: pool(0n) }, splitAmount: WAD });
+    expect(previewTrades(target, 100)).toMatchObject({
+      split: WAD,
+      buys: [],
+      sells: [{ side: "up", amountIn: WAD, underlyingOut: WAD / 2n, toTarget: false }],
+    });
+  });
+});
+
+it("keeps the preview price on UP when both asymmetric sides sell", () => {
+  const target = option({
+    pools: { up: pool(AT["1"]), down: pool(AT["1"]) },
+    targetPriceWad: WAD / 4n,
+    splitAmount: 10n * WAD,
+  });
+  expect(previewTrades(target, 100)).toMatchObject({ to: WAD / 4n, buys: [] });
+});
+
+it("caps the partially funded second buy during redistribution", () => {
+  const target = option({
+    pools: { up: pool(AT["0.25"], WAD), down: pool(AT["0.25"], 30n * WAD) },
+    targetPriceWad: WAD / 2n,
+    splitAmount: 10n * WAD,
+  });
+  const plan = planBuys(target, [], 100);
+  // 30 * (sqrt(0.5) - 0.5) * 1.01 is less than 6.4, including headroom.
+  expect(plan.legs.find((leg) => leg.side === "down")!.amountIn).toBeLessThan((64n * WAD) / 10n);
+});
+
+it("retains the split amount for a buy-only preview", () => {
+  const target = option({
+    pools: { up: pool(AT["0.25"], DEEP), down: pool(0n) },
+    targetPriceWad: WAD / 2n,
+    splitAmount: WAD,
+  });
+  expect(previewTrades(target, 100)).toMatchObject({ split: WAD, sells: [] });
 });

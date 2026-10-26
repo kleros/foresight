@@ -276,3 +276,32 @@ describe("the split each option is shown to make", () => {
     expect(shownSplit(withCredits(), undefined)).toBeUndefined();
   });
 });
+
+describe("credits funding boundaries", () => {
+  it("uses only the remaining request from wallet credits", () => {
+    const { funding } = fund({ wallet: 5n * WAD, tradeWallet: 2n * WAD, manager: 7n * WAD }, 3n * WAD);
+    expect(funding).toMatchObject({
+      collateralIn: 3n * WAD,
+      creditsIn: 3n * WAD,
+      credits: [{ kind: "foresight", fromTradeWallet: 2n * WAD, fromWallet: WAD }],
+      deposit: 0n,
+    });
+  });
+  it("retains one displayed collateral quantum after spending credits", () => {
+    const quantum = 10n ** BigInt(18 - OWNED_DECIMALS);
+    const { funding } = fund({ wallet: WAD, tradeWallet: 0n, manager: WAD }, WAD + quantum, {
+      ownWallet: WAD,
+      tradeWallet: 0n,
+    });
+    expect(funding).toMatchObject({ collateralIn: WAD + quantum, toAdd: quantum, deposit: quantum });
+  });
+  it("does not forgive collateral dust when selected credits contribute nothing", () => {
+    const funding = planFunding({
+      amount: 1n,
+      ownWallet: WAD,
+      tradeWallet: 0n,
+      credits: [{ kind: "foresight", wallet: 0n, tradeWallet: 0n, usable: 0n }],
+    });
+    expect(funding).toMatchObject({ collateralIn: 1n, toAdd: 1n, deposit: 1n });
+  });
+});
