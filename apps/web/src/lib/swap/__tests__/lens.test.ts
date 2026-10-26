@@ -1,9 +1,18 @@
-import { decodeFunctionData, encodeFunctionData, parseAbi, type Address, type PublicClient } from "viem";
+import {
+  createPublicClient,
+  custom,
+  decodeFunctionData,
+  encodeFunctionData,
+  parseAbi,
+  type Address,
+  type PublicClient,
+} from "viem";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // eslint-disable-next-line import-x/no-restricted-paths -- the predict oracle owns the slippage these legs are signed at
 import { SLIPPAGE_BPS } from "@/features/predict/oracle/tolerances";
 
+import { QUOTE_DEADLINE_SECONDS } from "../deadline";
 import { createLensExactInputQuoter, createLensQuoter } from "../lens";
 import { NoSwapRouteError, QuoteRefusedError, type SwapQuoteRequest } from "../types";
 
@@ -73,10 +82,22 @@ describe("createLensQuoter", () => {
   });
 
   it("dates the deadline from the chain's latest block, not the visitor's clock", async () => {
-    const client = { getBlock: () => Promise.resolve({ timestamp: 5_000n }) } as unknown as PublicClient;
+    const client = createPublicClient({
+      transport: custom(
+        {
+          request: async ({ method, params }) => {
+            if (method !== "eth_getBlockByNumber" || !Array.isArray(params) || params[0] !== "latest") {
+              throw new Error("No block for this RPC request");
+            }
+            return { timestamp: "0x1388", transactions: [] };
+          },
+        },
+        { retryCount: 0 },
+      ),
+    });
     await createLensQuoter(client, 100).quote(request());
 
-    expect(quote).toHaveBeenCalledWith(expect.objectContaining({ deadline: 5_000n + 1_800n }));
+    expect(quote).toHaveBeenCalledWith(expect.objectContaining({ deadline: 5_000n + QUOTE_DEADLINE_SECONDS }));
   });
 
   it("signs the swap with the limit it was asked for, through the router, tokens and recipient Lens named", async () => {
@@ -445,10 +466,10 @@ describe("exact-input quote request", () => {
       amount: 1000n,
       recipient: EXECUTOR,
       slippageBps: 0,
-      deadline: 6800n,
+      deadline: 5000n + QUOTE_DEADLINE_SECONDS,
     });
   });
-  it("refuses a multihop exact-input route before decoding a single-pool call", async () => {
+  it("refuses a multihop route for an exact-input single-pool quote", async () => {
     quote.mockResolvedValue({
       ...lensResult,
       data: encodeFunctionData({
@@ -466,11 +487,7 @@ describe("exact-input quote request", () => {
       }),
     ).rejects.toBeInstanceOf(NoSwapRouteError);
   });
-  it("requests the latest block explicitly for its deadline", async () => {
-    const getBlock = vi.fn().mockResolvedValue({ timestamp: 5000n });
-    await createLensQuoter({ getBlock } as unknown as PublicClient, 100).quote(request());
-    expect(getBlock).toHaveBeenCalledExactlyOnceWith({ blockTag: "latest" });
-  });
+
   it("refuses an unsupported router before requesting a quote", async () => {
     await expect(
       createLensQuoter({} as PublicClient, 1, () => Promise.resolve(0n)).quote(request()),

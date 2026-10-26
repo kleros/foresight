@@ -5,9 +5,10 @@ import { ALGEBRA_ROUTER_ABI } from "@/lib/swap/algebraRouter";
 
 import type { PreviewTrades } from "../../utils/plan";
 import {
+  MINT_RATE_MARGIN_BPS,
+  MOVED_TOLERANCE_BPS,
   assertRoutes,
   heldMoves,
-  sizeBatches,
   planPredict,
   PlansMovedError,
   NoRouteError,
@@ -48,7 +49,11 @@ const shown: PreviewTrades = {
   to: WAD / 4n,
   feeValue: 0n,
 };
-const snap = snapshot({ deposit: 0n, collateralIn: 0n, slippage: { tradeBps: 300, creditsBps: 0 } });
+const snap = snapshot({
+  deposit: 0n,
+  collateralIn: 0n,
+  slippage: { tradeBps: 3 * MOVED_TOLERANCE_BPS, creditsBps: 0 },
+});
 function build(deps: PredictDeps, run = snap, context = ctx()) {
   return planPredict(run, deps)
     .find((each) => each.id === STEP_ID.predict(1))!
@@ -61,18 +66,32 @@ const deps = (held?: HeldTo): PredictDeps => ({
 });
 
 describe("held money plans", () => {
-  it("reviews a two-percent amount move despite three-percent swap slippage", async () => {
+  it("reviews an amount move beyond the review tolerance but within swap slippage", async () => {
     await expect(
-      build(deps({ plans: { [key]: { ...shown, sells: [{ ...shown.sells[0]!, amountIn: (102n * WAD) / 100n }] } } })),
+      build(
+        deps({
+          plans: {
+            [key]: {
+              ...shown,
+              sells: [{ ...shown.sells[0]!, amountIn: ((10_000n + 2n * BigInt(MOVED_TOLERANCE_BPS)) * WAD) / 10_000n }],
+            },
+          },
+        }),
+      ),
     ).rejects.toBeInstanceOf(PlansMovedError);
   });
-  it("reviews a two-percent quote shortfall despite three-percent swap slippage", async () => {
+  it("reviews a quote shortfall beyond the review tolerance but within swap slippage", async () => {
     const d = deps({
       plans: { [key]: shown },
       quotes: { [key]: { sells: [{ side: "up", amountIn: WAD, amountOut: WAD / 2n }], buys: [] } },
     });
     const quoter = fakeQuoter();
-    d.quoter = { quote: async (request) => ({ ...(await quoter.quote(request)), amountOut: (49n * WAD) / 100n }) };
+    d.quoter = {
+      quote: async (request) => ({
+        ...(await quoter.quote(request)),
+        amountOut: ((WAD / 2n) * (10_000n - 2n * BigInt(MOVED_TOLERANCE_BPS))) / 10_000n,
+      }),
+    };
     await expect(build(d)).rejects.toBeInstanceOf(PlansMovedError);
   });
   it("builds when held metadata has no option plans", async () => {
@@ -99,15 +118,38 @@ describe("held money plans", () => {
     await expect(build(d)).rejects.toBeInstanceOf(PlansMovedError);
     expect(quoter.requests[0]!.heldOut).toBe(WAD / 2n);
   });
-  it("does not divide by a zero-input held sell", async () => {
+  it("builds without a held rate when the shown sell has no input", async () => {
     const d = deps({
       plans: { [key]: shown },
       quotes: { [key]: { sells: [{ side: "up", amountIn: 0n, amountOut: 0n }], buys: [] } },
     });
     const quoter = fakeQuoter();
     d.quoter = quoter;
-    await build(d);
+    await expect(build(d)).resolves.toMatchObject({ to: addresses.executor });
     expect(quoter.requests[0]!.heldOut).toBeUndefined();
+  });
+
+  it("reviews every unfunded batch without requiring a credits mint", async () => {
+    const options = [only, option(2)];
+    const moved = await heldMoves(ctx(), { ...snap, options, optionsPerBatch: 1 }, deps({ plans: {} }), new Set());
+    expect(moved?.markets).toEqual(options.map((each) => each.childMarket));
+  });
+
+  it("reviews a newly trading buy-only option", async () => {
+    const reader = fakeReader({
+      state: () => ({
+        ...sellState,
+        held: { up: 0n, down: 0n, invalid: 0n },
+        underlying: WAD,
+        pools: { ...sellState.pools, up: { ...sellState.pools.up, liquidity: 10n ** 30n, sqrtPriceX96: 2n ** 95n } },
+      }),
+    });
+    await expect(
+      build(
+        { reader, quoter: fakeQuoter(), heldTo: () => ({ plans: {} }) },
+        { ...snap, options: [option(1, WAD / 2n)] },
+      ),
+    ).rejects.toMatchObject({ moved: { markets: [only.childMarket] } });
   });
 });
 
@@ -179,7 +221,7 @@ describe("credits money boundaries", () => {
       vaultValue: (5n * WAD) / 4n,
       floor: (5n * WAD) / 4n,
       loss: 0n,
-      minted: 999900000000000000n,
+      minted: WAD - (WAD * MINT_RATE_MARGIN_BPS) / 10_000n,
     };
     await expect(
       build(
@@ -193,7 +235,7 @@ describe("credits money boundaries", () => {
       ),
     ).resolves.toMatchObject({ to: addresses.executor });
   });
-  it.each(["preflight", "review"])("carries the credits mint exactly once into every %s batch", async (mode) => {
+  it("carries the credits mint exactly once into every review batch", async () => {
     const options = [option(1), option(2)];
     const run = snapshot({
       options,
@@ -208,19 +250,62 @@ describe("credits money boundaries", () => {
       creditsQuoter: fakeCreditsQuoter({ lossBps: 0n }),
       heldTo: () => ({ plans: {} }),
     };
-    const moved =
-      mode === "review"
-        ? await heldMoves(ctx(), run, d, new Set())
-        : await assertRoutes(ctx(), run, d).catch((error: unknown) => {
-            if (!(error instanceof PlansMovedError)) throw error;
-            return error.moved;
-          });
+    const moved = await heldMoves(ctx(), run, d, new Set());
     expect(moved).toMatchObject({
       plans: {
-        [options[0]!.childMarket.toLowerCase()]: { split: 1999900000000000000n },
-        [options[1]!.childMarket.toLowerCase()]: { split: 1999900000000000000n },
+        [options[0]!.childMarket.toLowerCase()]: { split: 2n * WAD - (WAD * MINT_RATE_MARGIN_BPS) / 10_000n },
+        [options[1]!.childMarket.toLowerCase()]: { split: 2n * WAD - (WAD * MINT_RATE_MARGIN_BPS) / 10_000n },
       },
     });
+  });
+  it("carries the credits mint exactly once into every preflight batch", async () => {
+    const options = [option(1), option(2)];
+    const run = snapshot({
+      options,
+      optionsPerBatch: 1,
+      creditsToSpend: WAD,
+      collateralIn: WAD,
+      slippage: { tradeBps: 100, creditsBps: 0 },
+    });
+    const d = {
+      reader: fakeReader(),
+      quoter: fakeQuoter(),
+      creditsQuoter: fakeCreditsQuoter({ lossBps: 0n }),
+      heldTo: () => ({ plans: {} }),
+    };
+    const moved = await assertRoutes(ctx(), run, d).catch((error: unknown) => {
+      if (!(error instanceof PlansMovedError)) throw error;
+      return error.moved;
+    });
+    expect(moved).toMatchObject({
+      plans: {
+        [options[0]!.childMarket.toLowerCase()]: { split: 2n * WAD - (WAD * MINT_RATE_MARGIN_BPS) / 10_000n },
+        [options[1]!.childMarket.toLowerCase()]: { split: 2n * WAD - (WAD * MINT_RATE_MARGIN_BPS) / 10_000n },
+      },
+    });
+  });
+
+  it("reviews credits whose quoted output no longer covers the held floor", async () => {
+    const credits = {
+      amount: WAD,
+      creditsBps: 0,
+      quoted: (126n * WAD) / 100n,
+      vaultValue: (5n * WAD) / 4n,
+      floor: (126n * WAD) / 100n,
+      loss: 0n,
+      minted: WAD,
+    };
+    await expect(
+      build(
+        {
+          reader: fakeReader(),
+          quoter: fakeQuoter(),
+          creditsQuoter: fakeCreditsQuoter({ lossBps: 0n }),
+          heldTo: () => ({ credits }),
+        },
+        snapshot({ creditsToSpend: WAD, slippage: { tradeBps: 100, creditsBps: 0 } }),
+      ),
+    ).rejects.toMatchObject({ moved: { credits: { quoted: (5n * WAD) / 4n } } });
   });
 });
 
@@ -252,9 +337,10 @@ describe("review of options without executable amounts", () => {
   });
   it("reports the independently moved option alongside a short quote", async () => {
     const options = [only, option(2)];
+    let quoted = false;
     const reader = fakeReader({
       state: (each) =>
-        reader.asked.length > 1 && each === options[1]
+        quoted && each === options[1]
           ? { ...sellState, pools: { ...sellState.pools, up: { ...sellState.pools.up, sqrtPriceX96: 2n ** 95n } } }
           : sellState,
     });
@@ -262,10 +348,13 @@ describe("review of options without executable amounts", () => {
     const d: PredictDeps = {
       reader,
       quoter: {
-        quote: async (request) => ({
-          ...(await quoter.quote(request)),
-          amountOut: request.tokenIn === only.upToken ? 1n : WAD / 2n,
-        }),
+        quote: async (request) => {
+          quoted = true;
+          return {
+            ...(await quoter.quote(request)),
+            amountOut: request.tokenIn === only.upToken ? 1n : WAD / 2n,
+          };
+        },
       },
       heldTo: () => ({ plans: { [key]: shown, [options[1]!.childMarket.toLowerCase()]: shown } }),
     };
@@ -273,107 +362,28 @@ describe("review of options without executable amounts", () => {
       moved: { markets: [only.childMarket, options[1]!.childMarket] },
     });
   });
-});
 
-describe("batch gas money limits", () => {
-  const funded = snapshot({
-    options: Array.from({ length: 12 }, (_, index) => option(index + 1)),
-    deposit: 0n,
-    collateralIn: WAD,
-  });
-  it("infers fixed gas after shrinking by several options", async () => {
-    const counts: number[] = [];
+  it("does not call mixed at-estimate and illiquid options all at their estimates", async () => {
+    const options = [only, option(2)];
     const reader = fakeReader({
-      deployed: true,
-      estimateGas: async () => {
-        const count = reader.asked.at(-1)!.options.length;
-        counts.push(count);
-        return 12000000n + BigInt(count) * 1000000n;
-      },
+      state: (each) => ({
+        ...sellState,
+        held: { up: 0n, down: 0n, invalid: 0n },
+        pools: {
+          ...sellState.pools,
+          up: { ...sellState.pools.up, sqrtPriceX96: each === only ? 2n ** 95n : 2n ** 96n, liquidity: 0n },
+        },
+      }),
     });
-    expect(await sizeBatches(ctx(), funded, { reader, quoter: fakeQuoter() }, 40000000n)).toBe(4);
-    expect(counts).toEqual([10, 7, 4]);
+    await expect(build({ reader, quoter: fakeQuoter() }, { ...snap, options })).rejects.toBeInstanceOf(NoRouteError);
   });
-  it("keeps a batch whose gas exactly fills its block share", async () => {
-    const reader = fakeReader({ deployed: true, estimateGas: async () => 8500000n });
-    expect(await sizeBatches(ctx(), funded, { reader, quoter: fakeQuoter() }, 17000000n)).toBe(5);
-  });
-  it("does not estimate a batch before the owner's credits arrive", async () => {
-    const reader = fakeReader({ deployed: true, estimateGas: async () => 1000000000n });
-    expect(
-      await sizeBatches(
-        ctx(),
-        { ...funded, creditsFromEoa: WAD, creditsToSpend: WAD },
-        { reader, quoter: fakeQuoter(), creditsQuoter: fakeCreditsQuoter() },
-        17000000n,
-      ),
-    ).toBe(4);
-    expect(reader.estimated).toEqual([]);
-  });
-});
 
-it("reports no route for an unpriced held option without dereferencing a null plan", async () => {
-  const reader = fakeReader({
-    state: () => ({ ...sellState, pools: { ...sellState.pools, up: { ...sellState.pools.up, sqrtPriceX96: 0n } } }),
+  it("reports no route for an unpriced held option", async () => {
+    const reader = fakeReader({
+      state: () => ({ ...sellState, pools: { ...sellState.pools, up: { ...sellState.pools.up, sqrtPriceX96: 0n } } }),
+    });
+    await expect(build({ reader, quoter: fakeQuoter(), heldTo: () => ({ plans: {} }) })).rejects.toBeInstanceOf(
+      NoRouteError,
+    );
   });
-  await expect(build({ reader, quoter: fakeQuoter(), heldTo: () => ({ plans: {} }) })).rejects.toBeInstanceOf(
-    NoRouteError,
-  );
-});
-it("reviews every unfunded batch without requiring a credits mint", async () => {
-  const options = [only, option(2)];
-  const moved = await heldMoves(ctx(), { ...snap, options, optionsPerBatch: 1 }, deps({ plans: {} }), new Set());
-  expect(moved?.markets).toEqual(options.map((each) => each.childMarket));
-});
-
-it("reviews a newly trading buy-only option", async () => {
-  const reader = fakeReader({
-    state: () => ({
-      ...sellState,
-      held: { up: 0n, down: 0n, invalid: 0n },
-      underlying: WAD,
-      pools: { ...sellState.pools, up: { ...sellState.pools.up, liquidity: 10n ** 30n, sqrtPriceX96: 2n ** 95n } },
-    }),
-  });
-  await expect(
-    build({ reader, quoter: fakeQuoter(), heldTo: () => ({ plans: {} }) }, { ...snap, options: [option(1, WAD / 2n)] }),
-  ).rejects.toMatchObject({ moved: { markets: [only.childMarket] } });
-});
-
-it("reviews credits whose quoted output no longer covers the held floor", async () => {
-  const credits = {
-    amount: WAD,
-    creditsBps: 0,
-    quoted: (126n * WAD) / 100n,
-    vaultValue: (5n * WAD) / 4n,
-    floor: (126n * WAD) / 100n,
-    loss: 0n,
-    minted: WAD,
-  };
-  await expect(
-    build(
-      {
-        reader: fakeReader(),
-        quoter: fakeQuoter(),
-        creditsQuoter: fakeCreditsQuoter({ lossBps: 0n }),
-        heldTo: () => ({ credits }),
-      },
-      snapshot({ creditsToSpend: WAD, slippage: { tradeBps: 100, creditsBps: 0 } }),
-    ),
-  ).rejects.toMatchObject({ moved: { credits: { quoted: (5n * WAD) / 4n } } });
-});
-
-it("does not call mixed at-estimate and illiquid options all at their estimates", async () => {
-  const options = [only, option(2)];
-  const reader = fakeReader({
-    state: (each) => ({
-      ...sellState,
-      held: { up: 0n, down: 0n, invalid: 0n },
-      pools: {
-        ...sellState.pools,
-        up: { ...sellState.pools.up, sqrtPriceX96: each === only ? 2n ** 95n : 2n ** 96n, liquidity: 0n },
-      },
-    }),
-  });
-  await expect(build({ reader, quoter: fakeQuoter() }, { ...snap, options })).rejects.toBeInstanceOf(NoRouteError);
 });

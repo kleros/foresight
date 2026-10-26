@@ -69,10 +69,15 @@ describe("predict transaction allow-list", () => {
   });
 
   it.each([
-    ["selector on another target", { to: other, data: transfer(addresses.executor) }],
-    ["unlisted selector on collateral", { to: addresses.collateral, data: approve(addresses.swapRouter) }],
+    ["selector on another target", "is not allowed", { to: other, data: transfer(addresses.executor) }],
+    [
+      "unlisted selector on collateral",
+      "is not allowed",
+      { to: addresses.collateral, data: approve(addresses.swapRouter) },
+    ],
     [
       "native deposit to another receiver",
+      "not the executor",
       {
         to: addresses.sDaiAdapter,
         value: 7n,
@@ -83,17 +88,30 @@ describe("predict transaction allow-list", () => {
         }),
       },
     ],
-    ["native value on a transfer", { to: addresses.collateral, value: 1n, data: transfer(addresses.executor) }],
-    ["transfer to another receiver", { to: addresses.collateral, data: transfer(other) }],
-    ["approval to another spender", batch(addresses.collateral, approve(other))],
-    ["unlimited router approval", batch(addresses.collateral, approve(addresses.swapRouter, 2n ** 256n - 1n))],
-    ["swap to another receiver", batch(addresses.swapRouter, swap(other))],
-    ["swap without a price limit", batch(addresses.swapRouter, swap(addresses.executor, 0n))],
-    ["credits through another router", execute(other, addresses.wxdai)],
-    ["credits buying another token", execute(addresses.swapRouter, other)],
-    ["credits to another receiver", execute(addresses.swapRouter, addresses.wxdai, other)],
+    [
+      "native value on a transfer",
+      "carries 1 native",
+      { to: addresses.collateral, value: 1n, data: transfer(addresses.executor) },
+    ],
+    ["transfer to another receiver", "not the executor", { to: addresses.collateral, data: transfer(other) }],
+    ["approval to another spender", "approves", batch(addresses.collateral, approve(other))],
+    [
+      "unlimited router approval",
+      "approves an unbounded amount",
+      batch(addresses.collateral, approve(addresses.swapRouter, 2n ** 256n - 1n)),
+    ],
+    ["swap to another receiver", "swap pays", batch(addresses.swapRouter, swap(other))],
+    [
+      "swap without a price limit",
+      "swap carries no price limit",
+      batch(addresses.swapRouter, swap(addresses.executor, 0n)),
+    ],
+    ["credits through another router", "credits spent through", execute(other, addresses.wxdai)],
+    ["credits buying another token", "credits buy", execute(addresses.swapRouter, other)],
+    ["credits to another receiver", "credits swap pays", execute(addresses.swapRouter, addresses.wxdai, other)],
     [
       "native split for another parent",
+      "not the session's parent",
       {
         to: addresses.executor,
         data: encodeFunctionData({
@@ -124,30 +142,34 @@ describe("predict transaction allow-list", () => {
         }),
       },
     ],
-  ] satisfies [string, FlowTx][])("refuses %s", (_, tx) => {
+  ] satisfies [string, string, FlowTx][])("refuses %s", (_, reason, tx) => {
     expect(() => check(tx)).toThrow(UnlistedTxError);
+    expect(departures({ tx, ctx: ctx(), sessionTokens: [addresses.collateral] })).toEqual([
+      expect.stringContaining(reason),
+    ]);
   });
-});
 
-it("accepts a native deposit paying this executor", () => {
-  const tx = {
-    to: addresses.sDaiAdapter,
-    value: 7n,
-    data: encodeFunctionData({
-      abi: parseAbi(["function depositXDAI(address) payable"]),
-      functionName: "depositXDAI",
-      args: [addresses.executor],
-    }),
-  };
-  expect(() => check(tx)).not.toThrow();
-});
-it("refuses a send from anyone other than the run owner", () => {
-  expect(() =>
-    assertListed({
-      tx: { to: addresses.collateral, data: transfer(addresses.executor) },
-      ctx: ctx(),
-      sessionTokens: [addresses.collateral],
-      from: other,
-    }),
-  ).toThrow(UnlistedTxError);
+  it("refuses a send from anyone other than the run owner", () => {
+    expect(() =>
+      assertListed({
+        tx: { to: addresses.collateral, data: transfer(addresses.executor) },
+        ctx: ctx(),
+        sessionTokens: [addresses.collateral],
+        from: other,
+      }),
+    ).toThrow(UnlistedTxError);
+  });
+
+  it("accepts a native deposit paying this executor", () => {
+    const tx = {
+      to: addresses.sDaiAdapter,
+      value: 7n,
+      data: encodeFunctionData({
+        abi: parseAbi(["function depositXDAI(address) payable"]),
+        functionName: "depositXDAI",
+        args: [addresses.executor],
+      }),
+    };
+    expect(() => check(tx)).not.toThrow();
+  });
 });

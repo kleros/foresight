@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { PoolLiquidity } from "@/types/pool";
 
-import { MAX_SLIPPAGE_BPS, SLIPPAGE_BPS } from "../../oracle/tolerances";
+import { MAX_SLIPPAGE_BPS, PRICE_TOLERANCE_TICKS, SLIPPAGE_BPS } from "../../oracle/tolerances";
 import {
   atEstimate,
   buyBudgetShareBps,
@@ -16,7 +16,7 @@ import {
   type PreviewTrades,
   type SwapLeg,
 } from "../plan";
-import { swapToward } from "../poolMath";
+import { isqrt, swapToward } from "../poolMath";
 
 const WAD = 10n ** 18n;
 
@@ -169,24 +169,30 @@ describe("planBuys", () => {
   it("spends the sells' proceeds on the side being bought", () => {
     const plan = planBuys(option(), [{ side: "up", amountIn: WAD, underlyingOut: (WAD * 4n) / 10n }], SLIPPAGE_BPS);
 
-    // the whole UP balance went, so nothing pairs off: 0.4 proceeds at 98 of 100
+    // The whole UP balance went, so only the sale proceeds fund the buy.
     expect(plan.mergeAmount).toBe(0n);
-    expect(sized(plan.legs)).toEqual([{ side: "down", amountIn: (((WAD * 4n) / 10n) * 98n) / 100n }]);
+    expect(sized(plan.legs)).toEqual([
+      { side: "down", amountIn: (((WAD * 4n) / 10n) * buyBudgetShareBps(SLIPPAGE_BPS)) / 10_000n },
+    ]);
   });
 
   it("merges the pairs left over and spends those too", () => {
     const plan = planBuys(option(), [{ side: "up", amountIn: WAD / 2n, underlyingOut: WAD / 5n }], SLIPPAGE_BPS);
 
-    // 0.5 UP and 1 DOWN remain, so 0.5 merges back; 0.2 + 0.5 at 98 of 100
+    // Half the pairs remain, so the buy can spend both their merge and the sale proceeds.
     expect(plan.mergeAmount).toBe(WAD / 2n);
-    expect(sized(plan.legs)).toEqual([{ side: "down", amountIn: ((WAD / 5n + WAD / 2n) * 98n) / 100n }]);
+    expect(sized(plan.legs)).toEqual([
+      { side: "down", amountIn: ((WAD / 5n + WAD / 2n) * buyBudgetShareBps(SLIPPAGE_BPS)) / 10_000n },
+    ]);
   });
 
   it("keeps back more of the budget when the slippage setting is wider", () => {
     const plan = planBuys(option(), [{ side: "up", amountIn: WAD, underlyingOut: (WAD * 4n) / 10n }], 300);
 
-    // 0.4 proceeds, less 3% a sell may lose and the 1% margin: 96 of 100
-    expect(sized(plan.legs)).toEqual([{ side: "down", amountIn: (((WAD * 4n) / 10n) * 96n) / 100n }]);
+    // The wider slippage leaves less of the proceeds available to buy.
+    expect(sized(plan.legs)).toEqual([
+      { side: "down", amountIn: (((WAD * 4n) / 10n) * buyBudgetShareBps(300)) / 10_000n },
+    ]);
   });
 
   it("never buys with more than the sells pay when each fills at its minimum", () => {
@@ -232,7 +238,7 @@ describe("planBuys", () => {
 
   it("splits the budget between two buys by how far each has to travel", () => {
     // the estimate puts UP at 0.75 and so DOWN at 0.25: UP climbs 0.5 from 0.25, DOWN climbs
-    // 0.1875 from 0.0625, and 11 of collateral merges to a budget of 10.78
+    // 0.1875 from 0.0625, with 11 of collateral merging to fund both.
     const both = option({
       pools: { up: pool(AT["0.25"], DEEP), down: pool(AT["0.0625"], DEEP) },
       targetPriceWad: (WAD * 75n) / 100n,
@@ -243,7 +249,7 @@ describe("planBuys", () => {
     const plan = planBuys(both, [], SLIPPAGE_BPS);
 
     // 0.5 and 0.1875 of 0.6875 are 8 and 3 elevenths of the budget
-    const budget = (WAD * 11n * 98n) / 100n;
+    const budget = (WAD * 11n * buyBudgetShareBps(SLIPPAGE_BPS)) / 10_000n;
     expect(sized(plan.legs)).toEqual([
       { side: "up", amountIn: (budget * 8n) / 11n },
       { side: "down", amountIn: (budget * 3n) / 11n },
@@ -263,7 +269,7 @@ describe("planBuys", () => {
       const plan = planBuys(both, [], SLIPPAGE_BPS);
       const need = plan.legs.reduce((sum, leg) => sum + leg.amountInAtLimit, 0n);
 
-      expect(need).toBeLessThan((WAD * 10n * 98n) / 100n);
+      expect(need).toBeLessThan((WAD * 10n * buyBudgetShareBps(SLIPPAGE_BPS)) / 10_000n);
       for (const leg of plan.legs) {
         expect(leg.amountIn, `${leg.side} is given what reaching its target takes`).toBeGreaterThanOrEqual(
           leg.amountInAtLimit,
@@ -294,7 +300,7 @@ describe("planBuys", () => {
     const plan = planBuys(shallow, [{ side: "up", amountIn: WAD, underlyingOut: WAD * 100n }], SLIPPAGE_BPS);
 
     // the budget dwarfs what moving DOWN from 0.25 to 0.75 actually takes
-    expect(plan.legs[0]!.amountIn).toBeLessThan((WAD * 100n * 98n) / 100n);
+    expect(plan.legs[0]!.amountIn).toBeLessThan((WAD * 100n * buyBudgetShareBps(SLIPPAGE_BPS)) / 10_000n);
   });
 
   it("does nothing for an option the market already agrees with", () => {
@@ -320,6 +326,17 @@ describe("planBuys", () => {
     // half the UP went, so half of what was split is still paired and comes back as underlying
     expect(plan.legs).toEqual([]);
     expect(plan.mergeAmount).toBe(WAD / 2n);
+  });
+
+  it("caps the partially funded second buy during redistribution", () => {
+    const target = option({
+      pools: { up: pool(AT["0.25"], WAD), down: pool(AT["0.25"], 30n * WAD) },
+      targetPriceWad: WAD / 2n,
+      splitAmount: 10n * WAD,
+    });
+    const plan = planBuys(target, [], 100);
+    // 30 * (sqrt(0.5) - 0.5) * 1.01 is less than 6.4, including headroom.
+    expect(plan.legs.find((leg) => leg.side === "down")!.amountIn).toBeLessThan((64n * WAD) / 10n);
   });
 });
 
@@ -481,6 +498,24 @@ describe("previewTrades", () => {
   it("has nothing to show for an UP pool that never priced", () => {
     expect(previewTrades(option({ pools: { up: pool(0n), down: pool(AT["0.25"]) } }), SLIPPAGE_BPS)).toBeNull();
   });
+
+  it("keeps the preview price on UP when both asymmetric sides sell", () => {
+    const target = option({
+      pools: { up: pool(AT["1"]), down: pool(AT["1"]) },
+      targetPriceWad: WAD / 4n,
+      splitAmount: 10n * WAD,
+    });
+    expect(previewTrades(target, 100)).toMatchObject({ to: WAD / 4n, buys: [] });
+  });
+
+  it("retains the split amount for a buy-only preview", () => {
+    const target = option({
+      pools: { up: pool(AT["0.25"], DEEP), down: pool(0n) },
+      targetPriceWad: WAD / 2n,
+      splitAmount: WAD,
+    });
+    expect(previewTrades(target, 100)).toMatchObject({ split: WAD, sells: [] });
+  });
 });
 
 describe("planChanged", () => {
@@ -539,10 +574,23 @@ describe("price and amount review boundaries", () => {
   it("requires every priced side to reach its estimate", () => {
     expect(atEstimate({ pools: { up: pool(AT["0.25"]), down: pool(AT["1"]) }, targetPriceWad: WAD / 4n })).toBe(false);
   });
-  it.each([
-    ["upper", 79232123823359799118286999568n, 1000000000000000000n],
-    ["lower", 79228162514264337593543950336n, 1000100000000000000n],
-  ])("accepts the exact %s one-tick boundary", (_, price, targetPriceWad) => {
+  it("accepts the upper price tolerance boundary", () => {
+    const ticks = BigInt(PRICE_TOLERANCE_TICKS);
+    const targetPriceWad = WAD;
+    const boundary = (targetPriceWad * 10_001n ** ticks) / 10_000n ** ticks;
+    // Pick the first sqrt price whose WAD-rounded price reaches the boundary.
+    const root = isqrt((boundary * 2n ** 192n) / WAD);
+    const price = root ** 2n * WAD < boundary * 2n ** 192n ? root + 1n : root;
+    expect(price ** 2n * WAD).toBeGreaterThanOrEqual(boundary * 2n ** 192n);
+    expect((price - 1n) ** 2n * WAD).toBeLessThan(boundary * 2n ** 192n);
+    expect(atEstimate({ pools: { up: pool(price), down: pool(0n) }, targetPriceWad })).toBe(true);
+  });
+  it("accepts the lower price tolerance boundary", () => {
+    const ticks = BigInt(PRICE_TOLERANCE_TICKS);
+    const price = AT["1"];
+    const targetPriceWad = (WAD * 10_001n ** ticks) / 10_000n ** ticks;
+    expect(price ** 2n * WAD).toBe(WAD * 2n ** 192n);
+    expect((price + 1n) ** 2n * WAD).toBeGreaterThan(WAD * 2n ** 192n);
     expect(atEstimate({ pools: { up: pool(price), down: pool(0n) }, targetPriceWad })).toBe(true);
   });
   const shown: PreviewTrades = {
@@ -574,25 +622,40 @@ describe("price and amount review boundaries", () => {
       splitAmount: 0n,
     });
     const plan = planBuys(both, [], 100);
-    expect(plan.legs.reduce((total, leg) => total + leg.amountIn, 0n)).toBe(9800000000000000000n);
+    expect(plan.legs.reduce((total, leg) => total + leg.amountIn, 0n)).toBe(
+      (10n * WAD * buyBudgetShareBps(100)) / 10_000n,
+    );
     expect(plan.legs.find((leg) => leg.side === "up")!.amountIn).toBeLessThan(WAD);
-    expect(plan.legs.find((leg) => leg.side === "down")!.amountIn).toBeGreaterThan(9n * WAD);
+    expect(plan.legs.find((leg) => leg.side === "down")!.amountIn).toBeGreaterThan(
+      (10n * WAD * buyBudgetShareBps(100)) / 10_000n - WAD,
+    );
   });
 });
 
 describe("buy sizing boundaries", () => {
-  it.each([
-    [true, 2n ** 95n, 43395051798747794894315217862n],
-    [false, 2n ** 97n, 144650172662492649647717392875n],
-  ])("rounds the buy limit inside the target for token0=%s", (outcomeIsToken0, sqrtPriceX96, limit) => {
+  it("rounds a token0 buy limit down without passing the target", () => {
+    const targetPriceWad = (3n * WAD) / 10n;
     const target = option({
-      pools: { up: { ...pool(sqrtPriceX96, DEEP), outcomeIsToken0 }, down: pool(0n) },
-      targetPriceWad: (3n * WAD) / 10n,
+      pools: { up: pool(2n ** 95n, DEEP), down: pool(0n) },
+      targetPriceWad,
     });
-    expect(planBuys(target, [], 100).legs[0]!.limitSqrtPrice).toBe(limit);
+    const limit = planBuys(target, [], 100).legs[0]!.limitSqrtPrice;
+    expect(limit ** 2n * WAD).toBeLessThanOrEqual(targetPriceWad * 2n ** 192n);
+    expect((limit + 1n) ** 2n * WAD).toBeGreaterThan(targetPriceWad * 2n ** 192n);
+  });
+  it("rounds an inverted buy limit up without passing the target", () => {
+    const targetPriceWad = (3n * WAD) / 10n;
+    const target = option({
+      pools: { up: { ...pool(2n ** 97n, DEEP), outcomeIsToken0: false }, down: pool(0n) },
+      targetPriceWad,
+    });
+    const limit = planBuys(target, [], 100).legs[0]!.limitSqrtPrice;
+    expect(limit ** 2n * targetPriceWad).toBeGreaterThanOrEqual(WAD * 2n ** 192n);
+    expect((limit - 1n) ** 2n * targetPriceWad).toBeLessThan(WAD * 2n ** 192n);
   });
   it("retains a buy whose input equals the minimum leg", () => {
-    const amount = (MIN_LEG_WEI * 10000n + 9799n) / 9800n;
+    const share = buyBudgetShareBps(100);
+    const amount = (MIN_LEG_WEI * 10_000n + share - 1n) / share;
     const target = option({
       pools: { up: pool(AT["0.25"], DEEP), down: pool(0n) },
       targetPriceWad: WAD / 2n,
@@ -608,33 +671,4 @@ describe("buy sizing boundaries", () => {
       sells: [{ side: "up", amountIn: WAD, underlyingOut: WAD / 2n, toTarget: false }],
     });
   });
-});
-
-it("keeps the preview price on UP when both asymmetric sides sell", () => {
-  const target = option({
-    pools: { up: pool(AT["1"]), down: pool(AT["1"]) },
-    targetPriceWad: WAD / 4n,
-    splitAmount: 10n * WAD,
-  });
-  expect(previewTrades(target, 100)).toMatchObject({ to: WAD / 4n, buys: [] });
-});
-
-it("caps the partially funded second buy during redistribution", () => {
-  const target = option({
-    pools: { up: pool(AT["0.25"], WAD), down: pool(AT["0.25"], 30n * WAD) },
-    targetPriceWad: WAD / 2n,
-    splitAmount: 10n * WAD,
-  });
-  const plan = planBuys(target, [], 100);
-  // 30 * (sqrt(0.5) - 0.5) * 1.01 is less than 6.4, including headroom.
-  expect(plan.legs.find((leg) => leg.side === "down")!.amountIn).toBeLessThan((64n * WAD) / 10n);
-});
-
-it("retains the split amount for a buy-only preview", () => {
-  const target = option({
-    pools: { up: pool(AT["0.25"], DEEP), down: pool(0n) },
-    targetPriceWad: WAD / 2n,
-    splitAmount: WAD,
-  });
-  expect(previewTrades(target, 100)).toMatchObject({ split: WAD, sells: [] });
 });

@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { FlowStateError } from "../errors";
-import type { FlowHooks } from "../types";
+import type { FlowHooks, TxReplacementReason } from "../types";
+import { hashFor } from "./support/fakeGateway";
 import {
   doneIds,
   harness,
@@ -27,8 +28,15 @@ const HOUR = 60 * 60 * 1000;
  */
 
 /** Runs a flow up to a paused first step with a transaction still in flight. */
-async function pausedMidFlight(): Promise<{ first: Harness; hash: string }> {
+async function pausedMidFlight(replacementReason?: TxReplacementReason): Promise<{ first: Harness; hash: string }> {
   const first = harness({ scripts: [{ mine: "hold" }] });
+  if (replacementReason) {
+    const wait = first.gateway.waitForReceipt;
+    first.gateway.waitForReceipt = (args) => {
+      args.onReplaced?.({ reason: replacementReason, hash: hashFor(100) });
+      return wait({ ...args, onReplaced: undefined });
+    };
+  }
   const running = first.start([step("a"), step("b")]);
   await settle();
   first.orchestrator.pause();
@@ -40,8 +48,8 @@ async function pausedMidFlight(): Promise<{ first: Harness; hash: string }> {
 }
 
 /** A fresh orchestrator over the same storage, the reload. */
-function reload(first: Harness) {
-  return harness({ storage: first.storage });
+function reload(first: Harness, hooks?: FlowHooks<TestSnapshot, TestCtx>) {
+  return harness({ storage: first.storage, hooks });
 }
 
 describe("restoring a run for review", () => {
@@ -132,9 +140,13 @@ describe("restoring a run for review", () => {
 });
 
 describe("reconciling a transaction that was in flight", () => {
-  it("counts a transaction that mined while away as the step being done", async () => {
-    const { first, hash } = await pausedMidFlight();
-    const second = reload(first);
+  it.each([
+    ["original", undefined],
+    ["repriced", "repriced"],
+  ] as const)("counts a %s transaction that mined while away as the step being done", async (_, reason) => {
+    const { first, hash } = await pausedMidFlight(reason);
+    const afterStep = vi.fn();
+    const second = reload(first, { afterStep });
     second.orchestrator.restore({ flowId: "flow-1", steps: [step("a"), step("b")] });
     second.gateway.setChainState(hash as `0x${string}`, { receipt: "success", known: true });
 
@@ -144,6 +156,8 @@ describe("reconciling a transaction that was in flight", () => {
     expect(doneIds(second.orchestrator.getRun())).toEqual(["a"]);
     expect(leftIds(second.orchestrator.getRun())).toEqual(["b"]);
     expect(second.types()).toContain("step:confirmed");
+    expect(afterStep).toHaveBeenCalledTimes(1);
+    expect(second.gateway.signRequests).toEqual([]);
   });
 
   it.each(["cancelled", "replaced", "repriced"] as const)(
@@ -685,4 +699,56 @@ describe("resuming a step that already has a transaction out", () => {
     expect(h.gateway.signRequests).toHaveLength(1);
     expect(h.gateway.waitedOn).toEqual([hash, hash]);
   });
+});
+
+describe("replacement chains", () => {
+  it.each([
+    ["cancelled", "repriced"],
+    ["replaced", "repriced"],
+    ["repriced", "cancelled"],
+    ["repriced", "replaced"],
+  ] as const)("does not complete after %s followed by %s", async (reason, next) => {
+    const h = harness();
+    const wait = h.gateway.waitForReceipt;
+    h.gateway.waitForReceipt = async (args) => {
+      args.onReplaced?.({ reason, hash: hashFor(100) });
+      args.onReplaced?.({ reason: next, hash: hashFor(101) });
+      return wait({ ...args, hash: hashFor(101), onReplaced: undefined });
+    };
+    await h.start([step("a"), step("b")]);
+    expect(h.orchestrator.getRun()).toMatchObject({ status: "paused", reason: "cancelled" });
+    expect(doneIds(h.orchestrator.getRun())).toEqual([]);
+    expect(h.gateway.signRequests).toHaveLength(1);
+  });
+
+  it.each(["cancelled", "replaced"] as const)(
+    "reconciles a persisted %s receipt without completing the money step",
+    async (reason) => {
+      const { first, hash } = await pausedMidFlight(reason);
+      const afterStep = vi.fn();
+      const second = reload(first, { afterStep });
+      second.gateway.setChainState(hash as `0x${string}`, { receipt: "success" });
+      second.orchestrator.restore({ flowId: "flow-1", steps: [step("a"), step("b")] });
+      const result = await second.orchestrator.reconcileInFlight();
+      expect(result).toEqual({ outcome: "cancelled", stepId: "a", hash: hashFor(100) });
+      expect(second.orchestrator.getRun()).toMatchObject({
+        status: "paused",
+        reason: "cancelled",
+        error: { stepId: "a", cause: "cancelled", hash: hashFor(100) },
+      });
+      expect(outcomeOf(second.orchestrator.getRun(), "a")).toEqual({ status: "pending" });
+      expect(second.store.load("flow-1")).toMatchObject({
+        status: "paused",
+        reason: "cancelled",
+        steps: [
+          { stepId: "a", outcome: { status: "pending" } },
+          { stepId: "b", outcome: { status: "pending" } },
+        ],
+      });
+      expect(second.types()).toContain("step:failed");
+      expect(second.events).toContainEqual({ type: "flow:paused", reason: "cancelled" });
+      expect(afterStep).not.toHaveBeenCalled();
+      expect(second.gateway.signRequests).toEqual([]);
+    },
+  );
 });

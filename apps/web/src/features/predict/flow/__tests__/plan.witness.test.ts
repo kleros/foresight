@@ -116,6 +116,21 @@ describe("first-batch recovery witnesses", () => {
       fromBlock: 4321n,
     });
   });
+
+  it("adopts a matching credits-only batch without a collateral split", async () => {
+    await expect(
+      witnessed(
+        batch([credit, { to: addresses.router, data: native() }]),
+        addresses.executor,
+        snapshot({ collateralIn: 0n, creditsToSpend: 7n }),
+      ),
+    ).resolves.toBe(true);
+  });
+
+  it("does not adopt the executor's owner read as a landed batch", async () => {
+    const data = encodeFunctionData({ abi: tradeExecutorAbi, functionName: "owner" });
+    await expect(witnessed(data)).resolves.toBe(false);
+  });
 });
 
 describe("native deposit accounting", () => {
@@ -183,19 +198,4 @@ describe("native deposit accounting", () => {
     });
     expect(result).toEqual({ snapshotPatch: { collateralIn: 13n, mintFinalized: true } });
   });
-});
-
-it("adopts a matching credits-only batch without a collateral split", async () => {
-  await expect(
-    witnessed(
-      batch([credit, { to: addresses.router, data: native() }]),
-      addresses.executor,
-      snapshot({ collateralIn: 0n, creditsToSpend: 7n }),
-    ),
-  ).resolves.toBe(true);
-});
-
-it("does not adopt the executor's owner read as a landed batch", async () => {
-  const data = encodeFunctionData({ abi: tradeExecutorAbi, functionName: "owner" });
-  await expect(witnessed(data)).resolves.toBe(false);
 });

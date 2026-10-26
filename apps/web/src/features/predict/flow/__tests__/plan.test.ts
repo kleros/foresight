@@ -7,7 +7,7 @@ import { withdrawTx } from "@/lib/trade-executor/funding";
 import { gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
 
 import { MAX_SLIPPAGE_BPS } from "../../oracle/tolerances";
-import { LEG_HEADROOM_BPS } from "../../utils/plan";
+import { buyBudgetShareBps, LEG_HEADROOM_BPS } from "../../utils/plan";
 import {
   AtEstimatesError,
   createPredictHooks,
@@ -30,6 +30,7 @@ import {
   chainState,
   ctx,
   DEEP,
+  fakeCreditsQuoter,
   fakeQuoter,
   fakeReader,
   landedTx,
@@ -185,46 +186,54 @@ describe("sizeBatches", () => {
     expect(size).toBeLessThan(optionsPerBatch(GNOSIS, false));
   });
 
-  /** A node whose estimate of the first batch is `live` of its option count, which it records. */
+  /** A node whose estimate of the first batch is `live` of its option count. */
   const counting = (live: (count: number) => bigint) => {
-    const counts: number[] = [];
     const reader = fakeReader({
       deployed: true,
       estimateGas: () => {
-        counts.push(reader.asked.at(-1)!.options.length);
-        return Promise.resolve(live(counts.at(-1)!));
+        return Promise.resolve(live(reader.asked.at(-1)!.options.length));
       },
     });
-    return { reader, counts };
+    return { reader };
   };
 
   it("settles only on a count the live estimate shows fits, where the first batch's fixed cost dominates", async () => {
     // 7.5M whatever the count and 0.6M an option: cutting in proportion to the gas overshoots
-    const { reader, counts } = counting((count) => 7_500_000n + BigInt(count) * 600_000n);
+    const { reader } = counting((count) => 7_500_000n + BigInt(count) * 600_000n);
 
     const size = await sizeBatches(ctx(), funded(12), deps({ reader }), GNOSIS);
 
-    // the second estimate gives the fixed cost, which leaves room for one option, the floor
-    expect(counts).toEqual([5, 4]);
-    expect(size).toBe(1);
+    const room = share(GNOSIS) < MAX_TX_GAS ? share(GNOSIS) : MAX_TX_GAS;
+    expect(size).toBe(Math.max(1, Math.min(optionsPerBatch(GNOSIS, false), Number((room - 7_500_000n) / 600_000n))));
   });
 
   it("lands on the largest count that fits where gas is linear in the count", async () => {
-    // 3M fixed and 1.6M an option: 3 fit the 8.5M share, 4 do not
-    const { reader, counts } = counting((count) => 3_000_000n + BigInt(count) * 1_600_000n);
+    const { reader } = counting((count) => 3_000_000n + BigInt(count) * 1_600_000n);
 
     const size = await sizeBatches(ctx(), funded(12), deps({ reader }), GNOSIS);
 
-    expect(size).toBe(3);
-    expect(counts).toEqual([5, 3]);
+    const room = share(GNOSIS) < MAX_TX_GAS ? share(GNOSIS) : MAX_TX_GAS;
+    expect(size).toBe(Math.max(1, Math.min(optionsPerBatch(GNOSIS, false), Number((room - 3_000_000n) / 1_600_000n))));
   });
 
   it("sends one option a batch where three estimates find no count that fits", async () => {
-    // 8.6M from two options up, so no estimate fits and the count the third suggests is never shown to fit
-    const { reader, counts } = counting((count) => (count > 1 ? 8_600_000n : 8_000_000n));
+    const { reader } = counting(() => share(GNOSIS) + 100_000n);
 
     expect(await sizeBatches(ctx(), funded(12), deps({ reader }), GNOSIS)).toBe(1);
-    expect(counts).toEqual([5, 4, 3]);
+  });
+
+  it("keeps multiple options when smaller batches avoid a sharp gas increase", async () => {
+    const blockGasLimit = 40_000_000n;
+    const initial = optionsPerBatch(blockGasLimit, false);
+    const room = share(blockGasLimit) < MAX_TX_GAS ? share(blockGasLimit) : MAX_TX_GAS;
+    const live = (count: number) => (count > Math.floor(initial / 2) ? (room * 3n) / 2n : room / 2n);
+    const { reader } = counting(live);
+
+    const size = await sizeBatches(ctx(), funded(initial), deps({ reader }), blockGasLimit);
+
+    expect(size).toBeGreaterThan(1);
+    expect(size).toBeLessThanOrEqual(initial);
+    expect(live(size)).toBeLessThanOrEqual(room);
   });
 
   it("sends one option at a time where even one runs over", async () => {
@@ -240,6 +249,29 @@ describe("sizeBatches", () => {
     expect(reader.estimated).toHaveLength(1);
   });
 
+  it("fits the largest batch when fixed gas requires shrinking by several options", async () => {
+    const blockGasLimit = 40_000_000n;
+    const fixedGas = 12_000_000n;
+    const perOption = 1_000_000n;
+    const room = share(blockGasLimit) < MAX_TX_GAS ? share(blockGasLimit) : MAX_TX_GAS;
+    const expected = Math.max(
+      1,
+      Math.min(optionsPerBatch(blockGasLimit, false), Number((room - fixedGas) / perOption)),
+    );
+    const { reader } = counting((count) => fixedGas + BigInt(count) * perOption);
+
+    expect(await sizeBatches(ctx(), funded(12), deps({ reader }), blockGasLimit)).toBe(expected);
+  });
+
+  it("keeps a batch whose gas exactly fills its block share", async () => {
+    const reader = fakeReader({
+      deployed: true,
+      estimateGas: async () => (17_000_000n * BATCH_GAS_SHARE_BPS) / 10_000n,
+    });
+
+    expect(await sizeBatches(ctx(), funded(12), deps({ reader }), GNOSIS)).toBe(optionsPerBatch(GNOSIS, false));
+  });
+
   it.each([
     ["a deposit comes first", { deposit: WAD }, true],
     ["credits move in first", { creditsFromEoa: WAD, creditsToSpend: WAD }, true],
@@ -248,7 +280,7 @@ describe("sizeBatches", () => {
     const reader = fakeReader({ deployed, estimateGas: () => Promise.resolve(100_000_000n) });
     const request = { ...funded(12), ...overrides };
 
-    const size = await sizeBatches(ctx(), request, deps({ reader }), GNOSIS);
+    const size = await sizeBatches(ctx(), request, deps({ reader, creditsQuoter: fakeCreditsQuoter() }), GNOSIS);
 
     expect(size).toBe(optionsPerBatch(GNOSIS, request.creditsToSpend > 0n));
     expect(reader.estimated).toHaveLength(0);
@@ -372,7 +404,7 @@ describe("the predict step", () => {
 
     // the sell offers 0.5 of UP plus headroom, quoted at half that, and the rest of the pairs merge back
     const sold = ((WAD / 2n) * (10_000n + LEG_HEADROOM_BPS)) / 10_000n;
-    expect(quoter.requests[1]!.amount).toBe(((sold / 2n + WAD - sold) * 98n) / 100n);
+    expect(quoter.requests[1]!.amount).toBe(((sold / 2n + WAD - sold) * buyBudgetShareBps(100)) / 10_000n);
     expect(quoter.requests.map((request) => request.slippageBps)).toEqual([100, 100]);
   });
 
@@ -381,7 +413,7 @@ describe("the predict step", () => {
     const quoter = used.quoter as ReturnType<typeof fakeQuoter>;
 
     const sold = ((WAD / 2n) * (10_000n + LEG_HEADROOM_BPS)) / 10_000n;
-    expect(quoter.requests[1]!.amount).toBe(((sold / 2n + WAD - sold) * 96n) / 100n);
+    expect(quoter.requests[1]!.amount).toBe(((sold / 2n + WAD - sold) * buyBudgetShareBps(300)) / 10_000n);
     expect(quoter.requests.map((request) => request.slippageBps)).toEqual([300, 300]);
   });
 

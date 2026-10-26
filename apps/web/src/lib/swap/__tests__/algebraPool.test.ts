@@ -20,7 +20,10 @@ function fakePool(state: {
   deltas: Record<number, bigint>;
   price?: bigint;
 }) {
-  const answer = ({ functionName, args = [] }: Read): unknown => {
+  const answer = (read: Read): unknown => {
+    if (read.address !== POOL) throw new Error(`unexpected pool ${read.address}`);
+    encodeFunctionData({ abi: read.abi, functionName: read.functionName, args: read.args });
+    const { functionName, args = [] } = read;
     switch (functionName) {
       case "globalState":
         return [state.price ?? sqrtPriceAtTick(state.tick), state.tick, 3000, 0, 0, 0, true];
@@ -38,18 +41,10 @@ function fakePool(state: {
   };
   return {
     readContract: async (read: Read) => answer(read),
-    multicall: async ({ contracts, allowFailure = true }: { contracts: Read[]; allowFailure?: boolean }) =>
-      contracts.map((read) => {
-        expect(read.address).toBe(POOL);
-        try {
-          encodeFunctionData({ abi: read.abi, functionName: read.functionName, args: read.args });
-          const result = answer(read);
-          return allowFailure ? { status: "success", result } : result;
-        } catch (error) {
-          if (!allowFailure) throw error;
-          return { status: "failure", error };
-        }
-      }),
+    multicall: async ({ contracts, allowFailure }: { contracts: Read[]; allowFailure: false }) => {
+      if (allowFailure !== false) throw new Error("expected atomic pool reads");
+      return contracts.map(answer);
+    },
   } as unknown as PublicClient;
 }
 
@@ -91,18 +86,21 @@ describe("pool tick scan boundaries", () => {
       { tick: 600, liquidityDelta: 5n },
     ]);
   });
-  it.each([undefined, 0n])("does not scan without a target or initialized price: %s", async (price) => {
-    const client = fakePool({ tick: 0, rows: { 0: 1n }, deltas: { 0: 7n }, price });
-    const read = client.multicall;
+  it("does not scan ticks without a target", async () => {
+    const client = fakePool({ tick: 0, rows: { 0: 1n }, deltas: { 0: 7n } });
     client.multicall = () => {
       throw new Error("unexpected tick scan");
     };
-    const pool = await readPoolLiquidity(
-      client,
-      { address: POOL, outcomeIsToken0: true },
-      price === 0n ? 2n ** 96n : undefined,
-    );
+    const pool = await readPoolLiquidity(client, { address: POOL, outcomeIsToken0: true });
     expect(pool.ticks).toEqual([]);
-    client.multicall = read;
+  });
+
+  it("does not scan ticks when the pool price is uninitialised", async () => {
+    const client = fakePool({ tick: 0, rows: { 0: 1n }, deltas: { 0: 7n }, price: 0n });
+    client.multicall = () => {
+      throw new Error("unexpected tick scan");
+    };
+    const pool = await readPoolLiquidity(client, { address: POOL, outcomeIsToken0: true }, 2n ** 96n);
+    expect(pool.ticks).toEqual([]);
   });
 });

@@ -287,7 +287,7 @@ describe("credits funding boundaries", () => {
       deposit: 0n,
     });
   });
-  it("retains one displayed collateral quantum after spending credits", () => {
+  it("keeps the displayed collateral remainder after spending credits", () => {
     const quantum = 10n ** BigInt(18 - OWNED_DECIMALS);
     const { funding } = fund({ wallet: WAD, tradeWallet: 0n, manager: WAD }, WAD + quantum, {
       ownWallet: WAD,
