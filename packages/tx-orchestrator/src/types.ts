@@ -51,7 +51,7 @@ export interface TxGateway {
 
   /**
    * Whether the node still knows this hash at all. Separates "still in the
-   * mempool" from "dropped", which need opposite responses.
+   * mempool" from "unseen by this node".
    */
   isKnown(hash: Hash): Promise<boolean>;
 }
@@ -79,7 +79,7 @@ export type StepOutcome =
   /** The wallet is open. Nothing was broadcast, so there is nothing to reconcile. */
   | { status: "awaiting-signature" }
   /** Broadcast. The hash is on disk before this is announced. */
-  | { status: "submitted"; hash: Hash }
+  | { status: "submitted"; hash: Hash; replacementReason?: TxReplacementReason }
   | { status: "confirmed"; hash: Hash; blockNumber: bigint }
   | { status: "skipped" };
 
@@ -210,10 +210,15 @@ export type ReconcileOutcome =
   | "confirmed"
   /** It mined and reverted. */
   | "reverted"
+  /** A cancellation or unrelated transaction consumed its nonce. */
+  | "cancelled"
   /** Still in the mempool. */
   | "pending"
-  /** The node has never heard of it, dropped after broadcast. */
-  | "dropped"
+  /**
+   * The node knows neither a receipt nor the transaction. The hash is kept, since another node may hold it;
+   * the adapter decides when it is dead and calls `releaseInFlight`.
+   */
+  | "unseen"
   /**
    * A wallet prompt was open when the tab went away. No hash was ever recorded,
    * so there is nothing to ask the chain about and this really is unknown.

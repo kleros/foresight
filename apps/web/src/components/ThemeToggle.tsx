@@ -30,6 +30,7 @@ const ThemeToggle: React.FC<{
   return (
     <LightButton
       text={withText ? text : ""}
+      aria-label={text}
       onPress={toggleTheme}
       icon={
         theme === "light" ? (

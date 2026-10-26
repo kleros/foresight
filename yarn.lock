@@ -3356,6 +3356,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@fontsource/inter@npm:5.3.0":
+  version: 5.3.0
+  resolution: "@fontsource/inter@npm:5.3.0"
+  checksum: 10c0/568601c10c83601c23005f8cd7434499df6e007eaa22c4dabbb1dcae327cc8e4a148ece8d4a4edaa8bafc5d2371ea97a37d1cc91ffbed77a43e2d8c15a6e831b
+  languageName: node
+  linkType: hard
+
 "@foresight/contracts@workspace:*, @foresight/contracts@workspace:packages/contracts":
   version: 0.0.0-use.local
   resolution: "@foresight/contracts@workspace:packages/contracts"
@@ -3386,6 +3393,7 @@ __metadata:
     prettier: "npm:^3.7.4"
     prettier-plugin-solidity: "npm:^1.4.2"
     solhint-plugin-prettier: "npm:^0.1.0"
+    solmate: "npm:6.8.0"
     ts-node: "npm:^10.9.2"
     typechain: "npm:^8.3.2"
     typescript: "npm:^5.8.3"
@@ -5946,6 +5954,18 @@ __metadata:
     openzeppelin-solidity-conditional-tokens: "npm:openzeppelin-solidity@2.3.0"
     solmate: "npm:^6.2.0"
   checksum: 10c0/998959ca8f29bd2af7af0c38c2427cd0f4f088b0187e2b99643cb8b75aa73cbdae38da8a2850ebc56384448e937b40deea741e2ad4ab8b21c3811a28221f2903
+  languageName: node
+  linkType: hard
+
+"@seer-pm/lens@npm:1.5.1":
+  version: 1.5.1
+  resolution: "@seer-pm/lens@npm:1.5.1"
+  peerDependencies:
+    viem: ^2.0.0
+  peerDependenciesMeta:
+    viem:
+      optional: true
+  checksum: 10c0/c0e5e0da42e22f7d16dd1253031a53b037f230b0d2a5ee585f3e6c651bbd9d1c7a6d8d9e18d871ff195a305defc40cecf943d15887d621271b19e8c0b24c4c2d
   languageName: node
   linkType: hard
 
@@ -19530,7 +19550,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"solmate@npm:^6.2.0":
+"solmate@npm:6.8.0, solmate@npm:^6.2.0":
   version: 6.8.0
   resolution: "solmate@npm:6.8.0"
   checksum: 10c0/0221167f344f2fc683aedf3ce1508ea514c145c83e3e27034697e1a72eedddc5c36affd951d8d285ed5a1781409a918cb78c97a0e2b01772f3500eae7a958fdc
@@ -21750,6 +21770,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "web@workspace:apps/web"
   dependencies:
+    "@fontsource/inter": "npm:5.3.0"
     "@foresight/contracts": "workspace:*"
     "@foresight/eslint-config": "workspace:*"
     "@foresight/mock-atlas": "workspace:*"
@@ -21768,6 +21789,7 @@ __metadata:
     "@playwright/test": "npm:^1.53.1"
     "@reown/appkit": "npm:^1.8.22"
     "@reown/appkit-adapter-wagmi": "npm:^1.8.22"
+    "@seer-pm/lens": "npm:1.5.1"
     "@svgr/webpack": "npm:^8.1.0"
     "@tailwindcss/postcss": "npm:^4.3.3"
     "@tanstack/react-query": "npm:^5.101.3"

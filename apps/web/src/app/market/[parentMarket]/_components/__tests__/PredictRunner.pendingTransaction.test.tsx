@@ -1,0 +1,775 @@
+import type { ComponentProps, ReactNode } from "react";
+
+import {
+  createFlowRunStore,
+  createMemoryStorage,
+  type FlowRunStore,
+  type FlowTx,
+  type TxGateway,
+} from "@foresight/tx-orchestrator";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { WaitForTransactionReceiptTimeoutError, type Address, type Hash, type TransactionReceipt } from "viem";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useAccount } from "wagmi";
+
+import type { PredictDialog } from "@/features/predict/components/PredictDialog";
+import { addresses, ctx, fakeReader, poolQuoter, snapshot, WAD } from "@/features/predict/flow/__tests__/support/fakes";
+import { STEP_ID } from "@/features/predict/flow/plan";
+import type { PredictCtx, PredictReader, PredictSnapshot, SentTx } from "@/features/predict/flow/types";
+import { createPredictRun, SEND_HOLD_MS } from "@/features/predict/run/driver";
+import type { PredictDriver } from "@/features/predict/run/types";
+import type { SelectedEstimate } from "@/features/predict/types";
+import { SIGN_AGAIN_ASK } from "@/features/predict/utils/predictSteps";
+import type { SessionDetail } from "@/features/sessions/types";
+import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
+import { toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
+
+import { DEFAULT_CHAIN_ID } from "@/config/chains";
+
+import { GATEWAY } from "@/testing/fixtures";
+
+import { PredictRunner } from "../PredictRunner";
+
+const UNSEEN_COPY = "The network can't find your last transaction yet. Check again, or discard it.";
+
+const OWNER = "0x9999999999999999999999999999999999999999" as Address;
+const EXECUTOR = "0x8888888888888888888888888888888888888888" as Address;
+
+/** The run the mocked hook hands the runner; set per mount. */
+const harness = vi.hoisted(() => ({ makeDriver: null as null | (() => PredictDriver) }));
+
+vi.mock("@/lib/graphql/batcher", () => ({ fetchGraphql: vi.fn() }));
+vi.mock("@/config/ipfs", () => ({ IPFS_GATEWAY: "https://cdn.example.link/ipfs" }));
+vi.mock("@/lib/web3/public-client", () => ({ publicClient: {} }));
+
+vi.mock("wagmi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("wagmi")>()),
+  useAccount: vi.fn(),
+}));
+
+vi.mock("@/config/contracts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/config/contracts")>()),
+  gnosisRouterAddress: () => "0x7777777777777777777777777777777777777777",
+  tradeExecutorFactoryAddress: () => "0x6666666666666666666666666666666666666666",
+}));
+
+// The real driver over a scripted chain, held and disposed the way the real hook does.
+vi.mock("@/features/predict/hooks/usePredictRun", async () => {
+  const React = await import("react");
+  return {
+    usePredictRun: () => {
+      const driver = React.useMemo(() => harness.makeDriver!(), []);
+      React.useEffect(() => () => driver.dispose(), [driver]);
+      const progress = React.useSyncExternalStore(driver.subscribe, driver.getProgress, driver.getProgress);
+      return { driver, progress };
+    },
+  };
+});
+
+vi.mock("@/features/trade-executor/api/getExecutor", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/trade-executor/api/getExecutor")>()),
+  useExecutor: () => ({ data: { predicted: EXECUTOR, deployed: true } }),
+}));
+
+vi.mock("../usePredictFunding", () => ({
+  usePredictFunding: () => ({ funding: null, credits: { state: "none" }, canPayNative: false, isPending: false }),
+}));
+
+vi.mock("../useHasPredicted", () => ({ useHasPredicted: () => false }));
+// Details as the scripted chain's pools give it for the stored run's option, which Predict holds the run to
+vi.mock("../usePricePreview", async (importOriginal) => {
+  const { chainState, option, WAD: ONE } = await import("@/features/predict/flow/__tests__/support/fakes");
+  const { previewTrades } = await import("@/features/predict/utils/plan");
+  const { SLIPPAGE_BPS } = await import("@/features/predict/oracle/tolerances");
+  const state = chainState();
+  const shown = option(1);
+  const plan = previewTrades(
+    { pools: state.pools, targetPriceWad: shown.targetPriceWad, held: state.held, splitAmount: ONE * 5n },
+    SLIPPAGE_BPS,
+  )!;
+  return {
+    ...(await importOriginal<typeof import("../usePricePreview")>()),
+    usePricePreview: () => ({
+      moves: {},
+      plans: { [shown.childMarket.toLowerCase()]: plan },
+      held: {},
+      ready: true,
+      failed: false,
+    }),
+  };
+});
+
+type DialogProps = ComponentProps<typeof PredictDialog>;
+
+// Exposes what the popup would show: its failure line and the three timeline rows.
+vi.mock("@/features/predict/components/PredictDialog", () => ({
+  PredictDialog: (props: DialogProps) => (
+    <div>
+      <p data-testid="running">{String(props.isRunning)}</p>
+      <p data-testid="can-retry">{String(props.canRetry)}</p>
+      <p data-testid="can-close">{String(Boolean(props.canClose))}</p>
+      <p data-testid="failure">{props.steps.failure ?? ""}</p>
+      <p data-testid="asks-to-sign-again">{String(Boolean(props.asksToSignAgain))}</p>
+      <ul>
+        {props.steps.rows.map((row) => (
+          <li key={row.key} data-testid="row">{`${row.key}|${row.view}|${row.title}|${row.subtitle}`}</li>
+        ))}
+      </ul>
+      <button onClick={props.onClose}>close</button>
+      <button onClick={props.onPredict}>predict</button>
+      {props.onDiscard ? <button onClick={props.onDiscard}>discard</button> : null}
+    </div>
+  ),
+}));
+
+const FLOW_ID = "predict-pending-test";
+const START_BALANCE = WAD * 2n;
+const DEPOSIT = WAD * 3n;
+const SNAP = snapshot({ deposit: DEPOSIT, collateralIn: WAD * 5n, collateralBefore: START_BALANCE });
+
+/** What happens to the nth transaction the wallet signs. Default: it mines. */
+type Script = "mine" | "revert" | "hold" | "hold-and-network-down";
+
+/**
+ * A wallet, a chain and an RPC. While the network is down every read and every receipt
+ * wait fails, but transactions already broadcast stay out there and can still mine.
+ */
+function fakeChain(scripts: Script[] = []) {
+  const signRequests: FlowTx[] = [];
+  const mined = new Map<Hash, "success" | "reverted">();
+  const known = new Set<Hash>();
+  const deposits = new Set<Hash>();
+  const waitedOn: Hash[] = [];
+  const failed = { waits: 0, reads: 0 };
+  let networkDown = false;
+  let collateral = START_BALANCE;
+
+  const receipt = (hash: Hash, status: "success" | "reverted") =>
+    ({ transactionHash: hash, status, blockNumber: 19_000_000n }) as TransactionReceipt;
+
+  function mine(hash: Hash, status: "success" | "reverted" = "success") {
+    mined.set(hash, status);
+    if (status === "success" && deposits.has(hash)) collateral += DEPOSIT;
+  }
+
+  function down(): void {
+    failed.reads++;
+    throw new Error("RPC unavailable");
+  }
+
+  const gateway: TxGateway = {
+    sendTransaction: (tx) => {
+      const index = signRequests.length;
+      signRequests.push(tx);
+      const hash = `0x${(0xd0 + index).toString(16).padStart(64, "0")}` as Hash;
+      known.add(hash);
+      if (isDeposit(tx)) deposits.add(hash);
+      const script = scripts[index] ?? "mine";
+      if (script === "mine") mine(hash);
+      if (script === "revert") mine(hash, "reverted");
+      if (script === "hold-and-network-down") networkDown = true;
+      return Promise.resolve(hash);
+    },
+    waitForReceipt: async ({ hash, signal }) => {
+      waitedOn.push(hash);
+      for (;;) {
+        if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+        if (networkDown) {
+          failed.waits++;
+          throw new WaitForTransactionReceiptTimeoutError({ hash });
+        }
+        const status = mined.get(hash);
+        if (status) return receipt(hash, status);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+    },
+    getReceipt: async (hash) => {
+      if (networkDown) down();
+      const status = mined.get(hash);
+      return status ? receipt(hash, status) : null;
+    },
+    isKnown: async (hash) => {
+      if (networkDown) down();
+      return known.has(hash);
+    },
+  };
+
+  const reader = {
+    ...fakeReader({ deployed: true }),
+    collateralBalance: async () => {
+      if (networkDown) down();
+      return collateral;
+    },
+  };
+
+  return {
+    gateway,
+    reader,
+    signRequests,
+    waitedOn,
+    failed,
+    deposits: () => signRequests.filter(isDeposit),
+    sent: (index: number) => `0x${(0xd0 + index).toString(16).padStart(64, "0")}` as Hash,
+    /** A hash broadcast before this test's wallet existed, still in the mempool. */
+    seedPending(hash: Hash, deposit: boolean) {
+      known.add(hash);
+      if (deposit) deposits.add(hash);
+    },
+    mine,
+    setNetworkDown(value: boolean) {
+      networkDown = value;
+    },
+  };
+}
+
+type Chain = ReturnType<typeof fakeChain>;
+
+/** A collateral transfer or an xDAI payment to the adapter: money into the trade wallet. */
+const isDeposit = (tx: FlowTx) => tx.to === addresses.collateral || tx.to === addresses.sDaiAdapter;
+
+const accountMock = vi.mocked(useAccount);
+
+const session = (): SessionDetail =>
+  toSessionDetail({ ...sessionDetailColumns, children: [sessionChildRow()] }, GATEWAY);
+
+const selectedOn = (detail: SessionDetail): SelectedEstimate[] => [
+  { scale: detail.options[0]!, value: 312, marketEstimate: 250, direction: "higher" },
+];
+
+/** Opens the popup on a fresh driver over `chain` and `store`, as pressing the predict button does. */
+function open(
+  chain: Chain,
+  store: FlowRunStore,
+  reader: PredictReader = chain.reader,
+  unansweredSend?: { waitMs: number; pollMs: number },
+  now?: () => number,
+) {
+  harness.makeDriver = () =>
+    createPredictRun({
+      gateway: chain.gateway,
+      reader,
+      quoter: poolQuoter(SNAP.options),
+      store,
+      flowId: FLOW_ID,
+      ctx: (): PredictCtx => ctx(),
+      snapshot: (): PredictSnapshot => SNAP,
+      unansweredSend,
+      now,
+    });
+
+  const detail = session();
+  const onClose = vi.fn();
+  const onSuccess = vi.fn();
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
+  );
+  const view = render(
+    <PredictRunner
+      session={detail}
+      status="trading"
+      selected={selectedOn(detail)}
+      onClose={onClose}
+      onSuccess={onSuccess}
+    />,
+    { wrapper },
+  );
+
+  return {
+    onClose,
+    onSuccess,
+    predict: () => fireEvent.click(screen.getByText("predict")),
+    /** Close pressed, then the page unmounts the popup. */
+    close: () => {
+      fireEvent.click(screen.getByText("close"));
+      view.unmount();
+    },
+    shown: () => [
+      screen.getByTestId("failure").textContent,
+      ...screen.getAllByTestId("row").map((row) => row.textContent),
+    ],
+  };
+}
+
+const running = () => screen.getByTestId("running").textContent === "true";
+
+const SLOW = { timeout: 10_000 };
+
+/** The watcher retries a timed-out receipt wait with back-off before the run stops. */
+async function untilReceiptWaitsGiveUp(chain: Chain) {
+  await vi.waitFor(() => {
+    expect(chain.failed.waits).toBeGreaterThan(0);
+    expect(running()).toBe(false);
+  }, SLOW);
+  await act(async () => {});
+}
+
+async function untilRecoveryReadFails(chain: Chain) {
+  await vi.waitFor(() => {
+    expect(chain.failed.reads).toBeGreaterThan(0);
+    expect(running()).toBe(false);
+  }, SLOW);
+  await act(async () => {});
+}
+
+const stepOutcome = (store: FlowRunStore, stepId: string) =>
+  store.load<PredictSnapshot, PredictCtx>(FLOW_ID)?.steps.find((step) => step.stepId === stepId)?.outcome;
+
+/** A run left by an earlier popup: its deposit broadcast and not yet mined. */
+function seedSubmittedDeposit(chain: Chain, store: FlowRunStore): Hash {
+  const hash = `0x${"1".repeat(64)}` as Hash;
+  chain.seedPending(hash, true);
+  store.save<PredictSnapshot, PredictCtx>({
+    flowId: FLOW_ID,
+    adapterId: "predict-flow",
+    status: "paused",
+    reason: "error",
+    ctx: ctx(),
+    snapshot: { ...SNAP, collateralAtStart: START_BALANCE },
+    steps: [
+      { stepId: STEP_ID.createExecutor, label: "Set up your trade wallet", outcome: { status: "skipped" } },
+      { stepId: STEP_ID.deposit, label: "Add money to your trade wallet", outcome: { status: "submitted", hash } },
+      { stepId: STEP_ID.predict(1), label: "Making your prediction", outcome: { status: "pending" } },
+    ],
+  });
+  return hash;
+}
+
+/** Reopens, resumes once the stored run is up for review, then waits until it reuses `hash` or signs a fresh deposit. */
+async function reopenAndPredict(chain: Chain, store: FlowRunStore, hash: Hash, depositsBefore: number) {
+  const waitedBefore = chain.waitedOn.length;
+  const popup = open(chain, store);
+  await vi.waitFor(() => expect(running()).toBe(false));
+  popup.predict();
+  await vi.waitFor(() => {
+    const reused = chain.waitedOn.slice(waitedBefore).includes(hash) || popup.onSuccess.mock.calls.length > 0;
+    const resigned = chain.deposits().length > depositsBefore;
+    expect(reused || resigned).toBe(true);
+  }, SLOW);
+  return popup;
+}
+
+let store: FlowRunStore;
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  accountMock.mockReturnValue({ address: OWNER, chainId: DEFAULT_CHAIN_ID } as ReturnType<typeof useAccount>);
+  store = createFlowRunStore({ storage: createMemoryStorage() });
+});
+
+afterEach(() => {
+  harness.makeDriver = null;
+});
+
+describe("PredictRunner, closing a run whose transaction may still be pending", () => {
+  it.each([
+    ["the deposit", ["hold-and-network-down"] as Script[], STEP_ID.deposit, 0],
+    ["a prediction batch", ["mine", "hold-and-network-down"] as Script[], STEP_ID.predict(1), 1],
+  ])(
+    "keeps the hash and the snapshot when %s timed out waiting for its receipt",
+    async (_, scripts, stepId, sentIndex) => {
+      const chain = fakeChain(scripts);
+      const popup = open(chain, store);
+      popup.predict();
+      await untilReceiptWaitsGiveUp(chain);
+
+      const hash = chain.sent(sentIndex);
+      expect(stepOutcome(store, stepId)).toEqual({ status: "submitted", hash });
+      const before = store.load<PredictSnapshot, PredictCtx>(FLOW_ID)!.snapshot;
+
+      popup.close();
+
+      expect(popup.onClose).toHaveBeenCalledTimes(1);
+      expect(stepOutcome(store, stepId)).toEqual({ status: "submitted", hash });
+      expect(store.load<PredictSnapshot, PredictCtx>(FLOW_ID)?.snapshot).toEqual(before);
+    },
+    15_000,
+  );
+
+  it("keeps the hash and the snapshot when the recovery read failed", async () => {
+    const chain = fakeChain();
+    const hash = seedSubmittedDeposit(chain, store);
+    const before = store.load<PredictSnapshot, PredictCtx>(FLOW_ID)!.snapshot;
+    chain.setNetworkDown(true);
+
+    const popup = open(chain, store);
+    popup.predict();
+    await untilRecoveryReadFails(chain);
+    popup.close();
+
+    expect(stepOutcome(store, STEP_ID.deposit)).toEqual({ status: "submitted", hash });
+    expect(store.load<PredictSnapshot, PredictCtx>(FLOW_ID)?.snapshot).toEqual(before);
+  });
+});
+
+describe("PredictRunner while a sent transaction confirms", () => {
+  it("can be closed once the hash is stored, and leaves the run for the next popup to wait on", async () => {
+    const chain = fakeChain(["hold"]);
+    const popup = open(chain, store);
+    popup.predict();
+    await vi.waitFor(() => expect(chain.waitedOn).toHaveLength(1));
+    await vi.waitFor(() => expect(screen.getByTestId("can-close").textContent).toBe("true"));
+
+    popup.close();
+
+    expect(popup.onClose).toHaveBeenCalledOnce();
+    expect(stepOutcome(store, STEP_ID.deposit)).toEqual({ status: "submitted", hash: chain.sent(0) });
+  });
+});
+
+describe("PredictRunner, a new run stopped by a transaction of the wallet's still pending", () => {
+  it("retries on Predict and keeps the run on Close, since the pending one may be its own deposit", async () => {
+    const chain = fakeChain();
+    const reader = { ...chain.reader, hasPending: () => Promise.resolve(true) };
+    const popup = open(chain, store, reader);
+    popup.predict();
+    await vi.waitFor(() => expect(screen.getByTestId("failure").textContent).not.toBe(""));
+    expect(chain.deposits()).toHaveLength(0);
+    expect(screen.getByTestId("can-retry").textContent).toBe("true");
+
+    popup.close();
+    expect(store.load(FLOW_ID)).not.toBeNull();
+  });
+});
+
+describe("PredictRunner, reopening after closing on a pending transaction", () => {
+  it("waits on the deposit already broadcast instead of asking for it again", async () => {
+    const chain = fakeChain(["hold-and-network-down"]);
+    const first = open(chain, store);
+    first.predict();
+    await untilReceiptWaitsGiveUp(chain);
+    const hash = chain.sent(0);
+    first.close();
+
+    chain.setNetworkDown(false);
+    const second = await reopenAndPredict(chain, store, hash, 1);
+
+    expect(chain.deposits()).toHaveLength(1);
+
+    chain.mine(hash);
+    await vi.waitFor(() => expect(second.onSuccess).toHaveBeenCalled(), SLOW);
+    expect(chain.deposits()).toHaveLength(1);
+    expect(chain.signRequests.length).toBeGreaterThan(1);
+  }, 20_000);
+
+  it("waits on the deposit already broadcast after a failed recovery read", async () => {
+    const chain = fakeChain();
+    const hash = seedSubmittedDeposit(chain, store);
+    chain.setNetworkDown(true);
+    const first = open(chain, store);
+    first.predict();
+    await untilRecoveryReadFails(chain);
+    first.close();
+
+    chain.setNetworkDown(false);
+    const second = await reopenAndPredict(chain, store, hash, 0);
+
+    expect(chain.deposits()).toEqual([]);
+
+    chain.mine(hash);
+    await vi.waitFor(() => expect(second.onSuccess).toHaveBeenCalled(), SLOW);
+    expect(chain.deposits()).toEqual([]);
+  }, 20_000);
+});
+
+describe("PredictRunner, a transaction that confirms while the popup is closed", () => {
+  it("carries on to the prediction after a receipt timeout, without a second deposit", async () => {
+    const chain = fakeChain(["hold-and-network-down"]);
+    const first = open(chain, store);
+    first.predict();
+    await untilReceiptWaitsGiveUp(chain);
+    const hash = chain.sent(0);
+    first.close();
+
+    chain.setNetworkDown(false);
+    chain.mine(hash);
+
+    const second = await reopenAndPredict(chain, store, hash, 1);
+    await vi.waitFor(() => expect(second.onSuccess).toHaveBeenCalled(), SLOW);
+
+    expect(chain.deposits()).toHaveLength(1);
+    expect(chain.signRequests.filter((tx) => tx.to === addresses.executor)).toHaveLength(1);
+    expect(store.load(FLOW_ID)).toBeNull();
+  }, 20_000);
+
+  it("carries on to the prediction after a failed recovery read, without a second deposit", async () => {
+    const chain = fakeChain();
+    const hash = seedSubmittedDeposit(chain, store);
+    chain.setNetworkDown(true);
+    const first = open(chain, store);
+    first.predict();
+    await untilRecoveryReadFails(chain);
+    first.close();
+
+    chain.setNetworkDown(false);
+    chain.mine(hash);
+
+    const second = await reopenAndPredict(chain, store, hash, 0);
+    await vi.waitFor(() => expect(second.onSuccess).toHaveBeenCalled(), SLOW);
+
+    expect(chain.deposits()).toEqual([]);
+    expect(chain.signRequests.filter((tx) => tx.to === addresses.executor)).toHaveLength(1);
+    expect(store.load(FLOW_ID)).toBeNull();
+  }, 20_000);
+});
+
+describe("PredictRunner, what the popup says about an outcome it does not know", () => {
+  /** The same failure before anything was signed: nothing is out there to wait for. */
+  async function shownWithNothingSent(error: () => Error) {
+    const chain = fakeChain();
+    const reader = { ...chain.reader, collateralBalance: () => Promise.reject(error()) };
+    const popup = open(chain, store, reader);
+    popup.predict();
+    await vi.waitFor(() => expect(screen.getByTestId("failure")).not.toBeEmptyDOMElement(), SLOW);
+    const shown = popup.shown();
+    popup.close();
+    store = createFlowRunStore({ storage: createMemoryStorage() });
+    return shown;
+  }
+
+  async function shownForRevertedDeposit() {
+    const chain = fakeChain(["revert"]);
+    const popup = open(chain, store);
+    popup.predict();
+    await vi.waitFor(() => expect(screen.getByTestId("failure")).not.toBeEmptyDOMElement(), SLOW);
+    const shown = popup.shown();
+    popup.close();
+    store = createFlowRunStore({ storage: createMemoryStorage() });
+    return shown;
+  }
+
+  it("reads differently for a deposit whose receipt timed out than for a revert or nothing sent", async () => {
+    const reverted = await shownForRevertedDeposit();
+    const nothingSent = await shownWithNothingSent(
+      () => new WaitForTransactionReceiptTimeoutError({ hash: `0x${"2".repeat(64)}` }),
+    );
+
+    const chain = fakeChain(["hold-and-network-down"]);
+    const popup = open(chain, store);
+    popup.predict();
+    await untilReceiptWaitsGiveUp(chain);
+    const pending = popup.shown();
+
+    expect(pending).not.toEqual(reverted);
+    expect(pending).not.toEqual(nothingSent);
+    popup.close();
+  }, 20_000);
+
+  it("reads differently for a deposit whose recovery read failed than for a revert or nothing sent", async () => {
+    const reverted = await shownForRevertedDeposit();
+    const nothingSent = await shownWithNothingSent(() => new Error("RPC unavailable"));
+
+    const chain = fakeChain();
+    seedSubmittedDeposit(chain, store);
+    chain.setNetworkDown(true);
+    const popup = open(chain, store);
+    popup.predict();
+    await untilRecoveryReadFails(chain);
+    const pending = popup.shown();
+
+    expect(pending).not.toEqual(reverted);
+    expect(pending).not.toEqual(nothingSent);
+    popup.close();
+  }, 20_000);
+});
+
+describe("PredictRunner, clearing a run that finished", () => {
+  it("clears the stored run once every step has confirmed", async () => {
+    const chain = fakeChain();
+    const popup = open(chain, store);
+    popup.predict();
+    await vi.waitFor(() => expect(popup.onSuccess).toHaveBeenCalled(), SLOW);
+
+    expect(store.load(FLOW_ID)).toBeNull();
+    popup.close();
+  });
+
+  it("lets the next prediction start fresh after a finished run was cleared", async () => {
+    const chain = fakeChain();
+    const first = open(chain, store);
+    first.predict();
+    await vi.waitFor(() => expect(first.onSuccess).toHaveBeenCalled(), SLOW);
+    first.close();
+
+    const second = open(chain, store);
+    second.predict();
+    await vi.waitFor(() => expect(second.onSuccess).toHaveBeenCalled(), SLOW);
+
+    expect(chain.deposits()).toHaveLength(2);
+    second.close();
+  });
+});
+
+describe("PredictRunner, a deposit whose send errored after the wallet broadcast it", () => {
+  it("offers Try the rest, keeps the run on Close, and the next popup signs the deposit once", async () => {
+    const chain = fakeChain(["hold"]);
+    const send = chain.gateway.sendTransaction;
+    chain.gateway.sendTransaction = async (tx, opts) => {
+      await send(tx, opts);
+      throw new Error("Transaction failed", {
+        cause: Object.assign(new Error("Internal JSON-RPC error."), { code: -32603 }),
+      });
+    };
+    // the nonce a send takes is its index; the wallet's node holds it until it mines
+    const reader: PredictReader = {
+      ...chain.reader,
+      nextNonce: () => Promise.resolve(chain.signRequests.length),
+      sentWithNonce: async ({ nonce }): Promise<SentTx> => {
+        const tx = chain.signRequests[nonce];
+        if (!tx) return { status: "none" };
+        const mined = await chain.gateway.getReceipt(chain.sent(nonce));
+        if (!mined) return { status: "pending" };
+        return {
+          status: "mined",
+          hash: mined.transactionHash,
+          to: tx.to,
+          value: tx.value ?? 0n,
+          input: tx.data ?? "0x",
+          success: true,
+        };
+      },
+    };
+    const fast = { waitMs: 20, pollMs: 5 };
+
+    const first = open(chain, store, reader, fast);
+    await vi.waitFor(() => expect(running()).toBe(false));
+    first.predict();
+    await vi.waitFor(() => expect(screen.getByTestId("can-retry").textContent).toBe("true"));
+    first.close();
+    expect(store.load(FLOW_ID)).not.toBeNull();
+
+    chain.mine(chain.sent(0));
+    chain.gateway.sendTransaction = send;
+    const next = open(chain, store, reader, fast);
+    await vi.waitFor(() => expect(running()).toBe(false));
+    next.predict();
+    await vi.waitFor(() => expect(next.onSuccess).toHaveBeenCalled(), SLOW);
+
+    expect(chain.deposits()).toHaveLength(1);
+  });
+
+  it("retries a trade wallet setup whose send errored after broadcast, once it lands, with one setup signed", async () => {
+    const chain = fakeChain(["hold"]);
+    const send = chain.gateway.sendTransaction;
+    chain.gateway.sendTransaction = async (tx, opts) => {
+      await send(tx, opts);
+      throw new Error("Transaction failed", {
+        cause: Object.assign(new Error("Internal JSON-RPC error."), { code: -32603 }),
+      });
+    };
+    const reader: PredictReader = {
+      ...chain.reader,
+      isExecutorDeployed: () => Promise.resolve(false),
+      nextNonce: () => Promise.resolve(chain.signRequests.length),
+      sentWithNonce: async ({ nonce }): Promise<SentTx> => {
+        const tx = chain.signRequests[nonce];
+        if (!tx) return { status: "none" };
+        const mined = await chain.gateway.getReceipt(chain.sent(nonce));
+        if (!mined) return { status: "pending" };
+        return {
+          status: "mined",
+          hash: mined.transactionHash,
+          to: tx.to,
+          value: tx.value ?? 0n,
+          input: tx.data ?? "0x",
+          success: true,
+        };
+      },
+    };
+    const fast = { waitMs: 20, pollMs: 5 };
+    const isSetup = (tx: FlowTx) => tx.to === addresses.factory;
+
+    const popup = open(chain, store, reader, fast);
+    await vi.waitFor(() => expect(running()).toBe(false));
+    popup.predict();
+    await vi.waitFor(() => expect(chain.signRequests.filter(isSetup)).toHaveLength(1));
+    await vi.waitFor(() => expect(screen.getByTestId("can-retry").textContent).toBe("true"));
+
+    chain.mine(chain.sent(0));
+    chain.gateway.sendTransaction = send;
+    popup.predict();
+    await vi.waitFor(() => expect(popup.onSuccess).toHaveBeenCalled(), SLOW);
+
+    expect(chain.signRequests.filter(isSetup)).toHaveLength(1);
+  });
+});
+
+describe("PredictRunner, a deposit whose send errored and whose nonce stayed unused", () => {
+  it("holds it for ten minutes, then asks before signing again and signs on Sign again", async () => {
+    const chain = fakeChain();
+    const send = chain.gateway.sendTransaction;
+    let refused = false;
+    chain.gateway.sendTransaction = (tx, opts) => {
+      if (refused || !isDeposit(tx)) return send(tx, opts);
+      refused = true;
+      return Promise.reject(
+        new Error("Transaction failed", {
+          cause: Object.assign(new Error("Internal JSON-RPC error."), { code: -32603 }),
+        }),
+      );
+    };
+    const clock = { at: 1_700_000_000_000 };
+
+    const popup = open(chain, store, chain.reader, { waitMs: 20, pollMs: 5 }, () => clock.at);
+    await vi.waitFor(() => expect(running()).toBe(false));
+    popup.predict();
+    await vi.waitFor(() => expect(screen.getByTestId("can-retry").textContent).toBe("true"));
+    expect(screen.getByTestId("asks-to-sign-again").textContent).toBe("false");
+
+    clock.at += SEND_HOLD_MS;
+    popup.predict();
+    await vi.waitFor(() => expect(screen.getByTestId("asks-to-sign-again").textContent).toBe("true"));
+    expect(screen.getByTestId("failure").textContent).toBe(SIGN_AGAIN_ASK);
+    expect(chain.deposits()).toHaveLength(0);
+
+    popup.predict();
+    await vi.waitFor(() => expect(popup.onSuccess).toHaveBeenCalled(), SLOW);
+    expect(chain.deposits()).toHaveLength(1);
+  });
+});
+
+describe("PredictRunner, a stored deposit hash no node finds", () => {
+  it("keeps it with Check again and Discard while its nonce reads unused, and Discard retains its evidence", async () => {
+    const chain = fakeChain();
+    const hash = `0x${"2".repeat(64)}` as Hash;
+    const clock = { at: 1_700_000_000_000 };
+    store.save<PredictSnapshot, PredictCtx>({
+      flowId: FLOW_ID,
+      adapterId: "predict-flow",
+      status: "paused",
+      reason: "error",
+      ctx: ctx(),
+      snapshot: {
+        ...SNAP,
+        collateralAtStart: START_BALANCE,
+        sent: {
+          [STEP_ID.deposit]: {
+            owner: OWNER,
+            nonce: 0,
+            fromBlock: 1n,
+            tx: { to: addresses.collateral, data: "0x" },
+            heldAt: clock.at,
+          },
+        },
+      },
+      steps: [
+        { stepId: STEP_ID.createExecutor, label: "Set up your trade wallet", outcome: { status: "skipped" } },
+        { stepId: STEP_ID.deposit, label: "Add money to your trade wallet", outcome: { status: "submitted", hash } },
+        { stepId: STEP_ID.predict(1), label: "Making your prediction", outcome: { status: "pending" } },
+      ],
+    });
+
+    const popup = open(chain, store, chain.reader, undefined, () => clock.at);
+    await vi.waitFor(() => expect(running()).toBe(false));
+    popup.predict();
+    await vi.waitFor(() => expect(screen.getByTestId("failure").textContent).toBe(UNSEEN_COPY));
+    expect(screen.getByTestId("asks-to-sign-again").textContent).toBe("false");
+    expect(chain.deposits()).toHaveLength(0);
+
+    fireEvent.click(screen.getByText("discard"));
+
+    expect(store.load(FLOW_ID)).not.toBeNull();
+    expect(popup.onClose).toHaveBeenCalled();
+    expect(chain.deposits()).toHaveLength(0);
+  });
+});

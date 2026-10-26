@@ -1,6 +1,8 @@
 import type { DisplayBlock } from "@foresight/session-metadata";
 import type { Address } from "viem";
 
+import type { OptionScale } from "@/types/optionScale";
+
 export type SessionStatus = "setting-up" | "trading" | "closed";
 
 /** The fields every session read shares, whichever query fetched it. */
@@ -21,19 +23,13 @@ export interface SessionCore {
 }
 
 /** One child market */
-export interface SessionOption {
-  market: Address;
+export interface SessionOption extends OptionScale {
   outcomeIndex: number;
-  name: string;
-  color: string;
   question: string;
-  /** Parsed from the market name's `[unit]` suffix; null where the name carries none. */
-  unit: string | null;
-  /** Scalar bounds in the unit's own terms, de-scaled from 1e18. */
-  lowerBound: number;
-  upperBound: number;
   upToken: Address | null;
   downToken: Address | null;
+  /** Burnt with UP and DOWN when a set is merged back; the router takes the whole partition. */
+  invalidToken: Address | null;
   underlyingToken: Address | null;
   /** Display blocks with image uris already resolved against the gateway. */
   blocks: DisplayBlock[];
@@ -61,10 +57,7 @@ export interface SessionDetail extends SessionCore {
   options: SessionOption[];
 }
 
-export type SessionChartOption = Pick<
-  SessionOption,
-  "market" | "name" | "color" | "unit" | "lowerBound" | "upperBound"
->;
+export type SessionChartOption = OptionScale;
 
 export interface SessionChartPoint {
   /** Unix seconds. */

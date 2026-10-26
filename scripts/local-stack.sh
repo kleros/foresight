@@ -12,7 +12,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SESSION="foresight"
 DEPLOYMENTS="$ROOT/packages/contracts/deployments/localhost"
-DEPLOY_MARKER="$DEPLOYMENTS/SessionFactory.json"
+# the last artifact the local node deploys, so codegen sees every contract
+DEPLOY_MARKER="$DEPLOYMENTS/CreditsManager.json"
 GNOSIS_DEPLOYMENTS="$ROOT/packages/contracts/deployments/gnosis"
 RPC_URL="http://127.0.0.1:8545"
 HASURA_URL="http://127.0.0.1:8080"
@@ -77,6 +78,25 @@ fork_deploy_ready() {
 
 fork_ready() { fork_is_gnosis && fork_deploy_ready; }
 
+# Seer's LensQuoter quotes every swap the app makes, and it was deployed after the pinned fork block
+LENS_QUOTER="0x82150d38288e53AfcF20a5eEee47682c5Ef796d8"
+
+grant_lens_quoter() {
+  local upstream="${GNOSIS_RPC_URL:-https://rpc.gnosischain.com}" code
+  # fetched with node, the client the fork itself reaches upstream with
+  code="$(UPSTREAM="$upstream" ADDRESS="$LENS_QUOTER" node -e '
+    fetch(process.env.UPSTREAM, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getCode", params: [process.env.ADDRESS, "latest"] }),
+    }).then((r) => r.json()).then((j) => console.log(j.result ?? ""))')" ||
+    die "could not reach $upstream for the LensQuoter code"
+  [[ -n "$code" && "$code" != "0x" && "$code" != "null" ]] || die "LensQuoter $LENS_QUOTER has no code on $upstream"
+  rpc_result hardhat_setCode "\"$LENS_QUOTER\",\"$code\"" | grep -q '"result"' ||
+    die "could not set the LensQuoter code on the fork"
+  log "✓ LensQuoter copied onto the fork"
+}
+
 indexer_synced() {
   curl -sf "$INDEXER_URL/metrics" | grep -q '^envio_progress_ready{[^}]*} 1$'
 }
@@ -138,7 +158,7 @@ cmd_start() {
   tmux kill-session -t "$SESSION" 2>/dev/null || true
   # commands are passed as pane argv, never send-keys: send-keys types into the
   # pane's shell and silently loses characters if the shell is still starting up.
-  # hardhat node deploys SessionFactory itself on boot (--tags SessionFactory);
+  # hardhat node deploys the local contracts itself on boot (the --tags in local-node);
   # the gnosis fork carries the live deployment instead.
   tmux new-session -d -s "$SESSION" -n stack -c "$ROOT" "$node_cmd"
   tmux set-option -t "$SESSION" remain-on-exit on # keep a crashed pane's output readable
@@ -162,6 +182,7 @@ cmd_start() {
     web_cmd="yarn dev:gnosis-fork"
 
     wait_for "gnosis fork (chain 100, live deployment)" fork_ready
+    grant_lens_quoter
     log "wiring indexer config to the gnosis deployment"
     yarn indexer:update:gnosis-fork
   else

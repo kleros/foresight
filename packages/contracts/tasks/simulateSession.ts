@@ -38,6 +38,14 @@ task("simulate-session", "Deploys a sample session through the deployed SessionF
     });
     const sessionFactory = await hre.ethers.getContractAt("SessionFactory", deployment.address);
 
+    // a fork's clock stays at its pin block, which would leave the new session closed by wall time
+    const wallClock = Math.floor(Date.now() / 1000);
+    const pinned = await hre.ethers.provider.getBlock("latest");
+    if (pinned && pinned.timestamp < wallClock) {
+      await hre.network.provider.send("evm_setNextBlockTimestamp", [wallClock]);
+      await hre.network.provider.send("evm_mine");
+    }
+
     const latestBlock = await hre.ethers.provider.getBlock("latest");
     if (!latestBlock) {
       throw new Error("Could not read the latest block");

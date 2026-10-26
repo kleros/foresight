@@ -1,6 +1,6 @@
 import type { Hash, TransactionReceipt } from "viem";
 
-import { describeTxError, isFatalCause } from "./errors";
+import { describeTxError, isFatalCause, StorageWriteError } from "./errors";
 import type { ReceiptWatcher } from "./receiptWatcher";
 import type { RunState } from "./runState";
 import type { FlowScope } from "./scope";
@@ -135,7 +135,12 @@ export function createFlowDriver<TSnapshot, TCtx>(deps: {
     }
 
     state.setOutcome(entry.stepId, { status: "awaiting-signature" });
-    state.persist();
+    // without this record a prompt approved after the tab closes leaves no trace, so no prompt opens
+    if (!state.persist()) {
+      const error = new StorageWriteError();
+      stop({ stepId: entry.stepId, message: describeTxError(error), cause: classify(error), reason: "error" });
+      return undefined;
+    }
 
     const live = state.get();
     if (!live) return undefined;
@@ -179,7 +184,10 @@ export function createFlowDriver<TSnapshot, TCtx>(deps: {
    * not, and stops the run.
    */
   async function settle(entry: Entry, hash: Hash, signal: AbortSignal): Promise<TransactionReceipt | undefined> {
-    let replacement: TxReplacement | undefined;
+    let replacement: TxReplacement | undefined =
+      entry.outcome.status === "submitted" && entry.outcome.replacementReason
+        ? { hash: entry.outcome.hash, reason: entry.outcome.replacementReason }
+        : undefined;
     let receipt: TransactionReceipt;
 
     try {
@@ -188,8 +196,15 @@ export function createFlowDriver<TSnapshot, TCtx>(deps: {
         signal,
         giveUp: () => pauseRequested,
         onReplaced: (seen) => {
-          replacement = seen;
-          state.setOutcome(entry.stepId, { status: "submitted", hash: seen.hash });
+          replacement = {
+            ...seen,
+            reason: replacement && replacement.reason !== "repriced" ? replacement.reason : seen.reason,
+          };
+          state.setOutcome(entry.stepId, {
+            status: "submitted",
+            hash: seen.hash,
+            replacementReason: replacement.reason,
+          });
           state.persist();
           emit({ type: "step:replaced", stepId: entry.stepId, from: hash, to: seen.hash, reason: seen.reason });
         },
@@ -332,7 +347,8 @@ export function createFlowDriver<TSnapshot, TCtx>(deps: {
         const index = run.steps.findIndex((candidate) => candidate.stepId === entry.stepId);
         const total = run.steps.length;
 
-        const skip = await askedToSkip(entry);
+        // A submitted step's hash is settled by its receipt, never by canSkip.
+        const skip = entry.outcome.status === "submitted" ? false : await askedToSkip(entry);
         if (skip === undefined || gone()) return;
 
         if (skip) {

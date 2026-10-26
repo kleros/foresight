@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps } from "react";
 
 import { FileUploader, TextArea, TextField, Tooltip } from "@kleros/ui-components-library";
 import clsx from "clsx";
@@ -24,6 +24,26 @@ import type { DraftAssessment, OutcomeImageDraft } from "../types/draft";
 const MARKDOWN_INPUT = "w-full text-sm";
 
 const UPLOADER = "w-full [&_small]:text-sm";
+
+/** The library names every drop zone "DropZone" plus the first `#dropzone-label` on the page, and re-ids it after mount. */
+function NamedFileUploader({ label, ...props }: ComponentProps<typeof FileUploader> & { label: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  // The extra render after mount lands after the library's own re-id.
+  const [settled, setSettled] = useState(false);
+  useEffect(() => setSettled(true), []);
+  useLayoutEffect(() => {
+    // The library renders a visually hidden drop-zone button before the visible one.
+    const [dropZone, trigger] = ref.current?.querySelectorAll("button") ?? [];
+    dropZone?.setAttribute("aria-label", "Paste or drop a file");
+    dropZone?.removeAttribute("aria-labelledby");
+    trigger?.setAttribute("aria-label", label);
+  }, [label, settled]);
+  return (
+    <div ref={ref} className="contents">
+      <FileUploader {...props} />
+    </div>
+  );
+}
 
 /** What this step offers, before the role's own allow-list narrows it. */
 const HERO_TYPES = ["image/png", "image/jpeg"];
@@ -229,7 +249,8 @@ export function DisplayMetadataStep({
 
               <div>
                 <div className="type-label text-fs-text-secondary pb-1">Creator mark</div>
-                <FileUploader
+                <NamedFileUploader
+                  label="Creator mark icon"
                   className={UPLOADER}
                   callback={(file) => pick("icon", "iconName", file)}
                   acceptedFileTypes={allowedOf(ICON_TYPES, restriction)}
@@ -242,7 +263,8 @@ export function DisplayMetadataStep({
 
               <div>
                 <div className="type-label text-fs-text-secondary pb-1">Hero image</div>
-                <FileUploader
+                <NamedFileUploader
+                  label="Hero image"
                   className={UPLOADER}
                   callback={(file) => pick("hero", "heroImageName", file)}
                   acceptedFileTypes={allowedOf(HERO_TYPES, restriction)}
@@ -288,7 +310,8 @@ export function DisplayMetadataStep({
                         />
                       ))}
                       {o.images.length < MAX_IMAGE_BLOCKS ? (
-                        <FileUploader
+                        <NamedFileUploader
+                          label={`Image for ${branch}`}
                           className={UPLOADER}
                           // Remounting after each add clears the uploader for the next one.
                           key={o.images.length}

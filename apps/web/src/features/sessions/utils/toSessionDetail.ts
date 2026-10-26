@@ -29,6 +29,7 @@ function toSessionOption(child: SessionDetailRow["children"][number], gateway: s
     upperBound: fromWad(child.upperBound),
     upToken: asToken(child.upToken),
     downToken: asToken(child.downToken),
+    invalidToken: asToken(child.invalidToken),
     underlyingToken: asToken(child.underlyingToken),
     blocks: displayBlocks(child.blocks, gateway),
   };

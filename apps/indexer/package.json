@@ -12,7 +12,7 @@
     "codegen:gnosis": "envio codegen --config config.gnosis.yaml",
     "dev": "envio dev --config config.localhost.yaml",
     "dev:gnosis": "node --env-file=.env.gnosis \"$(yarn bin envio)\" dev --config config.gnosis.yaml",
-    "dev:gnosis-fork": "node --env-file=.env.gnosis-fork \"$(yarn bin envio)\" dev --config config.gnosis-fork.yaml",
+    "dev:gnosis-fork": "node --env-file=.env.gnosis-fork.example --env-file-if-exists=.env.gnosis-fork \"$(yarn bin envio)\" dev --config config.gnosis-fork.yaml",
     "start": "envio start",
     "start:local": "envio start --config config.localhost.yaml",
     "stop": "envio stop",

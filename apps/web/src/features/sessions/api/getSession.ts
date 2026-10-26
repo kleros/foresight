@@ -6,9 +6,12 @@ import { isAddress } from "viem";
 import { fetchGraphql } from "@/lib/graphql/batcher";
 import { graphql } from "@/lib/graphql/generated";
 import { STALE_TIME } from "@/lib/query";
+import { publicClient } from "@/lib/web3/public-client";
 
+import { DEFAULT_CHAIN_ID } from "@/config/chains";
 import { IPFS_GATEWAY } from "@/config/ipfs";
 
+import { verifySession } from "./verifySession";
 import { toSessionDetail } from "../utils/toSessionDetail";
 
 const SESSION_DETAIL = graphql(`
@@ -47,12 +50,8 @@ const SESSION_DETAIL = graphql(`
         blocks
         upToken
         downToken
+        invalidToken
         underlyingToken
-        tokens {
-          outcomeIndex
-          decimals
-          symbol
-        }
       }
     }
   }
@@ -69,7 +68,8 @@ export function useSession(parentMarket: string | undefined) {
       ? async () => {
           const result = await fetchGraphql(SESSION_DETAIL, { parentMarket: parentMarket.toLowerCase() });
           const row = result.Session[0];
-          return row ? toSessionDetail(row, IPFS_GATEWAY) : null;
+          if (!row) return null;
+          return toSessionDetail(await verifySession(publicClient, DEFAULT_CHAIN_ID, row, parentMarket), IPFS_GATEWAY);
         }
       : skipToken,
     staleTime: STALE_TIME.structural,

@@ -27,7 +27,7 @@ await orchestrator.resume();
 
 `pending`: still in the mempool. Resume adopts the hash rather than paying for a second transaction.
 
-`dropped`: the node has never heard of it. The step returns to `pending` and resume signs a fresh one.
+`unseen`: the node knows neither a receipt nor the transaction. The hash is kept, since a load-balanced or lagging node can miss a transaction another node holds, and resume would wait on it again. The adapter decides when it is dead, for example once the sender's nonce went to another transaction, and calls `releaseInFlight()`: with no argument the step returns to `pending` and resume signs a fresh one; with a hash the step waits on that one instead. `releaseInFlight()` refuses while the loop is going.
 
 `unknown`: a prompt was open and no hash was recorded. There is nothing to ask the chain, and a dismissed popup is indistinguishable from one approved after the tab died. The step is reset so resume prompts again, and the question is left to that step's `canSkip`. The result carries `canSelfCheck: false` when the step has none.
 
@@ -39,11 +39,13 @@ One key per run, `foresight.tx-flow.<flowId>` by default, holding the snapshot, 
 
 Steps are stored as `{ stepId, label, outcome }` with no builder, which is why `restore` needs a fresh plan.
 
-A store that cannot write does not stop the run. An `inform` fires once saying the run cannot be resumed if the tab closes, and the steps carry on. Stopping would be worse, since resume reads the same storage. The same applies to a store that cannot clear.
+The `awaiting-signature` write before each wallet prompt is the only record that a prompt may be out there, so when the store refuses it the step opens no wallet: the run pauses with a `StorageWriteError`, classified `rpc`, and a retry writes it again. An adapter that keeps its own record of a send before the prompt passes `durable: true` to `updateSnapshot`, which throws `StorageWriteError` when that write fails.
+
+Every other write that fails does not stop the run. An `inform` fires once saying the run cannot be resumed if the tab closes, and the steps carry on: what is already on chain is better finished than left with no record. The same applies to a store that cannot clear.
 
 Four things drop a stored run on read, each removing the record so the next read is clean:
 
-- `expiresAt` in the past. 72 hours by default, configurable with `ttlMs`.
+- `expiresAt` in the past. 72 hours by default, configurable with `ttlMs`. A run with a step at `awaiting-signature` or `submitted` never expires, nor one the store's `unsettled` predicate names, such as an adapter's held send; it is pruned on the first read after it settles.
 - A `version` mismatch against `FLOW_RUN_SCHEMA_VERSION`. No migration path, on purpose: a run whose step ids meant something different in an older release could double-send. Bump the constant whenever a stored shape changes meaning.
 - Unparseable JSON.
 - A record that parses but is unusable: no snapshot, no step list, a paused record with no reason, an unrecognised outcome, a `submitted` step with no hash, a `confirmed` one with no block number, or a record filed under a key that does not match its own `flowId`. A half-written record left in place would throw on every load with no way back.

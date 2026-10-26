@@ -1,0 +1,190 @@
+import { InsufficientLiquidityError, Lens, SwapRevertsError, type ChainId } from "@seer-pm/lens/client";
+import {
+  BaseError,
+  ContractFunctionRevertedError,
+  decodeFunctionData,
+  encodeFunctionData,
+  isAddress,
+  isAddressEqual,
+  toFunctionSelector,
+  type Address,
+  type Hex,
+  type PublicClient,
+} from "viem";
+
+import { swaprRouterAddress } from "@/config/contracts";
+
+import { ALGEBRA_ROUTER_ABI } from "./algebraRouter";
+import { QUOTE_DEADLINE_SECONDS } from "./deadline";
+import { NoSwapRouteError, QuoteRefusedError, type ExactInputQuoter, type SwapQuoter } from "./types";
+
+/**
+ * Seer's on-chain LensQuoter picks the route and returns the router call to make. Its execution
+ * check overrides balances at ERC-20 slot 0 only, so for Wrapped1155 legs it checks nothing.
+ */
+
+const EXACT_INPUT_SINGLE = toFunctionSelector(ALGEBRA_ROUTER_ABI[0]);
+
+const Q192 = 2n ** 192n;
+
+/** LensQuoter's reverts that answer the request rather than fail it. */
+const NO_ROUTE_ERRORS = new Set(["NoRoute", "ZeroAmount", "UnsupportedAMM"]);
+
+/** Whether Lens answered that no route takes the swap, as opposed to giving no answer. */
+function answeredNoRoute(error: unknown): boolean {
+  // Lens throws InsufficientLiquidityError, with no cause, for any failure of its gas-capped
+  // simulation, so a transport failure on that one call still reads as no route.
+  if (error instanceof InsufficientLiquidityError || error instanceof SwapRevertsError) return true;
+  const reverted =
+    error instanceof BaseError ? error.walk((link) => link instanceof ContractFunctionRevertedError) : null;
+  return reverted instanceof ContractFunctionRevertedError && NO_ROUTE_ERRORS.has(reverted.data?.errorName ?? "");
+}
+
+/** Algebra's fee unit: millionths of the input. */
+const FEE_DENOMINATOR = 1_000_000n;
+
+/**
+ * What `amountIn` returns at no worse than the limit price once the pool's fee is taken from it,
+ * less `slippageBps`. Algebra's token0 is the lower address, and the squared sqrt price is token1 per token0.
+ */
+function minOutAtLimit(
+  tokenIn: Address,
+  tokenOut: Address,
+  amountIn: bigint,
+  limitSqrtPrice: bigint,
+  poolFee: bigint,
+  slippageBps: number,
+) {
+  const priceX192 = limitSqrtPrice * limitSqrtPrice;
+  const kept = 10_000n - BigInt(slippageBps);
+  const net = (amountIn * (FEE_DENOMINATOR - poolFee)) / FEE_DENOMINATOR;
+  return BigInt(tokenIn) < BigInt(tokenOut)
+    ? (net * priceX192 * kept) / (Q192 * 10_000n)
+    : (net * Q192 * kept) / (priceX192 * 10_000n);
+}
+
+/** The latest block's time, in seconds: what the router checks a deadline against, whatever the visitor's clock says. */
+const latestBlockTime = (client: PublicClient) => async () => (await client.getBlock({ blockTag: "latest" })).timestamp;
+
+/** The quote's validity from `now`, ending before `closesAt`; the router accepts a swap at the deadline itself. */
+function deadlineFrom(now: bigint, closesAt: number | null | undefined): bigint {
+  const valid = now + QUOTE_DEADLINE_SECONDS;
+  if (closesAt == null) return valid;
+  const last = BigInt(closesAt) - 1n;
+  return valid < last ? valid : last;
+}
+
+export function createLensQuoter(
+  client: PublicClient,
+  chainId: ChainId,
+  chainNow: () => Promise<bigint> = latestBlockTime(client),
+  /** Unix seconds after which nothing it quotes may execute. */
+  closesAt?: number | null,
+): SwapQuoter {
+  const lens = new Lens(client, chainId);
+  const router = swaprRouterAddress(chainId);
+
+  return {
+    async quote(request) {
+      if (router === undefined) throw new QuoteRefusedError(`No Swapr router is known on chain ${chainId}.`);
+      const deadline = deadlineFrom(await chainNow(), closesAt);
+      const result = await lens
+        .quote({
+          tokenIn: request.tokenIn,
+          tokenOut: request.tokenOut,
+          amount: request.amount,
+          recipient: request.recipient,
+          slippageBps: request.slippageBps,
+          deadline,
+        })
+        .catch((error: unknown) => {
+          if (!answeredNoRoute(error)) throw error;
+          throw new NoSwapRouteError(`Lens found no route from ${request.tokenIn} to ${request.tokenOut}.`, {
+            cause: error,
+          });
+        });
+
+      if (!result.data.startsWith(EXACT_INPUT_SINGLE)) {
+        throw new NoSwapRouteError(
+          `Lens routed ${request.tokenIn} to ${request.tokenOut} through a call that takes no price limit.`,
+        );
+      }
+      const [params] = decodeFunctionData({ abi: ALGEBRA_ROUTER_ABI, data: result.data as Hex }).args;
+      // the answer comes from whichever RPC serves the eth_call, and the batch approves and pays what it names
+      if (
+        !isAddress(result.target) ||
+        !isAddressEqual(result.target, router) ||
+        !isAddressEqual(params.recipient, request.recipient) ||
+        !isAddressEqual(params.tokenIn, request.tokenIn) ||
+        !isAddressEqual(params.tokenOut, request.tokenOut) ||
+        params.amountIn !== request.amount ||
+        result.amountIn !== request.amount ||
+        result.msgValue !== 0n
+      ) {
+        throw new QuoteRefusedError(`Lens answered with another swap than ${request.tokenIn} to ${request.tokenOut}.`);
+      }
+
+      // Lens quotes the whole amount past the target; the limit stops it at `amountOutAtLimit`
+      const amountOut = result.amountOut < request.amountOutAtLimit ? result.amountOut : request.amountOutAtLimit;
+      // Lens's own min-out and deadline are the node's answer, so both are set here
+      const quotedMin = (amountOut * (10_000n - BigInt(request.slippageBps))) / 10_000n;
+      const swapped = params.amountIn < request.amountInAtLimit ? params.amountIn : request.amountInAtLimit;
+      const floor = minOutAtLimit(
+        params.tokenIn,
+        params.tokenOut,
+        swapped,
+        request.limitSqrtPrice,
+        request.poolFee,
+        request.slippageBps,
+      );
+      const heldMin =
+        request.heldOut === undefined ? 0n : (request.heldOut * (10_000n - BigInt(request.slippageBps))) / 10_000n;
+      const amountOutMinimum = [quotedMin, floor, heldMin].reduce((most, each) => (each > most ? each : most));
+
+      return {
+        amountIn: request.amount,
+        amountOut,
+        router,
+        data: encodeFunctionData({
+          abi: ALGEBRA_ROUTER_ABI,
+          functionName: "exactInputSingle",
+          args: [{ ...params, deadline, amountOutMinimum, limitSqrtPrice: request.limitSqrtPrice }],
+        }),
+        value: 0n,
+      };
+    },
+  };
+}
+
+/** Lens' route for an exact-input swap with no price limit, held to Swapr's single-pool call. */
+export function createLensExactInputQuoter(
+  client: PublicClient,
+  chainId: ChainId,
+  chainNow: () => Promise<bigint> = latestBlockTime(client),
+  /** Unix seconds after which nothing it quotes may execute. */
+  closesAt?: number | null,
+): ExactInputQuoter {
+  const lens = new Lens(client, chainId);
+
+  return {
+    async quote(request) {
+      const deadline = deadlineFrom(await chainNow(), closesAt);
+      const result = await lens.quote({ ...request, slippageBps: 0, deadline }).catch((error: unknown) => {
+        if (!answeredNoRoute(error)) throw error;
+        throw new NoSwapRouteError(`Lens found no route from ${request.tokenIn} to ${request.tokenOut}.`, {
+          cause: error,
+        });
+      });
+      if (!result.data.startsWith(EXACT_INPUT_SINGLE)) {
+        throw new NoSwapRouteError(`Lens routed ${request.tokenIn} to ${request.tokenOut} through more than one pool.`);
+      }
+      const [params] = decodeFunctionData({ abi: ALGEBRA_ROUTER_ABI, data: result.data as Hex }).args;
+      const data = encodeFunctionData({
+        abi: ALGEBRA_ROUTER_ABI,
+        functionName: "exactInputSingle",
+        args: [{ ...params, deadline }],
+      });
+      return { amountOut: result.amountOut, router: result.target as Address, data };
+    },
+  };
+}

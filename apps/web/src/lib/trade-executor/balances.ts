@@ -2,7 +2,7 @@ import { erc20Abi, type Address } from "viem";
 
 import type { ExecutorReadClient, FundsReadClient } from "./types";
 
-export function fetchTokenBalances(
+export async function fetchTokenBalances(
   client: ExecutorReadClient,
   args: { holder: Address; tokens: Address[] },
 ): Promise<bigint[]> {

@@ -67,3 +67,10 @@ export function timeLeftUntil(isoString: string): string {
 
   return `after ${targetDate.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`;
 }
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** Local date and time, safe in a filename: `2026-09-15_14-23`. */
+export function fileStamp(date: Date): string {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}-${pad(date.getMinutes())}`;
+}

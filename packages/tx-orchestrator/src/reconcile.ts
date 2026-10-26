@@ -34,6 +34,24 @@ export async function reconcileInFlight<TSnapshot, TCtx>(args: {
   const { hash } = outcome;
   const receipt = await gateway.getReceipt(hash);
 
+  if (receipt && outcome.replacementReason && outcome.replacementReason !== "repriced") {
+    const error: FlowError = {
+      stepId,
+      message:
+        outcome.replacementReason === "cancelled"
+          ? "The transaction was cancelled in the wallet."
+          : "Another transaction replaced this one.",
+      cause: "cancelled",
+      hash,
+    };
+    state.setOutcome(stepId, { status: "pending" });
+    state.transition({ status: "paused", reason: "cancelled", error });
+    state.persist();
+    emit({ type: "step:failed", stepId, error });
+    emit({ type: "flow:paused", reason: "cancelled" });
+    return { outcome: "cancelled", stepId, hash };
+  }
+
   if (receipt?.status === "reverted") {
     const error: FlowError = { stepId, message: "The transaction reverted on chain.", cause: "reverted", hash };
     state.setOutcome(stepId, { status: "pending" });
@@ -65,7 +83,6 @@ export async function reconcileInFlight<TSnapshot, TCtx>(args: {
     return { outcome: "pending", stepId, hash };
   }
 
-  state.setOutcome(stepId, { status: "pending" });
-  state.persist();
-  return { outcome: "dropped", stepId, hash };
+  // one node's not-found is not proof the transaction is gone; only `releaseInFlight` lets go of the hash
+  return { outcome: "unseen", stepId, hash };
 }

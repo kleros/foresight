@@ -15,6 +15,7 @@ const OUTCOME: Record<DeployResume["outcome"], string> = {
   unknown: "",
   pending: "It is still confirming.",
   confirmed: "It went through while you were away.",
+  cancelled: "This step was cancelled or replaced.",
   reverted: "It failed, and created nothing.",
   dropped: "It never went through.",
 };

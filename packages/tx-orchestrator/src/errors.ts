@@ -8,6 +8,14 @@ export class FlowStateError extends Error {
   }
 }
 
+/** The run could not be written to storage before a wallet prompt, so the prompt was not opened. */
+export class StorageWriteError extends Error {
+  constructor(options?: { cause?: unknown }) {
+    super("The run could not be saved before the wallet prompt.", options);
+    this.name = "StorageWriteError";
+  }
+}
+
 type ErrorLike = {
   name?: unknown;
   code?: unknown;
@@ -48,6 +56,13 @@ function isRejectionCode(code: unknown): boolean {
   return code === 4001 || code === "ACTION_REJECTED";
 }
 
+/** A decline as the wallet codes or names it; its wording alone can also come from an error after a broadcast. */
+export function isUserRejection(error: unknown): boolean {
+  return walkChain(error).some(
+    (link) => isRejectionCode(link.code) || (typeof link.name === "string" && USER_REJECTED_NAMES.has(link.name)),
+  );
+}
+
 const TRANSIENT_NAMES = new Set([
   "HttpRequestError",
   "TimeoutError",
@@ -79,10 +94,9 @@ function isTransientCode(error: ErrorLike): boolean {
 export function classifyTxError(error: unknown): Extract<TxErrorCause, "rejected" | "rpc" | "unknown"> {
   const links = walkChain(error);
 
-  for (const link of links) {
-    if (isRejectionCode(link.code)) return "rejected";
-    if (typeof link.name === "string" && USER_REJECTED_NAMES.has(link.name)) return "rejected";
-  }
+  // a write that may succeed once storage frees up; nothing was signed
+  if (error instanceof StorageWriteError) return "rpc";
+  if (isUserRejection(error)) return "rejected";
   const text = links.map(textOf).join(" ");
   if (REJECTION_TEXT.test(text)) return "rejected";
 

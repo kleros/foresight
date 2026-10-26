@@ -1,7 +1,7 @@
 import { fallback, http, type Transport } from "viem";
 import { gnosis, hardhat, mainnet } from "viem/chains";
 
-import { LOCAL_RPC_URL } from "./chains";
+import { LOCAL_RPC_URL, rpcTimeoutMs } from "./chains";
 import { env } from "./env";
 
 /**
@@ -22,7 +22,7 @@ const GNOSIS_RPCS = gnosisRpcUrls(env.GNOSIS_RPC);
 const MAINNET_RPCS = ["https://ethereum-rpc.publicnode.com", "https://eth.llamarpc.com"];
 
 export const transports = {
-  [gnosis.id]: fallback(GNOSIS_RPCS.map((url) => http(url, { batch: true }))),
+  [gnosis.id]: fallback(GNOSIS_RPCS.map((url) => http(url, { batch: true, timeout: rpcTimeoutMs(url) }))),
   [mainnet.id]: fallback(MAINNET_RPCS.map((url) => http(url, { batch: true }))),
-  [hardhat.id]: http(LOCAL_RPC_URL),
+  [hardhat.id]: http(LOCAL_RPC_URL, { timeout: rpcTimeoutMs(LOCAL_RPC_URL) }),
 } as const satisfies Record<number, Transport>;

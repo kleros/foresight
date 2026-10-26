@@ -20,13 +20,19 @@
   --fs-border-accent: var(--klerosUIComponentsPrimaryBlue);
   /* Text */
   --fs-text-primary: var(--klerosUIComponentsPrimaryText);
-  --fs-text-secondary: var(--klerosUIComponentsSecondaryText);
+  /* 5.1:1 on the sunken surface; Kleros' #999999 is 2.75:1 */
+  --fs-text-secondary: #6b6b6b;
   --fs-text-inverse: var(--klerosUIComponentsWhiteBackground);
-  --fs-text-accent: var(--klerosUIComponentsPrimaryBlue);
+  /* the accent fill is 4.1:1 on white, short of AA for text */
+  --fs-text-accent: #3355e0;
   --fs-text-protocol: var(--klerosUIComponentsSecondaryPurple);
   /* Accent: purple carries protocol identity, blue carries action */
   --fs-accent: var(--klerosUIComponentsPrimaryBlue);
   --fs-accent-hover: var(--klerosUIComponentsSecondaryBlue);
+  /* A primary that cannot be pressed now: white on it is 4.76:1 */
+  --fs-accent-disabled: color-mix(in srgb, var(--klerosUIComponentsPrimaryBlue) 55%, var(--fs-text-secondary));
+  /* white in both themes: dark's own primary label, #220050, is 2.7:1 on the greyed fill */
+  --fs-accent-disabled-text: #ffffff;
   --fs-accent-protocol: var(--klerosUIComponentsSecondaryPurple);
   --fs-accent-protocol-hover: var(--klerosUIComponentsPrimaryPurple);
   /* Tone: what the reader is being told, paired with its own background */
@@ -40,6 +46,13 @@
   --fs-tone-info-bg: var(--klerosUIComponentsTintMedium);
   --fs-tone-neutral: var(--klerosUIComponentsSecondaryText);
   --fs-tone-neutral-bg: var(--klerosUIComponentsLightGrey);
+  /* Tone as text: the tones above are fills and icons, below 4.5:1 as light-theme text */
+  --fs-tone-success-text: #0a7f27;
+  --fs-tone-warning-text: #9a5b00;
+  --fs-tone-error-text: #c4002a;
+  /* An estimate above or below the market: the slider's fill and thumb, 3:1 or more on the sunken surface */
+  --fs-estimate-up: #16a34a;
+  --fs-estimate-down: #e0405f;
   /* Geometry inherited from Kleros, restated so this layer has one vocabulary */
   --fs-radius: var(--klerosUIComponentsBaseRadius);
   --fs-border-width: 1px;
@@ -51,6 +64,17 @@
   --fs-surface: var(--klerosUIComponentsWhiteBackground);
   --fs-surface-raised: var(--klerosUIComponentsWhiteBackground);
   --fs-surface-sunken: var(--klerosUIComponentsLightBackground);
+  --fs-text-secondary: var(--klerosUIComponentsSecondaryText);
+  /* a lighter accent for text: #4872ff on #220050 is 4.3:1 */
+  --fs-text-accent: #7b96ff;
+  --fs-tone-success-text: var(--klerosUIComponentsSuccess);
+  --fs-tone-warning-text: var(--klerosUIComponentsWarning);
+  --fs-tone-error-text: var(--klerosUIComponentsError);
+  /* mixed toward the pale secondary text it would lighten instead: white on it is 6.2:1 */
+  --fs-accent-disabled: color-mix(in srgb, var(--klerosUIComponentsPrimaryBlue) 55%, var(--fs-border));
+  /* futarchy's pastels, 7.5:1 on the dark track */
+  --fs-estimate-up: var(--green-2);
+  --fs-estimate-down: var(--red-2);
   /* …and a soft radial purple glow behind the card in dark. A shadow on #1b003f
      is invisible; a glow in light mode is grime. */
   --fs-raise: none;

@@ -377,13 +377,16 @@ export function createOrchestratedDeploy(args: {
     // back describes a run this driver no longer holds.
     if (!orchestrator.getRun()) return;
 
+    // a deploy the node does not know is signed again on resume
+    if (reconciled.outcome === "unseen") orchestrator.releaseInFlight();
+
     const current = currentEntry(orchestrator.getRun()?.steps ?? []);
     const stepId = reconciled.stepId ?? current?.stepId ?? STEP_ID.atomic;
 
     resume = {
       stepId,
       label: current?.label ?? "the deploy",
-      outcome: reconciled.outcome,
+      outcome: reconciled.outcome === "unseen" ? "dropped" : reconciled.outcome,
       // Every other outcome is the chain having answered.
       canSelfCheck: reconciled.outcome === "unknown" ? Boolean(reconciled.canSelfCheck) : true,
       hash: reconciled.hash,

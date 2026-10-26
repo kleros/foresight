@@ -1,14 +1,53 @@
-/* Three durations, never a fourth.*/
+/* Three durations for one-shot motion, never a fourth; a loop, a spinner's turn, a nudge
+   and the reduced-motion fade each have their own token. */
 :root {
   --fs-dur-echo: 100ms; /* hover, press: a state echo */
   --fs-dur-enter: 250ms; /* enter, exit, expand */
   --fs-dur-structural: 400ms; /* structural moves: reorder, spawn, collapse */
+  --fs-dur-loop: 1.6s; /* one cycle of an indeterminate loop */
+  --fs-dur-nudge: 2s; /* one burst of an attention nudge and its hold */
+  --fs-dur-spin: 1s; /* one turn of a spinner */
+  --fs-dur-reduced-fade: 150ms; /* the in-place fade that stands in for a move under reduced motion */
   --fs-ease-enter: cubic-bezier(0, 0, 0.2, 1);
   --fs-ease-exit: cubic-bezier(0.4, 0, 1, 1);
   --fs-ease-structural: cubic-bezier(0.2, 0, 0, 1);
   /* Loading tiers. Under 300ms: render nothing. */
   --fs-skeleton-min: 300ms;
   --fs-narrative-min: 2000ms;
+  --fs-ease-spring: var(--fs-ease-structural);
+}
+/* A curve, not a duration: a settling spring (4.6 % overshoot) for a check popping in and the market pin landing.
+   A var() is valid at parse time, so without linear() support it would compute to ease, hence the feature query. */
+@supports (animation-timing-function: linear(0, 1)) {
+  :root {
+    --fs-ease-spring: linear(
+      0,
+      0.043,
+      0.148,
+      0.283,
+      0.428,
+      0.567,
+      0.691,
+      0.795,
+      0.878,
+      0.942,
+      0.987,
+      1.017,
+      1.035,
+      1.044,
+      1.046,
+      1.044,
+      1.039,
+      1.032,
+      1.026,
+      1.019,
+      1.014,
+      1.009,
+      1.005,
+      1.002,
+      1
+    );
+  }
 }
 .fs-echo {
   transition:
@@ -37,6 +76,11 @@
   to {
     opacity: 1;
     transform: none;
+  }
+}
+@keyframes fsFadeIn {
+  from {
+    opacity: 0;
   }
 }
 @keyframes fsFadeOut {
@@ -75,6 +119,67 @@
 }
 .fs-rise {
   animation: fsRise var(--fs-dur-enter) var(--fs-ease-enter) both;
+}
+/* A bar rising from the bottom edge, and sinking back to it. */
+@keyframes fsLiftIn {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fsLiftOut {
+  to {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+}
+/* A disclosure opens by grid rows, the one height-class animation allowed, as its content rises in;
+   closing, the content fades first and the rows then fold. Markup: .fs-disclosure > div (min-h-0, overflow hidden) > content. */
+.fs-disclosure {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--fs-dur-enter) var(--fs-ease-structural) var(--fs-dur-echo);
+}
+.fs-disclosure[data-open] {
+  grid-template-rows: 1fr;
+  transition-delay: 0s;
+}
+.fs-disclosure > div > * {
+  transition:
+    opacity var(--fs-dur-enter) var(--fs-ease-enter),
+    transform var(--fs-dur-enter) var(--fs-ease-enter);
+}
+.fs-disclosure:not([data-open]) > div > * {
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity var(--fs-dur-echo) var(--fs-ease-exit),
+    transform var(--fs-dur-echo) var(--fs-ease-exit);
+}
+/* Tailwind v4's rotate-180 sets the rotate property, not transform */
+.fs-chevron {
+  transition:
+    transform var(--fs-dur-enter) var(--fs-ease-structural),
+    rotate var(--fs-dur-enter) var(--fs-ease-structural);
+}
+/* A typed estimate landing: the value pill settles into its new place over the thumb. */
+@keyframes fsPillCommit {
+  from {
+    opacity: 0.6;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fs-pill-commit {
+  transform-origin: 50% 100%;
+  animation: fsPillCommit var(--fs-dur-enter) var(--fs-ease-spring) both;
 }
 /* A colour swatch is small, so it grows on hover rather than lifting. */
 .fs-swatch {
@@ -122,22 +227,48 @@
   animation: fsDraw var(--fs-dur-enter) var(--fs-ease-enter) both;
 }
 .fs-icon-pending {
-  animation: fsSpinDash 1s linear infinite;
+  animation: fsSpinDash var(--fs-dur-spin) linear infinite;
   transform-origin: 50% 50%;
+}
+/* A cue, three bursts of lift (--fs-nudge-lift), drop (--fs-nudge-drop) and settle, each followed by a hold.
+   Literal curves: Chromium ignores var() in a keyframe's timing function; they are --fs-ease-enter and --fs-ease-exit. */
+@keyframes fsNudgeDown {
+  0% {
+    transform: none;
+    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  }
+  12.5% {
+    transform: translateY(calc(-1 * var(--fs-nudge-lift, 3px)));
+    animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
+  }
+  25% {
+    transform: translateY(var(--fs-nudge-drop, 6px));
+    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  }
+  40%,
+  100% {
+    transform: none;
+  }
+}
+.fs-nudge-down {
+  animation: fsNudgeDown var(--fs-dur-nudge) linear var(--fs-dur-enter) 3;
 }
 @media (prefers-reduced-motion: reduce) {
   :root {
     --fs-dur-echo: 1ms;
     --fs-dur-enter: 1ms;
     --fs-dur-structural: 1ms;
+    --fs-ease-spring: linear;
   }
   .fs-enter,
-  .fs-exit,
   .fs-spawn,
   .fs-rise,
   .fs-icon-draw path,
   .fs-icon-draw polyline {
-    animation: fsFadeUp 150ms linear both;
+    animation: fsFadeIn var(--fs-dur-reduced-fade) linear both;
+  }
+  .fs-exit {
+    animation: fsFadeOut var(--fs-dur-reduced-fade) linear both;
   }
   .fs-spawn {
     transform: none;
@@ -150,7 +281,14 @@
     animation: none;
     opacity: 0.6;
   }
+  .fs-nudge-down {
+    animation: none;
+  }
   .fs-skeleton {
+    animation: none;
+  }
+  /* the library's loading Button scales its symbol */
+  .animate-breathing {
     animation: none;
   }
   * {

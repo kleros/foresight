@@ -1,0 +1,92 @@
+/* "Aurora": an explicit exception to the 3px system, scoped to the predict popup, its success dialog
+   and the option cards. Each token says why it departs from the semantic layer. */
+:root {
+  /* nested surfaces read as depth: modal 24 > panel 16 (8px inset) > control 10 > pill */
+  --fs-radius-popup: 24px;
+  --fs-radius-panel: 16px;
+  --fs-radius-control: 10px;
+  /* a tone step off the sheet separates a panel without a border */
+  --fs-popup-panel: #f4f2fb;
+  /* the step above a panel, for a pill or chip sitting on it */
+  --fs-popup-chip: #e8e4f5;
+  /* a pressable row's hover: the panel tone on the white sheet */
+  --fs-popup-hover: var(--fs-popup-panel);
+  /* hairlines and the step connector, tinted toward the violet so they sit on the panels */
+  --fs-popup-line: rgba(40, 20, 90, 0.08);
+  --fs-popup-line-strong: rgba(40, 20, 90, 0.24);
+  /* text on the lavender panels: 15.5, 6.2 and 4.9:1 on --fs-popup-panel */
+  --fs-popup-text: #1d1733;
+  --fs-popup-text-2: #5c567a;
+  --fs-popup-text-3: #67618a;
+  /* the keyboard focus ring: 5.3:1 on the panel, 4.7:1 on a chip */
+  --fs-popup-accent: #6b3cf5;
+  /* Max and links: 6.7:1 on the panel, where --fs-text-accent's blue is off-palette */
+  --fs-popup-accent-text: #5a2fd6;
+  /* a deepened slice of the brand axis, so white text passes at both ends (7.1 and 4.6:1) */
+  --fs-popup-axis-from: #7a00e6;
+  --fs-popup-axis-to: #0077d4;
+  --fs-popup-axis: linear-gradient(100deg, var(--fs-popup-axis-from), var(--fs-popup-axis-to));
+  --fs-popup-axis-v: linear-gradient(180deg, var(--fs-popup-axis-from), var(--fs-popup-axis-to));
+  --fs-popup-on-axis: #ffffff;
+  /* a button that cannot be pressed: its label is 4.5:1 on it */
+  --fs-popup-cta-disabled: #ebe8f4;
+  --fs-popup-cta-disabled-text: #6b6680;
+  /* the share slider's rail and its quarter dots; the dots are decorative, as the share label states the value */
+  --fs-popup-track: #e6e2f3;
+  --fs-popup-track-dot: #c8c2e0;
+  /* the share slider's rail edge: 3.3:1 on the washed panel; the fill is 3.6:1 or more on --fs-popup-track */
+  --fs-popup-track-edge: #7f78a6;
+  /* the amount panel's tint: 6% of the axis, even along it. Declared per theme so it mixes that theme's ends */
+  --fs-popup-wash: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--fs-popup-axis-from) 6%, transparent),
+    color-mix(in srgb, var(--fs-popup-axis-to) 6%, transparent)
+  );
+  --fs-popup-shadow: 0 20px 48px rgb(40 20 90 / 0.18), 0 1px 2px rgb(40 20 90 / 0.08);
+  --fs-popup-edge: transparent;
+  /* the status callout's surfaces: the tone into the panel, declared per theme so each mixes its own panel */
+  --fs-popup-tone-warning-bg: color-mix(in srgb, var(--fs-tone-warning) 14%, var(--fs-popup-panel));
+  --fs-popup-tone-error-bg: color-mix(in srgb, var(--fs-tone-error) 11%, var(--fs-popup-panel));
+}
+:root.dark,
+.dark {
+  /* the Kleros violet surfaces, so the popup belongs to the page behind it */
+  --fs-popup-panel: #1b003f;
+  --fs-popup-chip: #2e206c;
+  /* the panel tone is 1.2:1 on the violet sheet; the chip's is 1.9:1 */
+  --fs-popup-hover: #2e206c;
+  --fs-popup-line: rgba(218, 240, 255, 0.09);
+  --fs-popup-line-strong: rgba(218, 240, 255, 0.3);
+  --fs-popup-text: #e6f1ff;
+  --fs-popup-text-2: #b7c3dc;
+  --fs-popup-text-3: #8d9ab8;
+  /* 6.0:1 on the panel, 4.3:1 on a chip */
+  --fs-popup-accent: #9b7bff;
+  --fs-popup-accent-text: #b9a7ff;
+  --fs-popup-axis-from: #b45fff;
+  --fs-popup-axis-to: #6cc5ff;
+  /* the dark axis is light, so its label is the deep violet: 5.5 and 10.2:1 */
+  --fs-popup-on-axis: #12003a;
+  --fs-popup-cta-disabled: #2e206c;
+  --fs-popup-cta-disabled-text: #9aa6c6;
+  --fs-popup-track: #392c74;
+  --fs-popup-track-dot: #5b4e9c;
+  /* 3.7:1 on the washed panel; the fill is 3.4:1 or more on --fs-popup-track */
+  --fs-popup-track-edge: #7a72b4;
+  /* the dark panel takes 6% of either end without a visible change, so it mixes more */
+  --fs-popup-wash: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--fs-popup-axis-from) 14%, transparent),
+    color-mix(in srgb, var(--fs-popup-axis-to) 10%, transparent)
+  );
+  /* a shadow is invisible on #1b003f, so a hairline marks the edge instead */
+  --fs-popup-shadow: 0 24px 60px rgb(0 0 0 / 0.55);
+  --fs-popup-edge: rgba(218, 240, 255, 0.1);
+  --fs-popup-tone-warning-bg: color-mix(in srgb, var(--fs-tone-warning) 14%, var(--fs-popup-panel));
+  --fs-popup-tone-error-bg: color-mix(in srgb, var(--fs-tone-error) 11%, var(--fs-popup-panel));
+}
+
+/* the popup, its success dialog, the option cards and the pay token's menu ring a focused control in the violet */
+.fs-aurora {
+  --fs-focus-ring: var(--fs-popup-accent);
+}

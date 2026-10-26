@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatAmount, parseAmount } from "../amount";
+import { formatAmount, formatDisplayAmount, ownedAmount, parseAmount, scaleAmount } from "../amount";
 
 describe("parseAmount", () => {
   it("scales a decimal by the token's precision", () => {
@@ -39,5 +39,53 @@ describe("formatAmount", () => {
   it("keeps a whole number whole", () => {
     expect(formatAmount(3_000000000000000000n, 18)).toBe("3");
     expect(formatAmount(0n, 18)).toBe("0");
+  });
+
+  it("cuts to fewer decimals when asked", () => {
+    // 1.23456789 at 18 decimals
+    expect(formatAmount(1_234567890000000000n, 18, 2)).toBe("1.23");
+  });
+});
+
+describe("formatDisplayAmount", () => {
+  it.each([
+    [1_234_567_890_123456789012345678n, "1,234,567,890.123456"],
+    [1_000_000000000000000000n, "1,000"],
+    [999_500000000000000000n, "999.5"],
+    [0n, "0"],
+  ])("groups the whole part of %s in threes and leaves the fraction alone", (value, shown) => {
+    expect(formatDisplayAmount(value, 18)).toBe(shown);
+  });
+
+  it("cuts to fewer decimals when asked", () => {
+    expect(formatDisplayAmount(12_345_678_901234567890000000n, 18, 2)).toBe("12,345,678.9");
+  });
+
+  it("leaves formatAmount ungrouped, since a total read back with Number() relies on it", () => {
+    expect(formatAmount(1_000_000000000000000000n, 18)).toBe("1000");
+  });
+});
+
+describe("ownedAmount", () => {
+  it("groups a large holding", () => {
+    expect(ownedAmount(98_765_432_109_123456789000000000n, 18)).toBe("98,765,432,109.1234");
+  });
+
+  it("cuts to four decimals rather than rounding up past what is held", () => {
+    expect(ownedAmount(4_123456789012345678n, 18)).toBe("4.1234");
+  });
+
+  it("names a non-zero amount below the fourth decimal, and shows nothing held as 0", () => {
+    expect(ownedAmount(10_000_000_000_000n, 18)).toBe("less than 0.0001");
+    expect(ownedAmount(0n, 18)).toBe("0");
+  });
+});
+
+describe("scaleAmount", () => {
+  it("scales the decimal a number reads as, at both ends where it prints in exponent notation", () => {
+    expect(scaleAmount(0.27, 18)).toBe(270000000000000000n);
+    expect(scaleAmount(5e-8, 18)).toBe(50000000000n);
+    expect(scaleAmount(1.5e21, 0)).toBe(1500000000000000000000n);
+    expect(scaleAmount(-2.5, 1)).toBe(-25n);
   });
 });

@@ -79,6 +79,6 @@ Two conventions clients disagree about:
 
 `getReceipt` returns a reverted receipt rather than throwing on one. ethers throws `CALL_EXCEPTION`, so an ethers gateway must catch that and return the receipt with `status: "reverted"`.
 
-`isKnown` separates "still in the mempool" from "dropped after broadcast", which need opposite responses on resume. It is consulted only after `getReceipt` came back empty.
+`isKnown` separates "still in the mempool" from "unseen by this node". It is consulted only after `getReceipt` came back empty. An unseen hash is kept: the adapter judges, from the sender's nonce or a timeout, whether it is dead, and calls `releaseInFlight()`.
 
 `onReplaced` fires the moment the wallet replaces a transaction, before the replacement mines, so the new hash reaches disk while the old one is still being waited on.

@@ -3,17 +3,25 @@ import { useState, type FormEvent } from "react";
 import { Button, Form } from "@kleros/ui-components-library";
 import type { Address } from "viem";
 
+import { Dialog } from "@/components/ui/Dialog";
+
 import { parseAmount } from "@/utils/amount";
 
 import type { Asset } from "@/lib/trade-executor/types";
 
+import { overCap } from "./AmountDialog";
 import { TokenAmountField } from "./TokenAmountField";
-import { WalletDialog } from "./WalletDialog";
 import { useFunds } from "../../api/getFunds";
+import { useEachTokenBalance } from "../../api/getTokenBalances";
 
 export interface TokenChoice {
   decimals: number;
   symbol: string;
+}
+
+/** A token besides the collateral the source holds, picked by its address. */
+export interface HeldToken extends TokenChoice {
+  address: Address;
 }
 
 /** The token ids the picker addresses; the native one is not an address. */
@@ -31,8 +39,12 @@ interface TransferDialogProps {
   collateral: TokenChoice & { address: Address };
   /** Offered only where the native currency can reach the collateral. */
   native?: TokenChoice;
+  /** Other tokens the source may hold, such as Foresight credits; read as the dialog opens, each offered when it holds some. */
+  held?: HeldToken[];
   onSubmit: (asset: Asset) => void;
   isPending: boolean;
+  /** Max takes the whole balance rather than the shown amount. */
+  maxIsExact?: boolean;
 }
 
 export function TransferDialog({
@@ -44,55 +56,84 @@ export function TransferDialog({
   source,
   collateral,
   native,
+  held = [],
   onSubmit,
   isPending,
+  maxIsExact,
 }: TransferDialogProps) {
   const [selected, setSelected] = useState(COLLATERAL);
   const [input, setInput] = useState("");
 
   const useNative = selected === NATIVE && native !== undefined;
+  const reads = useEachTokenBalance(
+    source,
+    held.map((token) => token.address),
+  );
+  // a balance that could not be read is offered as unknown, never as an empty one
+  const heldNow = held.map((token, index) => {
+    const read = reads[index];
+    return { ...token, balance: read?.data, unread: read?.isError === true && read.data === undefined };
+  });
+  const offered = heldNow.filter((token) => token.unread || (token.balance ?? 0n) > 0n);
+  const other = offered.find((token) => token.address === selected);
   const funds = useFunds(source, collateral.address);
-  const chosen = useNative && native ? native : collateral;
-  const available = useNative ? funds.data?.native : (funds.data?.token ?? undefined);
-
-  const amount = parseAmount(input, chosen.decimals);
-  const exceedsAvailable = amount !== null && available !== undefined && amount > available;
 
   const tokens = [
     { id: COLLATERAL, symbol: collateral.symbol, decimals: collateral.decimals },
     ...(native ? [{ id: NATIVE, symbol: native.symbol, decimals: native.decimals }] : []),
+    ...offered.map((token) => ({ id: token.address, symbol: token.symbol, decimals: token.decimals })),
   ];
+  // a picked token whose balance re-reads as zero leaves the list, and nothing is sent in its place
+  const isPickOffered = tokens.some((token) => token.id === selected);
+  const stale = isPickOffered ? undefined : heldNow.find((token) => token.address === selected);
+
+  const chosen = useNative && native ? native : (other ?? stale ?? collateral);
+  const available = !isPickOffered
+    ? stale?.balance
+    : useNative
+      ? funds.data?.native
+      : other
+        ? other.balance
+        : (funds.data?.token ?? undefined);
+
+  const amount = parseAmount(input, chosen.decimals);
+  const exceedsAvailable = amount !== null && available !== undefined && amount > available;
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (amount === null || exceedsAvailable) return;
+    if (amount === null || exceedsAvailable || !isPickOffered) return;
 
-    onSubmit({ token: useNative ? "native" : collateral.address, amount });
+    onSubmit({ token: useNative ? "native" : (other?.address ?? collateral.address), amount });
   };
 
   return (
-    <WalletDialog isOpen={isOpen} onClose={onClose} title={title} hint={hint}>
+    <Dialog isOpen={isOpen} onClose={onClose} title={title} hint={hint}>
       <Form className="flex flex-col items-center gap-4" onSubmit={submit}>
         <TokenAmountField
           value={input}
           onChange={setInput}
-          tokens={tokens}
+          tokens={stale ? [...tokens, { id: stale.address, symbol: stale.symbol, decimals: stale.decimals }] : tokens}
           selected={selected}
           onSelectToken={setSelected}
           available={available}
           decimals={chosen.decimals}
-          error={exceedsAvailable ? "Not enough balance." : undefined}
-          isLoadingBalance={funds.isPending}
+          error={
+            exceedsAvailable ? overCap("Not enough balance.", available, chosen.decimals, chosen.symbol) : undefined
+          }
+          isLoadingBalance={isPickOffered && !other && funds.isPending}
           isReadOnly={isPending}
+          maxIsExact={maxIsExact}
         />
 
         <Button
           type="submit"
           text={actionText}
           isLoading={isPending}
-          isDisabled={amount === null || exceedsAvailable || isPending || !source}
+          isDisabled={
+            amount === null || exceedsAvailable || isPending || !source || !isPickOffered || other?.unread === true
+          }
         />
       </Form>
-    </WalletDialog>
+    </Dialog>
   );
 }

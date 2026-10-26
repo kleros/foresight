@@ -1,5 +1,5 @@
-import type { SessionDetail } from "@/features/sessions/types";
-import type { TradeWalletMarket } from "@/features/trade-executor/types";
+import type { SessionDetail, SessionOption } from "@/features/sessions/types";
+import type { TradeWalletMarket, TradeWalletPosition } from "@/features/trade-executor/types";
 
 /**
  * The wallet mints and merges the parent market's whole outcome set, so it needs the
@@ -11,7 +11,9 @@ export function toWalletMarket(session: SessionDetail): TradeWalletMarket | null
   if (!collateralToken || collateralDecimals === null || !collateralSymbol || !invalidToken) return null;
 
   const options = session.options.flatMap((option) =>
-    option.underlyingToken ? [{ token: option.underlyingToken, name: option.name, color: option.color }] : [],
+    option.underlyingToken
+      ? [{ token: option.underlyingToken, name: option.name, color: option.color, positions: positionsOf(option) }]
+      : [],
   );
   if (options.length === 0 || options.length !== session.options.length) return null;
 
@@ -22,3 +24,8 @@ export function toWalletMarket(session: SessionDetail): TradeWalletMarket | null
     invalidToken,
   };
 }
+
+const positionsOf = (option: SessionOption): TradeWalletPosition[] => [
+  ...(option.upToken ? [{ side: "UP" as const, token: option.upToken }] : []),
+  ...(option.downToken ? [{ side: "DOWN" as const, token: option.downToken }] : []),
+];

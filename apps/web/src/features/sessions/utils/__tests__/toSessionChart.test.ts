@@ -22,6 +22,7 @@ function option(overrides: Partial<SessionOption> = {}): SessionOption {
     name: dune.director.displayName,
     color: dune.director.color,
     question: "Opening weekend gross if Gerwig directs",
+    invalidToken: addresses.childInvalidToken,
     unit: dune.unit,
     lowerBound: 0,
     upperBound: 500,

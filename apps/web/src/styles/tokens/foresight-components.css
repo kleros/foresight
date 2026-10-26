@@ -431,3 +431,30 @@
     animation-delay: 0ms;
   }
 }
+
+/* A disabled Kleros primary is a greyed blue with a solid label; the library's grey on light grey is 1.25:1.
+   Unlayered, so it outranks the library's utilities. */
+button[data-disabled]:has(> .button-text):not(.bg-transparent) {
+  background-color: var(--fs-accent-disabled);
+  cursor: not-allowed;
+}
+button[data-disabled]:has(> .button-text):not(.bg-transparent) > .button-text {
+  color: var(--fs-accent-disabled-text);
+}
+button[data-disabled].border:has(> .button-text) {
+  background-color: var(--klerosUIComponentsWhiteBackground);
+  border-color: color-mix(in srgb, var(--klerosUIComponentsPrimaryBlue) 80%, transparent);
+}
+button[data-disabled].border:has(> .button-text) > .button-text {
+  color: color-mix(in srgb, var(--klerosUIComponentsPrimaryBlue) 80%, transparent);
+}
+
+/* One keyboard focus ring, from the accent unless a scope sets --fs-focus-ring; a control flush with a
+   scroll area's edge sets --fs-focus-offset: -2px. A tabindex="-1" container is focused by script, not by Tab. */
+:root {
+  --fs-focus-ring: var(--fs-accent);
+}
+:where(a, button, summary, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid var(--fs-focus-ring);
+  outline-offset: var(--fs-focus-offset, 2px);
+}

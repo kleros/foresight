@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { branchColor, getReadableTextColor, isLegibleBranchColor, nextBranchColor } from "../branchColor";
+import {
+  branchColor,
+  contrastRatio,
+  getReadableTextColor,
+  isLegibleBranchColor,
+  nextBranchColor,
+} from "../branchColor";
 
 /** More branches than any wizard flow reaches, to cover the whole hue wheel. */
 const LONG_SESSION = 200;
@@ -34,9 +40,20 @@ describe("getReadableTextColor", () => {
     expect(getReadableTextColor("#000000")).toBe("#FFFFFF");
   });
 
-  it("puts white text on every generated branch colour", () => {
+  it("keeps white on a colour white reads on at AA", () => {
+    // white on #7e1bd4 is 7.0:1
+    expect(getReadableTextColor("#7e1bd4")).toBe("#FFFFFF");
+  });
+
+  it("puts black text on a middle colour white fails AA on", () => {
+    // white on #009aff is 2.97:1, black 7.1:1
+    expect(getReadableTextColor("#009aff")).toBe("#000000");
+  });
+
+  it("gives every generated branch colour text at 4.5:1 or more", () => {
     for (let index = 0; index < LONG_SESSION; index++) {
-      expect(getReadableTextColor(branchColor(index))).toBe("#FFFFFF");
+      const color = branchColor(index);
+      expect(contrastRatio(color, getReadableTextColor(color))).toBeGreaterThanOrEqual(4.5);
     }
   });
 });

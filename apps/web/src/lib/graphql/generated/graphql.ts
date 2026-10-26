@@ -45,6 +45,8 @@ export type ChildMarket = {
   downToken: Scalars['String']['output'];
   /** child market address */
   id: Scalars['String']['output'];
+  /** burnt alongside DOWN and UP when a set is merged back; the router takes the whole partition */
+  invalidToken: Scalars['String']['output'];
   keyword: Scalars['String']['output'];
   /** the scalar range, 1e18-scaled like Reality's answers */
   lowerBound: Scalars['numeric']['output'];
@@ -138,6 +140,7 @@ export type ChildMarket_Bool_Exp = {
   displayName?: InputMaybe<String_Comparison_Exp>;
   downToken?: InputMaybe<String_Comparison_Exp>;
   id?: InputMaybe<String_Comparison_Exp>;
+  invalidToken?: InputMaybe<String_Comparison_Exp>;
   keyword?: InputMaybe<String_Comparison_Exp>;
   lowerBound?: InputMaybe<Numeric_Comparison_Exp>;
   marketName?: InputMaybe<String_Comparison_Exp>;
@@ -163,6 +166,8 @@ export type ChildMarket_Max_Order_By = {
   downToken?: InputMaybe<Order_By>;
   /** child market address */
   id?: InputMaybe<Order_By>;
+  /** burnt alongside DOWN and UP when a set is merged back; the router takes the whole partition */
+  invalidToken?: InputMaybe<Order_By>;
   keyword?: InputMaybe<Order_By>;
   /** the scalar range, 1e18-scaled like Reality's answers */
   lowerBound?: InputMaybe<Order_By>;
@@ -186,6 +191,8 @@ export type ChildMarket_Min_Order_By = {
   downToken?: InputMaybe<Order_By>;
   /** child market address */
   id?: InputMaybe<Order_By>;
+  /** burnt alongside DOWN and UP when a set is merged back; the router takes the whole partition */
+  invalidToken?: InputMaybe<Order_By>;
   keyword?: InputMaybe<Order_By>;
   /** the scalar range, 1e18-scaled like Reality's answers */
   lowerBound?: InputMaybe<Order_By>;
@@ -208,6 +215,7 @@ export type ChildMarket_Order_By = {
   displayName?: InputMaybe<Order_By>;
   downToken?: InputMaybe<Order_By>;
   id?: InputMaybe<Order_By>;
+  invalidToken?: InputMaybe<Order_By>;
   keyword?: InputMaybe<Order_By>;
   lowerBound?: InputMaybe<Order_By>;
   marketName?: InputMaybe<Order_By>;
@@ -238,6 +246,8 @@ export enum ChildMarket_Select_Column {
   DownToken = 'downToken',
   /** column name */
   Id = 'id',
+  /** column name */
+  InvalidToken = 'invalidToken',
   /** column name */
   Keyword = 'keyword',
   /** column name */
@@ -306,6 +316,8 @@ export type ChildMarket_Stream_Cursor_Value_Input = {
   downToken?: InputMaybe<Scalars['String']['input']>;
   /** child market address */
   id?: InputMaybe<Scalars['String']['input']>;
+  /** burnt alongside DOWN and UP when a set is merged back; the router takes the whole partition */
+  invalidToken?: InputMaybe<Scalars['String']['input']>;
   keyword?: InputMaybe<Scalars['String']['input']>;
   /** the scalar range, 1e18-scaled like Reality's answers */
   lowerBound?: InputMaybe<Scalars['numeric']['input']>;
@@ -1481,7 +1493,7 @@ export type Session = {
   icon?: Maybe<Scalars['String']['output']>;
   /** sessionId */
   id: Scalars['String']['output'];
-  /** the parent's INVALID outcome token, which `outcomes` does not carry; merging the outcome set back to collateral needs it */
+  /** the parent's INVALID outcome token */
   invalidToken?: Maybe<Scalars['String']['output']>;
   itemName?: Maybe<Scalars['String']['output']>;
   itemNamePlural?: Maybe<Scalars['String']['output']>;
@@ -1497,6 +1509,8 @@ export type Session = {
   /** when trading stops */
   openingTime?: Maybe<Scalars['numeric']['output']>;
   outcomeCount: Scalars['numeric']['output'];
+  /** wrapped ERC-20 per named outcome */
+  outcomeTokens: Array<Scalars['String']['output']>;
   outcomes: Array<Scalars['String']['output']>;
   parentMarket: Scalars['String']['output'];
   sessionId: Scalars['numeric']['output'];
@@ -1592,6 +1606,7 @@ export type Session_Bool_Exp = {
   openedAt?: InputMaybe<Numeric_Comparison_Exp>;
   openingTime?: InputMaybe<Numeric_Comparison_Exp>;
   outcomeCount?: InputMaybe<Numeric_Comparison_Exp>;
+  outcomeTokens?: InputMaybe<String_Array_Comparison_Exp>;
   outcomes?: InputMaybe<String_Array_Comparison_Exp>;
   parentMarket?: InputMaybe<String_Comparison_Exp>;
   sessionId?: InputMaybe<Numeric_Comparison_Exp>;
@@ -1623,6 +1638,7 @@ export type Session_Order_By = {
   openedAt?: InputMaybe<Order_By>;
   openingTime?: InputMaybe<Order_By>;
   outcomeCount?: InputMaybe<Order_By>;
+  outcomeTokens?: InputMaybe<Order_By>;
   outcomes?: InputMaybe<Order_By>;
   parentMarket?: InputMaybe<Order_By>;
   sessionId?: InputMaybe<Order_By>;
@@ -1675,6 +1691,8 @@ export enum Session_Select_Column {
   /** column name */
   OutcomeCount = 'outcomeCount',
   /** column name */
+  OutcomeTokens = 'outcomeTokens',
+  /** column name */
   Outcomes = 'outcomes',
   /** column name */
   ParentMarket = 'parentMarket',
@@ -1709,7 +1727,7 @@ export type Session_Stream_Cursor_Value_Input = {
   icon?: InputMaybe<Scalars['String']['input']>;
   /** sessionId */
   id?: InputMaybe<Scalars['String']['input']>;
-  /** the parent's INVALID outcome token, which `outcomes` does not carry; merging the outcome set back to collateral needs it */
+  /** the parent's INVALID outcome token */
   invalidToken?: InputMaybe<Scalars['String']['input']>;
   itemName?: InputMaybe<Scalars['String']['input']>;
   itemNamePlural?: InputMaybe<Scalars['String']['input']>;
@@ -1725,6 +1743,8 @@ export type Session_Stream_Cursor_Value_Input = {
   /** when trading stops */
   openingTime?: InputMaybe<Scalars['numeric']['input']>;
   outcomeCount?: InputMaybe<Scalars['numeric']['input']>;
+  /** wrapped ERC-20 per named outcome */
+  outcomeTokens?: InputMaybe<Array<Scalars['String']['input']>>;
   outcomes?: InputMaybe<Array<Scalars['String']['input']>>;
   parentMarket?: InputMaybe<Scalars['String']['input']>;
   sessionId?: InputMaybe<Scalars['numeric']['input']>;
@@ -2126,12 +2146,17 @@ export type Swap_Variance_Order_By = {
   underlyingPerOutcomeAfter?: InputMaybe<Order_By>;
 };
 
-/** An outcome or underlying token of a child market. */
+/**
+ * An outcome or underlying token. An outcome token belongs to one child market; an underlying is
+ * a parent outcome token, priced against by every child conditional on that outcome, so its
+ * markets are the ChildMarket rows whose underlyingToken it is.
+ */
 export type Token = {
   __typename?: 'Token';
   /** An object relationship */
   childMarket?: Maybe<ChildMarket>;
-  childMarket_id: Scalars['String']['output'];
+  /** the child market an outcome token belongs to; null for an underlying */
+  childMarket_id?: Maybe<Scalars['String']['output']>;
   /** null where the on-chain read failed */
   decimals?: Maybe<Scalars['Int']['output']>;
   /** token address, lowercase */
@@ -2179,6 +2204,7 @@ export type Token_Bool_Exp = {
 
 /** order by max() on columns of table "Token" */
 export type Token_Max_Order_By = {
+  /** the child market an outcome token belongs to; null for an underlying */
   childMarket_id?: InputMaybe<Order_By>;
   /** null where the on-chain read failed */
   decimals?: InputMaybe<Order_By>;
@@ -2191,6 +2217,7 @@ export type Token_Max_Order_By = {
 
 /** order by min() on columns of table "Token" */
 export type Token_Min_Order_By = {
+  /** the child market an outcome token belongs to; null for an underlying */
   childMarket_id?: InputMaybe<Order_By>;
   /** null where the on-chain read failed */
   decimals?: InputMaybe<Order_By>;
@@ -2259,6 +2286,7 @@ export type Token_Stream_Cursor_Input = {
 
 /** Initial value of the column from where the streaming should start */
 export type Token_Stream_Cursor_Value_Input = {
+  /** the child market an outcome token belongs to; null for an underlying */
   childMarket_id?: InputMaybe<Scalars['String']['input']>;
   /** null where the on-chain read failed */
   decimals?: InputMaybe<Scalars['Int']['input']>;
@@ -3365,6 +3393,13 @@ export type Timestamptz_Comparison_Exp = {
   _nin?: InputMaybe<Array<Scalars['timestamptz']['input']>>;
 };
 
+export type SessionPoolsQueryVariables = Exact<{
+  sessionId: Scalars['String']['input'];
+}>;
+
+
+export type SessionPoolsQuery = { __typename?: 'query_root', Pool: Array<{ __typename?: 'Pool', id: string, childMarket_id: string, outcomeIndex: number, outcomeIsToken0: boolean }> };
+
 export type SessionIndexedQueryVariables = Exact<{
   id: Scalars['String']['input'];
 }>;
@@ -3386,7 +3421,7 @@ export type SessionDetailQueryVariables = Exact<{
 }>;
 
 
-export type SessionDetailQuery = { __typename?: 'query_root', Session: Array<{ __typename?: 'Session', id: string, parentMarket: string, deployer: string, marketName: string, title?: string | null, description?: string | null, icon?: string | null, heroImage?: string | null, itemName?: string | null, itemNamePlural?: string | null, metadataResolved: boolean, outcomeCount: string, deployedChildCount: string, invalidToken?: string | null, collateralToken?: string | null, collateralDecimals?: number | null, collateralSymbol?: string | null, openedAt: string, completedAt: string, openingTime?: string | null, blocks: unknown, children: Array<{ __typename?: 'ChildMarket', id: string, parentOutcomeIndex: string, parentOutcome: string, marketName: string, lowerBound: string, upperBound: string, displayName?: string | null, color?: string | null, blocks: unknown, upToken: string, downToken: string, underlyingToken: string, tokens: Array<{ __typename?: 'Token', outcomeIndex?: number | null, decimals?: number | null, symbol?: string | null }> }> }> };
+export type SessionDetailQuery = { __typename?: 'query_root', Session: Array<{ __typename?: 'Session', id: string, parentMarket: string, deployer: string, marketName: string, title?: string | null, description?: string | null, icon?: string | null, heroImage?: string | null, itemName?: string | null, itemNamePlural?: string | null, metadataResolved: boolean, outcomeCount: string, deployedChildCount: string, invalidToken?: string | null, collateralToken?: string | null, collateralDecimals?: number | null, collateralSymbol?: string | null, openedAt: string, completedAt: string, openingTime?: string | null, blocks: unknown, children: Array<{ __typename?: 'ChildMarket', id: string, parentOutcomeIndex: string, parentOutcome: string, marketName: string, lowerBound: string, upperBound: string, displayName?: string | null, color?: string | null, blocks: unknown, upToken: string, downToken: string, invalidToken: string, underlyingToken: string }> }> };
 
 export type SessionChartQueryVariables = Exact<{
   sessionId: Scalars['String']['input'];
@@ -3413,9 +3448,10 @@ export type SessionsQueryVariables = Exact<{
 export type SessionsQuery = { __typename?: 'query_root', SessionCounter: Array<{ __typename?: 'SessionCounter', count: string }>, Session: Array<{ __typename?: 'Session', id: string, parentMarket: string, deployer: string, marketName: string, title?: string | null, description?: string | null, icon?: string | null, heroImage?: string | null, itemNamePlural?: string | null, outcomeCount: string, keyword: string, openingTime?: string | null }> };
 
 
+export const SessionPoolsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionPools"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Pool"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"childMarket"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"session_id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}}}]}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"childMarket_id"}},{"kind":"Field","name":{"kind":"Name","value":"outcomeIndex"}},{"kind":"Field","name":{"kind":"Name","value":"outcomeIsToken0"}}]}}]}}]} as unknown as DocumentNode<SessionPoolsQuery, SessionPoolsQueryVariables>;
 export const SessionIndexedDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionIndexed"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Session"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"IntValue","value":"1"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"children"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]}}]} as unknown as DocumentNode<SessionIndexedQuery, SessionIndexedQueryVariables>;
 export const SessionByMetadataDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionByMetadata"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"deployer"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"metadataUri"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"since"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"numeric"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Session"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"deployer"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"deployer"}}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"metadataUri"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"metadataUri"}}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"openedAt"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_gte"},"value":{"kind":"Variable","name":{"kind":"Name","value":"since"}}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"openedAt"},"value":{"kind":"EnumValue","value":"desc"}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"IntValue","value":"1"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"sessionId"}},{"kind":"Field","name":{"kind":"Name","value":"parentMarket"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}},{"kind":"Field","name":{"kind":"Name","value":"children"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"parentOutcomeIndex"},"value":{"kind":"EnumValue","value":"asc"}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentOutcomeIndex"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"chain_metadata"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"latest_processed_block"}},{"kind":"Field","name":{"kind":"Name","value":"block_height"}}]}}]}}]} as unknown as DocumentNode<SessionByMetadataQuery, SessionByMetadataQueryVariables>;
-export const SessionDetailDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionDetail"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"parentMarket"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Session"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"parentMarket"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"parentMarket"}}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"IntValue","value":"1"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentMarket"}},{"kind":"Field","name":{"kind":"Name","value":"deployer"}},{"kind":"Field","name":{"kind":"Name","value":"marketName"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"icon"}},{"kind":"Field","name":{"kind":"Name","value":"heroImage"}},{"kind":"Field","name":{"kind":"Name","value":"itemName"}},{"kind":"Field","name":{"kind":"Name","value":"itemNamePlural"}},{"kind":"Field","name":{"kind":"Name","value":"metadataResolved"}},{"kind":"Field","name":{"kind":"Name","value":"outcomeCount"}},{"kind":"Field","name":{"kind":"Name","value":"deployedChildCount"}},{"kind":"Field","name":{"kind":"Name","value":"invalidToken"}},{"kind":"Field","name":{"kind":"Name","value":"collateralToken"}},{"kind":"Field","name":{"kind":"Name","value":"collateralDecimals"}},{"kind":"Field","name":{"kind":"Name","value":"collateralSymbol"}},{"kind":"Field","name":{"kind":"Name","value":"openedAt"}},{"kind":"Field","name":{"kind":"Name","value":"completedAt"}},{"kind":"Field","name":{"kind":"Name","value":"openingTime"}},{"kind":"Field","name":{"kind":"Name","value":"blocks"}},{"kind":"Field","name":{"kind":"Name","value":"children"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"parentOutcomeIndex"},"value":{"kind":"EnumValue","value":"asc"}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentOutcomeIndex"}},{"kind":"Field","name":{"kind":"Name","value":"parentOutcome"}},{"kind":"Field","name":{"kind":"Name","value":"marketName"}},{"kind":"Field","name":{"kind":"Name","value":"lowerBound"}},{"kind":"Field","name":{"kind":"Name","value":"upperBound"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"color"}},{"kind":"Field","name":{"kind":"Name","value":"blocks"}},{"kind":"Field","name":{"kind":"Name","value":"upToken"}},{"kind":"Field","name":{"kind":"Name","value":"downToken"}},{"kind":"Field","name":{"kind":"Name","value":"underlyingToken"}},{"kind":"Field","name":{"kind":"Name","value":"tokens"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"outcomeIndex"}},{"kind":"Field","name":{"kind":"Name","value":"decimals"}},{"kind":"Field","name":{"kind":"Name","value":"symbol"}}]}}]}}]}}]}}]} as unknown as DocumentNode<SessionDetailQuery, SessionDetailQueryVariables>;
+export const SessionDetailDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionDetail"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"parentMarket"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Session"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"parentMarket"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"parentMarket"}}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"IntValue","value":"1"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentMarket"}},{"kind":"Field","name":{"kind":"Name","value":"deployer"}},{"kind":"Field","name":{"kind":"Name","value":"marketName"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"icon"}},{"kind":"Field","name":{"kind":"Name","value":"heroImage"}},{"kind":"Field","name":{"kind":"Name","value":"itemName"}},{"kind":"Field","name":{"kind":"Name","value":"itemNamePlural"}},{"kind":"Field","name":{"kind":"Name","value":"metadataResolved"}},{"kind":"Field","name":{"kind":"Name","value":"outcomeCount"}},{"kind":"Field","name":{"kind":"Name","value":"deployedChildCount"}},{"kind":"Field","name":{"kind":"Name","value":"invalidToken"}},{"kind":"Field","name":{"kind":"Name","value":"collateralToken"}},{"kind":"Field","name":{"kind":"Name","value":"collateralDecimals"}},{"kind":"Field","name":{"kind":"Name","value":"collateralSymbol"}},{"kind":"Field","name":{"kind":"Name","value":"openedAt"}},{"kind":"Field","name":{"kind":"Name","value":"completedAt"}},{"kind":"Field","name":{"kind":"Name","value":"openingTime"}},{"kind":"Field","name":{"kind":"Name","value":"blocks"}},{"kind":"Field","name":{"kind":"Name","value":"children"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"parentOutcomeIndex"},"value":{"kind":"EnumValue","value":"asc"}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentOutcomeIndex"}},{"kind":"Field","name":{"kind":"Name","value":"parentOutcome"}},{"kind":"Field","name":{"kind":"Name","value":"marketName"}},{"kind":"Field","name":{"kind":"Name","value":"lowerBound"}},{"kind":"Field","name":{"kind":"Name","value":"upperBound"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"color"}},{"kind":"Field","name":{"kind":"Name","value":"blocks"}},{"kind":"Field","name":{"kind":"Name","value":"upToken"}},{"kind":"Field","name":{"kind":"Name","value":"downToken"}},{"kind":"Field","name":{"kind":"Name","value":"invalidToken"}},{"kind":"Field","name":{"kind":"Name","value":"underlyingToken"}}]}}]}}]}}]} as unknown as DocumentNode<SessionDetailQuery, SessionDetailQueryVariables>;
 export const SessionChartDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionChart"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"upOutcome"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Pool"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"childMarket"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"session_id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}}}]}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"outcomeIndex"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"upOutcome"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"childMarket_id"}},{"kind":"Field","name":{"kind":"Name","value":"underlyingPerOutcome"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"swaps"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ListValue","values":[{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"timestamp"},"value":{"kind":"EnumValue","value":"asc"}}]},{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"logIndex"},"value":{"kind":"EnumValue","value":"asc"}}]}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"underlyingPerOutcomeAfter"}},{"kind":"Field","name":{"kind":"Name","value":"timestamp"}}]}}]}}]}}]} as unknown as DocumentNode<SessionChartQuery, SessionChartQueryVariables>;
 export const SessionStatsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SessionStats"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"Prediction"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"childMarket"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"session_id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}}}]}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"distinct_on"},"value":{"kind":"EnumValue","value":"executor_id"}},{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"executor_id"},"value":{"kind":"EnumValue","value":"asc"}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"executor_id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"Pool"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"childMarket"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"session_id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"_eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}}}]}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"volumeUnderlying"}}]}}]}}]} as unknown as DocumentNode<SessionStatsQuery, SessionStatsQueryVariables>;
 export const SessionsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Sessions"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"limit"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"offset"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"where"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Session_bool_exp"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"SessionCounter"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"count"}}]}},{"kind":"Field","name":{"kind":"Name","value":"Session"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"Variable","name":{"kind":"Name","value":"where"}}},{"kind":"Argument","name":{"kind":"Name","value":"order_by"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"openedAt"},"value":{"kind":"EnumValue","value":"desc"}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"Variable","name":{"kind":"Name","value":"limit"}}},{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"Variable","name":{"kind":"Name","value":"offset"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"parentMarket"}},{"kind":"Field","name":{"kind":"Name","value":"deployer"}},{"kind":"Field","name":{"kind":"Name","value":"marketName"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"icon"}},{"kind":"Field","name":{"kind":"Name","value":"heroImage"}},{"kind":"Field","name":{"kind":"Name","value":"itemNamePlural"}},{"kind":"Field","name":{"kind":"Name","value":"outcomeCount"}},{"kind":"Field","name":{"kind":"Name","value":"keyword"}},{"kind":"Field","name":{"kind":"Name","value":"openingTime"}}]}}]}}]} as unknown as DocumentNode<SessionsQuery, SessionsQueryVariables>;

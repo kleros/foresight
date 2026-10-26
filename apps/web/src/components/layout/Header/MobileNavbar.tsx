@@ -1,9 +1,9 @@
 "use client";
-import { Modal } from "@kleros/ui-components-library";
 import clsx from "clsx";
 import { useToggle } from "react-use";
 
 import LightButton from "@/components/ui/LightButton";
+import { Modal } from "@/components/ui/Modal";
 
 import HamburgerIcon from "@/assets/menu-icons/hamburger.svg";
 
@@ -17,15 +17,17 @@ const MobileNavbar: React.FC<{ walletSlot?: React.ReactNode }> = ({ walletSlot }
     <>
       <div className="fs-page relative flex h-16 items-center justify-between md:hidden!">
         <Logo />
-        <LightButton text="" icon={<HamburgerIcon />} onPress={toggleIsMenuOpen} />
+        <LightButton text="" aria-label="Menu" icon={<HamburgerIcon />} onPress={toggleIsMenuOpen} />
       </div>
       <Modal
+        belowHeader
         className={clsx(
           "mt-16 h-auto max-h-[80vh] w-full overflow-y-auto px-6 py-8",
           "absolute top-0 left-0 flex flex-col gap-6",
           "shadow-default rounded-base border-klerosUIComponentsStroke bg-klerosUIComponentsWhiteBackground border",
           "animate-slide-in-top",
         )}
+        ariaLabel="Menu"
         isOpen={isMenuOpen}
         onOpenChange={toggleIsMenuOpen}
         isDismissable

@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:gnosis": "node --env-file=.env.gnosis \"$(yarn bin next)\" dev",
-    "dev:gnosis-fork": "node --env-file=.env.gnosis-fork \"$(yarn bin next)\" dev",
+    "dev:gnosis-fork": "node --env-file=.env.gnosis-fork.example --env-file-if-exists=.env.local --env-file-if-exists=.env.gnosis-fork \"$(yarn bin next)\" dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --max-warnings 0",
@@ -15,9 +15,11 @@
     "codegen": "graphql-codegen",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:fork": "FORK_RPC_URL=${FORK_RPC_URL:-http://127.0.0.1:8545} node --env-file=.env.gnosis-fork.example --env-file-if-exists=.env.local --env-file-if-exists=.env.gnosis-fork \"$(yarn bin vitest)\" run predict.fork"
   },
   "dependencies": {
+    "@fontsource/inter": "5.3.0",
     "@foresight/contracts": "workspace:*",
     "@foresight/session-metadata": "workspace:*",
     "@foresight/tx-orchestrator": "workspace:*",
@@ -28,6 +30,7 @@
     "@kleros/ui-components-library": "^3.8.0",
     "@reown/appkit": "^1.8.22",
     "@reown/appkit-adapter-wagmi": "^1.8.22",
+    "@seer-pm/lens": "1.5.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@tanstack/react-query": "^5.101.3",
     "@wagmi/core": "^3.6.3",

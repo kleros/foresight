@@ -12,6 +12,8 @@ import "hardhat-deploy-ethers";
 
 import "./tasks/simulateSession";
 import "./tasks/simulateLiquidity";
+import "./tasks/grantCredits";
+import "./tasks/exportCreationCode";
 import solidityConfig from "./solidity.config.json";
 
 dotenv.config({ path: path.join(__dirname, ".env.local") });
@@ -53,10 +55,20 @@ const config: HardhatUserConfig = {
     deployer: {
       default: 0,
     },
+    // the app's mock accounts; credits are seeded to them on a local chain
+    alice: {
+      default: 0,
+    },
+    bob: {
+      default: 1,
+    },
   },
   networks: {
     hardhat: {
       saveDeployments: true,
+      // estimate a send that names no gas, as a wallet does; the default fills the block gas limit, which
+      // the balance check counts in full
+      gas: "auto",
       ...(forkGnosis && {
         chainId: 100,
         forking: {

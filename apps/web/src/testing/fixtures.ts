@@ -15,6 +15,8 @@ export const addresses = {
   underlyingToken: "0xabababababababababababababababababababab" as Address,
   collateralToken: "0xadadadadadadadadadadadadadadadadadadadad" as Address,
   invalidToken: "0xa0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0" as Address,
+  /** A child market wraps its own INVALID, distinct from the decision's. */
+  childInvalidToken: "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1" as Address,
 } as const;
 
 export const dune = {

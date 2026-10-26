@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 
-import { Copiable, Modal } from "@kleros/ui-components-library";
+import { Copiable } from "@kleros/ui-components-library";
 import clsx from "clsx";
 import { useAccount } from "wagmi";
+
+import { Modal } from "@/components/ui/Modal";
 
 import { AddressOrName, ChainDisplay, IdenticonOrAvatar } from "./AccountDisplay";
 import { DisconnectWalletButton } from "./ConnectWallet";
@@ -17,6 +19,8 @@ interface IAccountDetails {
 const AccountDetails: React.FC<IAccountDetails> = ({ isOpen, toggleIsOpen }) => {
   return (
     <Modal
+      belowHeader
+      ariaLabel="Account"
       isDismissable
       className={clsx(
         "absolute top-0 right-2 left-auto h-auto w-75.5",

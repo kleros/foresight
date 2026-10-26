@@ -1,0 +1,417 @@
+import { useState } from "react";
+
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { parseUnits } from "viem";
+import { describe, expect, it, vi } from "vitest";
+
+import { OWNED_DECIMALS } from "@/utils/amount";
+
+import { GAS_RESERVE_WEI } from "../../oracle/tolerances";
+import { planFunding } from "../../utils/funding";
+import { PredictAmountSection, type PayTokenChoice } from "../PredictAmountSection";
+
+const WAD = 10n ** 18n;
+const STEP = 10n ** BigInt(18 - OWNED_DECIMALS);
+
+const sDai: PayTokenChoice = { id: "collateral", symbol: "sDAI", decimals: 18 };
+const xDai: PayTokenChoice = { id: "native", symbol: "xDAI", decimals: 18 };
+
+// 1.25 xDAI per sDAI
+const RATE = (5n * WAD) / 4n;
+
+/** A wallet holding only `held` of the pay token, with an empty trade wallet. */
+function renderSection(token: PayTokenChoice, held: bigint) {
+  const funding = planFunding({
+    amount: 0n,
+    ownWallet: held,
+    tradeWallet: 0n,
+    tokenPerCollateralWad: token.id === "native" ? RATE : undefined,
+  });
+  const onAmountChange = vi.fn();
+  render(
+    <PredictAmountSection
+      amount={undefined}
+      onAmountChange={onAmountChange}
+      tokens={[sDai, xDai]}
+      token={token}
+      onTokenChange={vi.fn()}
+      funding={funding}
+      collateral={{ symbol: "sDAI", decimals: 18 }}
+      isFirstPrediction
+      isReadOnly={false}
+    />,
+  );
+  return onAmountChange;
+}
+
+function lastAmount(onAmountChange: ReturnType<typeof vi.fn>): bigint {
+  const call = onAmountChange.mock.calls.at(-1);
+  expect(call).toBeDefined();
+  return call![0] as bigint;
+}
+
+const decimalsOf = (amount: bigint) => amount.toString().padStart(19, "0").slice(-18).replace(/0+$/, "").length;
+
+// balances with more decimals than the field shows
+const wallets = [
+  { name: "sDAI", token: sDai, held: 7_777_777_777_777_777_777n, spendable: 7_777_777_777_777_777_777n },
+  {
+    name: "xDAI",
+    token: xDai,
+    held: 1_234_567_890_123_456_789n,
+    spendable: 1_234_567_890_123_456_789n - GAS_RESERVE_WEI,
+  },
+  {
+    name: "xDAI, under one",
+    token: xDai,
+    held: 345_678_901_234_567_891n,
+    spendable: 345_678_901_234_567_891n - GAS_RESERVE_WEI,
+  },
+];
+
+describe.each(wallets)("Max and 50% with only $name in the wallet", ({ token, held, spendable }) => {
+  it(`Max fills at most ${OWNED_DECIMALS} decimals, rounded down from what can be spent`, async () => {
+    const onAmountChange = renderSection(token, held);
+
+    await userEvent.click(screen.getByRole("button", { name: "Max" }));
+
+    const amount = lastAmount(onAmountChange);
+    expect(decimalsOf(amount)).toBeLessThanOrEqual(OWNED_DECIMALS);
+    expect(amount).toBeLessThanOrEqual(spendable);
+    expect(spendable - amount).toBeLessThan(STEP);
+  });
+
+  it("Max fills exactly the balance it shows", async () => {
+    const onAmountChange = renderSection(token, held);
+    const shown = screen.getByTitle(/^Balance: /).textContent!.match(/^Balance: ([\d,.]+) /)![1]!;
+
+    await userEvent.click(screen.getByRole("button", { name: "Max" }));
+
+    expect(lastAmount(onAmountChange)).toBe(parseUnits(shown.replace(/,/g, ""), token.decimals));
+  });
+
+  it(`50% fills at most ${OWNED_DECIMALS} decimals, rounded down from half of what can be spent`, () => {
+    const onAmountChange = renderSection(token, held);
+
+    fireEvent.change(screen.getByRole("slider"), { target: { value: "50" } });
+
+    const amount = lastAmount(onAmountChange);
+    const half = spendable / 2n;
+    expect(decimalsOf(amount)).toBeLessThanOrEqual(OWNED_DECIMALS);
+    expect(amount).toBeLessThanOrEqual(half);
+    expect(half - amount).toBeLessThan(2n * STEP);
+  });
+});
+
+describe("Max on an xDAI wallet holding no more than the gas reserve", () => {
+  it("never offers any of the reserve", async () => {
+    const onAmountChange = renderSection(xDai, GAS_RESERVE_WEI / 2n);
+
+    const max = screen.getByRole("button", { name: "Max" });
+    if (!max.hasAttribute("disabled")) await userEvent.click(max);
+
+    for (const [amount] of onAmountChange.mock.calls) expect(amount ?? 0n).toBe(0n);
+  });
+});
+
+describe("Max and 50% on a wallet of 1.234567890123456789 xDAI", () => {
+  it("Max fills 1.2245 xDAI: 0.01 kept for gas, the rest cut to 4 decimals", async () => {
+    const onAmountChange = renderSection(xDai, 1_234_567_890_123_456_789n);
+
+    await userEvent.click(screen.getByRole("button", { name: "Max" }));
+
+    expect(lastAmount(onAmountChange)).toBe(1_224_500_000_000_000_000n);
+  });
+
+  it("50% fills 0.6122 xDAI, half of 1.2245 cut to 4 decimals", () => {
+    const onAmountChange = renderSection(xDai, 1_234_567_890_123_456_789n);
+
+    fireEvent.change(screen.getByRole("slider"), { target: { value: "50" } });
+
+    expect(lastAmount(onAmountChange)).toBe(612_200_000_000_000_000n);
+  });
+});
+
+describe("75% on a wallet of 1.234567890123456789 xDAI", () => {
+  it("fills 0.9183 xDAI, three quarters of what Max fills cut to 4 decimals", () => {
+    const onAmountChange = renderSection(xDai, 1_234_567_890_123_456_789n);
+
+    fireEvent.change(screen.getByRole("slider"), { target: { value: "75" } });
+
+    expect(lastAmount(onAmountChange)).toBe(918_300_000_000_000_000n);
+  });
+});
+
+describe("Max and 50% on a wallet of 1.234567 of a 6-decimal token", () => {
+  const usdc: PayTokenChoice = { id: "collateral", symbol: "USDC", decimals: 6 };
+
+  it("Max fills 1.2345, cut to 4 of the token's 6 decimals", async () => {
+    const onAmountChange = renderSection(usdc, 1_234_567n);
+
+    await userEvent.click(screen.getByRole("button", { name: "Max" }));
+
+    expect(lastAmount(onAmountChange)).toBe(1_234_500n);
+  });
+
+  it("50% fills 0.6172, half of 1.2345 cut to 4 decimals", () => {
+    const onAmountChange = renderSection(usdc, 1_234_567n);
+
+    fireEvent.change(screen.getByRole("slider"), { target: { value: "50" } });
+
+    expect(lastAmount(onAmountChange)).toBe(617_200n);
+  });
+});
+
+describe("the amount field", () => {
+  it("is named Amount for assistive tech", () => {
+    renderSection(sDai, 10n ** 18n);
+
+    expect(screen.getByLabelText("Amount")).toBeInTheDocument();
+  });
+});
+
+/** The section as the popup holds it: the amount it reports is the amount it is given back. */
+function Held({
+  initial,
+  held,
+  onAmountChange,
+}: {
+  initial?: bigint;
+  held: bigint;
+  onAmountChange: (amount: bigint | undefined) => void;
+}) {
+  const [amount, setAmount] = useState(initial);
+  return (
+    <PredictAmountSection
+      amount={amount}
+      onAmountChange={(next) => {
+        onAmountChange(next);
+        setAmount(next);
+      }}
+      tokens={[sDai]}
+      token={sDai}
+      onTokenChange={vi.fn()}
+      funding={planFunding({ amount: amount ?? 0n, ownWallet: held, tradeWallet: 0n })}
+      collateral={{ symbol: "sDAI", decimals: 18 }}
+      isFirstPrediction
+      isReadOnly={false}
+    />
+  );
+}
+
+describe("the amount's digits", () => {
+  // the library groups on its own blur, and on a 3s timer; a read within a second tells the two apart
+  const grouped = { timeout: 1000 };
+
+  it("group a value Max sets at once, as its balance beside it is grouped", async () => {
+    render(<Held held={123_456_789n * WAD} onAmountChange={vi.fn()} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Max" }));
+
+    await waitFor(() => expect(screen.getByLabelText("Amount")).toHaveValue("123,456,789"), grouped);
+  });
+
+  it("group a value set from outside the field, its fraction whole", async () => {
+    const props = {
+      onAmountChange: vi.fn(),
+      tokens: [sDai],
+      token: sDai,
+      onTokenChange: vi.fn(),
+      funding: planFunding({ amount: 0n, ownWallet: 10n * WAD, tradeWallet: 0n }),
+      collateral: { symbol: "sDAI", decimals: 18 },
+      isFirstPrediction: true,
+      isReadOnly: false,
+    };
+    const view = render(<PredictAmountSection amount={WAD} {...props} />);
+
+    view.rerender(<PredictAmountSection amount={1_234_567n * WAD + 1n} {...props} />);
+
+    await waitFor(() => expect(screen.getByLabelText("Amount")).toHaveValue("1,234,567.000000000000000001"), grouped);
+  });
+
+  it("stay ungrouped while typed, report exactly what was typed, and group once the field is left", async () => {
+    const onAmountChange = vi.fn();
+    render(<Held held={10_000_000n * WAD} onAmountChange={onAmountChange} />);
+    const input = screen.getByLabelText("Amount");
+
+    await userEvent.type(input, "1234567.25");
+    expect(input).toHaveValue("1234567.25");
+    expect(lastAmount(onAmountChange)).toBe(parseUnits("1234567.25", 18));
+
+    await userEvent.tab();
+    await waitFor(() => expect(input).toHaveValue("1,234,567.25"), grouped);
+
+    // back in the field, a digit typed at the start lands at the caret
+    await userEvent.type(input, "9", { initialSelectionStart: 0, initialSelectionEnd: 0 });
+    expect(input).toHaveValue("91234567.25");
+    expect(lastAmount(onAmountChange)).toBe(parseUnits("91234567.25", 18));
+  });
+
+  it("take a pasted amount as typed", async () => {
+    const onAmountChange = vi.fn();
+    render(<Held held={10_000n * WAD} onAmountChange={onAmountChange} />);
+    const input = screen.getByLabelText("Amount");
+
+    await userEvent.click(input);
+    await userEvent.paste("2500.5");
+    expect(lastAmount(onAmountChange)).toBe(parseUnits("2500.5", 18));
+
+    await userEvent.tab();
+    await waitFor(() => expect(input).toHaveValue("2,500.5"), grouped);
+  });
+});
+
+describe("the total line", () => {
+  it("names a part too small to show rather than saying 0", () => {
+    const funding = planFunding({ amount: 4n * WAD + 1n, ownWallet: 10n * WAD, tradeWallet: 4n * WAD });
+    render(
+      <PredictAmountSection
+        amount={4n * WAD + 1n}
+        onAmountChange={vi.fn()}
+        tokens={[sDai]}
+        token={sDai}
+        onTokenChange={vi.fn()}
+        funding={funding}
+        collateral={{ symbol: "sDAI", decimals: 18 }}
+        isFirstPrediction={false}
+        isReadOnly={false}
+      />,
+    );
+
+    expect(screen.getByText(/in your trade wallet/)).toHaveTextContent(
+      `4 sDAI = 4 in your trade wallet + less than ${1 / 10 ** OWNED_DECIMALS} from your wallet`,
+    );
+  });
+});
+
+describe("a locked amount", () => {
+  // jsdom computes no Tailwind, so the dimmed look is read from the class on each control's root
+  it.each([true, false])("dims the field and the slider only when locked (%s)", (isReadOnly) => {
+    render(
+      <PredictAmountSection
+        amount={WAD}
+        onAmountChange={vi.fn()}
+        tokens={[sDai]}
+        token={sDai}
+        onTokenChange={vi.fn()}
+        funding={planFunding({ amount: WAD, ownWallet: 10n * WAD, tradeWallet: 0n })}
+        collateral={{ symbol: "sDAI", decimals: 18 }}
+        isFirstPrediction
+        isReadOnly={isReadOnly}
+      />,
+    );
+
+    for (const id of ["amount-input", "amount-slider"])
+      expect(screen.getByTestId(id).classList.contains("opacity-50")).toBe(isReadOnly);
+  });
+});
+
+describe("an empty balance", () => {
+  it("dims the share slider, which has nothing to share out", () => {
+    renderSection(sDai, 0n);
+
+    expect(screen.getByTestId("amount-slider").classList.contains("opacity-50")).toBe(true);
+  });
+});
+
+describe("an amount over the balance", () => {
+  // jsdom computes no Tailwind, so the error variant is read from the border class the field gets for it
+  it.each([
+    [false, true],
+    [true, false],
+  ])("marks the field as an error only while it can be changed (locked: %s)", (isReadOnly, isError) => {
+    render(
+      <PredictAmountSection
+        amount={20n * WAD}
+        onAmountChange={vi.fn()}
+        tokens={[sDai]}
+        token={sDai}
+        onTokenChange={vi.fn()}
+        funding={planFunding({ amount: 20n * WAD, ownWallet: 10n * WAD, tradeWallet: 0n })}
+        collateral={{ symbol: "sDAI", decimals: 18 }}
+        isFirstPrediction
+        isReadOnly={isReadOnly}
+      />,
+    );
+
+    expect(screen.getByLabelText("Amount").classList.contains("border-klerosUIComponentsError")).toBe(isError);
+  });
+});
+
+function renderReturning(extra: { isReadOnly?: boolean; note?: string; isDisconnected?: boolean } = {}) {
+  render(
+    <PredictAmountSection
+      amount={undefined}
+      onAmountChange={vi.fn()}
+      tokens={[sDai]}
+      token={sDai}
+      onTokenChange={vi.fn()}
+      funding={extra.isDisconnected ? null : planFunding({ amount: 0n, ownWallet: 10n * WAD, tradeWallet: 6n * WAD })}
+      collateral={{ symbol: "sDAI", decimals: 18 }}
+      isFirstPrediction={false}
+      isReadOnly={extra.isReadOnly ?? false}
+      isDisconnected={extra.isDisconnected}
+      note={extra.note}
+    />,
+  );
+}
+
+describe("a returning predictor", () => {
+  it.each([false, true])("is told they can change it without adding funds (running: %s)", (isReadOnly) => {
+    renderReturning({ isReadOnly });
+
+    expect(screen.getByText("You've predicted before, so you can change it without adding funds.")).toBeInTheDocument();
+  });
+});
+
+describe("Max", () => {
+  it("is offered beside a balance, and held while a run is locked", () => {
+    renderReturning({ isReadOnly: true });
+
+    expect(screen.getByRole("button", { name: "Max" })).toBeDisabled();
+  });
+
+  it.each([
+    ["a stored run's note", { note: "What this run started with." }],
+    ["no wallet", { isDisconnected: true }],
+  ])("is not offered with %s in place of a balance", (_, extra) => {
+    renderReturning(extra);
+
+    // jsdom computes no Tailwind, so the hidden button is read from its class
+    const max = screen.getByRole("button", { name: "Max" });
+    expect(max).toBeDisabled();
+    expect(max.classList.contains("invisible")).toBe(true);
+  });
+});
+
+describe("the share slider", () => {
+  it.each([true, false])("says its share beside the track, locked or not (locked: %s)", (isReadOnly) => {
+    render(
+      <PredictAmountSection
+        amount={5n * WAD}
+        onAmountChange={vi.fn()}
+        tokens={[sDai]}
+        token={sDai}
+        onTokenChange={vi.fn()}
+        funding={planFunding({ amount: 5n * WAD, ownWallet: 10n * WAD, tradeWallet: 0n })}
+        collateral={{ symbol: "sDAI", decimals: 18 }}
+        isFirstPrediction
+        isReadOnly={isReadOnly}
+      />,
+    );
+
+    expect(screen.getByTestId("amount-share")).toHaveTextContent(/^50%$/);
+  });
+});
+
+describe("the share slider by keyboard", () => {
+  it("steps the amount up from the arrow keys", async () => {
+    const onAmountChange = renderSection(sDai, 10n * WAD);
+
+    screen.getByRole("slider").focus();
+    await userEvent.keyboard("{ArrowRight}");
+
+    expect(lastAmount(onAmountChange)).toBe(WAD / 10n);
+  });
+});

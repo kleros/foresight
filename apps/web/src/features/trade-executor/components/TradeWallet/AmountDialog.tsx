@@ -2,10 +2,11 @@ import { useState, type FormEvent } from "react";
 
 import { Button, Form } from "@kleros/ui-components-library";
 
-import { parseAmount } from "@/utils/amount";
+import { Dialog } from "@/components/ui/Dialog";
+
+import { OWNED_DECIMALS, ownedAmount, parseAmount } from "@/utils/amount";
 
 import { AmountField } from "./AmountField";
-import { WalletDialog } from "./WalletDialog";
 
 interface AmountDialogProps {
   isOpen: boolean;
@@ -16,7 +17,12 @@ interface AmountDialogProps {
   available: bigint | undefined;
   isLoadingBalance: boolean;
   decimals: number;
-  symbol: string;
+  /** Left out for an amount that is not of one token. */
+  symbol?: string;
+  /** What `available` counts, as in "Balance: 5 sDAI". */
+  availableLabel?: string;
+  /** Said when the amount is over `available`. */
+  overText?: string;
   onSubmit: (amount: bigint) => void;
   isPending: boolean;
 }
@@ -32,6 +38,8 @@ export function AmountDialog({
   isLoadingBalance,
   decimals,
   symbol,
+  availableLabel,
+  overText = "Not enough balance.",
   onSubmit,
   isPending,
 }: AmountDialogProps) {
@@ -48,7 +56,7 @@ export function AmountDialog({
   };
 
   return (
-    <WalletDialog isOpen={isOpen} onClose={onClose} title={title} hint={hint}>
+    <Dialog isOpen={isOpen} onClose={onClose} title={title} hint={hint}>
       <Form className="flex flex-col items-center gap-4" onSubmit={submit}>
         <AmountField
           value={input}
@@ -56,7 +64,8 @@ export function AmountDialog({
           available={available}
           decimals={decimals}
           symbol={symbol}
-          error={exceedsAvailable ? "Not enough balance." : undefined}
+          availableLabel={availableLabel}
+          error={exceedsAvailable ? overCap(overText, available, decimals, symbol) : undefined}
           isLoadingBalance={isLoadingBalance}
           isReadOnly={isPending}
         />
@@ -68,6 +77,12 @@ export function AmountDialog({
           isDisabled={amount === null || exceedsAvailable || isPending}
         />
       </Form>
-    </WalletDialog>
+    </Dialog>
   );
+}
+
+/** The cap is named only when it shows as more than 0. */
+export function overCap(overText: string, available: bigint, decimals: number, symbol?: string): string {
+  if (available < 10n ** BigInt(Math.max(decimals - OWNED_DECIMALS, 0))) return overText;
+  return `${overText} Max ${ownedAmount(available, decimals)}${symbol ? ` ${symbol}` : ""}.`;
 }

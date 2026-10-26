@@ -9,7 +9,7 @@ import {
 } from "viem";
 import { describe, expect, it } from "vitest";
 
-import { classifyTxError, describeTxError } from "../errors";
+import { classifyTxError, describeTxError, isUserRejection } from "../errors";
 
 /**
  * Misclassifying here is expensive in both directions: retrying a declined
@@ -119,5 +119,21 @@ describe("describeTxError", () => {
   it("falls back to the message, then to something printable", () => {
     expect(describeTxError(new Error("plain"))).toBe("plain");
     expect(describeTxError({ nope: true })).toBe("Unknown transaction error");
+  });
+});
+
+describe("isUserRejection", () => {
+  it("takes a decline only from its code or its error's name", () => {
+    expect(isUserRejection(new UserRejectedRequestError(new Error("denied")))).toBe(true);
+    expect(isUserRejection(Object.assign(new Error("no"), { code: 4001 }))).toBe(true);
+    expect(isUserRejection(makeError("user rejected action", "ACTION_REJECTED"))).toBe(true);
+  });
+
+  it("does not take an internal error's wording for a decline", () => {
+    const error = new Error("Transaction failed", {
+      cause: new InternalRpcError(new Error("Internal JSON-RPC error: request rejected")),
+    });
+
+    expect(isUserRejection(error)).toBe(false);
   });
 });

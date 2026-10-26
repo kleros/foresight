@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { encodeState } from "../codec";
+import { StorageWriteError } from "../errors";
 import { createFlowRunStore, createMemoryStorage, fromWebStorage, type FlowRunStorage } from "../storage";
 import type { PersistedFlowRunInput } from "../types";
 import { harness, step } from "./support/harness";
@@ -86,14 +87,73 @@ describe("createFlowRunStore", () => {
     expect(s.load("draft-1")).toBeNull();
   });
 
-  it("auto-trashes an expired run rather than offering to resume it", () => {
+  it.each(["load", "list"] as const)("%s cannot delete a newer journal after capturing an expired record", (read) => {
+    const writer = store();
+    writer.save(aRun());
+    const key = storage.keys()[0]!;
+    const expired = storage.getItem(key)!;
+    clock += 73 * HOUR;
+    writer.save(aRun({ steps: [{ stepId: "deposit", label: "Deposit", outcome: { status: "awaiting-signature" } }] }));
+    const journal = storage.getItem(key);
+    let firstRead = true;
+    const reader = createFlowRunStore({
+      now: () => clock,
+      storage: {
+        ...storage,
+        getItem: (requested) => {
+          if (requested === key && firstRead) {
+            firstRead = false;
+            return expired;
+          }
+          return storage.getItem(requested);
+        },
+      },
+    });
+
+    if (read === "load") expect(reader.load("draft-1")).toBeNull();
+    else expect(reader.list()).toEqual([]);
+    expect(storage.getItem(key)).toBe(journal);
+    expect(writer.load("draft-1")?.steps[0]?.outcome.status).toBe("awaiting-signature");
+  });
+
+  it("hides an expired run without deleting its record", () => {
     const s = store();
     s.save(aRun());
     clock += 72 * HOUR + 1;
 
     expect(s.load("draft-1")).toBeNull();
-    // Gone from storage too, an expired run must not reappear in the gate.
-    expect(storage.keys()).toHaveLength(0);
+    expect(storage.keys()).toHaveLength(1);
+  });
+
+  it("keeps an expired run while a step holds a hash with no receipt read, or a wallet prompt", () => {
+    const s = store();
+    const inFlight = (
+      stepId: string,
+      outcome: { status: "submitted"; hash: `0x${string}` } | { status: "awaiting-signature" },
+    ) => aRun({ flowId: stepId, steps: [{ stepId: "parent", label: "Deploy parent", outcome }] });
+    s.save(inFlight("sent", { status: "submitted", hash: "0xabc" }));
+    s.save(inFlight("prompted", { status: "awaiting-signature" }));
+    clock += 73 * HOUR;
+
+    expect(s.load("sent")).not.toBeNull();
+    expect(
+      s
+        .list()
+        .map((r) => r.flowId)
+        .sort(),
+    ).toEqual(["prompted", "sent"]);
+  });
+
+  it("keeps an expired run readable while the caller says it is unsettled", () => {
+    let unsettled = true;
+    const s = createFlowRunStore({ storage, ttlMs: 72 * HOUR, now: () => clock, unsettled: () => unsettled });
+    s.save(aRun());
+    clock += 73 * HOUR;
+
+    expect(s.load("draft-1")).not.toBeNull();
+    unsettled = false;
+    expect(s.load("draft-1")).toBeNull();
+    expect(storage.keys()).toHaveLength(1);
   });
 
   it("updates the expiry time for a run which is resumed", () => {
@@ -106,23 +166,23 @@ describe("createFlowRunStore", () => {
     expect(s.load("draft-1")).not.toBeNull();
   });
 
-  it("lists live runs and prunes expired ones", () => {
+  it("lists live runs without deleting expired records", () => {
     const s = store();
     s.save(aRun({ flowId: "old" }));
     clock += 73 * HOUR;
     s.save(aRun({ flowId: "fresh" }));
 
     expect(s.list().map((r) => r.flowId)).toEqual(["fresh"]);
-    expect(storage.keys()).toHaveLength(1);
+    expect(storage.keys()).toHaveLength(2);
   });
 
-  it("drops unreadable/broken storage items", () => {
+  it("ignores unreadable storage items without deleting them", () => {
     const s = store();
     s.save(aRun());
     storage.setItem(storage.keys()[0] as string, "{ not json");
 
     expect(s.load("draft-1")).toBeNull();
-    expect(storage.keys()).toHaveLength(0);
+    expect(storage.keys()).toHaveLength(1);
   });
 
   it("drops a run written by an older schema", () => {
@@ -144,8 +204,7 @@ describe("createFlowRunStore", () => {
     );
 
     expect(store().load("draft-1")).toBeNull();
-    // Removed too, or every later load hits the same wall.
-    expect(storage.getItem("foresight.tx-flow.draft-1")).toBeNull();
+    expect(storage.getItem("foresight.tx-flow.draft-1")).not.toBeNull();
   });
 
   it("drops a record whose steps are not step summaries", () => {
@@ -289,25 +348,54 @@ describe("fromWebStorage", () => {
 });
 
 /**
- * A store that cannot write is a lost safety net, not a lost flow. Stopping the
- * run would be worse than useless: resume reads the same storage, so a run
- * stopped here could never be picked up again.
+ * The write before the wallet opens is the only record that a prompt may be out there, so a run whose
+ * store refuses it opens no wallet. Every later write only costs the safety net, and the run carries on.
  */
 describe("a run whose storage refuses to write", () => {
-  it("finishes anyway, and says once what was given up", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    const full: FlowRunStorage = {
-      ...createMemoryStorage(),
-      setItem: () => {
-        throw new DOMException("quota", "QuotaExceededError");
+  const refusing = (refuses: (value: string) => boolean): FlowRunStorage => {
+    const memory = createMemoryStorage();
+    return {
+      ...memory,
+      setItem: (key, value) => {
+        if (refuses(value)) throw new DOMException("quota", "QuotaExceededError");
+        memory.setItem(key, value);
       },
     };
-    const h = harness({ storage: full });
+  };
+
+  it("opens no wallet when the write before the prompt fails, and pauses to be tried again", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const h = harness({ storage: refusing(() => true) });
+
+    await h.start([step("a"), step("b")]);
+
+    expect(h.gateway.signRequests).toEqual([]);
+    expect(h.orchestrator.getStatus()).toBe("paused");
+    const run = h.orchestrator.getRun();
+    expect(run?.status === "paused" && run.error).toMatchObject({ stepId: "a", cause: "rpc" });
+  });
+
+  it("finishes when only writes after the prompt fail, and says once what was given up", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const h = harness({ storage: refusing((value) => value.includes('"submitted"')) });
 
     await h.start([step("a"), step("b")]);
 
     expect(h.orchestrator.getStatus()).toBe("completed");
-    // Many failed writes, one message.
+    expect(h.gateway.signRequests).toHaveLength(2);
     expect(h.events.filter((event) => event.type === "inform")).toHaveLength(1);
+  });
+
+  it("throws from a snapshot update asked to be durable when it cannot be saved", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    let full = false;
+    const h = harness({ storage: refusing(() => full), scripts: [{ sign: "reject" }] });
+    await h.start([step("a")]);
+    full = true;
+
+    expect(() => h.orchestrator.updateSnapshot({ title: "Arrakis" }, { source: "adapter", durable: true })).toThrow(
+      StorageWriteError,
+    );
+    expect(() => h.orchestrator.updateSnapshot({ title: "Arrakis" }, { source: "adapter" })).not.toThrow();
   });
 });

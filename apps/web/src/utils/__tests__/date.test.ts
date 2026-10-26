@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatLocalInstant, formatUtcInstant, utcInstant } from "../date";
+import { fileStamp, formatLocalInstant, formatUtcInstant, utcInstant } from "../date";
 
 describe("utcInstant", () => {
   it("composes an ISO day and HH:mm into a UTC date", () => {
@@ -50,5 +50,11 @@ describe("formatLocalInstant", () => {
 
   it("returns 'not set' for null", () => {
     expect(formatLocalInstant(null)).toBe("not set");
+  });
+});
+
+describe("fileStamp", () => {
+  it("writes the local date and time with only filename-safe characters", () => {
+    expect(fileStamp(new Date(2026, 8, 5, 9, 7))).toBe("2026-09-05_09-07");
   });
 });

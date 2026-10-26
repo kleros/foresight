@@ -113,6 +113,7 @@ export const seedMarket = async (indexer: TestIndexer, market: SeededMarket) => 
     upperBound: market.upperBound,
     downToken: market.down,
     upToken: market.up,
+    invalidToken: `${market.id}-invalid`,
     underlyingToken: market.underlying,
     displayName: undefined,
     color: undefined,

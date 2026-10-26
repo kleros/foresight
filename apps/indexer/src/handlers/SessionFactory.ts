@@ -144,6 +144,7 @@ indexer.onEvent({ contract: "SessionFactory", event: "ChildMarketDeployed" }, as
     upperBound: market.upperBound,
     downToken: market.down,
     upToken: market.up,
+    invalidToken: market.invalid,
     underlyingToken: market.underlying,
     displayName: display?.displayName,
     color: display?.color,

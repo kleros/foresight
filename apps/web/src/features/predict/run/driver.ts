@@ -1,0 +1,1183 @@
+"use client";
+
+import {
+  classifyTxError,
+  createTxOrchestrator,
+  currentEntry,
+  DEFAULT_RUN_TTL_MS,
+  isUserRejection,
+  settledEntries,
+  StorageWriteError,
+  type FlowError,
+  type FlowRunStore,
+  type OrchestratorRun,
+  type PersistedFlowRun,
+  type StepOutcome,
+  type StepSummary,
+  type TxGateway,
+  type TxStep,
+} from "@foresight/tx-orchestrator";
+import type { Address, Hash } from "viem";
+
+import { chainText, OUT_OF_FUNDS, REVERTS } from "@/utils/txErrorText";
+
+import type { ExactInputQuoter, SwapQuoter } from "@/lib/swap/types";
+
+import type { CreditsRoute } from "@/config/contracts";
+
+import { hasUnanswered } from "./interrupted";
+import type { RunOwnership } from "./ownership";
+import type { PredictDriver, PredictFailureReason, PredictProgress, PredictStepRow } from "./types";
+import { assertListed, sessionTokensOf, UnlistedTxError } from "../flow/allowed";
+import {
+  assertRoutes,
+  AtEstimatesError,
+  createPredictHooks,
+  CreditsUnavailableError,
+  depositMintPatch,
+  heldMoves,
+  isTx,
+  NoRouteError,
+  planPredict,
+  PlansMovedError,
+  PredictConfigError,
+  QuoteFailedError,
+  sizeBatches,
+  STEP_ID,
+  tradeWalletShare,
+  TxPendingError,
+  type PredictDeps,
+} from "../flow/plan";
+import type {
+  HeldTo,
+  MovedPlans,
+  PlannedRequest,
+  PredictCtx,
+  PredictOption,
+  PredictReader,
+  PredictRequest,
+  PredictSlippage,
+  PredictSnapshot,
+  SentTx,
+  UnansweredSend,
+} from "../flow/types";
+
+/** An option's market and the tokens a run approves and swaps for it. */
+export type OptionTokens = Omit<PredictOption, "targetPriceWad">;
+
+/** The trade wallet, or the wallet's credits, hold less than the prediction was shown to draw on. */
+class TradeWalletShortError extends Error {}
+
+/** The chain's clock has passed the session's close. */
+class SessionClosedError extends Error {}
+
+/** How long, and how often, the chain is read for a send whose answer was lost before the run halts. */
+const UNANSWERED_SEND = { waitMs: 120_000, pollMs: 2_000 };
+
+/** A held send whose nonce stays unused this long, in ms, is signed again only once the visitor says so. */
+export const SEND_HOLD_MS = 600_000;
+
+/** A held send's nonce reads unused within its hold; nothing is signed for its step meanwhile. */
+class HeldSendError extends Error {}
+
+/** A held send's nonce stayed unused past its hold; the visitor is asked before its step is signed again. */
+class SignAgainError extends Error {}
+
+const TRANSPORT_FAILURES = new Set(["TimeoutError", "HttpRequestError"]);
+
+/**
+ * Raised by viem or wagmi before the request reaches the wallet. Provider codes (4100, 4900, 4901)
+ * are left out: a wallet can answer one after it broadcast, e.g. a WalletConnect session dropping.
+ */
+const NOT_SENT_NAMES: Record<string, "wrong-chain" | "wrong-wallet"> = {
+  ChainMismatchError: "wrong-chain",
+  ConnectorChainMismatchError: "wrong-chain",
+  AccountNotFoundError: "wrong-wallet",
+  ConnectorNotConnectedError: "wrong-wallet",
+  ConnectorNotFoundError: "wrong-wallet",
+  ConnectorAccountNotFoundError: "wrong-wallet",
+  ConnectorUnavailableReconnectingError: "wrong-wallet",
+};
+
+/** Why the wallet was never asked for the send, where the client says so; nothing went out. */
+function notSent(error: unknown): "wrong-chain" | "wrong-wallet" | undefined {
+  let link: unknown = error;
+  for (let depth = 0; typeof link === "object" && link !== null && depth < 10; depth++) {
+    const { name, cause } = link as { name?: unknown; cause?: unknown };
+    if (typeof name === "string" && Object.hasOwn(NOT_SENT_NAMES, name)) return NOT_SENT_NAMES[name];
+    link = cause;
+  }
+  return undefined;
+}
+
+/** The request timed out or never reached the node, so the transaction may have gone out. */
+function unanswered(error: unknown): boolean {
+  let link: unknown = error;
+  for (let depth = 0; typeof link === "object" && link !== null && depth < 10; depth++) {
+    const { name, code, cause } = link as { name?: unknown; code?: unknown; cause?: unknown };
+    // a JSON-RPC error code is the node's answer
+    if (typeof code === "number") return false;
+    if (typeof name === "string" && TRANSPORT_FAILURES.has(name)) return true;
+    link = cause;
+  }
+  return false;
+}
+
+/** `promise`, or an AbortError once `signal` aborts, whichever comes first. */
+function unlessAborted<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return promise;
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(new DOMException("The run was disposed.", "AbortError"));
+    if (signal.aborted) abort();
+    signal.addEventListener("abort", abort, { once: true });
+    promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+  });
+}
+
+const sleep = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => (clearTimeout(timer), resolve()), { once: true });
+  });
+
+const sameSlippage = (a: PredictSlippage, b: PredictSlippage) =>
+  a.tradeBps === b.tradeBps && a.creditsBps === b.creditsBps;
+
+const sameAddress = (a: unknown, b: Address | null) =>
+  b === null ? a === null : typeof a === "string" && a.toLowerCase() === b.toLowerCase();
+
+/** True when every contract a saved run would sign against is the one the app names now. */
+function sameContracts(saved: PredictCtx, current: PredictCtx): boolean {
+  const pairs: Array<[unknown, Address | null]> = [
+    [saved.executor, current.executor],
+    [saved.factory, current.factory],
+    [saved.router, current.router],
+    [saved.collateral, current.collateral],
+    [saved.parentMarket, current.parentMarket],
+    [saved.sDaiAdapter, current.sDaiAdapter],
+  ];
+  const savedCredits: Partial<CreditsRoute> | null | undefined = saved.credits;
+  if (current.credits === null) {
+    if (savedCredits !== null) return false;
+  } else {
+    if (!savedCredits) return false;
+    for (const key of ["token", "manager", "wxdai", "swaprRouter"] as const) {
+      pairs.push([savedCredits[key], current.credits[key]]);
+    }
+  }
+  return pairs.every(([a, b]) => sameAddress(a, b));
+}
+
+/** True when every saved option names the market and tokens the session has for it. */
+function sameOptions(saved: readonly PredictOption[], session: readonly OptionTokens[]): boolean {
+  return saved.every((option) => {
+    const known = session.find((each) => sameAddress(option.childMarket, each.childMarket));
+    return (
+      known !== undefined &&
+      (["underlying", "upToken", "downToken", "invalidToken"] as const).every((key) =>
+        sameAddress(option[key], known[key]),
+      )
+    );
+  });
+}
+
+/** Why a saved run cannot be continued from the connected wallet, if it cannot. */
+function foreign(saved: PredictCtx, current: PredictCtx): "wrong-wallet" | "wrong-chain" | "unknown" | undefined {
+  if (String(saved.owner).toLowerCase() !== current.owner.toLowerCase()) return "wrong-wallet";
+  if (saved.chainId !== current.chainId) return "wrong-chain";
+  if (!sameContracts(saved, current)) return "unknown";
+  return undefined;
+}
+
+/** The nonce read for `send` went to another of the owner's transactions; the wallet may have sent it under a later one. */
+const takenElsewhere = (found: SentTx, send: UnansweredSend) =>
+  found.status === "taken" || (found.status === "mined" && !isTx(found, send.tx));
+
+/** Later nonces searched for a send whose own was taken: the owner's sends made while its prompt was open. */
+const NONCE_LOOKAHEAD = 8;
+
+/** Drives one prediction: the orchestrator's run, flattened into what the popup reads. */
+export function createPredictRun(args: {
+  gateway: TxGateway;
+  reader: PredictReader;
+  quoter: SwapQuoter;
+  creditsQuoter?: ExactInputQuoter;
+  /** Keyed per chain, owner and session, so no two runs share a stored record. */
+  flowId: string;
+  ctx: () => PredictCtx;
+  snapshot: () => PredictRequest;
+  /** The visitor's slippage settings now; a held run's retry takes them up. */
+  slippage?: () => PredictSlippage | undefined;
+  store?: FlowRunStore;
+  onComplete?: () => void;
+  now?: () => number;
+  /** How long, and how often, the chain is read for a send whose answer was lost. */
+  unansweredSend?: { waitMs: number; pollMs: number };
+  /** Which tab drives the stored run; without it this driver takes it as its own. */
+  ownership?: RunOwnership;
+  /** When the session stops trading, in unix seconds; nothing is signed once the chain's clock reaches it. */
+  closesAt?: number | null;
+  /** Every option of the session, which a stored run's options must match before it is restored. */
+  sessionOptions?: () => readonly OptionTokens[];
+}): PredictDriver {
+  const listeners = new Set<() => void>();
+  /** Options left out by each batch not yet settled, by step id; a settled batch's are kept in the run's snapshot. */
+  const leavingOut = new Map<string, Address[]>();
+  let failure: PredictProgress["failure"];
+  let retryFailed: (() => void) | undefined;
+  let planned: PredictStepRow[] = [];
+  /** Set while the routes are checked, before the orchestrator has a run; reset and dispose clear it. */
+  let checking: object | undefined;
+  /** The reason a step failed with, which the orchestrator's own causes cannot carry. */
+  let buildFailure:
+    | "no-route"
+    | "at-estimates"
+    | "quote"
+    | "funds"
+    | "credits"
+    | "pending"
+    | "closed"
+    | "unlisted"
+    | "storage"
+    | "held"
+    | "resign"
+    | "wrong-chain"
+    | "wrong-wallet"
+    | undefined;
+  /** Set while a sent transaction's outcome is read from the chain; the run itself stays stopped meanwhile. */
+  let reconciling = false;
+  let discarding = false;
+  let disposeAfterDiscard = false;
+  /** Set once a stored run is restored, until it is thrown away: the popup shows its snapshot, not the form. */
+  let recovered = false;
+  /** A restored run, reconciled, waiting for the visitor to resume it. */
+  let reviewing = false;
+  let inconsistentSteps = false;
+  /** Set once this run sends a transaction that moves money; a failed step put back to pending does not clear it. */
+  let moneyMoved = false;
+  /** Set while the chain is read for a send that errored. */
+  let awaitingUnanswered = false;
+  /** The step whose held send the visitor said to sign again; its nonce is read once more before it is let go. */
+  let signAgainFor: string | undefined;
+  /** What the run is held to; none for a recovered run. */
+  let held: HeldTo | undefined;
+  /** Set when a batch found the pools giving another plan than `held`; cleared by `confirm` and `reset`. */
+  let moved: MovedPlans | undefined;
+  /** A batch's moved plans, from its build's error to the pause it causes. */
+  let movedByBuild: MovedPlans | undefined;
+  /** Slippage a retry took up, stored with the run only once `confirm` accepts the plans it gives. */
+  let pendingSlippage: PredictSlippage | undefined;
+  /** Set once this tab holds the stored run; until then nothing here restores, signs or trashes it. */
+  let owned = !args.ownership;
+  let release: (() => void) | undefined;
+  /** The claim waiting on the lock's answer; reset and dispose drop it, and its answer is let go unless re-asked. */
+  let claiming: { answer: Promise<(() => void) | null> } | undefined;
+  /** The lock's answer while it is unread; a claim made meanwhile waits on it rather than ask again and be refused. */
+  let asked: Promise<(() => void) | null> | undefined;
+  /** Wallet requests not yet answered; this tab keeps the run until each is, whatever happens to the popup. */
+  const walletRequests = new Set<Promise<unknown>>();
+  let cached: PredictProgress;
+
+  const deps: PredictDeps = {
+    reader: args.reader,
+    quoter: args.quoter,
+    creditsQuoter: args.creditsQuoter,
+    heldTo: () => held,
+    onLeftOut: (option, _reason, stepId) => {
+      const left = leavingOut.get(stepId) ?? [];
+      if (!left.includes(option.childMarket)) leavingOut.set(stepId, [...left, option.childMarket]);
+    },
+  };
+
+  const waiting = { ...UNANSWERED_SEND, ...args.unansweredSend };
+  const now = args.now ?? Date.now;
+
+  /**
+   * How `send` ended, under the nonce read for it or, where another send took that, a later one. `taken` means
+   * its own nonce went to another transaction and none after it holds this one.
+   */
+  const nonceSearch = new WeakMap<UnansweredSend, number>();
+  async function sentAs(send: UnansweredSend): Promise<SentTx> {
+    const start = nonceSearch.get(send) ?? send.nonce;
+    for (let nonce = start; nonce < start + NONCE_LOOKAHEAD; nonce++) {
+      const found = await args.reader.sentWithNonce({ ...send, nonce });
+      if (takenElsewhere(found, send)) {
+        nonceSearch.set(send, nonce + 1);
+        continue;
+      }
+      return found.status === "none" && nonce > send.nonce ? { status: "taken" } : found;
+    }
+    return { status: "pending" };
+  }
+
+  /** True while `send`'s hold runs; a record stored with no time compares false and is asked about. */
+  const holding = (send: UnansweredSend) => now() - send.heldAt < SEND_HOLD_MS;
+
+  /** How `send` ended as read until `waitMs` runs out or it mines; unread reads as pending. */
+  async function answerOf(send: UnansweredSend, waitMs: number, signal?: AbortSignal): Promise<SentTx> {
+    const deadline = Date.now() + waitMs;
+    let found: SentTx = { status: "pending" };
+    while (!signal?.aborted) {
+      found = (await sentAs(send).catch(() => undefined)) ?? found;
+      if (found.status === "mined" || Date.now() >= deadline) break;
+      await sleep(waiting.pollMs, signal);
+    }
+    return found;
+  }
+
+  /** Stores `send` with the run, so neither a reset nor a reload forgets it before its nonce is read. */
+  function holdUnanswered(stepId: string, send: UnansweredSend) {
+    orchestrator.updateSnapshot((prev) => ({ ...prev, unanswered: { ...prev.unanswered, [stepId]: send } }), {
+      source: "adapter",
+      durable: true,
+    });
+  }
+
+  /** `prev` without `stepId`'s entry in `key`, the map dropped once it is empty. */
+  function without(prev: PredictSnapshot, key: "unanswered" | "sent", stepId: string): PredictSnapshot {
+    const { [stepId]: _settled, ...rest } = prev[key] ?? {};
+    const { [key]: _all, ...others } = prev;
+    return Object.keys(rest).length > 0 ? { ...others, [key]: rest } : others;
+  }
+
+  function forgetUnanswered(stepId: string) {
+    if (!orchestrator.getRun()?.snapshot.unanswered?.[stepId]) return;
+    orchestrator.updateSnapshot((prev) => without(prev, "unanswered", stepId), { source: "adapter" });
+  }
+
+  function forgetSent(stepId: string) {
+    if (!orchestrator.getRun()?.snapshot.sent?.[stepId]) return;
+    orchestrator.updateSnapshot((prev) => without(prev, "sent", stepId), { source: "adapter" });
+  }
+
+  /** The wallet's send, carried on with the chain's own record of it when the send errors. */
+  const gateway: TxGateway = {
+    ...args.gateway,
+    async sendTransaction(tx, options) {
+      const run = orchestrator.getRun();
+      const stepId = run ? currentEntry(run.steps)?.stepId : undefined;
+      if (!run || stepId === undefined) throw new UnlistedTxError(["no run to check it against"]);
+      assertListed({
+        tx,
+        ctx: run.ctx,
+        sessionTokens: sessionTokensOf(run.ctx, run.snapshot.options),
+        from: args.ctx().owner,
+      });
+
+      const owner = run.ctx.owner;
+      const [nonce, fromBlock] = await Promise.all([args.reader.nextNonce(owner), args.reader.latestBlock()]);
+      // the build's reads and quotes can outlast the close; this is the last check before the wallet opens
+      await assertOpen();
+      const send: UnansweredSend = { owner, nonce, fromBlock, tx, heldAt: now() };
+      // held before the wallet opens: a prompt approved after the tab closed has no hash stored to find it by
+      try {
+        holdUnanswered(stepId, send);
+      } catch (error) {
+        if (error instanceof StorageWriteError) forgetUnanswered(stepId);
+        throw error;
+      }
+      // the wallet's prompt outlives the run, so it is sent with no signal to drop it
+      const request = args.gateway.sendTransaction(tx);
+      walletRequests.add(request);
+      void request.then(
+        () => walletRequests.delete(request),
+        () => walletRequests.delete(request),
+      );
+      try {
+        return await unlessAborted(request, options?.signal);
+      } catch (error) {
+        // a disposed run keeps the send for whichever driver recovers it
+        if (options?.signal?.aborted) throw error;
+        // a coded wallet error can still follow a broadcast; a decline, a wallet never asked, or a node naming why it refused, did not
+        const text = chainText(error);
+        if (isUserRejection(error) || notSent(error) || OUT_OF_FUNDS.test(text) || REVERTS.test(text)) {
+          forgetUnanswered(stepId);
+          throw error;
+        }
+        // a lost answer is read until the wait runs out; a coded one is read once
+        awaitingUnanswered = true;
+        notify();
+        const found = await answerOf(send, unanswered(error) ? waiting.waitMs : 0, options?.signal).finally(() => {
+          awaitingUnanswered = false;
+        });
+        if (found.status === "mined") return found.hash;
+        if (found.status === "taken") {
+          forgetUnanswered(stepId);
+          throw error;
+        }
+        if (stepId !== STEP_ID.createExecutor) moneyMoved = true;
+        throw found.status === "pending" ? new TxPendingError() : new HeldSendError();
+      }
+    },
+  };
+
+  /** Throws once the chain's clock has reached the session's close. */
+  async function assertOpen() {
+    if (args.closesAt == null) return;
+    if ((await args.reader.latestTimestamp()) >= BigInt(args.closesAt)) throw new SessionClosedError();
+  }
+
+  const sessionClosed = () =>
+    assertOpen().then(
+      () => false,
+      (error: unknown) => {
+        if (error instanceof SessionClosedError) return true;
+        throw error;
+      },
+    );
+
+  /** Each step first reads how its errored send ended, and is built only while the session is open. */
+  function guardedSteps(steps: TxStep<PredictSnapshot, PredictCtx>[]): TxStep<PredictSnapshot, PredictCtx>[] {
+    return steps.map((step) => ({
+      ...step,
+      build: async (ctx, snap) => {
+        await assertOpen();
+        return step.build(ctx, snap);
+      },
+      canSkip: async (ctx, snap) => {
+        const answered = signAgainFor === step.id;
+        if (answered) signAgainFor = undefined;
+        const send = snap.unanswered?.[step.id];
+        if (send) {
+          const found = await sentAs(send);
+          if (found.status === "pending") throw new TxPendingError();
+          // forgotten once the skip is stored, so no record holds the step pending without it
+          if (found.status === "mined" && found.success) return true;
+          if (found.status === "none") {
+            if (holding(send)) throw new HeldSendError();
+            if (!answered) throw new SignAgainError();
+          }
+          forgetUnanswered(step.id);
+        }
+        return step.canSkip ? step.canSkip(ctx, snap) : false;
+      },
+    }));
+  }
+
+  const hooks = createPredictHooks({
+    reader: args.reader,
+    takeLeftOut: (stepId) => {
+      const left = leavingOut.get(stepId) ?? [];
+      leavingOut.delete(stepId);
+      return left;
+    },
+  });
+
+  const orchestrator = createTxOrchestrator<PredictSnapshot, PredictCtx>({
+    adapterId: "predict-flow",
+    gateway,
+    hooks,
+    store: args.store,
+    now: args.now,
+    // A build reads the chain and the indexer before it signs anything. Those failures are
+    // transient and leave nothing behind, so they pause for a retry rather than ending the run.
+    // A missing route is fatal to the orchestrator and a failed quote pauses it.
+    classifyError: (error) => {
+      if (error instanceof StorageWriteError) {
+        buildFailure = "storage";
+        return "rpc";
+      }
+      if (error instanceof SessionClosedError) {
+        buildFailure = "closed";
+        return "unknown";
+      }
+      if (error instanceof UnlistedTxError) {
+        buildFailure = "unlisted";
+        return "unknown";
+      }
+      if (error instanceof HeldSendError || error instanceof SignAgainError) {
+        buildFailure = error instanceof HeldSendError ? "held" : "resign";
+        return "rpc";
+      }
+      if (error instanceof PlansMovedError) {
+        movedByBuild = error.moved;
+        return "rpc";
+      }
+      const refused = notSent(error);
+      if (refused) {
+        buildFailure = refused;
+        return "rpc";
+      }
+      buildFailure =
+        error instanceof NoRouteError
+          ? "no-route"
+          : error instanceof AtEstimatesError
+            ? "at-estimates"
+            : error instanceof QuoteFailedError
+              ? "quote"
+              : error instanceof CreditsUnavailableError
+                ? "credits"
+                : error instanceof TxPendingError
+                  ? "pending"
+                  : undefined;
+      if (buildFailure === "quote" || buildFailure === "credits" || buildFailure === "pending") return "rpc";
+      if (buildFailure === "no-route" || buildFailure === "at-estimates" || error instanceof PredictConfigError) {
+        return "unknown";
+      }
+      if (error instanceof Error && !("cause" in error)) return "rpc";
+      const cause = classifyTxError(error);
+      if (cause === "rejected") return cause;
+      const text = chainText(error);
+      // a top-up lets the same transaction through, so the run pauses rather than ends
+      if (OUT_OF_FUNDS.test(text)) {
+        buildFailure = "funds";
+        return "rpc";
+      }
+      return REVERTS.test(text) ? "reverted" : cause;
+    },
+  });
+
+  const notify = () => {
+    cached = buildProgress();
+    for (const listener of listeners) listener();
+  };
+
+  function report(reason: PredictFailureReason | undefined, retry?: () => void) {
+    failure = reason === undefined ? undefined : { reason, retryable: Boolean(retry) };
+    retryFailed = reason === undefined ? undefined : retry;
+    notify();
+  }
+
+  const errorOf = (run: OrchestratorRun<PredictSnapshot, PredictCtx> | null): FlowError | undefined =>
+    run?.status === "paused" || run?.status === "failed" ? run.error : undefined;
+
+  function pendingHashOf(run: OrchestratorRun<PredictSnapshot, PredictCtx> | null): Hash | undefined {
+    const outcome = run && run.status !== "running" ? currentEntry(run.steps)?.outcome : undefined;
+    return outcome?.status === "submitted" ? outcome.hash : undefined;
+  }
+
+  function stage(): PredictProgress["stage"] {
+    const run = orchestrator.getRun();
+    if (!run) return failure ? "halted" : checking ? "quoting" : moved ? "moved" : "idle";
+    if (moved && (run.status === "paused" || run.status === "failed")) return "moved";
+    if (checking && run.status !== "running") return "quoting";
+    if ((reconciling || awaitingUnanswered) && !failure) return "confirming";
+    if (reviewing && !failure) return "review";
+
+    switch (run.status) {
+      case "completed":
+        return "complete";
+      case "running": {
+        const status = currentEntry(run.steps)?.outcome.status;
+        if (status === "submitted") return "confirming";
+        // A predict step reads the pools and quotes every leg before the wallet opens.
+        return status === "awaiting-signature" ? "signing" : "quoting";
+      }
+      default:
+        return "halted";
+    }
+  }
+
+  function buildProgress(): PredictProgress {
+    const run = orchestrator.getRun();
+    const settled = new Map(settledEntries(run?.steps ?? []).map((step) => [step.stepId, step]));
+    const current = run?.status === "running" ? currentEntry(run.steps)?.stepId : undefined;
+    const failedStep = moved ? undefined : errorOf(run)?.stepId;
+
+    const steps = (run?.steps ?? []).map((entry): PredictStepRow => {
+      const done = settled.get(entry.stepId);
+      if (done) {
+        const hash = done.outcome.status === "confirmed" ? { hash: done.outcome.hash } : {};
+        return { id: entry.stepId, label: entry.label, state: "success", ...hash };
+      }
+      if (entry.stepId === current) return { id: entry.stepId, label: entry.label, state: "running" };
+      if (entry.stepId === failedStep) return { id: entry.stepId, label: entry.label, state: "error" };
+      return { id: entry.stepId, label: entry.label, state: "pending" };
+    });
+
+    const pendingHash = pendingHashOf(run);
+    const sending = run?.status === "running" ? currentEntry(run.steps)?.outcome : undefined;
+    const rows = steps.length > 0 ? steps : planned;
+    const batchRows = rows.filter((row) => row.id.startsWith("predict-"));
+
+    const settledLeftOut = run?.snapshot.leftOut ?? [];
+    const leftOut = [...settledLeftOut, ...[...leavingOut.values()].flat()];
+
+    return {
+      stage: stage(),
+      steps: rows,
+      leftOut: leftOut.filter((market, index) => leftOut.indexOf(market) === index),
+      batchesDone: batchRows.filter((row) => row.state === "success").length,
+      batches: batchRows.length,
+      failure,
+      ...(pendingHash ? { pendingHash } : {}),
+      ...(sending?.status === "submitted" ? { sentHash: sending.hash } : {}),
+      ...(moneyMoved ? { moneyMoved: true as const } : {}),
+      ...(hasUnanswered(run?.snapshot) ? { unanswered: true as const } : {}),
+      ...(recovered && run ? { recovered: run.snapshot } : {}),
+      ...(moved ? { moved } : {}),
+      ...(held ? { held } : {}),
+    };
+  }
+
+  cached = buildProgress();
+
+  orchestrator.subscribe(notify);
+  orchestrator.on("step:submitted", (event) => {
+    if (event.stepId !== STEP_ID.createExecutor) moneyMoved = true;
+    // the hash is stored by now; its send is kept for the nonce, which says whether a hash no node finds is dead
+    const send = orchestrator.getRun()?.snapshot.unanswered?.[event.stepId];
+    if (!send) return;
+    orchestrator.updateSnapshot(
+      (prev) => ({ ...without(prev, "unanswered", event.stepId), sent: { ...prev.sent, [event.stepId]: send } }),
+      { source: "adapter" },
+    );
+  });
+  orchestrator.on("step:confirmed", (event) => forgetSent(event.stepId));
+  orchestrator.on("step:skipped", (event) => {
+    forgetUnanswered(event.stepId);
+    forgetSent(event.stepId);
+  });
+  orchestrator.on("flow:paused", () => {
+    if (movedByBuild) {
+      moved = movedByBuild;
+      movedByBuild = undefined;
+      buildFailure = undefined;
+      notify();
+      return;
+    }
+    const run = orchestrator.getRun();
+    const reason = buildFailure ?? errorOf(run)?.cause;
+    buildFailure = undefined;
+    const stepId = errorOf(run)?.stepId;
+    if (reason === "resign" && stepId !== undefined) report(reason, () => signAgain(stepId));
+    else report(reason, pendingHashOf(run) ? reconcileRun : resumeRun);
+  });
+  orchestrator.on("flow:failed", (event) => {
+    const reason = buildFailure ?? event.error.cause;
+    buildFailure = undefined;
+    // A failed wait keeps its hash, so the chain is asked how it ended before anything is signed again.
+    if (pendingHashOf(orchestrator.getRun())) report(reason, reconcileRun);
+    // A reverted batch is rebuilt from fresh quotes; the steps before it stay settled.
+    else if (reason === "reverted" && event.error.stepId.startsWith("predict-")) report(reason, resumeRun);
+    else report(reason);
+  });
+  orchestrator.on("flow:completed", () => {
+    args.onComplete?.();
+    notify();
+  });
+
+  function detached(work: () => Promise<void>): () => void {
+    const action = () =>
+      void work().catch((error: unknown) => {
+        if (error instanceof NoRouteError) report("no-route");
+        else if (error instanceof AtEstimatesError) report("at-estimates");
+        else if (error instanceof QuoteFailedError) report("quote", action);
+        else if (error instanceof CreditsUnavailableError) report("credits");
+        else if (error instanceof TxPendingError) report("pending", action);
+        else if (error instanceof TradeWalletShortError) report("balance");
+        else if (error instanceof SessionClosedError) report("closed");
+        else if (error instanceof UnlistedTxError) report("unlisted");
+        else if (error instanceof PredictConfigError) report("unknown");
+        else report(classifyTxError(error), action);
+      });
+    return action;
+  }
+
+  function needsMintFinalization() {
+    const run = orchestrator.getRun();
+    return (
+      run?.snapshot.depositNative &&
+      !run.snapshot.mintFinalized &&
+      settledEntries(run.steps).some((entry) => entry.stepId === STEP_ID.deposit)
+    );
+  }
+
+  /** A settled native deposit must have its actual mint recorded before a batch is built. */
+  async function settleOwedMint() {
+    const run = orchestrator.getRun();
+    if (!run || !needsMintFinalization()) return;
+    const patch = await depositMintPatch(deps, run.ctx, run.snapshot);
+    orchestrator.updateSnapshot(patch, { source: "adapter", durable: true });
+  }
+
+  /** The visitor's answer to the ask: `stepId` is signed again if its held send's nonce still reads unused. */
+  function signAgain(stepId: string) {
+    signAgainFor = stepId;
+    resumeRun();
+  }
+
+  // resumed in the same tick where nothing is owed, so the run is running as soon as a retry returns
+  const resumeRun = detached(() =>
+    needsMintFinalization() ? settleOwedMint().then(() => orchestrator.resume()) : orchestrator.resume(),
+  );
+
+  /** Lets go of `stepId`'s hash, so the step is signed again on resume. */
+  function releaseHash(stepId: string) {
+    orchestrator.releaseInFlight();
+    forgetSent(stepId);
+  }
+
+  /**
+   * A hash the node does not know is kept while its nonce reads unused, for the hold its send started; a nonce taken
+   * by another transaction lets it go, and a nonce still unused past the hold, or never stored, asks first.
+   */
+  async function settleUnseen(stepId: string, hash: Hash, answered: boolean) {
+    const send = orchestrator.getRun()?.snapshot.sent?.[stepId];
+    const found = send ? await sentAs(send) : undefined;
+    if (found?.status === "mined" && found.hash.toLowerCase() !== hash.toLowerCase()) {
+      orchestrator.releaseInFlight(found.hash);
+      await orchestrator.resume();
+      return;
+    }
+    if (found?.status === "mined" || found?.status === "pending") {
+      report("pending", reconcileRun);
+      return;
+    }
+    if (found?.status === "taken") {
+      releaseHash(stepId);
+      report(errorOf(orchestrator.getRun())?.cause ?? "unknown", resumeRun);
+      return;
+    }
+    if (send && holding(send)) report("unseen", reconcileRun);
+    else if (answered) {
+      releaseHash(stepId);
+      await settleOwedMint();
+      await orchestrator.resume();
+    } else report("resign", () => signAgainAfter(stepId));
+  }
+
+  /**
+   * Settles a sent transaction whose receipt was never seen, then carries on only if it mined or may still. With
+   * `signAgainStep`, a hash for that step that is still unseen past its hold is let go and the step signed again.
+   */
+  async function reconcile(signAgainStep?: string) {
+    reconciling = true;
+    notify();
+    const found = await orchestrator.reconcileInFlight().finally(() => {
+      reconciling = false;
+    });
+    // a revert is reported through `flow:failed`
+    if (found.outcome === "reverted" || found.outcome === "cancelled") return;
+    if (found.outcome === "unseen" && found.stepId !== undefined && found.hash !== undefined) {
+      await settleUnseen(found.stepId, found.hash, found.stepId === signAgainStep);
+      return;
+    }
+    await settleOwedMint();
+    await orchestrator.resume();
+  }
+
+  const reconcileRun = detached(() => reconcile());
+
+  /** The visitor's answer to the ask for a hash no node finds: the chain is read again before the step is signed. */
+  const signAgainAfter = (stepId: string) => detached(() => reconcile(stepId))();
+
+  /** How the transaction `hash` ended, by its receipt; undefined while it has none. */
+  async function outcomeOf(hash: Hash): Promise<StepOutcome | undefined> {
+    const receipt = await args.gateway.getReceipt(hash).catch(() => null);
+    if (!receipt) return undefined;
+    return receipt.status === "success"
+      ? { status: "confirmed", hash: receipt.transactionHash, blockNumber: receipt.blockNumber }
+      : { status: "pending" };
+  }
+
+  /**
+   * `step`'s outcome once the chain says how its hash or held send ended, or that it is dead; undefined while it may
+   * still land. A hash stored with no send is dead once no node knows it and the record is past the store's expiry.
+   */
+  async function strandedOutcome(
+    step: StepSummary,
+    send: UnansweredSend | undefined,
+    persistedAt: number,
+  ): Promise<StepOutcome | undefined> {
+    const hash = step.outcome.status === "submitted" ? step.outcome.hash : undefined;
+    if (hash) {
+      const settled = await outcomeOf(hash);
+      if (settled) {
+        return step.outcome.status === "submitted" &&
+          step.outcome.replacementReason &&
+          step.outcome.replacementReason !== "repriced"
+          ? { status: "pending" }
+          : settled;
+      }
+      if (!send) {
+        const known = await args.gateway.isKnown(hash).catch(() => true);
+        return !known && now() - persistedAt > DEFAULT_RUN_TTL_MS ? { status: "pending" } : undefined;
+      }
+    }
+    if (!send) return step.outcome;
+    const found = await sentAs(send).catch(() => undefined);
+    if (found?.status === "mined") return outcomeOf(found.hash);
+    if (found?.status === "taken" || (found?.status === "none" && !holding(send))) {
+      return hash ? { status: "pending" } : step.outcome;
+    }
+    return undefined;
+  }
+
+  /** Stores what the chain says of each hash and held send of `stored`, a run that can never resume. */
+  async function settleStranded(stored: PersistedFlowRun<PredictSnapshot, PredictCtx>) {
+    let snapshot = stored.snapshot;
+    let changed = false;
+    const steps: StepSummary[] = [];
+    for (const step of stored.steps) {
+      const send = snapshot.sent?.[step.stepId] ?? snapshot.unanswered?.[step.stepId];
+      const outcome = await strandedOutcome(step, send, stored.persistedAt);
+      if (outcome === undefined || (outcome === step.outcome && !send)) {
+        steps.push(step);
+        continue;
+      }
+      changed = true;
+      steps.push({ ...step, outcome });
+      snapshot = without(without(snapshot, "sent", step.stepId), "unanswered", step.stepId);
+    }
+    if (!changed) return;
+    const { version: _version, persistedAt: _persistedAt, expiresAt: _expiresAt, ...run } = stored;
+    try {
+      args.store?.save({ ...run, steps, snapshot });
+    } catch {
+      // a refused write leaves the record as it was, so the run stays kept
+    }
+  }
+
+  /**
+   * A run left behind by a closed tab. Its transactions may be on chain, so it is restored and
+   * reconciled rather than thrown away, then held for review: nothing is signed until `resume`.
+   */
+  const recoverRun = detached(async () => {
+    const stored = args.store?.load<PredictSnapshot, PredictCtx>(args.flowId);
+    if (!stored) return;
+    // Only the owner who saved a run, on the chain it was saved on, may sign the rest of it.
+    const mismatch = foreign(stored.ctx, args.ctx());
+    if (mismatch) {
+      if (mismatch === "unknown") await settleStranded(stored);
+      report(mismatch);
+      return;
+    }
+    const session = args.sessionOptions?.();
+    if (session && !sameOptions(stored.snapshot.options, session)) {
+      await settleStranded(stored);
+      report("unknown");
+      return;
+    }
+
+    const steps = guardedSteps(planPredict(stored.snapshot, deps));
+    const savedIds = new Set(stored.steps.map((step) => step.stepId));
+    if (
+      stored.steps.length !== steps.length ||
+      savedIds.size !== steps.length ||
+      steps.some((step) => !savedIds.has(step.id))
+    ) {
+      inconsistentSteps = true;
+      report("unknown");
+      return;
+    }
+    const restored = orchestrator.restore({ flowId: args.flowId, steps });
+    if (!restored) return;
+
+    // a send held for a step stored as settled was left by a write cut short; the step's outcome stands
+    for (const entry of settledEntries(orchestrator.getRun()?.steps ?? [])) forgetUnanswered(entry.stepId);
+    planned = [];
+    held = undefined;
+    recovered = true;
+    reconciling = true;
+    notify();
+    const found = await orchestrator.reconcileInFlight().finally(() => {
+      reconciling = false;
+    });
+    if (found.outcome === "reverted" || found.outcome === "cancelled") return;
+    // Past the close nothing can be signed, so a held send is settled by running the steps, whose builds stop the run.
+    if (hasUnanswered(orchestrator.getRun()?.snapshot) && (await sessionClosed())) {
+      await orchestrator.resume();
+      return;
+    }
+    // A transfer signed as the tab died left no hash, and its own transaction shows only once it mines.
+    if (found.outcome === "unknown" && (found.stepId === STEP_ID.deposit || found.stepId === STEP_ID.addCredits)) {
+      const transfer = steps.find((step) => step.id === found.stepId);
+      const landed = await Promise.resolve(transfer?.canSkip?.(stored.ctx, stored.snapshot)).catch((error: unknown) => {
+        if (error instanceof TxPendingError) return false;
+        throw error;
+      });
+      if (!landed) {
+        report("deposit-unconfirmed", resumeRun);
+        return;
+      }
+    }
+    reviewing = true;
+    notify();
+  });
+
+  /** Pins the trade wallet's balance before anything is signed, and checks a route exists for the plan held to. */
+  async function prepare(ctx: PredictCtx, requested: PlannedRequest): Promise<PredictSnapshot> {
+    const [collateralAtStart, creditsAtStart, latest] = await Promise.all([
+      args.reader.collateralBalance(ctx.executor),
+      args.reader.creditsBalance(ctx.executor),
+      args.reader.latestBlock(),
+    ]);
+    // nothing this run sends can land in a block already mined, which may hold an earlier run's
+    const fromBlock = latest + 1n;
+    if (collateralAtStart < tradeWalletShare(requested)) throw new TradeWalletShortError();
+    // an sDAI deposit lands as sent, so the split may not ask for more than it and the trade wallet's share
+    if (!requested.depositNative && requested.collateralIn > requested.deposit + tradeWalletShare(requested)) {
+      throw new TradeWalletShortError();
+    }
+    if (creditsAtStart + requested.creditsFromEoa < requested.creditsToSpend) throw new TradeWalletShortError();
+    if (requested.creditsFromEoa > 0n && (await args.reader.creditsBalance(ctx.owner)) < requested.creditsFromEoa) {
+      throw new TradeWalletShortError();
+    }
+    const snapshot = { ...requested, collateralAtStart, creditsAtStart, fromBlock };
+    await assertRoutes(ctx, snapshot, deps);
+    return snapshot;
+  }
+
+  /** The request and batch size the last check planned with; confirming at moved signs what it showed. */
+  let plannedSize: number | undefined;
+  let plannedRequest: PredictRequest | undefined;
+
+  const startRun = (heldTo?: HeldTo, size?: number, request?: PredictRequest) =>
+    detached(async () => {
+      report(undefined);
+      held = heldTo;
+      moved = undefined;
+      pendingSlippage = undefined;
+      leavingOut.clear();
+      moneyMoved = false;
+
+      const requested: PredictRequest = request ?? args.snapshot();
+      plannedRequest = requested;
+      const ctx = args.ctx();
+      const check = {};
+      checking = check;
+      notify();
+
+      const checked = await (async () => {
+        await assertOpen();
+        const optionsPerBatch = size ?? (await sizeBatches(ctx, requested, deps, await args.reader.blockGasLimit()));
+        const sized = { ...requested, optionsPerBatch };
+        const steps = guardedSteps(planPredict(sized, deps));
+        // The rows exist before the run does, so the popup shows the list while the routes are checked.
+        if (checking === check) {
+          plannedSize = optionsPerBatch;
+          planned = steps.map((step) => ({ id: step.id, label: step.label, state: "pending" }));
+          notify();
+        }
+        return { steps, snapshot: await prepare(ctx, sized) };
+      })().then(
+        (ready) => ready,
+        (error: unknown) => ({ error }),
+      );
+      if (checking !== check) return;
+      checking = undefined;
+      if ("error" in checked) {
+        if (!(checked.error instanceof PlansMovedError)) throw checked.error;
+        moved = checked.error.moved;
+        notify();
+        return;
+      }
+      await orchestrator.start({ flowId: args.flowId, snapshot: checked.snapshot, ctx, steps: checked.steps });
+    })();
+
+  /**
+   * Re-plans every batch still to land at `settings` against what the run is held to. A changed plan stops the
+   * run at moved with `settings` pending; an unchanged one stores them and carries on with `carryOn`.
+   */
+  const replanAt = (settings: PredictSlippage, carryOn: (() => void) | undefined) =>
+    detached(async () => {
+      const run = orchestrator.getRun();
+      if (!run) return;
+      const settled = new Set(settledEntries(run.steps).map((step) => step.stepId));
+      const check = {};
+      checking = check;
+      notify();
+      const found = await heldMoves(run.ctx, { ...run.snapshot, slippage: settings }, deps, settled).catch(
+        (error: unknown) => {
+          if (checking === check) checking = undefined;
+          throw error;
+        },
+      );
+      if (checking !== check) return;
+      checking = undefined;
+      if (found) {
+        pendingSlippage = settings;
+        moved = { ...found, bySlippage: true };
+        notify();
+        return;
+      }
+      orchestrator.updateSnapshot({ slippage: settings }, { source: "requote" });
+      carryOn?.();
+    })();
+
+  /** Runs `then` once this tab holds the run, or reports it held by another tab. */
+  function claimed(then: () => void) {
+    if (owned) {
+      then();
+      return;
+    }
+    const answer = (asked ??= args.ownership!.claim(args.flowId));
+    const claim = { answer };
+    claiming = claim;
+    void answer.then((letGo) => {
+      if (asked === answer) asked = undefined;
+      if (claiming !== claim) {
+        // a later claim waiting on this same answer takes it
+        if (claiming?.answer !== answer) letGo?.();
+        return;
+      }
+      claiming = undefined;
+      if (!letGo) {
+        report(args.ownership!.heldHere(args.flowId) ? "prompt-open" : "elsewhere", () => claimed(then));
+        return;
+      }
+      release = letGo;
+      owned = true;
+      then();
+    });
+  }
+
+  const driver: PredictDriver = {
+    start(heldTo) {
+      if (checking || claiming || orchestrator.getStatus() !== "idle") return;
+      claimed(() => {
+        // A stored run has steps that may already be on chain, and `start` would refuse anyway.
+        if (args.store?.load(args.flowId)) recoverRun();
+        else startRun(heldTo);
+      });
+    },
+
+    confirm() {
+      if (!moved || checking) return;
+      const now = moved;
+      const replanned = new Set(now.markets.map((market) => market.toLowerCase()));
+      // quotes confirmed for an option whose pools moved since are for a plan no longer shown
+      const quotes = Object.fromEntries(
+        Object.entries({ ...held?.quotes, ...now.quotes }).filter(
+          ([key]) => now.quotes?.[key] !== undefined || !replanned.has(key),
+        ),
+      );
+      const next: HeldTo = {
+        ...(held?.plans || Object.keys(now.plans).length > 0 ? { plans: { ...held?.plans, ...now.plans } } : {}),
+        ...(Object.keys(quotes).length > 0 ? { quotes } : {}),
+        ...((now.credits ?? held?.credits) ? { credits: now.credits ?? held?.credits } : {}),
+      };
+      const status = orchestrator.getStatus();
+      if (status === "idle") {
+        startRun(next, plannedSize, plannedRequest);
+        return;
+      }
+      if (status !== "paused" && status !== "failed") return;
+      held = next;
+      moved = undefined;
+      if (pendingSlippage) orchestrator.updateSnapshot({ slippage: pendingSlippage }, { source: "requote" });
+      pendingSlippage = undefined;
+      report(undefined);
+      resumeRun();
+    },
+
+    recover() {
+      if (checking || claiming || orchestrator.getStatus() !== "idle" || !args.store?.load(args.flowId)) return;
+      claimed(recoverRun);
+    },
+
+    resume(heldTo) {
+      if (!reviewing) return;
+      held = heldTo;
+      reviewing = false;
+      // The chain is read again: a transaction pending at review may have mined or dropped since.
+      reconcileRun();
+    },
+
+    retry(heldTo) {
+      if (heldTo) held = heldTo;
+      const again = retryFailed;
+      // A batch that is rebuilt gives its options another go; a sent one's left-out options stand until its receipt is read.
+      const run = orchestrator.getRun();
+      const sent = run && pendingHashOf(run) ? currentEntry(run.steps)?.stepId : undefined;
+      for (const stepId of [...leavingOut.keys()]) if (stepId !== sent) leavingOut.delete(stepId);
+      const settings = recovered ? undefined : args.slippage?.();
+      report(undefined);
+      // a sent batch is settled first, at the slippage it was signed with
+      if (run && !sent && held && settings && !sameSlippage(run.snapshot.slippage, settings)) {
+        replanAt(settings, again);
+        return;
+      }
+      again?.();
+    },
+
+    reset() {
+      if (inconsistentSteps) return;
+      const stored = args.store?.load<PredictSnapshot, PredictCtx>(args.flowId);
+      if (hasUnanswered(orchestrator.getRun()?.snapshot ?? stored?.snapshot)) return;
+      // the transaction still confirming may be this run's own, which only its pinned block finds once it lands
+      if (failure?.reason === "pending" || failure?.reason === "deposit-unconfirmed") return;
+      // a hash with no receipt read is kept, as the card's Discard keeps it, even for a run that cannot resume
+      if ((orchestrator.getRun()?.steps ?? stored?.steps ?? []).some((step) => step.outcome.status === "submitted")) {
+        return;
+      }
+      checking = undefined;
+      claiming = undefined;
+      const mismatch = stored && foreign(stored.ctx, args.ctx());
+      // another wallet's or network's run is kept for it; one naming other contracts can never resume
+      if (owned && (!mismatch || mismatch === "unknown")) orchestrator.trash(args.flowId);
+      recovered = false;
+      reviewing = false;
+      moneyMoved = false;
+      buildFailure = undefined;
+      signAgainFor = undefined;
+      leavingOut.clear();
+      planned = [];
+      held = undefined;
+      moved = undefined;
+      movedByBuild = undefined;
+      pendingSlippage = undefined;
+      report(undefined);
+    },
+
+    discard() {
+      if (discarding) return;
+      const run = orchestrator.getRun();
+      const stepId = run && pendingHashOf(run) ? currentEntry(run.steps)?.stepId : undefined;
+      if (stepId === undefined || (failure?.reason !== "unseen" && failure?.reason !== "resign")) return;
+      discarding = true;
+      detached(async () => {
+        reconciling = true;
+        notify();
+        try {
+          const found = await orchestrator.reconcileInFlight();
+          if (found.outcome === "pending") {
+            report("pending", reconcileRun);
+            return;
+          }
+          if (found.outcome === "unseen") {
+            const send = orchestrator.getRun()?.snapshot.sent?.[stepId];
+            const answer = send ? await sentAs(send) : undefined;
+            if (answer?.status !== "taken") {
+              report(answer?.status === "pending" || answer?.status === "mined" ? "pending" : "unseen", reconcileRun);
+              return;
+            }
+            releaseHash(stepId);
+          }
+          report(undefined);
+          driver.reset();
+        } finally {
+          reconciling = false;
+          discarding = false;
+          notify();
+          if (disposeAfterDiscard) driver.dispose();
+        }
+      })();
+    },
+
+    dispose() {
+      // Discard needs the run and its ownership until reconciliation and deletion finish.
+      if (discarding) {
+        disposeAfterDiscard = true;
+        return;
+      }
+      checking = undefined;
+      claiming = undefined;
+      orchestrator.dispose();
+      const letGo = release;
+      release = undefined;
+      owned = !args.ownership;
+      if (walletRequests.size === 0) letGo?.();
+      else void Promise.allSettled([...walletRequests]).then(() => letGo?.());
+    },
+
+    getProgress: () => cached,
+
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => void listeners.delete(listener);
+    },
+  };
+  return driver;
+}

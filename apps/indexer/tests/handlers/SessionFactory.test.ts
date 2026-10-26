@@ -38,6 +38,8 @@ const PARENT_OUTCOME_0 = "0x00000000000000000000000000000000000000a1" as const;
 const PARENT_OUTCOME_1 = "0x00000000000000000000000000000000000000a2" as const;
 const CHILD_MARKET_0 = "0x0000000000000000000000000000000000000c00" as const;
 const CHILD_MARKET_1 = "0x0000000000000000000000000000000000000c01" as const;
+const CHILD_0_INVALID = "0x0000000000000000000000000000000000000d10" as const;
+const CHILD_1_INVALID = "0x0000000000000000000000000000000000000d11" as const;
 const DEPLOYER = "0x0000000000000000000000000000000000000de9" as const;
 
 const ESCAPING_METADATA_URI = "ipfs://../../admin/purge";
@@ -45,11 +47,11 @@ const ESCAPING_METADATA_URI = "ipfs://../../admin/purge";
 /** `wrappedOutcome` and `parentWrappedOutcome` both answer (token, data). */
 const wrapped = (token: string) => [token, "0x"];
 
-const childReads = (down: string, up: string, underlying: string) => ({
+const childReads = (down: string, up: string, underlying: string, invalid: string) => ({
   marketName: CHILD_MARKET_NAME,
   lowerBound: LOWER_BOUND,
   upperBound: UPPER_BOUND,
-  wrappedOutcome: [wrapped(down), wrapped(up)],
+  wrappedOutcome: [wrapped(down), wrapped(up), wrapped(invalid)],
   parentWrappedOutcome: wrapped(underlying),
 });
 
@@ -63,8 +65,8 @@ const marketReads: Record<string, Record<string, unknown>> = {
     wrappedOutcome: [wrapped(PARENT_OUTCOME_0), wrapped(PARENT_OUTCOME_1), wrapped(PARENT_INVALID)],
   },
   // a child on outcome i prices against the parent's wrapped outcome i
-  [CHILD_MARKET_0]: childReads(CHILD_0_DOWN, CHILD_0_UP, PARENT_OUTCOME_0),
-  [CHILD_MARKET_1]: childReads(CHILD_1_DOWN, CHILD_1_UP, PARENT_OUTCOME_1),
+  [CHILD_MARKET_0]: childReads(CHILD_0_DOWN, CHILD_0_UP, PARENT_OUTCOME_0, CHILD_0_INVALID),
+  [CHILD_MARKET_1]: childReads(CHILD_1_DOWN, CHILD_1_UP, PARENT_OUTCOME_1, CHILD_1_INVALID),
   [CHILD_0_DOWN]: { decimals: 18, symbol: "DUNE0-DOWN" },
   [CHILD_0_UP]: { decimals: 18, symbol: "DUNE0-UP" },
   [PARENT_OUTCOME_0]: { decimals: 18, symbol: "VILLENEUVE" },
@@ -224,6 +226,7 @@ describe("SessionFactory indexing", () => {
 
     const child = await indexer.ChildMarket.getOrThrow(CHILD_MARKET_0);
     t.expect(child.session_id).toBe("0");
+    t.expect(child.invalidToken).toBe(CHILD_0_INVALID);
     t.expect(child.parentOutcomeIndex).toBe(0n);
     t.expect(child.parentOutcome).toBe("Villeneuve");
     t.expect(child.marketName).toBe(CHILD_MARKET_NAME);

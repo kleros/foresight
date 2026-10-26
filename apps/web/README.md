@@ -23,6 +23,10 @@ fails the build with the offending names rather than at runtime.
 | `NEXT_PUBLIC_SUBGRAPH_URL`       | yes      | Indexer GraphQL endpoint. Locally `http://localhost:8080/v1/graphql`   |
 | `NEXT_PUBLIC_ENABLE_LOCAL_CHAIN` | no       | Unset follows `NODE_ENV`; `"false"` offers gnosis only                 |
 
+In production, point `NEXT_PUBLIC_GNOSIS_RPC` at an archive node. Finding a held send reads the
+owner's transaction count at past blocks; a pruned node refuses those reads, and the app falls back
+to reading blocks one by one from the send's block to the head, which is slow.
+
 ```bash
 cp .env.gnosis.example .env.gnosis
 yarn dev:gnosis

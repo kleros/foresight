@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {ISeerMarketFactory} from "../interfaces/ISeerMarketFactory.sol";
+import {MockERC20} from "./MockERC20.sol";
 import {MockSeerMarket} from "./MockSeerMarket.sol";
 
 /// @title MockSeerMarketFactory
@@ -14,6 +15,8 @@ contract MockSeerMarketFactory is ISeerMarketFactory {
     MultiCategorical,
     Scalar
   }
+
+  address public collateralToken = address(new MockERC20("Mock collateral", "COL"));
 
   /// @notice Number of markets created through this mock.
   uint256 public marketCount;
@@ -65,16 +68,6 @@ contract MockSeerMarketFactory is ISeerMarketFactory {
   /// @return market Address of the deployed `MockSeerMarket`.
   function _deployMarket(CreateMarketParams calldata params) private returns (address market) {
     marketCount++;
-    market = address(
-      new MockSeerMarket(
-        params.marketName,
-        params.outcomes,
-        params.lowerBound,
-        params.upperBound,
-        params.parentMarket,
-        params.parentOutcome,
-        params.openingTime
-      )
-    );
+    market = address(new MockSeerMarket(params, collateralToken));
   }
 }

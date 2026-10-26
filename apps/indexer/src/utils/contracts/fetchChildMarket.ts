@@ -14,6 +14,7 @@ export const fetchChildMarket = createEffect(
       upperBound: S.bigint,
       down: S.string,
       up: S.string,
+      invalid: S.string,
       underlying: S.string,
     }),
     cache: true,
@@ -24,13 +25,14 @@ export const fetchChildMarket = createEffect(
     const market = getSeerMarketContract(input.address);
 
     try {
-      // outcome 0 is DOWN and outcome 1 is UP
-      const [marketName, lowerBound, upperBound, down, up, underlying] = await Promise.all([
+      // outcome 0 is DOWN and 1 is UP; Seer wraps INVALID one past the named outcomes
+      const [marketName, lowerBound, upperBound, down, up, invalid, underlying] = await Promise.all([
         client.readContract({ ...market, functionName: "marketName" }),
         client.readContract({ ...market, functionName: "lowerBound" }),
         client.readContract({ ...market, functionName: "upperBound" }),
         client.readContract({ ...market, functionName: "wrappedOutcome", args: [0n] }),
         client.readContract({ ...market, functionName: "wrappedOutcome", args: [1n] }),
+        client.readContract({ ...market, functionName: "wrappedOutcome", args: [2n] }),
         client.readContract({ ...market, functionName: "parentWrappedOutcome" }),
       ]);
 
@@ -40,6 +42,7 @@ export const fetchChildMarket = createEffect(
         upperBound,
         down: down[0].toLowerCase(),
         up: up[0].toLowerCase(),
+        invalid: invalid[0].toLowerCase(),
         underlying: underlying[0].toLowerCase(),
       };
     } catch (error) {
@@ -51,6 +54,7 @@ export const fetchChildMarket = createEffect(
         upperBound: 0n,
         down: UNAVAILABLE,
         up: UNAVAILABLE,
+        invalid: UNAVAILABLE,
         underlying: UNAVAILABLE,
       };
     }
