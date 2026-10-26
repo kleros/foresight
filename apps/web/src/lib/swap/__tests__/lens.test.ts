@@ -426,3 +426,55 @@ describe("createLensExactInputQuoter against a node that answers its own deadlin
     expect(params(result.data).deadline).toBe(1_800n);
   });
 });
+
+describe("exact-input quote request", () => {
+  beforeEach(() => {
+    quote.mockReset();
+    quote.mockResolvedValue({ ...lensResult, data: singleCall(495n) });
+  });
+  it("binds the credits quote to the requested tokens, amount, receiver and chain deadline", async () => {
+    await createLensExactInputQuoter({} as PublicClient, 100, () => Promise.resolve(5000n)).quote({
+      tokenIn: TOKEN_IN,
+      tokenOut: TOKEN_OUT,
+      amount: 1000n,
+      recipient: EXECUTOR,
+    });
+    expect(quote).toHaveBeenCalledExactlyOnceWith({
+      tokenIn: TOKEN_IN,
+      tokenOut: TOKEN_OUT,
+      amount: 1000n,
+      recipient: EXECUTOR,
+      slippageBps: 0,
+      deadline: 6800n,
+    });
+  });
+  it("refuses a multihop exact-input route before decoding a single-pool call", async () => {
+    quote.mockResolvedValue({
+      ...lensResult,
+      data: encodeFunctionData({
+        abi: ROUTER_ABI,
+        functionName: "exactInput",
+        args: [{ path: "0x", recipient: EXECUTOR, deadline: 1800n, amountIn: 1000n, amountOutMinimum: 1n }],
+      }),
+    });
+    await expect(
+      createLensExactInputQuoter({} as PublicClient, 100, () => Promise.resolve(0n)).quote({
+        tokenIn: TOKEN_IN,
+        tokenOut: TOKEN_OUT,
+        amount: 1000n,
+        recipient: EXECUTOR,
+      }),
+    ).rejects.toBeInstanceOf(NoSwapRouteError);
+  });
+  it("requests the latest block explicitly for its deadline", async () => {
+    const getBlock = vi.fn().mockResolvedValue({ timestamp: 5000n });
+    await createLensQuoter({ getBlock } as unknown as PublicClient, 100).quote(request());
+    expect(getBlock).toHaveBeenCalledExactlyOnceWith({ blockTag: "latest" });
+  });
+  it("refuses an unsupported router before requesting a quote", async () => {
+    await expect(
+      createLensQuoter({} as PublicClient, 1, () => Promise.resolve(0n)).quote(request()),
+    ).rejects.toBeInstanceOf(QuoteRefusedError);
+    expect(quote).not.toHaveBeenCalled();
+  });
+});

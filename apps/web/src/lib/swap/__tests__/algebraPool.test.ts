@@ -1,4 +1,4 @@
-import type { Address, PublicClient } from "viem";
+import { encodeFunctionData, type Abi, type Address, type PublicClient } from "viem";
 import { describe, expect, it } from "vitest";
 
 import { readPoolLiquidity } from "../algebraPool";
@@ -8,18 +8,22 @@ const POOL = "0x63AeC253E5dBdcfc634f5e9Dd18daAEB6632C7C7" as Address;
 
 interface Read {
   functionName: string;
+  abi: Abi;
+  address: Address;
   args?: readonly unknown[];
 }
 
-/**
- * A pool answering only the four reads `readPoolLiquidity` makes. Cast to PublicClient because
- * viem builds a client only around a transport; the reads it answers keep the pool ABI's shapes.
- */
-function fakePool(state: { tick: number; rows: Record<number, bigint>; deltas: Record<number, bigint> }) {
+// viem constructs PublicClient around a transport; this fake answers ABI-validated pool reads.
+function fakePool(state: {
+  tick: number;
+  rows: Record<number, bigint>;
+  deltas: Record<number, bigint>;
+  price?: bigint;
+}) {
   const answer = ({ functionName, args = [] }: Read): unknown => {
     switch (functionName) {
       case "globalState":
-        return [sqrtPriceAtTick(state.tick), state.tick, 3000, 0, 0, 0, true];
+        return [state.price ?? sqrtPriceAtTick(state.tick), state.tick, 3000, 0, 0, 0, true];
       case "liquidity":
         return 10n ** 18n;
       case "tickTable":
@@ -34,7 +38,18 @@ function fakePool(state: { tick: number; rows: Record<number, bigint>; deltas: R
   };
   return {
     readContract: async (read: Read) => answer(read),
-    multicall: async ({ contracts }: { contracts: Read[] }) => contracts.map(answer),
+    multicall: async ({ contracts, allowFailure = true }: { contracts: Read[]; allowFailure?: boolean }) =>
+      contracts.map((read) => {
+        expect(read.address).toBe(POOL);
+        try {
+          encodeFunctionData({ abi: read.abi, functionName: read.functionName, args: read.args });
+          const result = answer(read);
+          return allowFailure ? { status: "success", result } : result;
+        } catch (error) {
+          if (!allowFailure) throw error;
+          return { status: "failure", error };
+        }
+      }),
   } as unknown as PublicClient;
 }
 
@@ -56,5 +71,38 @@ describe("readPoolLiquidity on a Swapr (Algebra v1.9) pool with tick spacing 60"
     const pool = await readPoolLiquidity(client, { address: POOL, outcomeIsToken0: true }, sqrtPriceAtTick(-120));
 
     expect(pool.ticks).toEqual([{ tick: -60, liquidityDelta: 5n }]);
+  });
+});
+
+describe("pool tick scan boundaries", () => {
+  it.each([
+    [100, 600],
+    [600, 100],
+  ])("keeps all crossing rows from tick %i toward %i", async (tick, toward) => {
+    const client = fakePool({
+      tick,
+      rows: { 0: 1n << 120n, 1: 1n << 44n, 2: 1n << 88n },
+      deltas: { 120: 2n, 300: -3n, 600: 5n },
+    });
+    const pool = await readPoolLiquidity(client, { address: POOL, outcomeIsToken0: true }, sqrtPriceAtTick(toward));
+    expect(pool.ticks).toEqual([
+      { tick: 120, liquidityDelta: 2n },
+      { tick: 300, liquidityDelta: -3n },
+      { tick: 600, liquidityDelta: 5n },
+    ]);
+  });
+  it.each([undefined, 0n])("does not scan without a target or initialized price: %s", async (price) => {
+    const client = fakePool({ tick: 0, rows: { 0: 1n }, deltas: { 0: 7n }, price });
+    const read = client.multicall;
+    client.multicall = () => {
+      throw new Error("unexpected tick scan");
+    };
+    const pool = await readPoolLiquidity(
+      client,
+      { address: POOL, outcomeIsToken0: true },
+      price === 0n ? 2n ** 96n : undefined,
+    );
+    expect(pool.ticks).toEqual([]);
+    client.multicall = read;
   });
 });
