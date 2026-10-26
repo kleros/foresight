@@ -412,3 +412,59 @@ describe("createPredictRun when the run cannot succeed as configured", () => {
     expect(gateway.signRequests).toEqual([]);
   });
 });
+
+describe("reviewed retries at the first and repeated revert", () => {
+  it("waits for another retry when the retried batch reverts too", async () => {
+    const first = option(1);
+    const second = option(2);
+    const { driver, gateway } = setup({
+      options: [first, second],
+      script: ["success", "success", "revert", "revert", "success"],
+    });
+    driver.start();
+    await haltedOrComplete(driver);
+    driver.retry();
+    await vi.waitFor(() => expect(gateway.signRequests).toHaveLength(4));
+    await haltedOrComplete(driver);
+
+    expect(driver.getProgress().failure).toEqual({ reason: "reverted", retryable: true });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(gateway.signRequests).toHaveLength(4);
+    driver.retry();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("complete"));
+    expect(gateway.signRequests.filter(isDeposit)).toHaveLength(1);
+    expect(batchTxs(gateway.signRequests, first)).toHaveLength(1);
+    expect(batchTxs(gateway.signRequests, second)).toHaveLength(3);
+  });
+
+  it("retries the first batch without repeating its deposit", async () => {
+    const first = option(1);
+    const second = option(2);
+    const { driver, gateway } = setup({
+      options: [first, second],
+      script: ["success", "revert", "success", "success"],
+    });
+    driver.start();
+    await haltedOrComplete(driver);
+    expect(driver.getProgress().failure).toEqual({ reason: "reverted", retryable: true });
+    expect(driver.getProgress().batchesDone).toBe(0);
+    driver.retry();
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("complete"));
+
+    expect(gateway.signRequests.filter(isDeposit)).toHaveLength(1);
+    expect(batchTxs(gateway.signRequests, first)).toHaveLength(2);
+    expect(batchTxs(gateway.signRequests, second)).toHaveLength(1);
+  });
+
+  it("does not retry a confirmed reverted deposit", async () => {
+    const { driver, gateway } = setup({ options: [option(1)], script: ["revert", "success"] });
+    driver.start();
+    await haltedOrComplete(driver);
+    expect(driver.getProgress().failure).toEqual({ reason: "reverted", retryable: false });
+    driver.retry();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(gateway.signRequests).toHaveLength(1);
+    expect(gateway.signRequests.filter(isDeposit)).toHaveLength(1);
+  });
+});
