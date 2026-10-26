@@ -68,6 +68,6 @@
     "@internationalized/date": "3.12.3"
   },
   "volta": {
-    "node": "22.23.2"
+    "node": "22.23.4"
   }
 }
