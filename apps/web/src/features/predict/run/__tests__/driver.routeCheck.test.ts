@@ -78,6 +78,29 @@ const settled = (driver: PredictDriver) =>
   vi.waitFor(() => expect(["halted", "complete"]).toContain(driver.getProgress().stage));
 
 describe("createPredictRun route check", () => {
+  it("does not report an option the check could not route if the build then routes it", async () => {
+    const first = option(1);
+    const second = option(2);
+    let deposited = false;
+    const quoter = fakeQuoter({
+      refuse: (request) => !deposited && [request.tokenIn, request.tokenOut].includes(first.underlying),
+    });
+    const { driver, gateway } = setup(quoter, { options: [first, second] });
+    const send = gateway.sendTransaction;
+    gateway.sendTransaction = (tx, options) => {
+      if (isDeposit(tx)) deposited = true;
+      return send(tx, options);
+    };
+
+    driver.start();
+    await settled(driver);
+
+    expect(driver.getProgress().stage).toBe("complete");
+    expect(deposited).toBe(true);
+    expect(driver.getProgress().leftOut).toEqual([]);
+    expect(quoter.requests.filter((request) => request.tokenIn === first.underlying).length).toBeGreaterThan(0);
+  });
+
   it("lets a run that routes go through, depositing once", async () => {
     const { gateway, driver } = setup(fakeQuoter());
 
