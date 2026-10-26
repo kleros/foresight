@@ -1,4 +1,4 @@
-import { decodeFunctionData, erc20Abi, type Address, type Hex } from "viem";
+import { decodeFunctionData, encodeFunctionData, erc20Abi, type Address, type Hex } from "viem";
 import { describe, expect, it } from "vitest";
 
 import { ALGEBRA_ROUTER_ABI } from "@/lib/swap/algebraRouter";
@@ -8,16 +8,27 @@ import { gnosisRouterAbi, tradeExecutorAbi } from "@/config/contracts";
 
 import { planPredict, STEP_ID } from "../plan";
 import type { OptionChainState, PredictOption } from "../types";
-import { addresses, AT, chainState, ctx, DEEP, fakeQuoter, fakeReader, option, snapshot } from "./support/fakes";
+import { addresses, AT, chainState, ctx, DEEP, fakeQuoter, fakeReader, option, snapshot, WAD } from "./support/fakes";
 
 /** A quoter that remembers each quote by its calldata, so a swap in the batch can be traced to it. */
-function recordingQuoter(): SwapQuoter & { byData: Map<Hex, SwapQuote> } {
+function recordingQuoter(rate = 50n): SwapQuoter & { byData: Map<Hex, SwapQuote> } {
   const inner = fakeQuoter();
   const byData = new Map<Hex, SwapQuote>();
   return {
     byData,
     async quote(request) {
-      const quote = await inner.quote(request);
+      const original = await inner.quote(request);
+      const amountOut = (request.amount * rate) / 100n;
+      const decoded = decodeFunctionData({ abi: ALGEBRA_ROUTER_ABI, data: original.data });
+      const quote = {
+        ...original,
+        amountOut,
+        data: encodeFunctionData({
+          abi: ALGEBRA_ROUTER_ABI,
+          functionName: "exactInputSingle",
+          args: [{ ...decoded.args[0], amountOutMinimum: amountOut }],
+        }),
+      };
       byData.set(quote.data, quote);
       return quote;
     },
@@ -111,16 +122,29 @@ const sellsEverything = (): OptionChainState =>
     },
   });
 
-async function buildWorstCase(args: { slippageBps: number; options: PredictOption[]; state: () => OptionChainState }) {
-  const quoter = recordingQuoter();
-  const states = args.options.map(() => args.state());
-  const snap = snapshot({ options: args.options, slippage: { tradeBps: args.slippageBps, creditsBps: 0 } });
+async function buildWorstCase(args: {
+  slippageBps: number;
+  options: PredictOption[];
+  state: () => OptionChainState;
+  rate?: bigint;
+  collateralIn?: bigint;
+  batch?: number;
+}) {
+  const quoter = recordingQuoter(args.rate);
+  const batchOptions = args.batch ? [args.options[args.batch - 1]!] : args.options;
+  const states = batchOptions.map(() => args.state());
+  const snap = snapshot({
+    options: args.options,
+    slippage: { tradeBps: args.slippageBps, creditsBps: 0 },
+    ...(args.collateralIn === undefined ? {} : { collateralIn: args.collateralIn, deposit: args.collateralIn }),
+    ...(args.batch ? { optionsPerBatch: 1 } : {}),
+  });
   const deps = { reader: fakeReader({ state: args.state }), quoter };
 
-  const step = planPredict(snap, deps).find((each) => each.id === STEP_ID.predict(1))!;
+  const step = planPredict(snap, deps).find((each) => each.id === STEP_ID.predict(args.batch ?? 1))!;
   const tx = await step.build(ctx(), snap);
 
-  return replayWorstCase(tx.data!, args.options, states, quoter.byData, args.slippageBps);
+  return replayWorstCase(tx.data!, batchOptions, states, quoter.byData, args.slippageBps);
 }
 
 describe("the buys a batch can afford when every sell fills at its minimum", () => {
@@ -142,4 +166,39 @@ describe("the buys a batch can afford when every sell fills at its minimum", () 
       });
     }
   }
+});
+
+describe.each([100, 300])("buy budget at %i bps across stakes and batches", (slippageBps) => {
+  it.each([WAD / 10n, WAD * 7n, WAD * 1_000n])("funds a buy at a stake of %s", async (collateralIn) => {
+    const { lowest, buys } = await buildWorstCase({
+      slippageBps,
+      options: [option(1)],
+      state: sellsEverything,
+      collateralIn,
+    });
+    expect(buys).toBe(1);
+    expect(lowest.get(option(1).underlying)).toBeGreaterThanOrEqual(0n);
+  });
+
+  it("funds a buy when the sell pays more than its input", async () => {
+    const { lowest, buys } = await buildWorstCase({
+      slippageBps,
+      options: [option(1)],
+      state: sellsEverything,
+      rate: 300n,
+    });
+    expect(buys).toBe(1);
+    expect(lowest.get(option(1).underlying)).toBeGreaterThanOrEqual(0n);
+  });
+
+  it("funds a later batch from its held underlying", async () => {
+    const { lowest, buys } = await buildWorstCase({
+      slippageBps,
+      options: [option(1), option(2)],
+      batch: 2,
+      state: () => chainState({ ...sellsEverything(), underlying: WAD * 2n }),
+    });
+    expect(buys).toBe(1);
+    expect(lowest.get(option(2).underlying)).toBeGreaterThanOrEqual(0n);
+  });
 });
