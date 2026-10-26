@@ -95,7 +95,7 @@ function mount(overrides: Partial<Args> = {}) {
     ...overrides,
   };
   const view = renderHook((props: Args) => usePredictExecution(props), { wrapper, initialProps: args });
-  return { ...view, args };
+  return { ...view, args, queryClient };
 }
 
 beforeEach(() => {
@@ -254,5 +254,39 @@ describe("usePredictExecution, when a run can be built", () => {
 
     expect(view.result.current.ready).toBe(false);
     expect(lastInput()).toBeNull();
+  });
+});
+
+describe("usePredictExecution, the selected options and quiet stages", () => {
+  it("hands the driver every selected estimate, not only the first", () => {
+    const detail = toSessionDetail(
+      { ...sessionDetailColumns, children: [sessionChildRow(), sessionChildRow({ id: addresses.childMarkets[1] })] },
+      GATEWAY,
+    );
+    const selected: SelectedEstimate[] = detail.options.map((scale) => ({
+      scale,
+      value: 250,
+      marketEstimate: 200,
+      direction: "higher",
+    }));
+    mount({ session: detail, selected });
+
+    expect(
+      lastInput()
+        ?.options()
+        .map((option) => option.childMarket),
+    ).toEqual(addresses.childMarkets);
+  });
+
+  it.each(["idle", "quoting", "signing", "confirming"] as const)("leaves the cache alone on entering %s", (stage) => {
+    const view = mount();
+    const invalidate = vi.spyOn(view.queryClient, "invalidateQueries");
+    runMock.mockImplementation((input) => {
+      inputs.push(input);
+      return { driver: null, progress: { stage, steps: [], leftOut: [], batchesDone: 0, batches: 1 } };
+    });
+    view.rerender(view.args);
+
+    expect(invalidate).not.toHaveBeenCalled();
   });
 });

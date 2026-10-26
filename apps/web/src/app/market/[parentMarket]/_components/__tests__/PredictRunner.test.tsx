@@ -446,6 +446,7 @@ describe("PredictRunner, the dialog's controls", () => {
 
     expect(view.onSuccess).toHaveBeenCalledTimes(1);
     expect(driver.reset).toHaveBeenCalled();
+    expect(driver.reset.mock.invocationCallOrder[0]).toBeLessThan(view.onSuccess.mock.invocationCallOrder[0]!);
   });
 
   it("hands the success dialog what it placed, less what the run left out", () => {

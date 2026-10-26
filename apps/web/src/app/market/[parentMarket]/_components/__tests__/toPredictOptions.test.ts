@@ -131,6 +131,14 @@ describe("toPredictOptions, against missing token metadata", () => {
 });
 
 describe("toPredictOptions, converting estimates to prices", () => {
+  it("prices on the session's bounds, not on the bounds the estimate carries", () => {
+    const detail = session();
+    const stale = estimateOn(detail, FIRST, 250);
+    stale.scale = { ...stale.scale, lowerBound: 100, upperBound: 300 };
+
+    expect(toPredictOptions(detail, [stale])[0]?.targetPriceWad).toBe(WAD / 2n);
+  });
+
   // expected prices are worked by hand: (estimate - lower) / (upper - lower), in 1e18
   it.each([
     { lower: 0, upper: 500, estimate: 250, price: 5n * 10n ** 17n },

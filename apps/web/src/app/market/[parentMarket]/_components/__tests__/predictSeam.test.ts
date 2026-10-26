@@ -40,6 +40,15 @@ describe("PredictRunner stays on its side of the seam", () => {
     },
   );
 
+  it("holds no execution address literal or contract module import", () => {
+    const source = runner()
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/(^|[^:])\/\/.*$/gm, "$1");
+    expect(source.match(/0x[0-9a-fA-F]{40}/g) ?? []).toEqual([]);
+    const imports = [...source.matchAll(/(?:from\s+|import\s*\(\s*|import\s+)["'`]([^"'`]+)["'`]/g)];
+    expect(imports.map((match) => match[1]).filter((name) => /contracts/.test(name!))).toEqual([]);
+  });
+
   it("does not convert estimates to prices itself", () => {
     expect(runner()).not.toContain("estimateToPriceWad");
   });
