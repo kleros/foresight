@@ -20,6 +20,7 @@ import {
 } from "../../flow/__tests__/support/fakes";
 import { STEP_ID } from "../../flow/plan";
 import type { OptionChainState, PredictReader, PredictSnapshot } from "../../flow/types";
+import { planFunding } from "../../utils/funding";
 import { MIN_LEG_WEI } from "../../utils/plan";
 import { sqrtPriceX96FromPrice } from "../../utils/poolMath";
 import { predictSteps } from "../../utils/predictSteps";
@@ -175,6 +176,55 @@ function parentSplit(data: Hex): bigint | undefined {
 }
 
 describe("createPredictRun and the trade wallet's balance", () => {
+  it("splits only the deposit and the shown share across generated stale balances", async () => {
+    let seed = 20_261_008n;
+    const next = (max: bigint) => {
+      seed = (seed * 1_664_525n + 1_013_904_223n) % 2n ** 32n;
+      return (seed * max) / 2n ** 32n;
+    };
+    const rate = (WAD * 5n) / 4n;
+    for (let index = 0; index < 40; index++) {
+      const real = next(50n * WAD);
+      const cached = index % 4 === 0 ? 0n : next(real + 1n);
+      const native = index % 2 === 0;
+      const wanted = cached + WAD + next(30n * WAD);
+      const amount = native ? (wanted * rate + WAD - 1n) / WAD : wanted;
+      const funding = planFunding({
+        amount,
+        ownWallet: 100n * WAD,
+        tradeWallet: cached,
+        ...(native ? { tokenPerCollateralWad: rate } : {}),
+      });
+      const minted = native ? (funding.deposit * WAD) / rate : funding.deposit;
+      const gateway = fakeGateway((tx) => (tx.to === addresses.sDaiAdapter ? [mintLog(minted)] : []));
+      const driver = createPredictRun({
+        gateway,
+        reader: fakeReader({ deployed: true, collateral: real }),
+        quoter: fakeQuoter(),
+        flowId: `predict-generated-cache-${index}`,
+        ctx: () => ctx(),
+        snapshot: () =>
+          snapshot({
+            deposit: funding.deposit,
+            depositNative: native,
+            collateralIn: funding.collateralIn,
+            collateralBefore: cached,
+          }),
+      });
+      drivers.push(driver);
+      driver.start();
+      await vi.waitFor(() => expect(["halted", "complete"]).toContain(driver.getProgress().stage));
+
+      expect(driver.getProgress().stage, `case ${index}`).toBe("complete");
+      expect(gateway.signRequests.filter(isDeposit)).toHaveLength(1);
+      const splits = gateway.signRequests.flatMap((tx) =>
+        tx.to === addresses.executor ? (parentSplit(tx.data!) ?? []) : [],
+      );
+      expect(splits, `case ${index}`).toEqual([minted + funding.fromTradeWallet]);
+      driver.dispose();
+    }
+  });
+
   it("splits what an xDAI deposit minted plus the share shown, when the cached balance was low", async () => {
     // the adapter mints 1 collateral per 2 xDAI here, so the minted amount is not the deposit
     const gateway = fakeGateway((tx) => (tx.to === addresses.sDaiAdapter ? [mintLog((tx.value ?? 0n) / 2n)] : []));
