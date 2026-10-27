@@ -12,6 +12,7 @@ import { formatLocalInstant, formatUtcInstant, utcInstant } from "@/utils/date";
 import { Chip, FieldLabel, InfoTip } from "./fields";
 import { ScalarRangeTrack } from "./ScalarRangeTrack";
 import { SectionHeader } from "./SectionHeader";
+import { useTouched } from "../hooks/useTouched";
 import { useDraftStore } from "../stores/draftStore";
 import type { DraftAssessment } from "../types/draft";
 import { LONG_RUN_NOTE } from "../utils/assessDraft";
@@ -58,7 +59,13 @@ export function ChildMarketsStep({
   const unitOk = !!unit && !hasBrackets(unit) && !/\s/.test(unit);
   const lowerNum = parseNumber(draft.lower);
   const upperNum = parseNumber(draft.upper);
-  const boundsError = lowerNum < 0 || lowerNum >= upperNum;
+  const { touched, touch } = useTouched();
+  const templateQuiet = !draft.template && !touched("template");
+  const unitQuiet = !draft.unit && !touched("unit");
+  // The blank draft's upper bound is empty, which reads as 0 and so as not above the lower one.
+  const boundsEntered = !!draft.upper.trim() || touched("bounds");
+  const upperError = lowerNum >= upperNum && boundsEntered;
+  const boundsError = lowerNum < 0 || upperError;
   const sharedPays = resolutionExample({ lower: scaleToWei(draft.lower), upper: scaleToWei(draft.upper) }, draft.unit);
 
   const decision = utcInstant(draft.decisionDate, draft.decisionTime);
@@ -99,9 +106,10 @@ export function ChildMarketsStep({
             className="w-full"
             value={draft.template}
             onChange={(v) => setDraftField("template", v)}
+            onBlur={() => touch("template")}
             placeholder="The metric to predict, if {outcome} is chosen"
             aria-label="Question template"
-            variant={templateOk ? undefined : "error"}
+            variant={templateOk || templateQuiet ? undefined : "error"}
             message={
               hasBrackets(draft.template)
                 ? "Remove the square brackets. The unit is appended in them for you."
@@ -140,11 +148,12 @@ export function ChildMarketsStep({
                 className="fs-spawn w-56"
                 value={draft.unit}
                 onChange={(v) => setDraftField("unit", v)}
+                onBlur={() => touch("unit")}
                 placeholder="%"
                 aria-label="Unit"
-                variant={unitOk ? undefined : "error"}
+                variant={unitOk || unitQuiet ? undefined : "error"}
                 message={
-                  unitOk
+                  unitOk || unitQuiet
                     ? "Appended in brackets."
                     : hasBrackets(draft.unit)
                       ? "No brackets, just the unit."
@@ -174,9 +183,10 @@ export function ChildMarketsStep({
               className="w-full"
               value={draft.lower === "" ? Number.NaN : Number(draft.lower)}
               onChange={(v) => setDraftField("lower", Number.isNaN(v) ? "" : String(v))}
+              onBlur={() => touch("bounds")}
               minValue={0}
               aria-label="Lower bound"
-              variant={lowerNum < 0 || lowerNum >= upperNum ? "error" : undefined}
+              variant={boundsError ? "error" : undefined}
             />
           </div>
           <div>
@@ -185,9 +195,10 @@ export function ChildMarketsStep({
               className="w-full"
               value={draft.upper === "" ? Number.NaN : Number(draft.upper)}
               onChange={(v) => setDraftField("upper", Number.isNaN(v) ? "" : String(v))}
+              onBlur={() => touch("bounds")}
               minValue={0}
               aria-label="Upper bound"
-              variant={lowerNum >= upperNum ? "error" : undefined}
+              variant={upperError ? "error" : undefined}
             />
           </div>
           <ScalarRangeTrack

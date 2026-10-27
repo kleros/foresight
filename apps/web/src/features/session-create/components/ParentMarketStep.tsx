@@ -13,6 +13,7 @@ import { formatUtcInstant, utcInstant } from "@/utils/date";
 
 import { AdvancedToggle, FieldLabel, InfoTip } from "./fields";
 import { SectionHeader } from "./SectionHeader";
+import { useTouched } from "../hooks/useTouched";
 import { useDraftStore } from "../stores/draftStore";
 import type { DraftAssessment } from "../types/draft";
 import { LONG_RUN_NOTE } from "../utils/assessDraft";
@@ -46,6 +47,7 @@ export function ParentMarketStep({
     useDraftStore();
   const [advanced, setAdvanced] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
+  const { touched, touch } = useTouched();
 
   const dupLabels = new Set<string>();
   {
@@ -122,7 +124,7 @@ export function ParentMarketStep({
                   }}
                   className={clsx(
                     "fs-echo rounded-fs bg-fs-surface-sunken grid grid-cols-[20px_24px_minmax(0,1fr)_32px] items-center gap-3 border px-2.5 py-1.5",
-                    dup || !o.label.trim() ? "border-fs-tone-error" : "border-fs-border",
+                    dup || (!o.label.trim() && touched(o.id)) ? "border-fs-tone-error" : "border-fs-border",
                     dragId === o.id && "opacity-60",
                   )}
                 >
@@ -153,6 +155,7 @@ export function ParentMarketStep({
                     className="w-full"
                     value={o.label}
                     onChange={(v) => patchOutcome(o.id, { label: v })}
+                    onBlur={() => touch(o.id)}
                     placeholder="Outcome name"
                     aria-label="Outcome name"
                   />
