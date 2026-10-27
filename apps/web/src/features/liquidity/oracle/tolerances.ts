@@ -22,3 +22,6 @@ export { MINT_RATE_MARGIN_BPS } from "@/features/predict/flow/plan";
 
 /** Native balance an xDAI split always leaves for gas: 0.01 xDAI. */
 export const GAS_RESERVE_WEI = 10n ** 16n;
+
+/** Per-token scale of the throwaway position a self-realign trades against, in wei. */
+export const REALIGN_DUST_WEI = 10n ** 12n;
