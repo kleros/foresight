@@ -17,6 +17,7 @@ import { MarkdownField } from "./MarkdownField";
 import { SectionHeader } from "./SectionHeader";
 import { MAX_IMAGE_BLOCKS } from "../flow/metadata";
 import { useImageUrl } from "../hooks/useImageUrl";
+import { useTouched } from "../hooks/useTouched";
 import { useDraftStore } from "../stores/draftStore";
 import { getImageFile, imageSlot, setImageFile } from "../stores/imageStore";
 import type { DraftAssessment, OutcomeImageDraft } from "../types/draft";
@@ -102,6 +103,8 @@ export function DisplayMetadataStep({
   };
 
   const cardComplete = !!draft.description.trim() && !!draft.heroImageName && !!draft.iconName;
+  const { touched, touch } = useTouched();
+  const titleFlagged = !draft.title.trim() && (!!draft.title || touched("title"));
 
   return (
     <section
@@ -133,9 +136,10 @@ export function DisplayMetadataStep({
           label="Session title"
           value={draft.title}
           onChange={(v) => setDraftField("title", v)}
+          onBlur={() => touch("title")}
           placeholder="A short name for this session"
-          variant={draft.title.trim() ? undefined : "warning"}
-          message={draft.title.trim() ? undefined : "Required. The card has nothing to be called."}
+          variant={titleFlagged ? "warning" : undefined}
+          message={titleFlagged ? "Required. The card has nothing to be called." : undefined}
         />
 
         <div>

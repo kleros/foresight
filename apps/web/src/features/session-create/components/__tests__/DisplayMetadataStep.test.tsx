@@ -112,3 +112,22 @@ describe("DisplayMetadataStep drop zones", () => {
     }
   });
 });
+
+describe("DisplayMetadataStep title on a blank draft", () => {
+  const REQUIRED = "Required. The card has nothing to be called.";
+
+  it("does not ask for a title before the field is left", () => {
+    renderStep();
+
+    expect(screen.queryByText(REQUIRED)).not.toBeInTheDocument();
+  });
+
+  it("asks for a title once the field is left empty", async () => {
+    renderStep();
+
+    await userEvent.click(screen.getByRole("textbox", { name: "Session title" }));
+    await userEvent.tab();
+
+    expect(screen.getByText(REQUIRED)).toBeInTheDocument();
+  });
+});

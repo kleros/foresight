@@ -99,3 +99,59 @@ describe("The unit field", () => {
     expect(screen.getByRole("textbox", { name: "Unit" })).toHaveValue("$M");
   });
 });
+
+/** The library marks an input in error with this class; `invalid:` and `focus:invalid:` variants are separate tokens. */
+const inError = (input: HTMLElement) => input.classList.contains("border-klerosUIComponentsError");
+
+describe("Errors on a blank draft", () => {
+  it("leaves an empty template unflagged until the field is left", async () => {
+    renderStep();
+    const template = screen.getByRole("textbox", { name: "Question template" });
+    expect(inError(template)).toBe(false);
+
+    await userEvent.click(template);
+    await userEvent.tab();
+
+    expect(inError(template)).toBe(true);
+  });
+
+  it("flags a template missing {outcome} as soon as one is typed", async () => {
+    renderStep();
+    const template = screen.getByRole("textbox", { name: "Question template" });
+
+    await userEvent.type(template, "Revenue");
+
+    expect(inError(template)).toBe(true);
+  });
+
+  it("says nothing about the bounds while the upper one is untouched", () => {
+    // The blank draft: lower "0", upper "".
+    expect(draft().lower).toBe("0");
+    expect(draft().upper).toBe("");
+    renderStep();
+
+    expect(screen.queryByText("Lower bound is not below the upper bound.")).not.toBeInTheDocument();
+  });
+
+  it("flags the bounds once the upper one is left empty", async () => {
+    renderStep();
+
+    await userEvent.click(screen.getByRole("textbox", { name: "Upper bound" }));
+    await userEvent.tab();
+
+    expect(screen.getByText("Lower bound is not below the upper bound.")).toBeInTheDocument();
+  });
+
+  it("leaves an empty free-text unit unflagged until the field is left", async () => {
+    renderStep();
+    await openUnits();
+    await userEvent.click(await option("Other..."));
+    const unit = await screen.findByRole("textbox", { name: "Unit" });
+    expect(inError(unit)).toBe(false);
+
+    await userEvent.click(unit);
+    await userEvent.tab();
+
+    expect(inError(unit)).toBe(true);
+  });
+});
