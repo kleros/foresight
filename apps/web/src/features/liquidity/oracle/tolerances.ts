@@ -17,8 +17,8 @@ export const MAX_SEED_PRICE_BPS = 9_900n;
 /** Rounding a branch may leave unused in the wallet, per token, in wei. */
 export const DUST_WEI = 10n ** 6n;
 
-/** Hundredths of a percent an xDAI split's minted sDAI may fall below `previewDeposit`; the predict flow's margin. */
-export { MINT_RATE_MARGIN_BPS } from "@/features/predict/flow/plan";
+/** Hundredths of a percent an xDAI split's minted sDAI may fall below `previewDeposit`: interest raises the rate between preview and split. */
+export const MINT_RATE_MARGIN_BPS = 1n;
 
 /** Native balance an xDAI split always leaves for gas: 0.01 xDAI. */
 export const GAS_RESERVE_WEI = 10n ** 16n;

@@ -1,7 +1,7 @@
 import type { Address, Hex } from "viem";
 
 /** Who may receive an approval inside a liquidity run. */
-export type LiquiditySpender = "gnosisRouter" | "positionManager";
+export type LiquiditySpender = "gnosisRouter" | "positionManager" | "swaprRouter";
 
 export interface LiquidityAllowList {
   /** Seer's router: splits and merges at the parent and at each branch. */
@@ -36,7 +36,7 @@ export const LIQUIDITY_ALLOW_LIST: Record<number, LiquidityAllowList> = {
         target: "sessionToken",
         selector: "0x095ea7b3",
         name: "approve(address,uint256)",
-        spender: ["gnosisRouter", "positionManager"],
+        spender: ["gnosisRouter", "positionManager", "swaprRouter"],
       },
       { target: "gnosisRouter", selector: "0xd5f82280", name: "splitPosition(address,address,uint256)" },
       { target: "gnosisRouter", selector: "0x50d9991c", name: "splitFromBase(address)", value: true },
