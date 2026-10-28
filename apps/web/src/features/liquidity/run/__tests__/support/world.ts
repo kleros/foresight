@@ -19,7 +19,7 @@ import {
 import { expect, vi } from "vitest";
 
 import { decode, owner } from "../../../flow/__tests__/support/session";
-import type { LiquiditySession, MergeInput, PoolState, RemoveInput, SeedInput } from "../../../types";
+import type { LiquiditySession, MergeInput, PoolState, RemoveInput, SeedInput, SentWithNonce } from "../../../types";
 import { createLiquidityRun } from "../../driver";
 
 /**
@@ -52,6 +52,8 @@ import { createLiquidityRun } from "../../driver";
  *     ownerOf(tokenId: bigint): Promise<Address>
  *     nextNonce(account: Address): Promise<number>          // the account's next nonce, counting mined sends only
  *     hasPending(account: Address): Promise<boolean>        // a send of the account is broadcast and not yet mined
+ *     blockNumber(): Promise<bigint>                        // the latest block's number
+ *     sentWithNonce({ owner, nonce, fromBlock }): Promise<SentWithNonce>   // what took that nonce, from that block on
  *   }
  *
  *   LiquidityDriver { start(); recover(); resume(); retry(); reset(); dispose();
@@ -84,8 +86,11 @@ export type LiquidityRequestLike =
 
 export type LiquidityDriverLike = ReturnType<typeof createLiquidityRun>;
 
-/** What the wallet does with the n-th prompt (from 0): mine it, refuse it, never answer, or broadcast it unmined. */
-export type PromptScript = "sign" | "reject" | "hang" | "unmined";
+/**
+ * What the wallet does with the n-th prompt (from 0): mine it, refuse it, never answer, broadcast it unmined, mine it
+ * reverted, or broadcast it and then cancel it with a self-send at its nonce.
+ */
+export type PromptScript = "sign" | "reject" | "hang" | "unmined" | "revert" | "cancel";
 
 /** EIP-5792's atomic capability status, or no `atomic` entry at all. */
 export type AtomicStatus = "supported" | "ready" | "unsupported" | "absent";
@@ -102,14 +107,27 @@ export interface Broadcast {
   hash: Hash;
   tx: FlowTx;
   from: Address;
+  /** The sender's nonce, taken in broadcast order. */
+  nonce: number;
   mined: boolean;
+  /** The block that mined it. */
+  minedIn?: bigint;
+  reverted: boolean;
+  /** Another transaction took its nonce, so it never mines. */
+  dropped: boolean;
 }
+
+/** The logs a mined transaction's receipt carries, given the receipt's own fields. */
+export type LogsOf = (
+  sent: Broadcast,
+  receipt: Pick<TransactionReceipt, "blockHash" | "blockNumber" | "transactionHash">,
+) => TransactionReceipt["logs"];
 
 /**
  * A Gnosis chain and the wallets on it, shared by every driver of a test so a reload sees what the last tab left.
  * Every field the receipt type names is filled, so a viem rename fails to compile here.
  */
-export function chain(opts: { chainTime?: bigint; pools?: [Address, Address, PoolState][] } = {}) {
+export function chain(opts: { chainTime?: bigint; pools?: [Address, Address, PoolState][]; logs?: LogsOf } = {}) {
   const state = {
     chainTime: opts.chainTime ?? 1_900_000_000n,
     /** Every account's native balance, in wei; sends do not spend it. */
@@ -125,36 +143,66 @@ export function chain(opts: { chainTime?: bigint; pools?: [Address, Address, Poo
   const batches = new Map<string, Broadcast>();
   const waiting = new Map<Hash, (receipt: TransactionReceipt) => void>();
 
-  const receiptOf = (sent: Broadcast): TransactionReceipt => ({
-    blockHash: BLOCK_HASH,
-    blockNumber: state.block,
-    contractAddress: null,
-    cumulativeGasUsed: 21_000n,
-    effectiveGasPrice: 1n,
-    from: sent.from,
-    gasUsed: 21_000n,
-    logs: [],
-    logsBloom: `0x${"0".repeat(512)}`,
-    status: "success",
-    to: sent.tx.to,
-    transactionHash: sent.hash,
-    transactionIndex: 0,
-    type: "eip1559",
-  });
+  const receiptOf = (sent: Broadcast): TransactionReceipt => {
+    const ids = { blockHash: BLOCK_HASH, blockNumber: sent.minedIn ?? state.block, transactionHash: sent.hash };
+    return {
+      ...ids,
+      contractAddress: null,
+      cumulativeGasUsed: 21_000n,
+      effectiveGasPrice: 1n,
+      from: sent.from,
+      gasUsed: 21_000n,
+      logs: sent.reverted ? [] : (opts.logs?.(sent, ids) ?? []),
+      logsBloom: `0x${"0".repeat(512)}`,
+      status: sent.reverted ? "reverted" : "success",
+      to: sent.tx.to,
+      transactionIndex: 0,
+      type: "eip1559",
+    };
+  };
 
-  function broadcast(tx: FlowTx, from: Address, mined: boolean): Broadcast {
-    const sent: Broadcast = { hash: hashAt(broadcasts.length), tx, from, mined };
+  const ofAccount = (account: Address) =>
+    broadcasts.filter((sent) => !sent.dropped && isAddressEqual(sent.from, account));
+
+  function broadcast(tx: FlowTx, from: Address, mined: boolean, how: { reverted?: boolean } = {}): Broadcast {
+    const sent: Broadcast = {
+      hash: hashAt(broadcasts.length),
+      tx,
+      from,
+      nonce: ofAccount(from).length,
+      mined: false,
+      reverted: how.reverted ?? false,
+      dropped: false,
+    };
     broadcasts.push(sent);
-    if (mined) state.block += 1n;
+    if (mined) mine(sent);
     return sent;
   }
 
   function mine(sent: Broadcast) {
-    if (sent.mined) return;
+    if (sent.mined || sent.dropped) return;
     sent.mined = true;
     state.block += 1n;
+    sent.minedIn = state.block;
     waiting.get(sent.hash)?.(receiptOf(sent));
     waiting.delete(sent.hash);
+  }
+
+  /** Mines a zero-value self-send at `sent`'s nonce, so `sent` never mines: a cancel from the wallet. */
+  function cancel(sent: Broadcast): Broadcast {
+    sent.dropped = true;
+    const by: Broadcast = {
+      hash: hashAt(broadcasts.length),
+      tx: { to: sent.from, data: "0x", value: 0n },
+      from: sent.from,
+      nonce: sent.nonce,
+      mined: false,
+      reverted: false,
+      dropped: false,
+    };
+    broadcasts.push(by);
+    mine(by);
+    return by;
   }
 
   const find = (hash: Hash) => broadcasts.find((sent) => sent.hash === hash);
@@ -167,10 +215,26 @@ export function chain(opts: { chainTime?: bigint; pools?: [Address, Address, Poo
       const holder = state.owners.get(tokenId);
       return holder ? Promise.resolve(holder) : Promise.reject(new Error(`no token ${tokenId}`));
     },
-    nextNonce: (account: Address) =>
-      Promise.resolve(broadcasts.filter((sent) => sent.mined && isAddressEqual(sent.from, account)).length),
-    hasPending: (account: Address) =>
-      Promise.resolve(broadcasts.some((sent) => !sent.mined && isAddressEqual(sent.from, account))),
+    nextNonce: (account: Address) => Promise.resolve(ofAccount(account).filter((sent) => sent.mined).length),
+    hasPending: (account: Address) => Promise.resolve(ofAccount(account).some((sent) => !sent.mined)),
+    blockNumber: () => Promise.resolve(state.block),
+    sentWithNonce: ({ owner: account, nonce, fromBlock }: { owner: Address; nonce: number; fromBlock: bigint }) => {
+      const sent = ofAccount(account).find((each) => each.nonce === nonce);
+      const found: SentWithNonce = !sent
+        ? { status: "none" }
+        : !sent.mined
+          ? { status: "pending" }
+          : sent.minedIn! < fromBlock
+            ? { status: "taken" }
+            : {
+                status: "mined",
+                hash: sent.hash,
+                to: sent.tx.to,
+                input: sent.tx.data ?? "0x",
+                value: sent.tx.value ?? 0n,
+              };
+      return Promise.resolve(found);
+    },
   };
 
   return {
@@ -184,6 +248,7 @@ export function chain(opts: { chainTime?: bigint; pools?: [Address, Address, Poo
     /** Mines every broadcast transaction still waiting. */
     land: () => broadcasts.forEach(mine),
     broadcast,
+    cancel,
     find,
     receiptOf,
     waitFor: (hash: Hash) =>
@@ -209,6 +274,8 @@ export function gateway(
   const prompts: FlowTx[] = [];
   const hung: FlowTx[] = [];
   let onHang: (() => void) | undefined;
+  /** Sends a cancel took the nonce of, by hash, and the cancel that did. */
+  const cancelled = new Map<Hash, Broadcast>();
 
   const port: BalanceTxGateway = {
     sendTransaction: (tx) => {
@@ -222,16 +289,22 @@ export function gateway(
         onHang?.();
         return new Promise<Hash>(() => {});
       }
-      const sent = world.broadcast(tx, from, step === "sign");
+      const sent = world.broadcast(tx, from, step === "sign" || step === "revert", { reverted: step === "revert" });
+      if (step === "cancel") cancelled.set(sent.hash, world.cancel(sent));
       opts.onBroadcast?.(tx);
       return Promise.resolve(sent.hash);
     },
-    waitForReceipt: ({ hash }) => world.waitFor(hash),
+    waitForReceipt: ({ hash, onReplaced }) => {
+      const by = cancelled.get(hash);
+      if (!by) return world.waitFor(hash);
+      onReplaced?.({ reason: "cancelled", hash: by.hash });
+      return world.waitFor(by.hash);
+    },
     getReceipt: (hash) => {
       const sent = world.find(hash);
       return Promise.resolve(sent?.mined ? world.receiptOf(sent) : null);
     },
-    isKnown: (hash) => Promise.resolve(world.find(hash) !== undefined),
+    isKnown: (hash) => Promise.resolve(Boolean(world.find(hash) && !world.find(hash)!.dropped)),
     getBalance: () => Promise.resolve(world.state.native),
     estimateFee: () => Promise.resolve(world.state.fee),
   };
