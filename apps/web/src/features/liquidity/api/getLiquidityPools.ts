@@ -74,6 +74,41 @@ async function readSession(
   return { chainId, parentMarket, collateral, parentInvalid: token(count), branches };
 }
 
+const poolReads = (address: Address) => [
+  { address, abi: POOL_ABI, functionName: "globalState" as const },
+  { address, abi: POOL_ABI, functionName: "liquidity" as const },
+  { address, abi: POOL_ABI, functionName: "tickSpacing" as const },
+];
+
+type PoolReads = [readonly [bigint, ...unknown[]], bigint, number];
+
+function toPoolState([[sqrtPriceX96], liquidity, tickSpacing]: PoolReads): PoolState {
+  // a created pool with no price yet is initialized by createAndInitializePoolIfNecessary, as a missing one is
+  if (sqrtPriceX96 === 0n) return { status: "missing" };
+  if (liquidity === 0n) return { status: "empty", sqrtPriceX96, tickSpacing };
+  return { status: "live", sqrtPriceX96, liquidity, tickSpacing };
+}
+
+/** The pair's pool as it stands, tokens in either order, found through the allow list's factory (L5). */
+export async function fetchPoolState(
+  client: PublicClient,
+  chainId: number,
+  tokenA: Address,
+  tokenB: Address,
+): Promise<PoolState> {
+  const list = LIQUIDITY_ALLOW_LIST[chainId];
+  if (!list) throw new Error(`No liquidity allow list for chain ${chainId}.`);
+  const address = await client.readContract({
+    address: list.algebraFactory,
+    abi: FACTORY_ABI,
+    functionName: "poolByPair",
+    args: [tokenA, tokenB],
+  });
+  if (isAddressEqual(address, zeroAddress)) return { status: "missing" };
+  const reads = await client.multicall({ contracts: poolReads(address), allowFailure: false, batchSize: 0 });
+  return toPoolState(reads as unknown as PoolReads);
+}
+
 /** Each branch's UP and DOWN pool, from the session's own markets and `poolByPair` on the allow list's factory (L5). */
 export async function fetchLiquidityPools(
   client: PublicClient,
@@ -101,28 +136,14 @@ export async function fetchLiquidityPools(
   const existing = addresses.filter((address) => !isAddressEqual(address, zeroAddress));
   const reads = existing.length
     ? await client.multicall({
-        contracts: existing.flatMap((address) => [
-          { address, abi: POOL_ABI, functionName: "globalState" as const },
-          { address, abi: POOL_ABI, functionName: "liquidity" as const },
-          { address, abi: POOL_ABI, functionName: "tickSpacing" as const },
-        ]),
+        contracts: existing.flatMap(poolReads),
         allowFailure: false,
         batchSize: 0,
       })
     : [];
 
   const states = new Map<Address, PoolState>(
-    existing.map((address, index) => {
-      const [[sqrtPriceX96], liquidity, tickSpacing] = reads.slice(index * 3, index * 3 + 3) as [
-        readonly [bigint, ...unknown[]],
-        bigint,
-        number,
-      ];
-      // a created pool with no price yet is initialized by createAndInitializePoolIfNecessary, as a missing one is
-      if (sqrtPriceX96 === 0n) return [address, { status: "missing" }];
-      if (liquidity === 0n) return [address, { status: "empty", sqrtPriceX96, tickSpacing }];
-      return [address, { status: "live", sqrtPriceX96, liquidity, tickSpacing }];
-    }),
+    existing.map((address, index) => [address, toPoolState(reads.slice(index * 3, index * 3 + 3) as PoolReads)]),
   );
   const stateOf = (address: Address): PoolState => states.get(address) ?? { status: "missing" };
 

@@ -2,10 +2,15 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
+import { useState, type ReactNode } from "react";
 
 import { isAddress } from "viem";
 
+import { LiquidityBanner } from "@/features/liquidity/components/LiquidityBanner";
+import { LiquidityDialog } from "@/features/liquidity/components/LiquidityDialog";
+import { LiquiditySection } from "@/features/liquidity/components/LiquiditySection";
+import { useSessionLiquidity } from "@/features/liquidity/hooks/useSessionLiquidity";
 import { EstimateActions } from "@/features/predict/components/EstimateActions";
 import { EstimateCsvDialog } from "@/features/predict/components/EstimateCsvDialog";
 import { useEstimateHydration } from "@/features/predict/hooks/useEstimateHydration";
@@ -19,7 +24,7 @@ import { optionNoun, optionNounSingular } from "@/features/sessions/utils/option
 import { sessionStatus } from "@/features/sessions/utils/toSessionDetail";
 import { TradeWallet } from "@/features/trade-executor/components/TradeWallet/TradeWallet";
 
-import { paths } from "@/config/paths";
+import { ADD_LIQUIDITY_PARAM, paths } from "@/config/paths";
 
 import { AdvancedSection } from "./AdvancedSection";
 import { OptionCard } from "./OptionCard";
@@ -41,6 +46,14 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
   const positions = useOptionPositions(session.data ?? undefined);
   useRenderAtClose(session.data?.closesAt);
   useEstimateHydration();
+  const searchParams = useSearchParams();
+  const [isAddingLiquidity, setAddingLiquidity] = useState(() => searchParams?.has(ADD_LIQUIDITY_PARAM) ?? false);
+  const liquidity = useSessionLiquidity({
+    parentMarket: parentMarket as `0x${string}`,
+    branches: session.data?.options.map(({ market, outcomeIndex, name }) => ({ market, outcomeIndex, name })) ?? [],
+    closesAt: session.data?.closesAt ?? null,
+    isReady: session.data?.setupComplete ?? false,
+  });
 
   if (!isAddress(parentMarket, { strict: false }) || session.data === null) {
     return (
@@ -69,6 +82,14 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
   const status = sessionStatus(detail, new Date());
   const noun = optionNoun(detail.itemNamePlural);
   const walletMarket = toWalletMarket(detail);
+  const addLiquidityReason =
+    status === "closed"
+      ? "Liquidity can't be added after the session's close."
+      : !detail.setupComplete
+        ? "The session is still being set up."
+        : liquidity.pools.isError
+          ? "Could not read the pools. Reload in a moment."
+          : undefined;
   // the pool's number is an unbounded float; held on each option's grid so "at the market" is exact
   const latest = chart.data ? latestEstimates(chart.data) : {};
   const marketEstimates = Object.fromEntries(
@@ -81,6 +102,9 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
   return (
     <PageColumn>
       <SessionHeader session={detail} status={status} stats={stats.data} statsPending={stats.isPending} />
+      {liquidity.hasLiquidity === false ? (
+        <LiquidityBanner reason={addLiquidityReason} onAdd={() => setAddingLiquidity(true)} />
+      ) : null}
       {chart.isPending ? (
         <ChartSkeleton />
       ) : chart.isError ? (
@@ -131,7 +155,26 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
         />
         {walletMarket ? <TradeWallet market={walletMarket} noun={optionNounSingular(detail.itemName)} /> : null}
         <AdvancedSection parentMarket={detail.parentMarket} />
+        <LiquiditySection
+          reason={addLiquidityReason}
+          onAdd={() => setAddingLiquidity(true)}
+          positions={liquidity.positions}
+          merge={liquidity.merge}
+          run={liquidity.run}
+        />
       </section>
+      <LiquidityDialog
+        // opens once the pools are read, which it plans against
+        isOpen={isAddingLiquidity && liquidity.pools.data !== undefined}
+        onClose={() => setAddingLiquidity(false)}
+        names={liquidity.names}
+        pools={liquidity.pools.data}
+        owner={liquidity.owner}
+        balances={liquidity.balances}
+        chainTime={liquidity.chainTime}
+        closed={status === "closed"}
+        run={liquidity.run}
+      />
     </PageColumn>
   );
 }

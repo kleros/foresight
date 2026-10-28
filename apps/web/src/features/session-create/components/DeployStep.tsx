@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { Accordion, Button, Copiable, CustomTimeline } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
@@ -8,6 +10,7 @@ import { formatUtcInstant, utcInstant } from "@/utils/date";
 import { tryGatewayUrl } from "@/utils/ipfs";
 
 import { DEFAULT_CHAIN } from "@/config/chains";
+import { paths } from "@/config/paths";
 import { seerMarketUrl } from "@/config/site";
 
 import { RecoveredRunBanner } from "./RecoveredRunBanner";
@@ -361,7 +364,11 @@ export function DeployStep({
                 <div className="type-label text-fs-text-primary">Needs liquidity to be tradable</div>
               </div>
               <div className="flex flex-wrap items-center gap-4">
-                <Button text="Seed liquidity" isDisabled />
+                {progress.parentMarket ? (
+                  <Link href={paths.market.addLiquidity.getHref(progress.parentMarket)} className="fs-cta type-label">
+                    Seed liquidity
+                  </Link>
+                ) : null}
                 {seerUrl ? <ExternalLink href={seerUrl}>View on Seer</ExternalLink> : null}
                 <button
                   type="button"

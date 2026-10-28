@@ -33,6 +33,13 @@ export function fullRange(spacing: number) {
 export const sqrtPriceForBps = (bps: bigint, childIsToken0: boolean) =>
   childIsToken0 ? isqrt((bps * Q96 * Q96) / BPS) : isqrt((Q96 * Q96 * BPS) / bps);
 
+/** The child token's price in `bps` of its parent outcome at `sqrtP`, to the nearest basis point. */
+export function bpsForSqrtPrice(sqrtP: bigint, childIsToken0: boolean): bigint {
+  const squared = sqrtP * sqrtP;
+  const q192 = Q96 * Q96;
+  return childIsToken0 ? (squared * BPS + q192 / 2n) / q192 : (q192 * BPS + squared / 2n) / squared;
+}
+
 /** `sqrtP` moved by `ticks`, up for a positive count. */
 export const movedSqrtPrice = (sqrtP: bigint, ticks: number) => (sqrtP * sqrtPriceAtTick(ticks)) / Q96;
 
