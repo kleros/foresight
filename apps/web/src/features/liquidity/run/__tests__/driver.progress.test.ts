@@ -166,6 +166,23 @@ describe("a seed's progress, read from the run's steps", () => {
     expect(sends.prompts).toEqual([]);
   });
 
+  it("says the chain is being checked while a later signature's transaction is built, after earlier prompts", async () => {
+    const fake = chain();
+    const read = fake.reader.chainTime;
+    let reads = 0;
+    // read 4 is the third step's build, after two prompts were answered
+    fake.reader.chainTime = () => (++reads >= 4 ? new Promise<bigint>(() => {}) : read());
+    const { driver, sends } = seedRun(() => "sign", fake);
+
+    await vi.waitFor(() => expect(reads).toBe(4), { timeout: 3_000 });
+
+    expect(sends.prompts).toHaveLength(2);
+    expect(progress(driver)).toMatchObject({
+      stage: "signing",
+      signature: { position: 3, total: TOTAL, status: "building" },
+    });
+  });
+
   it("names the seed's kind", async () => {
     const { driver, sends } = seedRun(() => "hang");
 
