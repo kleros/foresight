@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { Button } from "@kleros/ui-components-library";
 
 import { Modal } from "@/components/ui/Modal";
@@ -35,9 +37,12 @@ export function LiquidityPositionsDialog({
 }) {
   const { isRunning, progress } = run;
   const kind = progress?.kind;
-  const removing = positions.find(
-    (position) => position.request.kind === "remove" && position.request.input.position.tokenId === progress?.tokenId,
-  )?.pool;
+  // a completed remove burns its NFT, so the refetched list no longer holds it
+  const [pressed, setPressed] = useState<{ tokenId: bigint; pool: string }>();
+  const removing =
+    positions.find(
+      (position) => position.request.kind === "remove" && position.request.input.position.tokenId === progress?.tokenId,
+    )?.pool ?? (pressed && pressed.tokenId === progress?.tokenId ? pressed.pool : undefined);
   const isOwn = kind === "remove" || kind === "merge";
 
   const steps = isOwn
@@ -94,7 +99,12 @@ export function LiquidityPositionsDialog({
                           text="Remove"
                           aria-label={`Remove ${position.pool}`}
                           isDisabled={run.isHeld}
-                          onPress={() => run.start(position.request)}
+                          onPress={() => {
+                            if (position.request.kind === "remove") {
+                              setPressed({ tokenId: position.request.input.position.tokenId, pool: position.pool });
+                            }
+                            run.start(position.request);
+                          }}
                         />
                       </div>
                       <dl className="mt-1 text-[13px] leading-[18px] tabular-nums">

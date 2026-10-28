@@ -271,13 +271,16 @@ const removing = (stage: LiquidityProgress["stage"], tokenId: bigint, extra: Par
     ...extra,
   }) satisfies LiquidityProgress;
 
-const positionsPopup = (run: LiquidityRun, opts: { merge?: ShownMerge; onClose?: () => void } = {}) =>
+const positionsPopup = (
+  run: LiquidityRun,
+  opts: { merge?: ShownMerge; onClose?: () => void; positions?: ShownPosition[] } = {},
+) =>
   wrap(
     <LiquidityPositionsDialog
       isOpen
       onClose={opts.onClose ?? (() => {})}
       names={NAMES}
-      positions={POSITIONS}
+      positions={opts.positions ?? POSITIONS}
       merge={opts.merge}
       run={run}
     />,
@@ -290,6 +293,19 @@ describe("Your positions during a remove", () => {
 
     // the stored run of token 77 was recovered for review in place of a new one
     view.rerender(positionsPopup(runAt(removing("review", 77n))));
+
+    expect(timelineItems().map((each) => each.getAttribute("aria-label"))).toEqual([
+      `Timeline item: Remove ${DOWN_POOL}`,
+    ]);
+  });
+
+  it("still names the pool once the removed position drops out of the refetched list", async () => {
+    const view = render(positionsPopup(runAt(IDLE)));
+    await userEvent.click(screen.getByRole("button", { name: `Remove ${DOWN_POOL}` }));
+    view.rerender(positionsPopup(runAt(removing("signing", 77n))));
+
+    const done = removing("complete", 77n, { rows: [row("remove", "done", 1, 1)], signatures: { done: 1, total: 1 } });
+    view.rerender(positionsPopup(runAt(done), { positions: [POSITIONS[0]!] }));
 
     expect(timelineItems().map((each) => each.getAttribute("aria-label"))).toEqual([
       `Timeline item: Remove ${DOWN_POOL}`,
