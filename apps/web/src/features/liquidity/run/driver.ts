@@ -658,6 +658,8 @@ export function createLiquidityRun(args: {
       const stored = run() ?? args.store.load<LiquiditySnapshot, LiquidityCtx>(args.flowId);
       const account = args.account();
       if (stored && !(account && isAddressEqual(stored.ctx.owner, account))) return;
+      // the probe reads the connected chain
+      if (stored && stored.ctx.chainId !== args.chainId()) return;
       discarding = true;
       let landing: boolean;
       try {
