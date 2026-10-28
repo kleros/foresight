@@ -6,6 +6,8 @@ import type { Address } from "viem";
 
 import { formatAmount, parseAmount } from "@/utils/amount";
 
+import { LIQUIDITY_CLOSED_REASON } from "@/config/liquidity";
+
 import { useSDaiPreviewDeposit, type LiquidityBalances } from "../api/getLiquidityBalances";
 import { BPS, bpsForSqrtPrice } from "../flow/math";
 import { planSeed } from "../flow/plan";
@@ -81,7 +83,7 @@ export function useLiquiditySeed({
     const inRange = (bps: bigint | null) => bps !== null && bps >= MIN_SEED_PRICE_BPS && bps <= MAX_SEED_PRICE_BPS;
 
     const problem = (() => {
-      if (closed) return "Liquidity can't be added after the session's close.";
+      if (closed) return LIQUIDITY_CLOSED_REASON;
       if (!owner) return "Connect a wallet to add liquidity.";
       if (!pools || chainTime === undefined) return "Reading the pools…";
       if (total === undefined) return "Enter a total.";

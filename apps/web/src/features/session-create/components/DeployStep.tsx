@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useId } from "react";
 
 import { Accordion, Button, Copiable, CustomTimeline } from "@kleros/ui-components-library";
 import clsx from "clsx";
@@ -10,6 +11,7 @@ import { formatUtcInstant, utcInstant } from "@/utils/date";
 import { tryGatewayUrl } from "@/utils/ipfs";
 
 import { DEFAULT_CHAIN } from "@/config/chains";
+import { LIQUIDITY_CLOSED_REASON } from "@/config/liquidity";
 import { paths } from "@/config/paths";
 import { seerMarketUrl } from "@/config/site";
 
@@ -100,7 +102,10 @@ export function DeployStep({
   const { draft } = useDraftStore();
   const unit = draft.unit.trim();
   const hasMissing = assessment.issues.length > 0;
-  const decisionHuman = formatUtcInstant(utcInstant(draft.decisionDate, draft.decisionTime));
+  const closesAt = utcInstant(draft.decisionDate, draft.decisionTime);
+  const decisionHuman = formatUtcInstant(closesAt);
+  const isClosed = closesAt !== null && closesAt.getTime() <= Date.now();
+  const seedReasonId = useId();
   const imageCount = (draft.heroImageName ? 1 : 0) + (draft.iconName ? 1 : 0);
 
   const stages = stagesFor(progress, imageCount, draft.outcomes.length);
@@ -364,7 +369,14 @@ export function DeployStep({
                 <div className="type-label text-fs-text-primary">Needs liquidity to be tradable</div>
               </div>
               <div className="flex flex-wrap items-center gap-4">
-                {progress.parentMarket ? (
+                {progress.parentMarket && isClosed ? (
+                  <span className="flex flex-wrap items-center gap-3">
+                    <Button small text="Seed liquidity" isDisabled aria-describedby={seedReasonId} />
+                    <span id={seedReasonId} className="type-caption text-fs-text-secondary">
+                      {LIQUIDITY_CLOSED_REASON}
+                    </span>
+                  </span>
+                ) : progress.parentMarket ? (
                   <Link href={paths.market.addLiquidity.getHref(progress.parentMarket)} className="fs-cta type-label">
                     Seed liquidity
                   </Link>

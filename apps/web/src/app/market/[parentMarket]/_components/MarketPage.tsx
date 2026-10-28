@@ -24,6 +24,7 @@ import { optionNoun, optionNounSingular } from "@/features/sessions/utils/option
 import { sessionStatus } from "@/features/sessions/utils/toSessionDetail";
 import { TradeWallet } from "@/features/trade-executor/components/TradeWallet/TradeWallet";
 
+import { LIQUIDITY_CLOSED_REASON } from "@/config/liquidity";
 import { ADD_LIQUIDITY_PARAM, paths } from "@/config/paths";
 
 import { AdvancedSection } from "./AdvancedSection";
@@ -84,7 +85,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
   const walletMarket = toWalletMarket(detail);
   const addLiquidityReason =
     status === "closed"
-      ? "Liquidity can't be added after the session's close."
+      ? LIQUIDITY_CLOSED_REASON
       : !detail.setupComplete
         ? "The session is still being set up."
         : liquidity.pools.isError
