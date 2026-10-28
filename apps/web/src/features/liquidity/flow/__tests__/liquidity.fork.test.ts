@@ -23,6 +23,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 
 import { tickAtSqrtPrice } from "@/lib/swap/tickMath";
 
+import { minedHash, revertedOnChain } from "./support/reverted";
 import { decode, leftoverOf, movedSqrtPrice, sortPair, userSqrtPrice } from "./support/session";
 import { LIQUIDITY_ALLOW_LIST } from "../../oracle/allowlist";
 import {
@@ -332,6 +333,7 @@ describe.skipIf(!FORK_RPC_URL)("the liquidity flow, against a gnosis fork", () =
           return record.hash;
         } catch (error) {
           record.error = error;
+          record.hash = minedHash(error);
           throw error;
         }
       },
@@ -348,10 +350,9 @@ describe.skipIf(!FORK_RPC_URL)("the liquidity flow, against a gnosis fork", () =
         const next = sent[index + 1];
         return next ? next.nativeBefore : client.getBalance({ address: OWNER });
       },
+      /** Whether send `index` mined and the contract reverted it; a send that never reached the chain throws. */
       async reverted(index: number) {
-        const record = sent[index]!;
-        if (record.error !== undefined || !record.hash) return true;
-        return (await client.getTransactionReceipt({ hash: record.hash })).status === "reverted";
+        return revertedOnChain(client, index, sent[index]);
       },
     };
   }

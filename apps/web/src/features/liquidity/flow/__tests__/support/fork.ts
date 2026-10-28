@@ -18,6 +18,7 @@ import {
 import { gnosis } from "viem/chains";
 import { afterAll, afterEach, beforeAll, beforeEach, expect } from "vitest";
 
+import { minedHash, revertedOnChain } from "./reverted";
 import { decode, movedSqrtPrice, sortPair } from "./session";
 import { LIQUIDITY_ALLOW_LIST } from "../../../oracle/allowlist";
 import { readSentWithNonce } from "../../../run/sentWithNonce";
@@ -102,16 +103,6 @@ export interface Position {
   tickLower: number;
   tickUpper: number;
   liquidity: bigint;
-}
-
-/** Hardhat mines a send that reverts and answers it with an RPC error whose `data.txHash` names the mined send. */
-function minedHash(error: unknown): Hash | undefined {
-  for (let at = error; typeof at === "object" && at !== null; at = (at as { cause?: unknown }).cause) {
-    const data = (at as { data?: unknown }).data;
-    const hash = typeof data === "object" && data !== null ? (data as { txHash?: unknown }).txHash : undefined;
-    if (typeof hash === "string") return hash as Hash;
-  }
-  return undefined;
 }
 
 /** Registers the fork's hooks in the calling describe and returns the helpers its tests use. */
@@ -283,11 +274,7 @@ export function useFork() {
       },
       /** Whether send `index` mined and the contract reverted it; a send that never reached the chain throws. */
       async reverted(index: number) {
-        const record = sent[index];
-        if (!record) throw new Error(`no send ${index}`);
-        if (!record.hash)
-          throw new Error(`send ${index} never reached the chain: ${String(record.error).slice(0, 600)}`);
-        return (await client.getTransactionReceipt({ hash: record.hash })).status === "reverted";
+        return revertedOnChain(client, index, sent[index]);
       },
     };
   }
