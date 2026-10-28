@@ -12555,6 +12555,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"fast-check@npm:4.10.2":
+  version: 4.10.2
+  resolution: "fast-check@npm:4.10.2"
+  dependencies:
+    pure-rand: "npm:^8.0.0"
+  checksum: 10c0/ee9329018cc98d7fb3d7e5c944c4c667796b37133cd96aeb8dd1aeba901cf8561c2cc1355ffd54e1a16d262170a04bcfdc335da2e865294166e7bb8d97313f7d
+  languageName: node
+  linkType: hard
+
 "fast-copy@npm:^4.0.0":
   version: 4.0.4
   resolution: "fast-copy@npm:4.0.4"
@@ -17892,6 +17901,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"pure-rand@npm:^8.0.0":
+  version: 8.4.2
+  resolution: "pure-rand@npm:8.4.2"
+  checksum: 10c0/4b2ef2a2e68a258fb311efd26b65305b4865856e28d6b40ff61f7d65bb6a39b4f8ebbcf7dfc843193b3cfe54e7501dbc2c7aba0ecdb97d13cd634db709df83fd
+  languageName: node
+  linkType: hard
+
 "qrcode@npm:1.5.3":
   version: 1.5.3
   resolution: "qrcode@npm:1.5.3"
@@ -21804,6 +21820,7 @@ __metadata:
     "@yornaath/batshit": "npm:^0.10.0"
     clsx: "npm:^2.1.1"
     eslint: "npm:^9.28.0"
+    fast-check: "npm:4.10.2"
     graphql: "npm:^16.9.0"
     graphql-request: "npm:^7.4.0"
     jose: "npm:^5.10.0"
