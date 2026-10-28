@@ -1,0 +1,275 @@
+import {
+  createPublicClient,
+  custom,
+  decodeFunctionData,
+  encodeFunctionResult,
+  getAddress,
+  keccak256,
+  isAddressEqual,
+  multicall3Abi,
+  parseAbi,
+  RpcRequestError,
+  slice,
+  toHex,
+  zeroAddress,
+  type Abi,
+  type Address,
+  type Hex,
+  type PublicClient,
+} from "viem";
+import { gnosis } from "viem/chains";
+
+import { tickAtSqrtPrice } from "@/lib/swap/tickMath";
+
+import { LIQUIDITY_ALLOW_LIST } from "../../../oracle/allowlist";
+
+/**
+ * A fake Gnosis chain behind a real viem `PublicClient`, and the API these tests hold
+ * `features/liquidity/api/` to:
+ *
+ *   getLiquidityPools.ts
+ *     fetchLiquidityPools(client: PublicClient, { chainId, parentMarket, childMarkets })
+ *       → Promise<SessionPools>
+ *       childMarkets[i] is the child market of parent outcome i.
+ *     SessionPools = { session: LiquiditySession; branches: { up: PoolState; down: PoolState }[] }
+ *       branches[i] belongs to session.branches[i]: `outcome` = parent.wrappedOutcome(i),
+ *       `downToken`/`upToken`/`invalidToken` = child.wrappedOutcome(0/1/2), `parentInvalid` =
+ *       parent.wrappedOutcome(childMarkets.length). `up` is the pool of (upToken, outcome), `down` of
+ *       (downToken, outcome), each from `poolByPair` on the allow list's `algebraFactory`.
+ *     sessionHasLiquidity(pools: SessionPools) → boolean
+ *     liquidityKeyPrefix: readonly unknown[]   every liquidity read's query key starts with it
+ *     useLiquidityPools({ parentMarket, childMarkets } | undefined) → UseQueryResult<SessionPools>
+ *       reads through `publicClient` from "@/lib/web3/public-client" on DEFAULT_CHAIN_ID
+ *
+ *   getLiquidityPositions.ts
+ *     fetchLiquidityPositions(client: PublicClient, { pools: SessionPools; owner: Address })
+ *       → Promise<LiquidityPosition[]>
+ *     LiquidityPosition = { tokenId, token0, token1, tickLower, tickUpper, liquidity, amount0, amount1 }
+ *       amount0/amount1: what decreaseLiquidity of the full liquidity returns at the pool's current price.
+ *     useLiquidityPositions(pools: SessionPools | undefined, owner: Address | undefined)
+ *       → UseQueryResult<LiquidityPosition[]>
+ *
+ * The chain answers `eth_call`, alone or as Multicall3 `aggregate3`, for: a market's `wrappedOutcome`,
+ * `numOutcomes` and `parentWrappedOutcome`; the factory's `poolByPair` (either token order); a pool's
+ * `globalState`, `liquidity`, `tickSpacing`, `token0` and `token1`; the position manager's `factory`,
+ * `balanceOf`, `tokenOfOwnerByIndex`, `positions` and `ownerOf`. Anything else reverts.
+ */
+
+export const LIST = LIQUIDITY_ALLOW_LIST[100]!;
+export const Q96 = 2n ** 96n;
+
+const WORLD_ABI: Abi = parseAbi([
+  "function wrappedOutcome(uint256 index) view returns (address wrapped1155, bytes data)",
+  "function numOutcomes() view returns (uint256)",
+  "function parentWrappedOutcome() view returns (address wrapped1155, bytes data)",
+  "function poolByPair(address tokenA, address tokenB) view returns (address)",
+  "function globalState() view returns (uint160 price, int24 tick, uint16 fee, uint16 timepointIndex, uint8 communityFeeToken0, uint8 communityFeeToken1, bool unlocked)",
+  "function liquidity() view returns (uint128)",
+  "function tickSpacing() view returns (int24)",
+  "function token0() view returns (address)",
+  "function token1() view returns (address)",
+  "function factory() view returns (address)",
+  "function balanceOf(address owner) view returns (uint256)",
+  "function tokenOfOwnerByIndex(address owner, uint256 index) view returns (uint256)",
+  "function positions(uint256 tokenId) view returns (uint96 nonce, address operator, address token0, address token1, int24 tickLower, int24 tickUpper, uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128, uint128 tokensOwed0, uint128 tokensOwed1)",
+  "function ownerOf(uint256 tokenId) view returns (address)",
+]);
+
+/** Checksummed, as viem decodes every address it reads back. */
+export const at = (prefix: string): Address => getAddress(`0x${prefix.padEnd(40, "0")}`);
+export const owner: Address = at("a1");
+export const stranger: Address = at("ee");
+
+export const sortPair = (a: Address, b: Address): [Address, Address] => (BigInt(a) < BigInt(b) ? [a, b] : [b, a]);
+const pairKey = (a: Address, b: Address) => sortPair(a, b).join("|").toLowerCase();
+
+export interface PoolSetup {
+  sqrtPriceX96: bigint;
+  liquidity: bigint;
+  tickSpacing: number;
+}
+
+export interface PositionSetup {
+  tokenId: bigint;
+  token0: Address;
+  token1: Address;
+  tickLower: number;
+  tickUpper: number;
+  liquidity: bigint;
+  /** Who `ownerOf` names; defaults to the account it is enumerated under. */
+  ownerOf?: Address;
+}
+
+export interface BranchTokens {
+  childMarket: Address;
+  outcome: Address;
+  upToken: Address;
+  downToken: Address;
+  invalidToken: Address;
+}
+
+export interface Call {
+  to: Address;
+  functionName: string;
+  args: readonly unknown[];
+}
+
+/** Branch `index`'s market and tokens; a distinct address per `wrappedOutcome` index. */
+export function branchTokens(index: number): BranchTokens {
+  return {
+    childMarket: at(`c${index}`),
+    outcome: at(`8${index}`),
+    downToken: at(`1${index}d`),
+    upToken: at(`f${index}a`),
+    invalidToken: at(`5${index}`),
+  };
+}
+
+export function createChain(branchCount: number) {
+  const parentMarket = at("b0");
+  const parentInvalid = at("b9");
+  const branches = Array.from({ length: branchCount }, (_, index) => branchTokens(index + 1));
+  const pools = new Map<string, { address: Address; token0: Address; token1: Address; state: PoolSetup }>();
+  const enumerated = new Map<string, PositionSetup[]>();
+  const calls: Call[] = [];
+  let ethCalls = 0;
+
+  const marketOutcomes = new Map<string, Address[]>([
+    [parentMarket.toLowerCase(), [...branches.map((each) => each.outcome), parentInvalid]],
+    ...branches.map(
+      (each) =>
+        [each.childMarket.toLowerCase(), [each.downToken, each.upToken, each.invalidToken]] as [string, Address[]],
+    ),
+  ]);
+
+  const poolAt = (address: Address) => [...pools.values()].find((pool) => isAddressEqual(pool.address, address));
+  const positionById = (tokenId: bigint) =>
+    [...enumerated.values()].flat().find((position) => position.tokenId === tokenId);
+
+  function result(to: Address, functionName: string, args: readonly unknown[]): unknown {
+    const outcomes = marketOutcomes.get(to.toLowerCase());
+    if (outcomes) {
+      if (functionName === "wrappedOutcome") {
+        const token = outcomes[Number(args[0] as bigint)];
+        if (!token) throw new Error("no such outcome");
+        return [token, "0x"];
+      }
+      if (functionName === "numOutcomes") return BigInt(outcomes.length - 1);
+      if (functionName === "parentWrappedOutcome" && !isAddressEqual(to, parentMarket)) {
+        const index = branches.findIndex((each) => isAddressEqual(each.childMarket, to));
+        return [branches[index]!.outcome, "0x"];
+      }
+    }
+    if (isAddressEqual(to, LIST.algebraFactory) && functionName === "poolByPair") {
+      return pools.get(pairKey(args[0] as Address, args[1] as Address))?.address ?? zeroAddress;
+    }
+    const pool = poolAt(to);
+    if (pool) {
+      const { sqrtPriceX96, liquidity, tickSpacing } = pool.state;
+      if (functionName === "globalState") return [sqrtPriceX96, tickAtSqrtPrice(sqrtPriceX96), 100, 0, 0, 0, true];
+      if (functionName === "liquidity") return liquidity;
+      if (functionName === "tickSpacing") return tickSpacing;
+      if (functionName === "token0") return pool.token0;
+      if (functionName === "token1") return pool.token1;
+    }
+    if (isAddressEqual(to, LIST.positionManager)) {
+      if (functionName === "factory") return LIST.algebraFactory;
+      if (functionName === "balanceOf") return BigInt(enumerated.get((args[0] as Address).toLowerCase())?.length ?? 0);
+      if (functionName === "tokenOfOwnerByIndex") {
+        const held = enumerated.get((args[0] as Address).toLowerCase()) ?? [];
+        const position = held[Number(args[1] as bigint)];
+        if (!position) throw new Error("index out of bounds");
+        return position.tokenId;
+      }
+      const position = positionById(args[0] as bigint);
+      if (!position) throw new Error("invalid token id");
+      if (functionName === "ownerOf") {
+        const [enumeratedUnder] = [...enumerated.entries()].find(([, held]) => held.includes(position))!;
+        return position.ownerOf ?? (enumeratedUnder as Address);
+      }
+      if (functionName === "positions") {
+        const { token0, token1, tickLower, tickUpper, liquidity } = position;
+        return [0n, zeroAddress, token0, token1, tickLower, tickUpper, liquidity, 0n, 0n, 0n, 0n];
+      }
+    }
+    throw new Error(`no ${functionName} on ${to}`);
+  }
+
+  function answer(to: Address, data: Hex): { ok: true; data: Hex } | { ok: false } {
+    try {
+      const { functionName, args = [] } = decodeFunctionData({ abi: WORLD_ABI, data });
+      calls.push({ to, functionName, args });
+      return {
+        ok: true,
+        data: encodeFunctionResult({ abi: WORLD_ABI, functionName, result: result(to, functionName, args) }),
+      };
+    } catch {
+      return { ok: false };
+    }
+  }
+
+  const multicall3 = gnosis.contracts.multicall3.address;
+
+  async function request({ method, params }: { method: string; params?: unknown }): Promise<unknown> {
+    if (method === "eth_chainId") return "0x64";
+    if (method !== "eth_call") throw new Error(`unexpected rpc ${method}`);
+    ethCalls += 1;
+    const [{ to, data }] = params as [{ to: Address; data: Hex }];
+    if (isAddressEqual(to, multicall3)) {
+      const decoded = decodeFunctionData({ abi: multicall3Abi, data });
+      if (decoded.functionName !== "aggregate3") throw new Error(`unexpected multicall ${decoded.functionName}`);
+      const results = decoded.args[0].map((call) => {
+        const answered = answer(call.target, call.callData);
+        return answered.ok ? { success: true, returnData: answered.data } : { success: false, returnData: "0x" as Hex };
+      });
+      return encodeFunctionResult({ abi: multicall3Abi, functionName: "aggregate3", result: results });
+    }
+    const answered = answer(to, data);
+    if (answered.ok) return answered.data;
+    // the shape a node gives a reverted eth_call; viem builds it from the JSON-RPC error body
+    throw new RpcRequestError({
+      body: { method, params },
+      error: { code: 3, message: "execution reverted" },
+      url: "fake",
+    });
+  }
+
+  /** Configured like the app's own `publicClient`: Gnosis, with multicall batching on. */
+  const client: PublicClient = createPublicClient({
+    chain: gnosis,
+    transport: custom({ request }),
+    batch: { multicall: true },
+  });
+
+  return {
+    client,
+    parentMarket,
+    parentInvalid,
+    branches,
+    markets: { chainId: 100, parentMarket, childMarkets: branches.map((each) => each.childMarket) },
+    calls,
+    /** JSON-RPC `eth_call` requests made so far: one per round trip, however many reads it carries. */
+    ethCalls: () => ethCalls,
+    /** Creates the pair's pool, or sets the state of the one already there. */
+    setPool(tokenA: Address, tokenB: Address, state: PoolSetup): Address {
+      const key = pairKey(tokenA, tokenB);
+      const existing = pools.get(key);
+      if (existing) {
+        existing.state = state;
+        return existing.address;
+      }
+      const [token0, token1] = sortPair(tokenA, tokenB);
+      // a pair's pool address is fixed by the pair, as CREATE2 makes it on chain
+      const address = getAddress(slice(keccak256(toHex(key)), 12));
+      pools.set(key, { address, token0, token1, state });
+      return address;
+    },
+    /** Lists a position under `account`'s `tokenOfOwnerByIndex`. */
+    holdPosition(account: Address, position: PositionSetup) {
+      const key = account.toLowerCase();
+      enumerated.set(key, [...(enumerated.get(key) ?? []), position]);
+    },
+  };
+}
+
+export type Chain = ReturnType<typeof createChain>;

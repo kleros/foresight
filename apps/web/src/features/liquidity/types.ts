@@ -26,6 +26,24 @@ export type PoolState =
   | { status: "empty"; sqrtPriceX96: bigint; tickSpacing: number }
   | { status: "live"; sqrtPriceX96: bigint; liquidity: bigint; tickSpacing: number };
 
+/** A session and its pools, `branches[i]` the UP and DOWN pool of `session.branches[i]`. */
+export interface SessionPools {
+  session: LiquiditySession;
+  branches: { up: PoolState; down: PoolState }[];
+}
+
+/** A wallet's position in one of a session's pools, with what withdrawing all of it returns now (rounded down). */
+export interface LiquidityPosition {
+  tokenId: bigint;
+  token0: Address;
+  token1: Address;
+  tickLower: number;
+  tickUpper: number;
+  liquidity: bigint;
+  amount0: bigint;
+  amount1: bigint;
+}
+
 export type SeedCollateral = "sDAI" | "xDAI";
 
 export interface SeedBranchInput {
