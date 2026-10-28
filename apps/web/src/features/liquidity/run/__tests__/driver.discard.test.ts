@@ -224,6 +224,125 @@ describe("createLiquidityRun discard", () => {
     expect(timesBroadcast(fake, PLANNED)).toEqual(PLANNED.map(() => 1));
   });
 
+  it("keeps a run held on a prompt that was approved and mined since it halted, and that send lands once", async () => {
+    const { fake, left, hung } = await leftOpen();
+    const { driver, store, flowId } = await reopened(fake, left);
+    expect(progressOf(driver).failure?.reason).toBe("held");
+    fake.approveLater(hung, owner);
+
+    await driver.discard();
+
+    expect(storedRun(store, flowId)).not.toBeNull();
+    expect(progressOf(driver)).toEqual({ stage: "halted", failure: { reason: "pending", retryable: true } });
+    driver.retry();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("complete"));
+    expect(timesBroadcast(fake, PLANNED)).toEqual(PLANNED.map(() => 1));
+  });
+
+  it("keeps a run whose submitted send mined after its receipt wait failed, and that send lands once", async () => {
+    const fake = chain();
+    const sends = gateway(fake, owner, { script: (index) => (index === SPLIT_AT ? "unmined" : "sign") });
+    const wait = sends.port.waitForReceipt;
+    let failed = false;
+    sends.port.waitForReceipt = (args) => {
+      if (failed || !sameTx(fake.find(args.hash)!.tx, PLANNED[SPLIT_AT]!)) return wait(args);
+      failed = true;
+      return Promise.reject(new Error("boom"));
+    };
+    const { driver, store, flowId } = driverOn({
+      world: fake,
+      gateway: sends,
+      wallet: wallet(fake, owner),
+      request: seedRequest(),
+    });
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("halted"));
+    fake.land();
+
+    await driver.discard();
+
+    expect(storedRun(store, flowId)).not.toBeNull();
+    expect(progressOf(driver)).toEqual({ stage: "halted", failure: { reason: "pending", retryable: true } });
+    driver.retry();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("complete"));
+    expect(timesBroadcast(fake, PLANNED)).toEqual(PLANNED.map(() => 1));
+  });
+
+  it("keeps a run whose batch the wallet reports confirmed after a status read failed, and sends it once", async () => {
+    const fake = chain();
+    const batch = wallet(fake, owner, { atomic: "supported" });
+    const ask = batch.port.request;
+    let failed = false;
+    batch.port.request = (call) => {
+      if (call.method !== "wallet_getCallsStatus" || failed) return ask(call);
+      failed = true;
+      return Promise.reject(new Error("request timed out"));
+    };
+    const { driver, store, flowId } = driverOn({
+      world: fake,
+      gateway: gateway(fake, owner),
+      wallet: batch,
+      request: seedRequest(),
+    });
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("halted"));
+
+    await driver.discard();
+
+    expect(storedRun(store, flowId)).not.toBeNull();
+    expect(progressOf(driver)).toEqual({ stage: "halted", failure: { reason: "pending", retryable: true } });
+    driver.retry();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("complete"));
+    expect(batch.sendCalls).toHaveLength(1);
+  });
+
+  it("keeps a run whose batch the wallet reports pending", async () => {
+    const fake = chain();
+    const batch = wallet(fake, owner, { atomic: "supported", status: "pending" });
+    const ask = batch.port.request;
+    let failed = false;
+    batch.port.request = (call) => {
+      if (call.method !== "wallet_getCallsStatus" || failed) return ask(call);
+      failed = true;
+      return Promise.reject(new Error("request timed out"));
+    };
+    const { driver, store, flowId } = driverOn({
+      world: fake,
+      gateway: gateway(fake, owner),
+      wallet: batch,
+      request: seedRequest(),
+    });
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("halted"));
+
+    await driver.discard();
+
+    expect(storedRun(store, flowId)).not.toBeNull();
+    expect(progressOf(driver).failure?.reason).toBe("pending");
+  });
+
+  it("keeps a run, halted as rpc, when the chain cannot be read to tell whether its send landed", async () => {
+    const fake = chain();
+    const sends = gateway(fake, owner, { script: (index) => (index === SPLIT_AT ? "unmined" : "sign") });
+    const wait = sends.port.waitForReceipt;
+    sends.port.waitForReceipt = (args) =>
+      sameTx(fake.find(args.hash)!.tx, PLANNED[SPLIT_AT]!) ? Promise.reject(new Error("boom")) : wait(args);
+    const { driver, store, flowId } = driverOn({
+      world: fake,
+      gateway: sends,
+      wallet: wallet(fake, owner),
+      request: seedRequest(),
+    });
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("halted"));
+    sends.port.getReceipt = () => Promise.reject(new Error("request timed out"));
+
+    await driver.discard();
+
+    expect(storedRun(store, flowId)).not.toBeNull();
+    expect(progressOf(driver).failure?.reason).toBe("rpc");
+  });
+
   it("keeps a run that has not halted", async () => {
     const { fake, left } = await leftOpen();
     const sends = gateway(fake, owner);

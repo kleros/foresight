@@ -632,26 +632,39 @@ export function createLiquidityRun(args: {
   let discarding = false;
   const busy = () => disposed || preparing || recovering || discarding;
 
-  /** Whether a send of `stored` is broadcast and not yet mined, or its batch is still pending. */
-  async function mayStillLand(
+  /** Whether a send of the stored run is in flight or has landed; retry, not a new start, must settle it. */
+  async function mayHaveLanded(
     stored: Pick<PersistedFlowRun<LiquiditySnapshot, LiquidityCtx>, "snapshot" | "ctx" | "steps">,
   ) {
     const { snapshot, ctx, steps } = stored;
     if (snapshot.callsId !== undefined) {
       try {
-        if ((await callsStatus(snapshot.callsId)).status < 200) return true;
+        if ((await callsStatus(snapshot.callsId)).status < 300) return true;
       } catch (error) {
         // a batch the wallet cannot report is never sent again (L9)
         if (!(error instanceof RunStop)) throw error;
       }
     }
     for (const step of steps) {
-      if (step.outcome.status === "submitted" && !(await args.gateway.getReceipt(step.outcome.hash))) return true;
+      if (step.outcome.status !== "submitted") continue;
+      const receipt = await args.gateway.getReceipt(step.outcome.hash);
+      if (!receipt || receipt.status === "success") return true;
     }
-    const asked = steps.some(
+    const live = steps.filter(
       (step) => step.outcome.status !== "confirmed" && step.outcome.status !== "skipped" && snapshot.sends[step.stepId],
     );
-    return asked && (await args.reader.hasPending(ctx.owner));
+    if (live.length === 0) return false;
+    if (await args.reader.hasPending(ctx.owner)) return true;
+    for (const step of live) {
+      const send = snapshot.sends[step.stepId] as Partial<SendRecord>;
+      if (!send.tx || send.nonce === undefined || send.fromBlock === undefined) continue;
+      const found = await args.reader.sentWithNonce({ owner: ctx.owner, nonce: send.nonce, fromBlock: send.fromBlock });
+      if (found.status === "pending") return true;
+      if (found.status !== "mined" || !sameCall(found, send.tx)) continue;
+      const receipt = await args.gateway.getReceipt(found.hash);
+      if (!receipt || receipt.status === "success") return true;
+    }
+    return false;
   }
 
   return {
@@ -709,7 +722,7 @@ export function createLiquidityRun(args: {
 
     /**
      * Deletes this account's halted run, sends and all, signing nothing; for the UI to call once the user confirmed.
-     * Refused, as `pending`, while the chain shows one of its sends broadcast and not yet mined.
+     * Refused, as `pending`, while the chain shows one of its sends broadcast, mined, or its batch pending or confirmed.
      */
     async discard() {
       if (busy() || !failure || orchestrator.getStatus() === "running") return;
@@ -721,7 +734,7 @@ export function createLiquidityRun(args: {
       discarding = true;
       let landing: boolean;
       try {
-        landing = stored ? await mayStillLand(stored) : false;
+        landing = stored ? await mayHaveLanded(stored) : false;
       } catch (error) {
         stop(error, resumeRun);
         return;
