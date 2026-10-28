@@ -11,6 +11,7 @@ import {
   progressOf,
   settled,
   storedRun,
+  timesBroadcast,
   wallet,
   type Chain,
 } from "./support/world";
@@ -18,7 +19,8 @@ import { owner, stranger } from "../../flow/__tests__/support/session";
 
 afterEach(disposeDrivers);
 
-const SPLIT_AT = seedTxs(seedInput()).findIndex(movesMoney);
+const PLANNED = seedTxs(seedInput());
+const SPLIT_AT = PLANNED.findIndex(movesMoney);
 const tick = () => new Promise((resolve) => setTimeout(resolve, 30));
 
 /** A seed whose parent split prompt was open when its tab closed, on a copy of that tab's storage. */
@@ -133,5 +135,69 @@ describe("createLiquidityRun discard", () => {
     await tick();
 
     expect(storedRun(store, flowId)).not.toBeNull();
+  });
+
+  it("keeps a run whose send was broadcast before its receipt wait failed, and that send lands once", async () => {
+    const fake = chain();
+    const sends = gateway(fake, owner, { script: (index) => (index === SPLIT_AT ? "unmined" : "sign") });
+    const wait = sends.port.waitForReceipt;
+    let failed = false;
+    sends.port.waitForReceipt = (args) => {
+      if (failed) return wait(args);
+      failed = true;
+      return Promise.reject(new Error("boom"));
+    };
+    const { driver, store, flowId } = driverOn({
+      world: fake,
+      gateway: sends,
+      wallet: wallet(fake, owner),
+      request: seedRequest(),
+    });
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("halted"));
+
+    await driver.discard();
+
+    expect(storedRun(store, flowId)).not.toBeNull();
+    expect(progressOf(driver)).toEqual({ stage: "halted", failure: { reason: "pending", retryable: true } });
+    fake.land();
+    driver.retry();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("complete"));
+    expect(timesBroadcast(fake, PLANNED)).toEqual(PLANNED.map(() => 1));
+  });
+
+  it("keeps a run held on a prompt that was approved, broadcast and not yet mined since it halted", async () => {
+    const { fake, left, hung } = await leftOpen();
+    const { driver, store, flowId } = await reopened(fake, left);
+    expect(progressOf(driver).failure?.reason).toBe("held");
+    fake.broadcast(hung, owner, false);
+
+    await driver.discard();
+
+    expect(storedRun(store, flowId)).not.toBeNull();
+    expect(progressOf(driver)).toEqual({ stage: "halted", failure: { reason: "pending", retryable: true } });
+    fake.land();
+    driver.retry();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("complete"));
+    expect(timesBroadcast(fake, PLANNED)).toEqual(PLANNED.map(() => 1));
+  });
+
+  it("keeps a run that has not halted", async () => {
+    const { fake, left } = await leftOpen();
+    const sends = gateway(fake, owner);
+    const { driver, store, flowId } = driverOn({
+      world: fake,
+      gateway: sends,
+      wallet: wallet(fake, owner),
+      request: seedRequest(),
+      storage: left,
+    });
+    driver.recover();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("review"));
+
+    await driver.discard();
+
+    expect(storedRun(store, flowId)).not.toBeNull();
+    expect(progressOf(driver)).toEqual({ stage: "review" });
   });
 });
