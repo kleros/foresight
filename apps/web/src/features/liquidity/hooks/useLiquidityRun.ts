@@ -104,7 +104,7 @@ export function useLiquidityRun(parentMarket: Address, closesAt: Date | null): L
     resume: () => driver?.resume(),
     retry: () => driver?.retry(),
     reset: () => driver?.reset(),
-    discard: () => driver?.discard(),
+    discard: () => void driver?.discard(),
     isRunning: stage === "signing" || stage === "confirming",
     isHeld: stage !== undefined && stage !== "idle" && stage !== "complete",
   };

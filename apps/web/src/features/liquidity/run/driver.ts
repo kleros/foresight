@@ -9,6 +9,7 @@ import {
   type BalanceTxGateway,
   type FlowRunStore,
   type FlowTx,
+  type PersistedFlowRun,
   type TxGateway,
   type TxStep,
 } from "@foresight/tx-orchestrator";
@@ -561,7 +562,30 @@ export function createLiquidityRun(args: {
     })();
   }
 
-  const busy = () => disposed || preparing || recovering;
+  let discarding = false;
+  const busy = () => disposed || preparing || recovering || discarding;
+
+  /** Whether a send of `stored` is broadcast and not yet mined, or its batch is still pending. */
+  async function mayStillLand(
+    stored: Pick<PersistedFlowRun<LiquiditySnapshot, LiquidityCtx>, "snapshot" | "ctx" | "steps">,
+  ) {
+    const { snapshot, ctx, steps } = stored;
+    if (snapshot.callsId !== undefined) {
+      try {
+        if ((await callsStatus(snapshot.callsId)).status < 200) return true;
+      } catch (error) {
+        // a batch the wallet cannot report is never sent again (L9)
+        if (!(error instanceof RunStop)) throw error;
+      }
+    }
+    for (const step of steps) {
+      if (step.outcome.status === "submitted" && !(await args.gateway.getReceipt(step.outcome.hash))) return true;
+    }
+    const asked = steps.some(
+      (step) => step.outcome.status !== "confirmed" && step.outcome.status !== "skipped" && snapshot.sends[step.stepId],
+    );
+    return asked && (await args.reader.hasPending(ctx.owner));
+  }
 
   return {
     start() {
@@ -617,13 +641,29 @@ export function createLiquidityRun(args: {
 
     /**
      * Deletes this account's halted run, sends and all, signing nothing; for the UI to call once the user confirmed.
-     * A run with a send broadcast and not yet mined is kept.
+     * Refused, as `pending`, while the chain shows one of its sends broadcast and not yet mined.
      */
-    discard() {
-      if (busy() || !failure || failure.reason === "pending" || orchestrator.getStatus() === "running") return;
+    async discard() {
+      if (busy() || !failure || orchestrator.getStatus() === "running") return;
       const stored = run() ?? args.store.load<LiquiditySnapshot, LiquidityCtx>(args.flowId);
       const account = args.account();
       if (stored && !(account && isAddressEqual(stored.ctx.owner, account))) return;
+      discarding = true;
+      notify();
+      let landing: boolean;
+      try {
+        landing = stored ? await mayStillLand(stored) : false;
+      } catch (error) {
+        stop(error, resumeRun);
+        return;
+      } finally {
+        discarding = false;
+      }
+      if (disposed) return;
+      if (landing) {
+        report("pending", resumeRun);
+        return;
+      }
       if (stored) orchestrator.trash(args.flowId);
       moved = false;
       reviewing = false;
