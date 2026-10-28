@@ -75,8 +75,8 @@ describe("fetchLiquidityPositions in a wallet others have sent NFTs to", () => {
     const [only] = chain.branches as [Chain["branches"][0]];
     chain.setPool(only.upToken, only.outcome, { sqrtPriceX96: Q96, liquidity: 10n * WAD, tickSpacing: 60 });
     const [token0, token1] = sortPair(only.upToken, only.outcome);
-    // positions and ownerOf for each NFT come to twice what one request may carry
-    const tokenIds = Array.from({ length: CALLS_PER_BATCH }, (_, index) => 1_000n + BigInt(index));
+    // one more NFT than one request may carry, so neither the enumeration nor the reads fit one request
+    const tokenIds = Array.from({ length: CALLS_PER_BATCH + 1 }, (_, index) => 1_000n + BigInt(index));
     for (const tokenId of tokenIds) {
       chain.holdPosition(owner, { tokenId, token0, token1, ...fullRange(60), liquidity: WAD });
     }
@@ -87,7 +87,7 @@ describe("fetchLiquidityPositions in a wallet others have sent NFTs to", () => {
     expect(positions.map((each) => each.tokenId)).toEqual(tokenIds);
   });
 
-  it.each(["enumeration", "reads"] as const)(
+  it.each(["enumeration", "reads", "positions", "ownerOf"] as const)(
     "lists the readable positions when another NFT's %s revert",
     async (reverts) => {
       const chain = createChain(1);
@@ -105,4 +105,21 @@ describe("fetchLiquidityPositions in a wallet others have sent NFTs to", () => {
       expect(positions.map((each) => each.tokenId)).toEqual([200n, 202n]);
     },
   );
+
+  it.each([
+    ["reads", 5_030n],
+    ["enumeration", 30n],
+  ] as const)("fails the read when the node keeps refusing a request of the %s", async (_, carried) => {
+    const chain = createChain(1);
+    const [only] = chain.branches as [Chain["branches"][0]];
+    chain.setPool(only.upToken, only.outcome, { sqrtPriceX96: Q96, liquidity: 10n * WAD, tickSpacing: 60 });
+    const [token0, token1] = sortPair(only.upToken, only.outcome);
+    for (let index = 0n; index < 40n; index += 1n) {
+      chain.holdPosition(owner, { tokenId: 5_000n + index, token0, token1, ...fullRange(60), liquidity: WAD });
+    }
+    const pools = await fetchLiquidityPools(chain.client, chain.markets);
+    chain.refuseRequestsCarrying(carried);
+
+    await expect(fetchLiquidityPositions(chain.client, { pools, owner })).rejects.toThrow();
+  });
 });

@@ -98,8 +98,8 @@ export interface PositionSetup {
   liquidity: bigint;
   /** Who `ownerOf` names; defaults to the account it is enumerated under. */
   ownerOf?: Address;
-  /** Which reads of it revert: its `tokenOfOwnerByIndex`, or its `positions` and `ownerOf` (a burned token). */
-  reverts?: "enumeration" | "reads";
+  /** Which reads of it revert: its `tokenOfOwnerByIndex`, its `positions` and `ownerOf` (a burned token), or one of those two. */
+  reverts?: "enumeration" | "reads" | "positions" | "ownerOf";
 }
 
 export interface BranchTokens {
@@ -139,6 +139,7 @@ export function createChain(branchCount: number, { maxCallsPerRequest = Infinity
   const pools = new Map<string, { address: Address; token0: Address; token1: Address; state: PoolSetup }>();
   const enumerated = new Map<string, PositionSetup[]>();
   const calls: Call[] = [];
+  const refused = new Set<bigint>();
   let ethCalls = 0;
 
   const marketOutcomes = new Map<string, Address[]>([
@@ -189,7 +190,9 @@ export function createChain(branchCount: number, { maxCallsPerRequest = Infinity
         return position.tokenId;
       }
       const position = positionById(args[0] as bigint);
-      if (!position || position.reverts === "reads") throw new Error("invalid token id");
+      if (!position || position.reverts === "reads" || position.reverts === functionName) {
+        throw new Error("invalid token id");
+      }
       if (functionName === "ownerOf") {
         const [enumeratedUnder] = [...enumerated.entries()].find(([, held]) => held.includes(position))!;
         return position.ownerOf ?? (enumeratedUnder as Address);
@@ -225,7 +228,16 @@ export function createChain(branchCount: number, { maxCallsPerRequest = Infinity
     if (isAddressEqual(to, multicall3)) {
       const decoded = decodeFunctionData({ abi: multicall3Abi, data });
       if (decoded.functionName !== "aggregate3") throw new Error(`unexpected multicall ${decoded.functionName}`);
-      if (decoded.args[0].length > maxCallsPerRequest) {
+      const carriesRefused = decoded.args[0].some((call) => {
+        try {
+          return (decodeFunctionData({ abi: WORLD_ABI, data: call.callData }).args ?? []).some(
+            (arg) => typeof arg === "bigint" && refused.has(arg),
+          );
+        } catch {
+          return false;
+        }
+      });
+      if (decoded.args[0].length > maxCallsPerRequest || carriesRefused) {
         throw new RpcRequestError({
           body: { method, params },
           error: { code: -32000, message: "out of gas" },
@@ -277,6 +289,10 @@ export function createChain(branchCount: number, { maxCallsPerRequest = Infinity
       const address = getAddress(slice(keccak256(toHex(key)), 12));
       pools.set(key, { address, token0, token1, state });
       return address;
+    },
+    /** The node refuses, every time, an `aggregate3` whose calls carry `value` as an argument. */
+    refuseRequestsCarrying(value: bigint) {
+      refused.add(value);
     },
     /** Lists a position under `account`'s `tokenOfOwnerByIndex`. */
     holdPosition(account: Address, position: PositionSetup) {

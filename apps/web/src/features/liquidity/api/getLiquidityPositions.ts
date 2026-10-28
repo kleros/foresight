@@ -1,7 +1,13 @@
 "use client";
 
 import { skipToken, useQuery } from "@tanstack/react-query";
-import { isAddressEqual, parseAbi, type Address, type PublicClient } from "viem";
+import {
+  ContractFunctionExecutionError,
+  isAddressEqual,
+  parseAbi,
+  type Address,
+  type PublicClient,
+} from "viem";
 
 import { STALE_TIME } from "@/lib/query";
 import { sqrtPriceAtTick } from "@/lib/swap/tickMath";
@@ -21,6 +27,13 @@ const NFPM_ABI = parseAbi([
 
 /** Calldata bytes per Multicall3 request; a wallet anyone can send NFTs to is read in requests of this size. */
 export const POSITION_READ_BATCH_BYTES = 1_024;
+
+/** True when the entry's own call reverted; a failure naming `aggregate3` is a refused request, rethrown to retry. */
+function ownCallReverted(entry: { status: "success" | "failure"; error?: unknown }, functionName: string) {
+  if (entry.status === "success") return false;
+  if (entry.error instanceof ContractFunctionExecutionError && entry.error.functionName === functionName) return true;
+  throw entry.error;
+}
 
 const pairKey = (a: Address, b: Address) => (BigInt(a) < BigInt(b) ? `${a}|${b}` : `${b}|${a}`).toLowerCase();
 
@@ -65,7 +78,9 @@ export async function fetchLiquidityPositions(
     })),
     batchSize: POSITION_READ_BATCH_BYTES,
   });
-  const tokenIds = enumerated.flatMap((each) => (each.status === "success" ? [each.result] : []));
+  const tokenIds = enumerated.flatMap((each) =>
+    ownCallReverted(each, "tokenOfOwnerByIndex") ? [] : [each.result as bigint],
+  );
   const reads = await client.multicall({
     contracts: tokenIds.flatMap((tokenId) => [
       { ...manager, functionName: "positions" as const, args: [tokenId] as const },
@@ -76,7 +91,8 @@ export async function fetchLiquidityPositions(
 
   return tokenIds.flatMap((tokenId, index) => {
     const [read, held] = [reads[index * 2]!, reads[index * 2 + 1]!];
-    if (read.status !== "success" || held.status !== "success") return [];
+    const reverted = [ownCallReverted(read, "positions"), ownCallReverted(held, "ownerOf")];
+    if (reverted.includes(true)) return [];
     const [position, holder] = [read.result, held.result] as [
       readonly [bigint, Address, Address, Address, number, number, bigint, ...bigint[]],
       Address,
