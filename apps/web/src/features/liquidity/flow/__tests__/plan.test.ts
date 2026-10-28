@@ -300,7 +300,7 @@ describe("self-realign of an empty pool (L3)", () => {
       if (mint?.name !== "mint" || r.state.status !== "empty") throw new Error("no dust mint");
       const { sqrtA, sqrtB } = fullRange(NEW_POOL_TICK_SPACING);
 
-      const withdraw = decode(r.plan.steps[r.withdrawAt]!.build!({ tokenId }));
+      const withdraw = decode(r.plan.steps[r.withdrawAt]!.build!({ tokenId, sqrtPriceX96: r.pool.sqrtPriceX96 }));
 
       expect(withdraw.kind).toBe("multicall");
       if (withdraw.kind !== "multicall") return;

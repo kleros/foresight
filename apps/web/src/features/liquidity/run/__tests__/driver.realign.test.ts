@@ -11,10 +11,24 @@ import {
   gateway,
   progressOf,
   wallet,
+  type Chain,
   type LogsOf,
 } from "./support/world";
-import { LIST, decode, fullRange, liquidityFor, owner, txsOf } from "../../flow/__tests__/support/session";
+import {
+  BPS,
+  CHAIN_TIME,
+  LIST,
+  amount0Delta,
+  amount1Delta,
+  decode,
+  fullRange,
+  liquidityFor,
+  owner,
+  txsOf,
+  userSqrtPrice,
+} from "../../flow/__tests__/support/session";
 import { planSeed } from "../../flow/plan";
+import { LIQUIDITY_DEADLINE_SECONDS, LIQUIDITY_SLIPPAGE_BPS } from "../../oracle/tolerances";
 import type { PoolState } from "../../types";
 
 afterEach(disposeDrivers);
@@ -56,8 +70,11 @@ const mintLogs: LogsOf = (sent, receipt) =>
       ]
     : [];
 
-/** A chain holding the reviewed empty UP pool, whose run's own sends move it as they would a real pool. */
-function realignChain(opts: { mintLogs: boolean }) {
+/**
+ * A chain holding the reviewed empty UP pool, whose run's own sends move it as they would a real pool: the swap to
+ * its limit, or to `swapTo` where a capped swap stops short.
+ */
+function realignChain(opts: { mintLogs: boolean; swapTo?: bigint }) {
   const fake = chain({ logs: opts.mintLogs ? mintLogs : undefined });
   fake.setPool(TOKENS.upToken, TOKENS.outcome, REVIEWED.up);
   fake.state.owners.set(DUST_ID, owner);
@@ -75,7 +92,7 @@ function realignChain(opts: { mintLogs: boolean }) {
         tickSpacing: 60,
       });
     } else if (decoded.kind === "swap") {
-      price = decoded.limitSqrtPrice;
+      price = opts.swapTo ?? decoded.limitSqrtPrice;
       fake.setPool(TOKENS.upToken, TOKENS.outcome, {
         status: "live",
         sqrtPriceX96: price,
@@ -91,17 +108,32 @@ function realignChain(opts: { mintLogs: boolean }) {
 
 const input = seedInput({ pools: REVIEWED });
 
-function realignRun(opts: { mintLogs: boolean }) {
+/** A realign run on `realignChain`, where `meanwhile` runs after each of the run's sends has moved the pool. */
+function realignRun(opts: { mintLogs: boolean; swapTo?: bigint; meanwhile?: (tx: FlowTx, fake: Chain) => void }) {
   const { fake, moveUp } = realignChain(opts);
-  const sends = gateway(fake, owner, { onBroadcast: moveUp });
+  const sends = gateway(fake, owner, {
+    onBroadcast: (tx) => {
+      moveUp(tx);
+      opts.meanwhile?.(tx, fake);
+    },
+  });
   const { driver } = driverOn({
     world: fake,
     gateway: sends,
     wallet: wallet(fake, owner),
     request: { kind: "seed", input },
   });
-  return { driver, sends };
+  return { driver, sends, fake };
 }
+
+const isSwap = (tx: FlowTx) => decode(tx).kind === "swap";
+/** The branch's seed: a multicall minting both of its pools. */
+const isSeedMint = (tx: FlowTx) => {
+  const decoded = decode(tx);
+  return decoded.kind === "multicall" && decoded.inner.filter((call) => call.name === "mint").length === 2;
+};
+/** Someone else's liquidity, far deeper than the dust. */
+const OTHERS = 10n ** 21n;
 
 describe("createLiquidityRun realigning an empty pool (L3)", () => {
   it("withdraws the dust position its own mint gave out, and is not stopped by its own move of the pool", async () => {
@@ -163,5 +195,76 @@ describe("createLiquidityRun realigning an empty pool (L3)", () => {
         (each) => each.kind === "multicall" && each.inner[0]!.name === "decreaseLiquidity" && each.inner[0]!.tokenId,
       ),
     ).toEqual([DUST_ID]);
+  });
+
+  it("stops for a new review before the swap when someone added liquidity after the run's dust mint (L10)", async () => {
+    const { driver, sends } = realignRun({
+      mintLogs: true,
+      meanwhile: (tx, fake) => {
+        const mint = decode(tx);
+        if (!isDustMint(tx) || mint.kind !== "multicall" || mint.inner[0]!.name !== "mint") return;
+        const dust = liquidityFor(FROM, sqrtA, sqrtB, mint.inner[0]!.amount0Desired, mint.inner[0]!.amount1Desired);
+        fake.setPool(TOKENS.upToken, TOKENS.outcome, {
+          status: "live",
+          sqrtPriceX96: FROM,
+          liquidity: dust + OTHERS,
+          tickSpacing: 60,
+        });
+      },
+    });
+
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("moved"), { timeout: 3_000 });
+
+    expect(sends.prompts.filter(isDustMint)).toHaveLength(1);
+    expect(sends.prompts.filter(isSwap)).toEqual([]);
+  });
+
+  it("stops for a new review before the seed mint when someone seeded the pool after the dust withdrawal (L10)", async () => {
+    const target = planSeed(input).branches[0]!.pools.up.sqrtPriceX96;
+    const { driver, sends } = realignRun({
+      mintLogs: true,
+      meanwhile: (tx, fake) => {
+        if (!isWithdraw(tx)) return;
+        fake.setPool(TOKENS.upToken, TOKENS.outcome, {
+          status: "live",
+          sqrtPriceX96: target,
+          liquidity: OTHERS,
+          tickSpacing: 60,
+        });
+      },
+    });
+
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("moved"), { timeout: 3_000 });
+
+    expect(sends.prompts.filter(isWithdraw)).toHaveLength(1);
+    expect(sends.prompts.filter(isSeedMint)).toEqual([]);
+  });
+
+  it("holds the dust withdrawal to the amounts at the pool's price read at build, with the deadline from chain time then", async () => {
+    // a capped swap stopped short of the target
+    const swapTo = userSqrtPrice(4_000n, true);
+    const later = CHAIN_TIME + 3_600n;
+    const { driver, sends } = realignRun({
+      mintLogs: true,
+      swapTo,
+      meanwhile: (tx, fake) => {
+        if (isSwap(tx)) fake.state.chainTime = later;
+      },
+    });
+
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("complete"), { timeout: 3_000 });
+
+    const withdraw = decode(sends.prompts.find(isWithdraw)!);
+    const decrease = withdraw.kind === "multicall" ? withdraw.inner[0] : undefined;
+    if (decrease?.name !== "decreaseLiquidity") throw new Error("no dust withdrawal");
+    const less = (amount: bigint) => (amount * (BPS - BigInt(LIQUIDITY_SLIPPAGE_BPS))) / BPS;
+    expect(decrease).toMatchObject({
+      amount0Min: less(amount0Delta(swapTo, sqrtB, decrease.liquidity, false)),
+      amount1Min: less(amount1Delta(sqrtA, swapTo, decrease.liquidity, false)),
+      deadline: later + LIQUIDITY_DEADLINE_SECONDS,
+    });
   });
 });

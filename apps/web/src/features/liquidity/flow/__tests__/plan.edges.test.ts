@@ -89,7 +89,7 @@ describe("a realign's dust withdrawal", () => {
     ["falling, child token0", 9_900n, 2_000n, true],
     ["falling, child token1", 9_900n, 2_000n, false],
   ] as const)(
-    "holds to the dust's amounts over the swap's price range less slippage, %s",
+    "holds to the dust's amounts at the pool's price read at build less slippage, %s",
     (_, poolBps, target, order) => {
       const pool: PoolStateInput = {
         status: "empty",
@@ -105,23 +105,20 @@ describe("a realign's dust withdrawal", () => {
         chainTime: CHAIN_TIME,
         branches: [{ depth: 1_000n * WAD, upPriceBps: target, pools: { up: pool, down: missing } }],
       });
-      const withdrawAt = plan.steps.findIndex((step) => step.build !== undefined);
-      const dustAt = plan.steps.findIndex((step) => step.id === plan.steps[withdrawAt]!.withdraws);
-      const dust = decode(plan.steps[dustAt]!.tx!);
-      const withdraw = decode(plan.steps[withdrawAt]!.build!({ tokenId: 1n }));
-      if (dust.kind !== "multicall" || withdraw.kind !== "multicall") throw new Error("no dust round trip");
-      const mint = dust.inner[0]!;
-      const decrease = withdraw.inner[0]!;
-      if (mint.name !== "mint" || decrease.name !== "decreaseLiquidity") throw new Error("no dust mint or withdrawal");
+      const step = plan.steps.find((each) => each.build !== undefined)!;
       const { sqrtA, sqrtB } = fullRange(NEW_POOL_TICK_SPACING);
-      // a swap capped by another account's liquidity stops anywhere from the pool's price to the target (L3)
-      const [low, high] = [userSqrtPrice(poolBps, order), plan.branches[0]!.pools.up.sqrtPriceX96].sort((a, b) =>
-        a < b ? -1 : 1,
-      ) as [bigint, bigint];
       const less = (amount: bigint) => (amount * (BPS - BigInt(LIQUIDITY_SLIPPAGE_BPS))) / BPS;
+      // the target, and a capped swap's stop short of it
+      const reads = [plan.branches[0]!.pools.up.sqrtPriceX96, userSqrtPrice((poolBps + target) / 2n, order)];
 
-      expect(decrease.amount0Min).toBe(less(amount0Delta(high, sqrtB, decrease.liquidity, false)));
-      expect(decrease.amount1Min).toBe(less(amount1Delta(sqrtA, low, decrease.liquidity, false)));
+      for (const read of reads) {
+        const withdraw = decode(step.build!({ tokenId: 1n, sqrtPriceX96: read }));
+        const decrease = withdraw.kind === "multicall" ? withdraw.inner[0]! : undefined;
+        if (decrease?.name !== "decreaseLiquidity") throw new Error("no dust withdrawal");
+
+        expect(decrease.amount0Min).toBe(less(amount0Delta(read, sqrtB, decrease.liquidity, false)));
+        expect(decrease.amount1Min).toBe(less(amount1Delta(sqrtA, read, decrease.liquidity, false)));
+      }
     },
   );
 });

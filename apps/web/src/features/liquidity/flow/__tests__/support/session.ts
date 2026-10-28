@@ -21,8 +21,9 @@ import { LIQUIDITY_ALLOW_LIST } from "../../../oracle/allowlist";
  *                  amount0Min, amount1Min, create, realign, priceLocked }
  *     PoolState: { status: "missing" } | { status: "empty"; sqrtPriceX96; tickSpacing }
  *              | { status: "live"; sqrtPriceX96; liquidity; tickSpacing }
- *     LiquidityStep: { id; tx } | { id; withdraws: <id of the dust mint step>; build({ tokenId }) → FlowTx }
- *       The dust position's tokenId is known only once its mint lands, so its withdrawal is built from it.
+ *     LiquidityStep: { id; tx } | { id; withdraws: <id of the dust mint step>; build({ tokenId, sqrtPriceX96 }) → FlowTx }
+ *       The dust position's tokenId is known only once its mint lands, so its withdrawal is built from it and
+ *       the pool's price read at build.
  *   planRemove({ chainId, owner, chainTime, sqrtPriceX96,
  *                position: { tokenId, token0, token1, tickLower, tickUpper, liquidity } })
  *     → { amount0, amount1, amount0Min, amount1Min, tx }
@@ -256,15 +257,23 @@ export interface StepLike {
   id: string;
   tx?: FlowTx;
   withdraws?: string;
-  build?: (minted: { tokenId: bigint }) => FlowTx;
+  build?: (at: { tokenId: bigint; sqrtPriceX96: bigint }) => FlowTx;
 }
 
-/** Each step's transaction, building a dust withdrawal from token id `dustTokenId(stepIndex)`. */
+/**
+ * Each step's transaction, building a dust withdrawal from token id `dustTokenId(stepIndex)` at the price the swap
+ * before it is limited to, where a run's own swap leaves the pool.
+ */
 export function txsOf(steps: readonly StepLike[], dustTokenId = (index: number) => 9_000n + BigInt(index)): FlowTx[] {
+  let limit: bigint | undefined;
   return steps.map((step, index) => {
-    if (step.tx) return step.tx;
-    if (!step.build) throw new Error(`step ${step.id} has neither tx nor build`);
-    return step.build({ tokenId: dustTokenId(index) });
+    if (step.tx) {
+      const decoded = decode(step.tx);
+      if (decoded.kind === "swap") limit = decoded.limitSqrtPrice;
+      return step.tx;
+    }
+    if (!step.build || limit === undefined) throw new Error(`step ${step.id} has neither tx nor a swap before it`);
+    return step.build({ tokenId: dustTokenId(index), sqrtPriceX96: limit });
   });
 }
 
