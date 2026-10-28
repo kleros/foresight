@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { TOKENS, empty, seedInput } from "./support/requests";
 import {
+  CLOSES_AT,
   chain,
   copyStorage,
   disposeDrivers,
@@ -266,5 +267,59 @@ describe("createLiquidityRun realigning an empty pool (L3)", () => {
       amount1Min: less(amount1Delta(sqrtA, swapTo, decrease.liquidity, false)),
       deadline: later + LIQUIDITY_DEADLINE_SECONDS,
     });
+  });
+
+  /** The token id each dust withdrawal sent takes out. */
+  const withdrawn = (prompts: FlowTx[]) =>
+    prompts
+      .filter(isWithdraw)
+      .map(decode)
+      .map(
+        (each) => each.kind === "multicall" && each.inner[0]!.name === "decreaseLiquidity" && each.inner[0]!.tokenId,
+      );
+
+  it("withdraws the dust when someone added liquidity after the swap, then stops for a new review before the seed mint (L3, L10)", async () => {
+    let dust = 0n;
+    let at = FROM;
+    const { driver, sends } = realignRun({
+      mintLogs: true,
+      meanwhile: (tx, fake) => {
+        const decoded = decode(tx);
+        if (isDustMint(tx) && decoded.kind === "multicall" && decoded.inner[0]!.name === "mint") {
+          dust = liquidityFor(FROM, sqrtA, sqrtB, decoded.inner[0]!.amount0Desired, decoded.inner[0]!.amount1Desired);
+          return;
+        }
+        if (decoded.kind === "swap") at = decoded.limitSqrtPrice;
+        else if (!isWithdraw(tx)) return;
+        fake.setPool(TOKENS.upToken, TOKENS.outcome, {
+          status: "live",
+          sqrtPriceX96: at,
+          liquidity: OTHERS + (decoded.kind === "swap" ? dust : 0n),
+          tickSpacing: 60,
+        });
+      },
+    });
+
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("moved"), { timeout: 3_000 });
+
+    expect(withdrawn(sends.prompts)).toEqual([DUST_ID]);
+    expect(sends.prompts.filter(isSeedMint)).toEqual([]);
+  });
+
+  it("withdraws the dust when the session closed after the swap, then halts as closed before the seed mint (L3, L7)", async () => {
+    const { driver, sends } = realignRun({
+      mintLogs: true,
+      meanwhile: (tx, fake) => {
+        if (isSwap(tx)) fake.state.chainTime = CLOSES_AT;
+      },
+    });
+
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("halted"), { timeout: 3_000 });
+
+    expect(progressOf(driver).failure?.reason).toBe("closed");
+    expect(withdrawn(sends.prompts)).toEqual([DUST_ID]);
+    expect(sends.prompts.filter(isSeedMint)).toEqual([]);
   });
 });

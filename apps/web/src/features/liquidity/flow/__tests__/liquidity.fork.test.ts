@@ -777,7 +777,7 @@ describe.skipIf(!FORK_RPC_URL)("the liquidity flow, against a gnosis fork", () =
     );
 
     it(
-      "caps the realign swap when another account adds liquidity before it, and the seed mint then reverts",
+      "caps the realign swap when another account adds liquidity before it, withdraws the dust, and stops before the seed mint",
       async () => {
         const tokens = session.branches[0]!;
         const upIsToken0 = BigInt(tokens.upToken) < BigInt(tokens.outcome);
@@ -803,7 +803,7 @@ describe.skipIf(!FORK_RPC_URL)("the liquidity flow, against a gnosis fork", () =
 
         const progress = await drive(request, gateway);
         expect(added).toBe(true);
-        expect(progress.stage).not.toBe("complete");
+        expect(progress.stage).toBe("moved");
 
         const swapAt = gateway.sent.findIndex((each) => kindOf(each.tx).kind === "swap");
         const swap = kindOf(gateway.sent[swapAt]!.tx);
@@ -814,7 +814,7 @@ describe.skipIf(!FORK_RPC_URL)("the liquidity flow, against a gnosis fork", () =
         expect(spent).toBeGreaterThan(0n);
         expect(spent).toBeLessThanOrEqual(swap.amountIn);
 
-        // the dust still comes back in full, then the seed mint goes out and reverts on its minimums
+        // the dust still comes back in full; the pool now holds the other account's liquidity, so no seed mint is signed
         const withdrawAt = gateway.sent.findIndex((each) => isWithdraw(each.tx));
         expect(withdrawAt).toBeGreaterThan(swapAt);
         expect({ dustWithdrawalReverted: await gateway.reverted(withdrawAt) }).toEqual({
@@ -823,9 +823,7 @@ describe.skipIf(!FORK_RPC_URL)("the liquidity flow, against a gnosis fork", () =
         expect(
           await burned(await mintedIn(gateway.sent[gateway.sent.findIndex((each) => isDustMint(each.tx))]!.hash!)),
         ).toBe(true);
-        const seedAt = gateway.sent.findIndex((each) => isSeedMint(each.tx, tokens.outcome));
-        expect(seedAt).toBeGreaterThan(swapAt);
-        expect(await gateway.reverted(seedAt)).toBe(true);
+        expect(gateway.sent.filter((each) => isSeedMint(each.tx, tokens.outcome))).toEqual([]);
         const seeded = (await positionsOf(OWNER)).filter(
           (each) => inPool(each, tokens.upToken, tokens.outcome) && each.liquidity > 0n,
         );
