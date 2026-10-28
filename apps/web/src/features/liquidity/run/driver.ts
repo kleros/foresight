@@ -659,7 +659,6 @@ export function createLiquidityRun(args: {
       const account = args.account();
       if (stored && !(account && isAddressEqual(stored.ctx.owner, account))) return;
       discarding = true;
-      notify();
       let landing: boolean;
       try {
         landing = stored ? await mayStillLand(stored) : false;
