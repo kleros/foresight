@@ -113,6 +113,33 @@ describe("createLiquidityRun recovering a prompt open when its tab closed (L8)",
     expect(sends.prompts).toEqual([]);
   });
 
+  it("holds a send stored with only a nonce and a time, whose nonce a mined call of it took", async () => {
+    const { fake, left, hung } = await leftOpen();
+    const legacy = (value: unknown): unknown => {
+      if (Array.isArray(value)) return value.map(legacy);
+      if (typeof value !== "object" || value === null) return value;
+      return Object.fromEntries(
+        Object.entries(value).map(([key, field]) =>
+          key === "sends"
+            ? [
+                key,
+                Object.fromEntries(
+                  Object.entries(field as object).map(([id, send]) => [id, { nonce: send.nonce, heldAt: T0 }]),
+                ),
+              ]
+            : [key, legacy(field)],
+        ),
+      );
+    };
+    for (const key of left.keys()) left.setItem(key, JSON.stringify(legacy(JSON.parse(left.getItem(key)!))));
+    fake.approveLater(hung, owner);
+
+    const { driver, sends } = await reopened(fake, left);
+
+    expect(progressOf(driver)).toEqual({ stage: "halted", failure: { reason: "held", retryable: true } });
+    expect(sends.prompts).toEqual([]);
+  });
+
   // red-team probe P-o
   it("sends the parent split once when its prompt was approved after the tab closed and mined only before a retry", async () => {
     const { fake, left, hung } = await leftOpen();
