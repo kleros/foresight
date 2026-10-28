@@ -22,7 +22,7 @@ export {
   type FlowRunStorage,
   type FlowRunStore,
 } from "./storage";
-export { createViemTxGateway, type BalanceTxGateway, type ReceiptClient } from "./viemGateway";
+export { createViemTxGateway, type ReceiptClient } from "./viemGateway";
 export { decodeState, encodeState } from "./codec";
 export {
   currentEntry,

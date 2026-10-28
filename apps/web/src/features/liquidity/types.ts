@@ -190,9 +190,7 @@ export type LiquidityFailureReason =
   /** The wallet cannot report a sent batch, so it is never sent again. */
   | "batch-unknown"
   /** The wallet reports the batch did not land. */
-  | "batch-failed"
-  /** The run's xDAI would leave the account under GAS_RESERVE_WEI (L12), so nothing was sent. */
-  | "gas-reserve";
+  | "batch-failed";
 
 export interface LiquidityProgress {
   /** `moved`: a pool read at build differs from the reviewed one; nothing more is signed until a new review. */

@@ -6,7 +6,6 @@ import {
   currentEntry,
   settledEntries,
   StorageWriteError,
-  type BalanceTxGateway,
   type FlowRunStore,
   type FlowTx,
   type TxGateway,
@@ -27,7 +26,6 @@ import {
 import { assertListed, UnlistedTxError } from "../flow/allowed";
 import { planMerge, planRemove, planSeed } from "../flow/plan";
 import { LIQUIDITY_ALLOW_LIST } from "../oracle/allowlist";
-import { GAS_RESERVE_WEI } from "../oracle/tolerances";
 import type {
   LiquidityFailureReason,
   LiquidityProgress,
@@ -139,7 +137,7 @@ const sleep = (ms: number, signal?: AbortSignal) =>
 
 /** Drives one liquidity run (seed, add, remove or merge) from the connected wallet, under adapter `liquidity-flow`. */
 export function createLiquidityRun(args: {
-  gateway: BalanceTxGateway;
+  gateway: TxGateway;
   wallet: LiquidityWallet;
   reader: LiquidityReader;
   store: FlowRunStore;
@@ -215,11 +213,6 @@ export function createLiquidityRun(args: {
     const steps = planned(request, chainTime);
     for (const step of steps) {
       if (step.tx) assertListed({ tx: step.tx, session, owner: request.input.owner, from: account });
-    }
-    const value = steps.reduce((sum, step) => (settled.has(step.id) ? sum : sum + (step.tx?.value ?? 0n)), 0n);
-    // L12
-    if (value > 0n && (await args.gateway.getBalance(account)) - value < GAS_RESERVE_WEI) {
-      throw new RunStop("gas-reserve", true);
     }
     return { steps, account, session };
   }

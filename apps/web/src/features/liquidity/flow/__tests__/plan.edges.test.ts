@@ -88,42 +88,36 @@ describe("a realign's dust withdrawal", () => {
     ["rising, child token1", 100n, 6_000n, false],
     ["falling, child token0", 9_900n, 2_000n, true],
     ["falling, child token1", 9_900n, 2_000n, false],
-  ] as const)(
-    "holds to the dust's amounts over the swap's price range less slippage, %s",
-    (_, poolBps, target, order) => {
-      const pool: PoolStateInput = {
-        status: "empty",
-        sqrtPriceX96: userSqrtPrice(poolBps, order),
-        tickSpacing: NEW_POOL_TICK_SPACING,
-      };
-      const s = session([branch(1, { up: order, down: !order })]);
-      const plan = planSeed({
-        session: s,
-        owner,
-        total: 1_000n * WAD,
-        collateral: "sDAI",
-        chainTime: CHAIN_TIME,
-        branches: [{ depth: 1_000n * WAD, upPriceBps: target, pools: { up: pool, down: missing } }],
-      });
-      const withdrawAt = plan.steps.findIndex((step) => step.build !== undefined);
-      const dustAt = plan.steps.findIndex((step) => step.id === plan.steps[withdrawAt]!.withdraws);
-      const dust = decode(plan.steps[dustAt]!.tx!);
-      const withdraw = decode(plan.steps[withdrawAt]!.build!({ tokenId: 1n }));
-      if (dust.kind !== "multicall" || withdraw.kind !== "multicall") throw new Error("no dust round trip");
-      const mint = dust.inner[0]!;
-      const decrease = withdraw.inner[0]!;
-      if (mint.name !== "mint" || decrease.name !== "decreaseLiquidity") throw new Error("no dust mint or withdrawal");
-      const { sqrtA, sqrtB } = fullRange(NEW_POOL_TICK_SPACING);
-      // a swap capped by another account's liquidity stops anywhere from the pool's price to the target (L3)
-      const [low, high] = [userSqrtPrice(poolBps, order), plan.branches[0]!.pools.up.sqrtPriceX96].sort((a, b) =>
-        a < b ? -1 : 1,
-      ) as [bigint, bigint];
-      const less = (amount: bigint) => (amount * (BPS - BigInt(LIQUIDITY_SLIPPAGE_BPS))) / BPS;
+  ] as const)("holds to the dust's amounts at the target price less slippage, %s", (_, poolBps, target, order) => {
+    const pool: PoolStateInput = {
+      status: "empty",
+      sqrtPriceX96: userSqrtPrice(poolBps, order),
+      tickSpacing: NEW_POOL_TICK_SPACING,
+    };
+    const s = session([branch(1, { up: order, down: !order })]);
+    const plan = planSeed({
+      session: s,
+      owner,
+      total: 1_000n * WAD,
+      collateral: "sDAI",
+      chainTime: CHAIN_TIME,
+      branches: [{ depth: 1_000n * WAD, upPriceBps: target, pools: { up: pool, down: missing } }],
+    });
+    const withdrawAt = plan.steps.findIndex((step) => step.build !== undefined);
+    const dustAt = plan.steps.findIndex((step) => step.id === plan.steps[withdrawAt]!.withdraws);
+    const dust = decode(plan.steps[dustAt]!.tx!);
+    const withdraw = decode(plan.steps[withdrawAt]!.build!({ tokenId: 1n }));
+    if (dust.kind !== "multicall" || withdraw.kind !== "multicall") throw new Error("no dust round trip");
+    const mint = dust.inner[0]!;
+    const decrease = withdraw.inner[0]!;
+    if (mint.name !== "mint" || decrease.name !== "decreaseLiquidity") throw new Error("no dust mint or withdrawal");
+    const { sqrtA, sqrtB } = fullRange(NEW_POOL_TICK_SPACING);
+    const at = plan.branches[0]!.pools.up.sqrtPriceX96;
+    const less = (amount: bigint) => (amount * (BPS - BigInt(LIQUIDITY_SLIPPAGE_BPS))) / BPS;
 
-      expect(decrease.amount0Min).toBe(less(amount0Delta(high, sqrtB, decrease.liquidity, false)));
-      expect(decrease.amount1Min).toBe(less(amount1Delta(sqrtA, low, decrease.liquidity, false)));
-    },
-  );
+    expect(decrease.amount0Min).toBe(less(amount0Delta(at, sqrtB, decrease.liquidity, false)));
+    expect(decrease.amount1Min).toBe(less(amount1Delta(sqrtA, at, decrease.liquidity, false)));
+  });
 });
 
 describe("a realigned branch's budget", () => {
