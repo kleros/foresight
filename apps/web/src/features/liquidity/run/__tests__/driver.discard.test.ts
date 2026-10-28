@@ -9,6 +9,7 @@ import {
   gateway,
   movesMoney,
   progressOf,
+  sameTx,
   settled,
   storedRun,
   timesBroadcast,
@@ -143,7 +144,7 @@ describe("createLiquidityRun discard", () => {
     const wait = sends.port.waitForReceipt;
     let failed = false;
     sends.port.waitForReceipt = (args) => {
-      if (failed) return wait(args);
+      if (failed || !sameTx(fake.find(args.hash)!.tx, PLANNED[SPLIT_AT]!)) return wait(args);
       failed = true;
       return Promise.reject(new Error("boom"));
     };
