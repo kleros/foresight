@@ -1,7 +1,21 @@
-import type { StatusLine } from "../utils/predictSteps";
+/** A popup's status line: what it says, in which tone. */
+export interface PopupStatusLine {
+  text: string;
+  tone: "neutral" | "warning" | "error";
+  /** Said for the visitor's information only, in the popup's small type on one line. */
+  small?: true;
+  /** A run is checking something before it goes on. */
+  waiting?: true;
+}
 
 /** The status callout's 16px mark: its tone, or a clock while a run checks something. */
-export function StatusGlyph({ status, className }: { status: StatusLine; className?: string }) {
+export function StatusGlyph({
+  status,
+  className,
+}: {
+  status: Pick<PopupStatusLine, "tone" | "waiting">;
+  className?: string;
+}) {
   const kind = status.waiting ? "waiting" : status.tone;
   return (
     <svg

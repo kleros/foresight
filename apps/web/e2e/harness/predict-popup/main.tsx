@@ -4,7 +4,6 @@ import { createRoot } from "react-dom/client";
 import { parseUnits, type Hash } from "viem";
 import { gnosis } from "viem/chains";
 
-import { PredictButton } from "@/features/predict/components/PredictButton";
 import { PredictDialog } from "@/features/predict/components/PredictDialog";
 import type { ListedEstimate } from "@/features/predict/components/PredictList";
 import { DEFAULT_SLIPPAGE, SLIPPAGE_BPS } from "@/features/predict/oracle/tolerances";
@@ -15,6 +14,8 @@ import { planFunding } from "@/features/predict/utils/funding";
 import { previewTrades } from "@/features/predict/utils/plan";
 import { fundsToAdd, predictSteps } from "@/features/predict/utils/predictSteps";
 import { normalizeSlippageSettings, type SlippageSettings } from "@/features/predict/utils/slippage";
+
+import { PopupButton } from "@/components/ui/PopupButton";
 
 import { estimateToPriceWad, priceWadToEstimate } from "@/utils/optionPrice";
 
@@ -333,7 +334,7 @@ const success = (
     isEmailVerified={isEmailVerified}
     // the app's sign-in needs a wallet; this draws its button as PredictSuccessDialog does
     signUp={
-      <PredictButton
+      <PopupButton
         text="Sign in to subscribe"
         busyText={signingIn ? "Signing in…" : undefined}
         isDisabled={false}

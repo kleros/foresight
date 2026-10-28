@@ -1,4 +1,5 @@
-import type { StepView } from "../utils/predictSteps";
+/** A step row's state; `inactive` will not run, `failed` is where the run stopped. */
+export type StepView = "idle" | "running" | "done" | "inactive" | "failed";
 
 /** A numbered 24px bullet: the digit, a check and a cross stacked, so a change of `view` cross-fades. */
 export function StepBullet({ view, number }: { view: StepView; number: number }) {

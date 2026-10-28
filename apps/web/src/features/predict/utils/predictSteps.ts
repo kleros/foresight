@@ -1,5 +1,8 @@
 import type { Address } from "viem";
 
+import type { PopupStatusLine } from "@/components/ui/StatusGlyph";
+import type { StepView } from "@/components/ui/StepBullet";
+
 import { shortenAddress } from "@/utils/address";
 import { FEE_ONLY_OUT_OF_FUNDS_COPY, OUT_OF_FUNDS_COPY } from "@/utils/txErrorText";
 
@@ -8,7 +11,7 @@ import { STEP_ID } from "../flow/stepIds";
 import type { PredictProgress } from "../run/types";
 import type { PayToken } from "../types";
 
-export type StepView = "idle" | "running" | "done" | "inactive" | "failed";
+export type { StepView };
 
 export interface PredictStepRow {
   key: "wallet" | "funds" | "predict";
@@ -251,14 +254,7 @@ export function predictSteps(
   return { rows: marked, failure: reason, ...started, ...(mayLand ? { pending: true as const } : {}) };
 }
 
-export interface StatusLine {
-  text: string;
-  tone: "neutral" | "warning" | "error";
-  /** Said for the visitor's information only, in the popup's small type on one line. */
-  small?: true;
-  /** A run is checking something before it goes on. */
-  waiting?: true;
-}
+export type StatusLine = PopupStatusLine;
 
 /**
  * The popup's one status line under the steps, most pressing first: what the visitor has to do,

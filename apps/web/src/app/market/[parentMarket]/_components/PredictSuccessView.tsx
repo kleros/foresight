@@ -6,13 +6,13 @@ import type { CSSProperties, ReactNode } from "react";
 import clsx from "clsx";
 import type { Address, Hash } from "viem";
 
-import { PredictButton } from "@/features/predict/components/PredictButton";
-import { StepBullet } from "@/features/predict/components/StepBullet";
 import { shownAmount } from "@/features/predict/utils/funding";
 import type { FundsToAdd } from "@/features/predict/utils/predictSteps";
 import { receiptRows, type PlacedStep, type ReceiptLink, type ReceiptRow } from "@/features/predict/utils/receipt";
 
 import { Modal } from "@/components/ui/Modal";
+import { PopupButton } from "@/components/ui/PopupButton";
+import { StepBullet } from "@/components/ui/StepBullet";
 
 import ExternalArrow from "@/assets/svg/external-arrow.svg";
 
@@ -203,7 +203,7 @@ export function PredictSuccessView({
       <div className="predict-success-foot mt-4 flex flex-col">
         {subscribed ? (
           // nothing is at stake here, so Close stays in the panel's tone
-          <PredictButton text="Close" quiet isDisabled={false} onPress={onClose} />
+          <PopupButton text="Close" quiet isDisabled={false} onPress={onClose} />
         ) : (
           <button
             type="button"

@@ -4,11 +4,11 @@ import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react"
 
 import clsx from "clsx";
 
-import LightButton from "@/components/ui/LightButton";
 import { Modal } from "@/components/ui/Modal";
+import { POPUP_FRAME, PopupCloseButton } from "@/components/ui/Popup";
+import { PopupButton } from "@/components/ui/PopupButton";
 import { ScrollFade } from "@/components/ui/ScrollFade";
-
-import CloseIcon from "@/assets/svg/close.svg";
+import { StatusCallout } from "@/components/ui/StatusCallout";
 
 import { formatEstimate } from "@/utils/formatEstimate";
 import { INERT } from "@/utils/inert";
@@ -16,13 +16,11 @@ import { INERT } from "@/utils/inert";
 import type { PayToken } from "../types";
 import { GearIcon } from "./GearIcon";
 import { PredictAmountSection, type PayTokenChoice } from "./PredictAmountSection";
-import { PredictButton } from "./PredictButton";
 import type { CreditsChoice } from "./PredictCreditsLine";
 import { PredictList, type ListedEstimate, type PriceMove } from "./PredictList";
 import { PredictSettings, reachable } from "./PredictSettings";
 import { PredictStepsTimeline } from "./PredictStepsTimeline";
 import { PredictSummary, type CreditsSwapShown } from "./PredictSummary";
-import { StatusGlyph } from "./StatusGlyph";
 import { HIGH_SLIPPAGE_BPS } from "../oracle/tolerances";
 import { shownAmount, shownSplit, type Funding } from "../utils/funding";
 import {
@@ -293,12 +291,12 @@ export function PredictDialog({
   const isStacked = useSyncExternalStore(subscribeStacked, isStackedNow, () => false);
   const goBack = onBack ? (
     <div className="fs-enter w-28 shrink-0 [@media(max-width:374px)]:w-full">
-      <PredictButton text="Go back" quiet isDisabled={false} onPress={onBack} />
+      <PopupButton text="Go back" quiet isDisabled={false} onPress={onBack} />
     </div>
   ) : null;
   const discard = onDiscard ? (
     <div className="fs-enter w-28 shrink-0 [@media(max-width:374px)]:w-full">
-      <PredictButton text="Discard" quiet isDisabled={false} onPress={onDiscard} />
+      <PopupButton text="Discard" quiet isDisabled={false} onPress={onDiscard} />
     </div>
   ) : null;
 
@@ -309,13 +307,7 @@ export function PredictDialog({
       // a run part way through can be left only while it waits on a transaction stored as sent
       isDismissable={!isRunning || canClose}
       onOpenChange={(open) => (open || (isRunning && !canClose) ? undefined : onClose())}
-      className={clsx(
-        "fixed top-18 left-1/2 -translate-x-1/2 transform",
-        "h-auto max-h-[calc(100dvh-5rem)] md:max-h-[calc(100dvh-5.5rem)]",
-        "w-[calc(100vw-2rem)] max-w-[480px]",
-        "flex px-4 pt-4 pb-0! md:px-5 md:pt-5",
-        "fs-aurora rounded-fs-popup bg-fs-surface border border-(--fs-popup-edge) shadow-(--fs-popup-shadow)",
-      )}
+      className={POPUP_FRAME}
     >
       {/* on a phone on its side the whole popup scrolls between its sticky 40px header and its sticky button;
           it reaches 12px into the dialog's right padding for the close button's target, 4px into the left for Predict's ring */}
@@ -388,20 +380,11 @@ export function PredictDialog({
                 )}
               />
             </button>
-            <LightButton
-              text=""
-              aria-label={settingsOpen ? "Close settings" : "Close"}
-              icon={<CloseIcon className="text-fs-popup-text-2 size-4.5" />}
+            <PopupCloseButton
+              label={settingsOpen ? "Close settings" : "Close"}
               isDisabled={isRunning && !canClose}
               // under the Settings title the X closes the settings, not the prediction behind them
               onPress={settingsOpen ? () => setSettingsWanted(false) : onClose}
-              className={clsx(
-                "relative -mr-1.5 size-8 justify-center rounded-full! p-0",
-                "hover:bg-transparent [@media(hover:hover)]:hover:bg-fs-popup-hover disabled:opacity-40",
-                "before:absolute before:-inset-1.5 before:content-['']",
-                // the scroller's top edge is the button's, so its ring sits inside
-                "landscape-phone:[--fs-focus-offset:-2px]",
-              )}
             />
           </div>
         </div>
@@ -534,25 +517,7 @@ export function PredictDialog({
           </ScrollFade>
 
           {/* outside the body's scroll area, so the reason a run stopped shows with the button; its slot is held empty or not */}
-          <p
-            ref={statusRef}
-            role="status"
-            aria-live="polite"
-            data-tone={status?.tone}
-            className="predict-status text-left"
-          >
-            {status ? (
-              <span
-                key={status.text}
-                data-testid="status-box"
-                data-small={status.small}
-                className={clsx("predict-status-box", status.tone !== "neutral" && "fs-enter")}
-              >
-                <StatusGlyph status={status} />
-                <span data-testid="status-text">{status.text}</span>
-              </span>
-            ) : null}
-          </p>
+          <StatusCallout ref={statusRef} status={status} />
 
           {/* under 375px Go back and Confirm new prices outgrow one row, so Confirm stacks over Go back */}
           <div
@@ -563,7 +528,7 @@ export function PredictDialog({
           >
             {isMoved && onBack && !isStacked ? goBack : null}
             {isStacked ? null : discard}
-            <PredictButton
+            <PopupButton
               text={
                 onRetryPrices
                   ? "Try again"

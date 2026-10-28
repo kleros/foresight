@@ -2,10 +2,10 @@
 
 import { useAtlasProvider } from "@kleros/kleros-app";
 
-import { PredictButton } from "@/features/predict/components/PredictButton";
 import ContactDetailsForm from "@/features/settings/components/NotificationSettings/ContactDetailsForm";
 
 import EnsureAuth from "@/components/auth/EnsureAuth";
+import { PopupButton } from "@/components/ui/PopupButton";
 
 import { DEFAULT_CHAIN } from "@/config/chains";
 import { explorerTxUrl } from "@/config/site";
@@ -46,7 +46,7 @@ export function PredictSuccessDialog({
       signUp={
         <EnsureAuth
           renderButton={({ onPress, isDisabled, isSigningIn }) => (
-            <PredictButton
+            <PopupButton
               text="Sign in to subscribe"
               busyText={isSigningIn ? "Signing in…" : undefined}
               isDisabled={isDisabled}

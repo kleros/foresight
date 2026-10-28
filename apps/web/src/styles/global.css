@@ -318,7 +318,7 @@
   }
 }
 
-/* The predict popup's steps: the library timeline's rows at 40px, numbered bullets on a dotted connector
+/* A popup's steps (StepsTimeline): the library timeline's rows at 40px, numbered bullets on a dotted connector
    that fills with the axis as a step finishes. Unlayered, so it wins over the library's own margins. */
 .step-bullet {
   position: relative;
@@ -423,14 +423,14 @@
   stroke-dashoffset: 0;
   transition: stroke-dashoffset var(--fs-dur-enter) var(--fs-ease-enter);
 }
-.predict-steps > li > div:first-child {
+.fs-steps > li > div:first-child {
   padding-top: 6px;
 }
 /* the library draws a line above the bullet down to the title's offset; the connector below replaces it */
-.predict-steps > li > div:first-child > div[style] {
+.fs-steps > li > div:first-child > div[style] {
   display: none;
 }
-.predict-steps > li > div:first-child > div:last-child:not([style]) {
+.fs-steps > li > div:first-child > div:last-child:not([style]) {
   position: relative;
   flex: 1 1 0;
   width: 0;
@@ -438,7 +438,7 @@
   margin: 0 0 -6px;
   border-left: 2px dotted var(--fs-popup-line-strong);
 }
-.predict-steps > li > div:first-child > div:last-child:not([style])::after {
+.fs-steps > li > div:first-child > div:last-child:not([style])::after {
   content: "";
   position: absolute;
   top: 0;
@@ -450,10 +450,10 @@
   transform-origin: top;
   transition: transform var(--fs-dur-structural) var(--fs-ease-structural);
 }
-.predict-steps > li:has([data-bullet="done"]) > div:first-child > div:last-child:not([style])::after {
+.fs-steps > li:has([data-bullet="done"]) > div:first-child > div:last-child:not([style])::after {
   transform: scaleY(1);
 }
-.predict-steps > li > div:nth-child(2) {
+.fs-steps > li > div:nth-child(2) {
   flex: 1 1 0;
   min-width: 0;
   height: 36px;
@@ -461,19 +461,19 @@
   justify-content: center;
   gap: 0;
 }
-.predict-steps > li > div:nth-child(2) > div {
+.fs-steps > li > div:nth-child(2) > div {
   flex-wrap: nowrap;
   justify-content: space-between;
   gap: 2px 12px;
 }
-.predict-steps h2 {
+.fs-steps h2 {
   flex: none;
   font: 600 13px/18px var(--font-sans);
   color: var(--fs-popup-text);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.predict-steps h2 + p {
+.fs-steps h2 + p {
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -491,37 +491,37 @@
   white-space: normal;
   text-align: right;
 }
-.predict-steps li:has([data-bullet="running"]) h2 + p {
+.fs-steps li:has([data-bullet="running"]) h2 + p {
   color: var(--fs-popup-text);
 }
-.predict-steps li:has([data-bullet="failed"]) h2 + p {
+.fs-steps li:has([data-bullet="failed"]) h2 + p {
   color: var(--fs-tone-error-text);
 }
-.predict-steps li:has([data-bullet="inactive"]) h2 {
+.fs-steps li:has([data-bullet="inactive"]) h2 {
   color: var(--fs-popup-text-2);
 }
-.predict-steps li:has([data-bullet="inactive"]) h2 + p {
+.fs-steps li:has([data-bullet="inactive"]) h2 + p {
   color: var(--fs-popup-text-3);
 }
 /* the step's detail sits under its title where the two do not fit one line; both columns then
    start at the row's top, so the 24px bullet and the 16px title 4px down share a centre */
 @container (max-width: 22rem) {
-  .predict-steps > li > div:first-child {
+  .fs-steps > li > div:first-child {
     padding-top: 0;
   }
-  .predict-steps > li > div:first-child > div:last-child:not([style]) {
+  .fs-steps > li > div:first-child > div:last-child:not([style]) {
     margin-bottom: 0;
   }
-  .predict-steps > li > div:nth-child(2) {
+  .fs-steps > li > div:nth-child(2) {
     height: 40px;
     justify-content: flex-start;
     padding-top: 4px;
   }
-  .predict-steps > li > div:nth-child(2) > div {
+  .fs-steps > li > div:nth-child(2) > div {
     flex-direction: column;
     align-items: flex-start;
   }
-  .predict-steps h2 {
+  .fs-steps h2 {
     line-height: 16px;
   }
   .predict-steps > li:nth-child(2) h2 + p {
@@ -540,8 +540,18 @@
     white-space: normal;
   }
 }
-.predict-steps small {
+.fs-steps small {
   display: none;
+}
+/* a liquidity row's title names a branch, so it gives way before its signature count */
+.liquidity-steps h2 {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+.liquidity-steps h2 + p {
+  flex: none;
 }
 /* the token select's caret: the summary's 1.5px chevron in place of the library's filled triangle */
 .predict-token-select > button > svg:last-child {
