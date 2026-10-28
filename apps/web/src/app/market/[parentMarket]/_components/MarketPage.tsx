@@ -159,6 +159,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
         <LiquiditySection
           reason={addLiquidityReason}
           onAdd={() => setAddingLiquidity(true)}
+          names={liquidity.names}
           positions={liquidity.positions}
           merge={liquidity.merge}
           run={liquidity.run}

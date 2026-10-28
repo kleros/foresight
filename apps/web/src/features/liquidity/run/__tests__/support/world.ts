@@ -63,7 +63,12 @@ import { createLiquidityRun } from "../../driver";
  *   LiquidityProgress {
  *     stage: "idle" | "signing" | "confirming" | "review" | "moved" | "halted" | "complete";
  *     failure?: { reason: string; retryable: boolean };
+ *     kind?: "seed" | "remove" | "merge";  atomic?: true;
+ *     rows: { id; view: "idle" | "running" | "done" | "failed"; signatures: { done; total } }[];
+ *     signatures: { done; total };   // one per transaction, or one for a batch
+ *     signature?: { position; total; status: "building" | "awaiting-signature" | "submitted" };
  *   }
+ *     rows: a seed's "parent" then "branch:<i>", a remove's "remove", a merge's "branch:<i>" merges then "parent".
  *     stage "moved": a pool read at build differs from the reviewed one; nothing more is signed until a new review.
  *     reasons these tests name: "unlisted" (flow/allowed.ts found a departure, including a run whose owner is not
  *     the connected account), "closed" (seed or add at or after the close by chain time), "wrong-wallet"
@@ -485,7 +490,11 @@ export const settled = (driver: LiquidityDriverLike) =>
     { timeout: 3_000 },
   );
 
-export const progressOf = (driver: LiquidityDriverLike) => driver.getProgress() as LiquidityProgressLike;
+/** The run's stage and failure only; driver.progress.test.ts reads the rows. */
+export const progressOf = (driver: LiquidityDriverLike): LiquidityProgressLike => {
+  const { stage, failure } = driver.getProgress();
+  return failure ? { stage, failure } : { stage };
+};
 
 // ---------------------------------------------------------------- what reached the chain
 

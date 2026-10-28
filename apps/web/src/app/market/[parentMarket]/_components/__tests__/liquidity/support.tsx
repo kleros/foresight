@@ -35,8 +35,10 @@ import { MarketPage } from "../../MarketPage";
  *     through `publicClient` from "@/lib/web3/public-client", the account through wagmi's `useAccount`;
  *     there is no WagmiProvider, so sends go through `@wagmi/core` with `wagmiConfig` as `usePredictRun` does.
  *     - no pool of the session holds liquidity: a banner above the options with an "Add liquidity" control
- *     - always: a liquidity section below the options and the Predict button, with an "Add liquidity" control,
- *       one "Remove" button per position the wallet holds, and a "Merge" button with what merging returns
+ *     - always: a liquidity section below the options and the Predict button, with an "Add liquidity" control
+ *       and a line saying how many positions the wallet holds; where it holds any, or complete sets to merge,
+ *       a "Your positions" button opens a dialog of that name with one "Remove" per position and a "Merge"
+ *       button with what merging returns. The section lists no position itself.
  *     - after the session's close: every "Add liquidity" / "Seed liquidity" control disabled, its reason as
  *       its accessible description; "Remove" and "Merge" stay enabled
  *     - "Add liquidity" opens a dialog named /liquidity/i: a "Total" amount in sDAI or xDAI, per branch a

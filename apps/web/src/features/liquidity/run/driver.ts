@@ -27,7 +27,6 @@ import {
 } from "viem";
 
 import { assertListed, UnlistedTxError } from "../flow/allowed";
-import { planMerge, planRemove, planSeed } from "../flow/plan";
 import { LIQUIDITY_ALLOW_LIST } from "../oracle/allowlist";
 import { GAS_RESERVE_WEI } from "../oracle/tolerances";
 import type {
@@ -41,6 +40,8 @@ import type {
   PoolState,
   SeedInput,
 } from "../types";
+import { MAY_LAND } from "../types";
+import { plannedSteps as planned, rowsOf, type RunRow } from "./rows";
 
 export const BATCH = "batch";
 
@@ -95,20 +96,6 @@ class RunStop extends Error {
 
 const sessionOf = (request: LiquidityRequest): LiquiditySession =>
   request.kind === "remove" ? request.session : request.input.session;
-
-/** The request's steps, with deadlines from `chainTime` where given; ids do not depend on it. */
-function planned(request: LiquidityRequest, chainTime?: bigint): LiquidityStep[] {
-  switch (request.kind) {
-    case "seed":
-      return planSeed({ ...request.input, chainTime: chainTime ?? request.input.chainTime }).steps;
-    case "remove":
-      return [
-        { id: "remove", tx: planRemove({ ...request.input, chainTime: chainTime ?? request.input.chainTime }).tx },
-      ];
-    case "merge":
-      return planMerge(request.input).txs.map((tx, index) => ({ id: `merge:${index}`, tx }));
-  }
-}
 
 const poolKey = (pool: PoolState) =>
   pool.status === "missing"
@@ -431,7 +418,9 @@ export function createLiquidityRun(args: {
     },
   });
 
-  let cached: LiquidityProgress = { stage: "idle" };
+  /** What start() was last pressed with, for the rows before the run is stored. */
+  let asked: LiquidityRequest | undefined;
+  let cached: LiquidityProgress = { stage: "idle", rows: [], signatures: { done: 0, total: 0 } };
 
   function stage(): LiquidityProgress["stage"] {
     if (moved) return "moved";
@@ -450,8 +439,63 @@ export function createLiquidityRun(args: {
     }
   }
 
+  let grouped: { request: LiquidityRequest; rows: RunRow[] } | undefined;
+  function rowsFor(request: LiquidityRequest): RunRow[] {
+    if (grouped?.request !== request) {
+      let rows: RunRow[];
+      try {
+        rows = rowsOf(request, planned(request));
+      } catch {
+        rows = [];
+      }
+      grouped = { request, rows };
+    }
+    return grouped.rows;
+  }
+
+  /** The popup's rows and the prompt the run is on, from the run's own steps. */
+  function rowProgress(now: LiquidityProgress["stage"]): Omit<LiquidityProgress, "stage" | "failure"> {
+    const current = run();
+    const request = current?.snapshot.request ?? asked;
+    if (!request) return { rows: [], signatures: { done: 0, total: 0 } };
+    const entries = current?.steps ?? [];
+    const atomic = current?.snapshot.atomic === true;
+    const settled = new Set(settledEntries(entries).map((entry) => entry.stepId));
+    const live = currentEntry(entries);
+    const going = now === "signing" || now === "confirming";
+    const crossed = now === "halted" && !(failure && MAY_LAND.has(failure.reason));
+    const plan = rowsFor(request);
+    const total = atomic ? 1 : plan.reduce((sum, row) => sum + row.stepIds.length, 0);
+    const rows = plan.map(({ id, stepIds }) => {
+      const covers = atomic ? [BATCH] : stepIds;
+      const done = atomic ? (settled.has(BATCH) ? stepIds.length : 0) : stepIds.filter((s) => settled.has(s)).length;
+      const holds = live !== undefined && covers.includes(live.stepId);
+      const view =
+        done === stepIds.length ? "done" : holds && going ? "running" : holds && crossed ? "failed" : "idle";
+      return { id, view, signatures: { done, total: stepIds.length } } as const;
+    });
+    const position = live ? entries.indexOf(live) + 1 : 0;
+    const status = live?.outcome.status;
+    return {
+      kind: request.kind,
+      ...(atomic ? { atomic: true as const } : {}),
+      rows,
+      signatures: { done: atomic ? (settled.has(BATCH) ? 1 : 0) : settled.size, total },
+      ...(live && going
+        ? {
+            signature: {
+              position,
+              total,
+              status: status === "awaiting-signature" || status === "submitted" ? status : "building",
+            },
+          }
+        : {}),
+    };
+  }
+
   function notify() {
-    cached = { stage: stage(), ...(failure ? { failure } : {}) };
+    const now = stage();
+    cached = { stage: now, ...(failure ? { failure } : {}), ...rowProgress(now) };
     for (const listener of listeners) listener();
   }
 
@@ -523,6 +567,7 @@ export function createLiquidityRun(args: {
 
   const startRun = detached(async () => {
     const request = args.request();
+    asked = request;
     preparing = true;
     notify();
     let checked: Awaited<ReturnType<typeof checkedSteps>>;
@@ -646,6 +691,7 @@ export function createLiquidityRun(args: {
       }
       moved = false;
       reviewing = false;
+      asked = undefined;
       report(undefined);
     },
 
@@ -678,6 +724,7 @@ export function createLiquidityRun(args: {
       if (stored) orchestrator.trash(args.flowId);
       moved = false;
       reviewing = false;
+      asked = undefined;
       report(undefined);
     },
 

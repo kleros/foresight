@@ -379,7 +379,7 @@ describe.skipIf(!FORK_RPC_URL)("the liquidity flow, against a gnosis fork", () =
       closesAt,
       pollMs: 100,
     });
-    const progress = await new Promise<LiquidityProgress>((resolve, reject) => {
+    const progress = await new Promise<Pick<LiquidityProgress, "stage" | "failure">>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error("the run did not settle")), RUN_TIMEOUT_MS - 10_000);
       const check = () => {
         const now = driver.getProgress();
@@ -387,7 +387,7 @@ describe.skipIf(!FORK_RPC_URL)("the liquidity flow, against a gnosis fork", () =
         if (now.stage === "complete" || (now.stage === "halted" && now.failure) || now.stage === "moved") {
           clearTimeout(timer);
           unsubscribe();
-          resolve(now);
+          resolve(now.failure ? { stage: now.stage, failure: now.failure } : { stage: now.stage });
         }
       };
       const unsubscribe = driver.subscribe(check);

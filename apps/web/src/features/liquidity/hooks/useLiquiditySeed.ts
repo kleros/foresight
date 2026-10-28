@@ -8,12 +8,14 @@ import { formatAmount, parseAmount } from "@/utils/amount";
 
 import { LIQUIDITY_CLOSED_REASON } from "@/config/liquidity";
 
+import { tokenLabels, type TokenAmount } from "./useSessionLiquidity";
 import { useSDaiPreviewDeposit, type LiquidityBalances } from "../api/getLiquidityBalances";
 import { BPS, bpsForSqrtPrice } from "../flow/math";
 import { planSeed } from "../flow/plan";
 import { MAX_SEED_PRICE_BPS, MIN_SEED_PRICE_BPS } from "../oracle/tolerances";
+import { rowsOf } from "../run/rows";
 import type { LiquidityRequest, SeedCollateral, SeedInput, SeedPlan, SessionPools } from "../types";
-import { tokenLabels, type TokenAmount } from "./useSessionLiquidity";
+import type { PlannedRow } from "../utils/runSteps";
 
 const PRICE_DECIMALS = 4;
 export const DEFAULT_UP_PRICE = formatAmount(BPS / 2n, PRICE_DECIMALS);
@@ -139,21 +141,9 @@ export function useLiquiditySeed({
           ],
         })),
         leftovers: plan.leftovers.map((each) => amount(each.token, each.amount)),
-        /** The timeline's rows: the parent split (branch null), then each branch's steps, with their signature counts. */
-        steps: stepRows(plan),
+        /** The timeline's rows: the parent split, then each branch, with their signature counts. */
+        steps: rowsOf(request, plan.steps).map((row): PlannedRow => ({ id: row.id, signatures: row.stepIds.length })),
       },
     };
   }, [pools, owner, names, balances, chainTime, closed, form, total, previewDeposit.data]);
-}
-
-function stepRows(plan: SeedPlan) {
-  const rows: { branch: number | null; signatures: number }[] = [];
-  for (const step of plan.steps) {
-    const [scope, index] = step.id.split(":");
-    const branch = scope === "branch" ? Number(index) : null;
-    const last = rows.at(-1);
-    if (last && last.branch === branch) last.signatures += 1;
-    else rows.push({ branch, signatures: 1 });
-  }
-  return rows;
 }

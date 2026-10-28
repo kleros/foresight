@@ -223,8 +223,32 @@ export type LiquidityFailureReason =
   /** The run's xDAI would leave the account under GAS_RESERVE_WEI (L12), so nothing was sent. */
   | "gas-reserve";
 
+/** Halts whose send may still land: the row it stopped on is not crossed, and the stop is a warning. */
+export const MAY_LAND: ReadonlySet<LiquidityFailureReason> = new Set(["pending", "held", "batch-unknown"]);
+
+/** A row's state: `failed` marks the row the run stopped on, unless what it sent may still land. */
+export type LiquidityRowView = "idle" | "running" | "done" | "failed";
+
+export interface LiquidityProgressRow {
+  /** `parent`, `branch:<i>` or `remove`, in the plan's order. */
+  id: string;
+  view: LiquidityRowView;
+  /** The row's transactions settled and planned. */
+  signatures: { done: number; total: number };
+}
+
 export interface LiquidityProgress {
   /** `moved`: a pool read at build differs from the reviewed one; nothing more is signed until a new review. */
   stage: "idle" | "signing" | "confirming" | "review" | "moved" | "halted" | "complete";
   failure?: { reason: LiquidityFailureReason; retryable: boolean };
+  /** What the run signs; absent before a run. */
+  kind?: LiquidityRequest["kind"];
+  /** The run is one EIP-5792 batch, so one signature. */
+  atomic?: true;
+  /** Empty before a run. */
+  rows: LiquidityProgressRow[];
+  /** Wallet prompts settled and planned: one per transaction, or one for a batch. */
+  signatures: { done: number; total: number };
+  /** The prompt the run is on: `building` while its transaction is checked against the chain. */
+  signature?: { position: number; total: number; status: "building" | "awaiting-signature" | "submitted" };
 }

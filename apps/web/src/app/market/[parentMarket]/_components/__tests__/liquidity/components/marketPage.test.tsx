@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -117,8 +117,15 @@ function show(world: World, openingTime: string) {
   return sessionLoaded();
 }
 
-const removeButtons = () => screen.queryAllByRole("button", { name: /^remove/i });
-const mergeButton = () => screen.findByRole("button", { name: /^merge/i }, { timeout: 5000 });
+const removeButtons = (scope: HTMLElement = document.body) => within(scope).queryAllByRole("button", { name: /^remove/i });
+const positionsButton = () => screen.findByRole("button", { name: "Your positions" }, { timeout: 5000 });
+const summary = () => screen.getByTestId("liquidity-summary");
+
+/** Opens Your positions from the section, once the wallet's positions are read. */
+async function openPositions() {
+  await userEvent.click(await positionsButton());
+  return screen.findByRole("dialog", { name: "Your positions" }, { timeout: 5000 });
+}
 const predictButton = () => screen.getByRole("button", { name: /^Predict (\d+ )?estimates?$/ });
 const optionHeading = (index: number) => screen.getAllByRole("heading", { name: BRANCH_NAMES[index] })[0]!;
 
@@ -160,8 +167,9 @@ describe("the market page of a session with no liquidity", () => {
     world.holdPosition(owner, { tokenId: 11n, token0, token1, tickLower: 600, tickUpper: 1_200, liquidity: WAD });
 
     await show(world, TRADING_CLOSE);
+    const dialog = await openPositions();
 
-    const remove = await screen.findByRole("button", { name: `Remove ${BRANCH_NAMES[0]} UP pool` }, { timeout: 5000 });
+    const remove = await within(dialog).findByRole("button", { name: `Remove ${BRANCH_NAMES[0]} UP pool` });
     expect(disabled(remove)).toBe(false);
   });
 });
@@ -169,7 +177,7 @@ describe("the market page of a session with no liquidity", () => {
 describe("the market page of a session with liquidity", () => {
   it("shows no banner, only the section's Add liquidity below the options", async () => {
     await show(seeded(), TRADING_CLOSE);
-    await waitFor(() => expect(removeButtons()).toHaveLength(2), { timeout: 5000 });
+    await waitFor(() => expect(summary()).toHaveTextContent(/^2 positions\b/), { timeout: 5000 });
 
     const controls = addControls();
     expect(controls).toHaveLength(1);
@@ -186,23 +194,30 @@ describe("the market page of a session with liquidity", () => {
 
     await show(world, TRADING_CLOSE);
 
-    // the position is listed once the pools are read
-    await waitFor(() => expect(removeButtons()).toHaveLength(1), { timeout: 5000 });
+    // the position is counted once the pools are read
+    await waitFor(() => expect(summary()).toHaveTextContent(/^1 position\b/), { timeout: 5000 });
     const controls = addControls();
     expect(controls).toHaveLength(1);
     expect(precedes(predictButton(), controls[0]!)).toBe(true);
   });
 
-  it("lists each of the wallet's positions with its own Remove, in the section", async () => {
+  it("counts the wallet's positions in the section, below Predict, without listing them there", async () => {
     await show(seeded(), TRADING_CLOSE);
 
-    await waitFor(() => expect(removeButtons()).toHaveLength(2), { timeout: 5000 });
-    const [add] = addControls() as [HTMLElement];
-    for (const remove of removeButtons()) {
-      expect(precedes(predictButton(), remove)).toBe(true);
-      expect(disabled(remove)).toBe(false);
-    }
-    expect(add).toBeInTheDocument();
+    await waitFor(() => expect(summary()).toHaveTextContent(/^2 positions\b/), { timeout: 5000 });
+    expect(precedes(predictButton(), await positionsButton())).toBe(true);
+    expect(removeButtons()).toEqual([]);
+  });
+
+  it("lists each of the wallet's positions with its own Remove in Your positions", async () => {
+    await show(seeded(), TRADING_CLOSE);
+
+    const dialog = await openPositions();
+
+    await waitFor(() => expect(removeButtons(dialog)).toHaveLength(2), { timeout: 5000 });
+    for (const remove of removeButtons(dialog)) expect(disabled(remove)).toBe(false);
+    expect(within(dialog).getByRole("button", { name: `Remove ${BRANCH_NAMES[0]} UP pool` })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: `Remove ${BRANCH_NAMES[1]} DOWN pool` })).toBeInTheDocument();
   });
 
   it("offers the merge after the positions, showing exactly what it returns", async () => {
@@ -223,15 +238,15 @@ describe("the market page of a session with liquidity", () => {
     expect(plan.parentMerge).toBe((325n * WAD) / 100n);
 
     await show(world, TRADING_CLOSE);
-    const merge = await mergeButton();
-    await waitFor(() => expect(removeButtons()).toHaveLength(2), { timeout: 5000 });
+    const dialog = await openPositions();
+    const merge = await within(dialog).findByRole("button", { name: /^merge/i }, { timeout: 5000 });
+    await waitFor(() => expect(removeButtons(dialog)).toHaveLength(2), { timeout: 5000 });
 
-    for (const remove of removeButtons()) expect(precedes(remove, merge)).toBe(true);
-    const section = merge.closest("section") ?? document.body;
+    for (const remove of removeButtons(dialog)) expect(precedes(remove, merge)).toBe(true);
     await waitFor(() => {
-      expectShown(section, plan.branches[0]!.merge, "branch 0's merge");
-      expectShown(section, plan.branches[1]!.merge, "branch 1's merge");
-      expectShown(section, plan.parentMerge, "the sDAI the parent merge returns");
+      expectShown(dialog, plan.branches[0]!.merge, "branch 0's merge");
+      expectShown(dialog, plan.branches[1]!.merge, "branch 1's merge");
+      expectShown(dialog, plan.parentMerge, "the sDAI the parent merge returns");
     });
   });
 
@@ -261,13 +276,15 @@ describe("the market page after the session's close", () => {
     holdCompleteSets(world);
 
     await show(world, PAST_CLOSE);
-
-    const merge = await mergeButton();
-    await waitFor(() => expect(removeButtons()).toHaveLength(2), { timeout: 5000 });
-    expect(disabled(merge)).toBe(false);
-    for (const remove of removeButtons()) expect(disabled(remove)).toBe(false);
     const [add] = addControls() as [HTMLElement];
     expect(disabled(add)).toBe(true);
     expect(add).toHaveAccessibleDescription(/clos/i);
+
+    const dialog = await openPositions();
+
+    const merge = await within(dialog).findByRole("button", { name: /^merge/i }, { timeout: 5000 });
+    await waitFor(() => expect(removeButtons(dialog)).toHaveLength(2), { timeout: 5000 });
+    expect(disabled(merge)).toBe(false);
+    for (const remove of removeButtons(dialog)) expect(disabled(remove)).toBe(false);
   });
 });
