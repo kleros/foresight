@@ -243,12 +243,14 @@ export interface LiquidityProgress {
   failure?: { reason: LiquidityFailureReason; retryable: boolean };
   /** What the run signs; absent before a run. */
   kind?: LiquidityRequest["kind"];
+  /** A remove's position, by token id. */
+  tokenId?: bigint;
   /** The run is one EIP-5792 batch, so one signature. */
   atomic?: true;
   /** Empty before a run. */
   rows: LiquidityProgressRow[];
   /** Wallet prompts settled and planned: one per transaction, or one for a batch. */
   signatures: { done: number; total: number };
-  /** The prompt the run is on: `building` while its transaction is checked against the chain. */
+  /** The prompt the run is on: `building` until the wallet is asked, `submitted` once it answered. */
   signature?: { position: number; total: number; status: "building" | "awaiting-signature" | "submitted" };
 }

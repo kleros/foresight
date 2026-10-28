@@ -2,14 +2,18 @@ import type { ReactNode } from "react";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { branch, decode, owner, session } from "../../flow/__tests__/support/session";
 import { planMerge, planSeed } from "../../flow/plan";
 import type { LiquidityRun } from "../../hooks/useLiquidityRun";
-import type { LiquidityProgress, LiquidityProgressRow, MergeInput, SeedInput } from "../../types";
+import type { ShownMerge, ShownPosition } from "../../hooks/useSessionLiquidity";
+import { removeInput, SESSION } from "../../run/__tests__/support/requests";
+import type { LiquidityProgress, LiquidityProgressRow, MergeInput, SeedInput, SessionPools } from "../../types";
 import { LiquidityDialog } from "../LiquidityDialog";
 import { LiquidityPositionsDialog } from "../LiquidityPositionsDialog";
+import { LiquiditySection } from "../LiquiditySection";
 
 // the popup reads no chain here: the pools are not passed, and sDAI needs no deposit preview
 vi.mock("@/lib/web3/public-client", () => ({ publicClient: {} }));
@@ -81,11 +85,11 @@ const recovered: LiquidityProgress = {
   signatures: { done: PARENT + BRANCH_0, total: TOTAL },
 };
 
-function runAt(progress: LiquidityProgress): LiquidityRun {
+function runAt(progress: LiquidityProgress, start: LiquidityRun["start"] = () => {}): LiquidityRun {
   const isRunning = progress.stage === "signing" || progress.stage === "confirming";
   return {
     progress,
-    start: () => {},
+    start,
     resume: () => {},
     retry: () => {},
     reset: () => {},
@@ -95,20 +99,30 @@ function runAt(progress: LiquidityProgress): LiquidityRun {
   };
 }
 
-const wrap = (children: ReactNode) => (
-  <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
-);
+const wrap = (children: ReactNode) => <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>;
 
-const addPopup = (progress: LiquidityProgress) =>
+/** The session's pools, none of them holding liquidity yet, and a wallet that can pay for the seed. */
+const POOLS: SessionPools = {
+  session: TWO,
+  branches: TWO.branches.map(() => ({ up: { status: "missing" }, down: { status: "missing" } })),
+};
+const BALANCES = {
+  branches: TWO.branches.map(() => ({ outcome: 0n, up: 0n, down: 0n, invalid: 0n })),
+  parentInvalid: 0n,
+  collateral: 100n * WAD,
+  native: 100n * WAD,
+};
+
+const addPopup = (progress: LiquidityProgress, opts: { readable?: boolean; onClose?: () => void } = {}) =>
   wrap(
     <LiquidityDialog
       isOpen
-      onClose={() => {}}
+      onClose={opts.onClose ?? (() => {})}
       names={NAMES}
-      pools={undefined}
+      pools={opts.readable ? POOLS : undefined}
       owner={owner}
-      balances={undefined}
-      chainTime={undefined}
+      balances={opts.readable ? BALANCES : undefined}
+      chainTime={opts.readable ? input.chainTime : undefined}
       closed={false}
       run={runAt(progress)}
     />,
@@ -136,7 +150,9 @@ describe("the Add liquidity popup during a seed", () => {
   it("says it waits for the signature to confirm once it is broadcast", () => {
     render(addPopup(signing("submitted")));
 
-    expect(statusText(dialog("Add liquidity"))).toBe(`Waiting for signature ${PARENT + BRANCH_0 + 1} of ${TOTAL} to confirm.`);
+    expect(statusText(dialog("Add liquidity"))).toBe(
+      `Waiting for signature ${PARENT + BRANCH_0 + 1} of ${TOTAL} to confirm.`,
+    );
   });
 
   it("follows the run from one signature to the next without remounting a bullet", () => {
@@ -201,15 +217,7 @@ describe("Your positions during a merge", () => {
 
   it("lists the merge's rows and names the signature it is on", () => {
     render(
-      wrap(
-        <LiquidityPositionsDialog
-          isOpen
-          onClose={() => {}}
-          names={NAMES}
-          positions={[]}
-          run={runAt(progress)}
-        />,
-      ),
+      wrap(<LiquidityPositionsDialog isOpen onClose={() => {}} names={NAMES} positions={[]} run={runAt(progress)} />),
     );
 
     expect([bullet(`Merge ${NAMES[0]}`), bullet("Merge back to sDAI")]).toEqual(["done", "running"]);
@@ -222,12 +230,257 @@ describe("Your positions during a merge", () => {
 describe("Your positions while a seed holds the session", () => {
   it("lists no steps and says where to finish it", () => {
     render(
-      wrap(
-        <LiquidityPositionsDialog isOpen onClose={() => {}} names={NAMES} positions={[]} run={runAt(declined)} />,
-      ),
+      wrap(<LiquidityPositionsDialog isOpen onClose={() => {}} names={NAMES} positions={[]} run={runAt(declined)} />),
     );
 
     expect(screen.queryAllByRole("listitem", { name: /^Timeline item/ })).toEqual([]);
     expect(statusText(dialog("Your positions"))).toMatch(/Adding liquidity from this wallet is unfinished/);
+  });
+});
+
+const IDLE: LiquidityProgress = { stage: "idle", rows: [], signatures: { done: 0, total: 0 } };
+const tone = (scope: HTMLElement) => within(scope).getByRole("status").getAttribute("data-tone");
+const timelineItems = () => screen.queryAllByRole("listitem", { name: /^Timeline item/ });
+
+/** Two positions in branch 0's pools: the UP pool's under token 78, the DOWN pool's under token 77. */
+const position = (tokenId: bigint, pool: string): ShownPosition => {
+  const base = removeInput();
+  return {
+    key: tokenId.toString(),
+    pool,
+    returns: [{ label: "sDAI", amount: WAD }],
+    request: { kind: "remove", session: SESSION, input: { ...base, position: { ...base.position, tokenId } } },
+  };
+};
+const UP_POOL = `${NAMES[0]} UP pool`;
+const DOWN_POOL = `${NAMES[0]} DOWN pool`;
+const POSITIONS = [position(78n, UP_POOL), position(77n, DOWN_POOL)];
+const MERGE: ShownMerge = {
+  branches: [{ label: NAMES[0]!, amount: WAD }],
+  parentMerge: WAD,
+  request: { kind: "merge", input: { session: TWO, owner, balances: BALANCES } },
+};
+
+const removing = (stage: LiquidityProgress["stage"], tokenId: bigint, extra: Partial<LiquidityProgress> = {}) =>
+  ({
+    stage,
+    kind: "remove",
+    tokenId,
+    rows: [row("remove", stage === "review" ? "idle" : "running", 0, 1)],
+    signatures: { done: 0, total: 1 },
+    ...extra,
+  }) satisfies LiquidityProgress;
+
+const positionsPopup = (run: LiquidityRun, opts: { merge?: ShownMerge; onClose?: () => void } = {}) =>
+  wrap(
+    <LiquidityPositionsDialog
+      isOpen
+      onClose={opts.onClose ?? (() => {})}
+      names={NAMES}
+      positions={POSITIONS}
+      merge={opts.merge}
+      run={run}
+    />,
+  );
+
+describe("Your positions during a remove", () => {
+  it("names the position the run withdraws, not the one pressed last", async () => {
+    const view = render(positionsPopup(runAt(IDLE)));
+    await userEvent.click(screen.getByRole("button", { name: `Remove ${UP_POOL}` }));
+
+    // the stored run of token 77 was recovered for review in place of a new one
+    view.rerender(positionsPopup(runAt(removing("review", 77n))));
+
+    expect(timelineItems().map((each) => each.getAttribute("aria-label"))).toEqual([
+      `Timeline item: Remove ${DOWN_POOL}`,
+    ]);
+  });
+
+  it("says the one signature without a count, while the wallet asks and once it is broadcast", () => {
+    const view = render(
+      positionsPopup(
+        runAt(removing("signing", 77n, { signature: { position: 1, total: 1, status: "awaiting-signature" } })),
+      ),
+    );
+    expect(statusText(dialog("Your positions"))).toBe("Confirm in your wallet.");
+
+    view.rerender(
+      positionsPopup(runAt(removing("confirming", 77n, { signature: { position: 1, total: 1, status: "submitted" } }))),
+    );
+    expect(statusText(dialog("Your positions"))).toBe("Waiting for the transaction to confirm.");
+  });
+
+  it("keeps Close disabled and ignores Escape while it signs", async () => {
+    const onClose = vi.fn();
+    render(
+      positionsPopup(
+        runAt(removing("signing", 77n, { signature: { position: 1, total: 1, status: "awaiting-signature" } })),
+        {
+          onClose,
+        },
+      ),
+    );
+
+    expect(within(dialog("Your positions")).getByRole("button", { name: "Close" })).toBeDisabled();
+    await userEvent.keyboard("{Escape}");
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("closes on Escape once nothing runs", async () => {
+    const onClose = vi.fn();
+    render(positionsPopup(runAt(IDLE), { onClose }));
+
+    await userEvent.keyboard("{Escape}");
+
+    expect(onClose).toHaveBeenCalled();
+  });
+});
+
+describe("Your positions' actions", () => {
+  it("offers Remove and Merge while no run holds the session", () => {
+    render(positionsPopup(runAt(IDLE), { merge: MERGE }));
+
+    const popup = dialog("Your positions");
+    expect(within(popup).getByRole("button", { name: `Remove ${UP_POOL}` })).toBeEnabled();
+    expect(within(popup).getByRole("button", { name: "Merge" })).toBeEnabled();
+  });
+
+  it("disables Remove and Merge, and offers no way to carry the seed on, while a seed holds the session", () => {
+    render(positionsPopup(runAt(declined), { merge: MERGE }));
+
+    const popup = dialog("Your positions");
+    expect(within(popup).getByRole("button", { name: `Remove ${UP_POOL}` })).toBeDisabled();
+    expect(within(popup).getByRole("button", { name: `Remove ${DOWN_POOL}` })).toBeDisabled();
+    expect(within(popup).getByRole("button", { name: "Merge" })).toBeDisabled();
+    expect(within(popup).queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(within(popup).queryByRole("button", { name: "Start over" })).toBeNull();
+  });
+});
+
+describe("the Add liquidity popup while a merge holds the session", () => {
+  const mergeHalted: LiquidityProgress = {
+    stage: "halted",
+    failure: { reason: "rejected", retryable: true },
+    kind: "merge",
+    rows: [row("branch:0", "failed", 0, 3), row("parent", "idle", 0, 2)],
+    signatures: { done: 0, total: 5 },
+  };
+
+  it("says where to finish it, lists none of its rows and offers none of its actions", () => {
+    render(addPopup(mergeHalted));
+
+    const popup = dialog("Add liquidity");
+    expect(statusText(popup)).toMatch(/Removing or merging from this wallet is unfinished/);
+    expect(timelineItems()).toEqual([]);
+    expect(within(popup).queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(within(popup).queryByRole("button", { name: "Start over" })).toBeNull();
+  });
+
+  it("keeps the form editable, but Add liquidity disabled", async () => {
+    render(addPopup(mergeHalted, { readable: true }));
+
+    const popup = dialog("Add liquidity");
+    const total = within(popup).getByLabelText("Total");
+    expect(total).not.toHaveAttribute("readonly");
+    await userEvent.type(total, "10");
+    expect(within(popup).getByRole("button", { name: "Add liquidity" })).toBeDisabled();
+  });
+
+  it("enables Add liquidity for the same form once nothing holds the session", async () => {
+    render(addPopup(IDLE, { readable: true }));
+
+    const popup = dialog("Add liquidity");
+    await userEvent.type(within(popup).getByLabelText("Total"), "10");
+
+    expect(within(popup).getByRole("button", { name: "Add liquidity" })).toBeEnabled();
+  });
+});
+
+describe("the Add liquidity popup while its own seed is held", () => {
+  it("keeps the form read-only", () => {
+    render(addPopup(declined));
+
+    expect(within(dialog("Add liquidity")).getByLabelText("Total")).toHaveAttribute("readonly");
+  });
+
+  it("ignores Escape while it signs", async () => {
+    const onClose = vi.fn();
+    render(addPopup(signing("awaiting-signature"), { onClose }));
+
+    await userEvent.keyboard("{Escape}");
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe("the status line's tone and words", () => {
+  it("warns, rather than errs, when what was sent may still land", () => {
+    const view = render(addPopup({ ...declined, failure: { reason: "pending", retryable: true } }));
+    expect(tone(dialog("Add liquidity"))).toBe("warning");
+
+    view.rerender(addPopup(declined));
+    expect(tone(dialog("Add liquidity"))).toBe("error");
+  });
+
+  it("says the chain is checked before a signature, and the button and the row say so too", () => {
+    const at = PARENT + BRANCH_0 + 1;
+    render(
+      addPopup({ ...signing("awaiting-signature"), signature: { position: at, total: TOTAL, status: "building" } }),
+    );
+
+    const popup = dialog("Add liquidity");
+    expect(statusText(popup)).toBe(`Checking the chain before signature ${at} of ${TOTAL}.`);
+    expect(within(popup).getByRole("button", { name: "Checking…" })).toBeDisabled();
+    expect(within(item(`Seed ${NAMES[1]}`)).getByText(`1 of ${BRANCH_1} · Checking…`)).toBeVisible();
+  });
+
+  it("puts the wallet's ask, or the wait to confirm, on the busy button", () => {
+    const view = render(addPopup(signing("awaiting-signature")));
+    expect(within(dialog("Add liquidity")).getByRole("button", { name: "Confirm in your wallet" })).toBeDisabled();
+
+    view.rerender(addPopup(signing("submitted")));
+    expect(within(dialog("Add liquidity")).getByRole("button", { name: "Confirming…" })).toBeDisabled();
+  });
+
+  it("says how much of the stopped row went through", () => {
+    render(
+      addPopup({
+        ...declined,
+        rows: [
+          row("parent", "done", PARENT, PARENT),
+          row("branch:0", "failed", 2, BRANCH_0),
+          row("branch:1", "idle", 0, BRANCH_1),
+        ],
+      }),
+    );
+
+    expect(within(item(`Seed ${NAMES[0]}`)).getByText(`2 of ${BRANCH_0} went through`)).toBeVisible();
+  });
+
+  it("says a batch's rows were signed in one batch", () => {
+    render(
+      addPopup({
+        stage: "complete",
+        kind: "seed",
+        atomic: true,
+        rows: [
+          row("parent", "done", PARENT, PARENT),
+          row("branch:0", "done", BRANCH_0, BRANCH_0),
+          row("branch:1", "done", BRANCH_1, BRANCH_1),
+        ],
+        signatures: { done: 1, total: 1 },
+      }),
+    );
+
+    expect(within(item("Split into outcomes")).getByText("In one batch")).toBeVisible();
+    expect(within(item(`Seed ${NAMES[1]}`)).getByText("In one batch")).toBeVisible();
+  });
+});
+
+describe("the market page's Liquidity section", () => {
+  it("offers Your positions where only complete sets can merge", () => {
+    render(wrap(<LiquiditySection onAdd={() => {}} names={NAMES} positions={[]} merge={MERGE} run={runAt(IDLE)} />));
+
+    expect(screen.getByRole("button", { name: "Your positions" })).toBeEnabled();
   });
 });

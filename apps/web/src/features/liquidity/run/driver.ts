@@ -177,6 +177,10 @@ export function createLiquidityRun(args: {
   let withdrawIds = new Set<string>();
   /** The batch the atomic step's build checked, sent by the gateway right after. */
   let batch: { id: string; account: Address; calls: FlowTx[] } | undefined;
+  /** A wallet prompt is open; the orchestrator marks a step awaiting its signature before building it. */
+  let prompting = false;
+  /** The wallet took the batch, which has not landed yet. */
+  let batchSent = false;
 
   async function assertHolds(tokenId: bigint, account: Address) {
     if (!isAddressEqual(await args.reader.ownerOf(tokenId), account)) throw new RunStop("unlisted", false);
@@ -377,6 +381,9 @@ export function createLiquidityRun(args: {
         },
       ],
     });
+    prompting = false;
+    batchSent = true;
+    notify();
     for (;;) {
       const { status, receipts } = await callsStatus(sent.id);
       const hash = receipts?.at(-1)?.transactionHash;
@@ -389,10 +396,18 @@ export function createLiquidityRun(args: {
 
   const gateway: TxGateway = {
     ...args.gateway,
-    sendTransaction(tx, options) {
+    async sendTransaction(tx, options) {
       const sent = batch;
       batch = undefined;
-      return sent ? sendBatch(sent, options?.signal) : args.gateway.sendTransaction(tx, options);
+      prompting = true;
+      notify();
+      try {
+        return await (sent ? sendBatch(sent, options?.signal) : args.gateway.sendTransaction(tx, options));
+      } finally {
+        // the orchestrator announces what came of the send right after
+        prompting = false;
+        batchSent = false;
+      }
     },
   };
 
@@ -433,7 +448,7 @@ export function createLiquidityRun(args: {
       case "completed":
         return "complete";
       case "running":
-        return currentEntry(current.steps)?.outcome.status === "submitted" ? "confirming" : "signing";
+        return batchSent || currentEntry(current.steps)?.outcome.status === "submitted" ? "confirming" : "signing";
       default:
         return "halted";
     }
@@ -470,26 +485,23 @@ export function createLiquidityRun(args: {
       const covers = atomic ? [BATCH] : stepIds;
       const done = atomic ? (settled.has(BATCH) ? stepIds.length : 0) : stepIds.filter((s) => settled.has(s)).length;
       const holds = live !== undefined && covers.includes(live.stepId);
-      const view =
-        done === stepIds.length ? "done" : holds && going ? "running" : holds && crossed ? "failed" : "idle";
+      const view = done === stepIds.length ? "done" : holds && going ? "running" : holds && crossed ? "failed" : "idle";
       return { id, view, signatures: { done, total: stepIds.length } } as const;
     });
     const position = live ? entries.indexOf(live) + 1 : 0;
-    const status = live?.outcome.status;
+    const status =
+      batchSent || live?.outcome.status === "submitted"
+        ? "submitted"
+        : prompting && live?.outcome.status === "awaiting-signature"
+          ? "awaiting-signature"
+          : "building";
     return {
       kind: request.kind,
+      ...(request.kind === "remove" ? { tokenId: request.input.position.tokenId } : {}),
       ...(atomic ? { atomic: true as const } : {}),
       rows,
-      signatures: { done: atomic ? (settled.has(BATCH) ? 1 : 0) : settled.size, total },
-      ...(live && going
-        ? {
-            signature: {
-              position,
-              total,
-              status: status === "awaiting-signature" || status === "submitted" ? status : "building",
-            },
-          }
-        : {}),
+      signatures: { done: settled.size, total },
+      ...(live && going ? { signature: { position, total, status } } : {}),
     };
   }
 

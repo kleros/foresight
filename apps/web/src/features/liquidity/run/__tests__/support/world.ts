@@ -63,11 +63,12 @@ import { createLiquidityRun } from "../../driver";
  *   LiquidityProgress {
  *     stage: "idle" | "signing" | "confirming" | "review" | "moved" | "halted" | "complete";
  *     failure?: { reason: string; retryable: boolean };
- *     kind?: "seed" | "remove" | "merge";  atomic?: true;
+ *     kind?: "seed" | "remove" | "merge";  tokenId?: bigint;  atomic?: true;   // tokenId: a remove's position
  *     rows: { id; view: "idle" | "running" | "done" | "failed"; signatures: { done; total } }[];
  *     signatures: { done; total };   // one per transaction, or one for a batch
  *     signature?: { position; total; status: "building" | "awaiting-signature" | "submitted" };
  *   }
+ *     signature.status: "building" until the wallet is asked, "submitted" once it answered (a batch: before it lands).
  *     rows: a seed's "parent" then "branch:<i>", a remove's "remove", a merge's "branch:<i>" merges then "parent".
  *     stage "moved": a pool read at build differs from the reviewed one; nothing more is signed until a new review.
  *     reasons these tests name: "unlisted" (flow/allowed.ts found a departure, including a run whose owner is not
@@ -334,7 +335,8 @@ export function wallet(
     atomic?: AtomicStatus | ((chainId: Hex) => AtomicStatus);
     capabilitiesThrow?: boolean;
     capabilityChain?: Hex;
-    sendCalls?: "answer" | "hang";
+    /** `unmined`: the wallet answers and broadcasts the batch, which mines on `land()`. */
+    sendCalls?: "answer" | "hang" | "unmined";
     status?: BatchStatusScript;
     onSendCalls?: (params: SendCallsRequest) => void;
   } = {},
@@ -364,7 +366,8 @@ export function wallet(
         onSend?.();
         if (opts.sendCalls === "hang") return new Promise(() => {});
         // an atomic batch lands as one transaction
-        const sent = world.broadcast({ to: from, data: "0x" }, from, (opts.status ?? "confirmed") === "confirmed");
+        const mined = opts.sendCalls !== "unmined" && (opts.status ?? "confirmed") === "confirmed";
+        const sent = world.broadcast({ to: from, data: "0x" }, from, mined);
         world.batches.set(call.id ?? "", sent);
         return { id: call.id };
       }

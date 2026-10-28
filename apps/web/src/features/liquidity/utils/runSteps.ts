@@ -39,7 +39,10 @@ const signatures = (count: number) => `${count} ${count === 1 ? "signature" : "s
 export function runStatus(progress: LiquidityProgress | null): PopupStatusLine | null {
   if (!progress) return null;
   if (progress.failure) {
-    return { text: FAILURE_COPY[progress.failure.reason], tone: MAY_LAND.has(progress.failure.reason) ? "warning" : "error" };
+    return {
+      text: FAILURE_COPY[progress.failure.reason],
+      tone: MAY_LAND.has(progress.failure.reason) ? "warning" : "error",
+    };
   }
   const staged = STAGE_COPY[progress.stage];
   if (staged) return staged;
@@ -53,7 +56,10 @@ export function runStatus(progress: LiquidityProgress | null): PopupStatusLine |
   const which = at.total === 1 ? "" : ` ${at.position} of ${at.total}`;
   switch (at.status) {
     case "awaiting-signature":
-      return { text: at.total === 1 ? "Confirm in your wallet." : `Signature${which}. Confirm in your wallet.`, tone: "neutral" };
+      return {
+        text: at.total === 1 ? "Confirm in your wallet." : `Signature${which}. Confirm in your wallet.`,
+        tone: "neutral",
+      };
     case "submitted":
       return {
         text: at.total === 1 ? "Waiting for the transaction to confirm." : `Waiting for signature${which} to confirm.`,
@@ -65,18 +71,34 @@ export function runStatus(progress: LiquidityProgress | null): PopupStatusLine |
   }
 }
 
+/** What the run waits on: the wallet, the chain to mine, or its own checks of the chain. */
+function waitingOn(progress: LiquidityProgress | null): string {
+  switch (progress?.signature?.status) {
+    case "awaiting-signature":
+      return "Confirm in your wallet";
+    case "submitted":
+      return "Confirming…";
+    default:
+      return "Checking…";
+  }
+}
+
 /** The busy button's words while a run goes. */
 export function busyText(progress: LiquidityProgress | null): string | undefined {
   if (progress?.stage !== "signing" && progress?.stage !== "confirming") return undefined;
-  return progress.signature?.status === "awaiting-signature" ? "Confirm in your wallet" : "Confirming…";
+  return waitingOn(progress);
 }
 
 function subtitle(row: LiquidityProgressRow, progress: LiquidityProgress | null): string {
   const { done, total } = row.signatures;
+  if (row.view === "running") {
+    const wait = waitingOn(progress);
+    return progress?.atomic || total === 1 ? wait : `${done + 1} of ${total} · ${wait}`;
+  }
+  // a batch signs every row at once
+  if (progress?.atomic) return "In one batch";
   if (row.view === "failed" && done > 0) return `${done} of ${total} went through`;
-  if (row.view !== "running") return signatures(total);
-  const wait = progress?.signature?.status === "awaiting-signature" ? "Confirm in your wallet" : "Confirming…";
-  return progress?.atomic || total === 1 ? wait : `${done + 1} of ${total} · ${wait}`;
+  return signatures(total);
 }
 
 /**

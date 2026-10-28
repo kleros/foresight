@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-
 import { Button } from "@kleros/ui-components-library";
 
 import { Modal } from "@/components/ui/Modal";
@@ -36,9 +34,10 @@ export function LiquidityPositionsDialog({
   run: LiquidityRun;
 }) {
   const { isRunning, progress } = run;
-  // what was pressed last, so the remove row can name its pool
-  const [removing, setRemoving] = useState<string | undefined>(undefined);
   const kind = progress?.kind;
+  const removing = positions.find(
+    (position) => position.request.kind === "remove" && position.request.input.position.tokenId === progress?.tokenId,
+  )?.pool;
   const isOwn = kind === "remove" || kind === "merge";
 
   const steps = isOwn
@@ -53,11 +52,7 @@ export function LiquidityPositionsDialog({
         },
       })
     : [];
-  const status = isOwn
-    ? runStatus(progress)
-    : run.isHeld
-      ? { text: HELD_BY_SEED, tone: "warning" as const }
-      : null;
+  const status = isOwn ? runStatus(progress) : run.isHeld ? { text: HELD_BY_SEED, tone: "warning" as const } : null;
   const stopped = isOwn && (progress?.stage === "halted" || progress?.stage === "moved");
 
   return (
@@ -99,10 +94,7 @@ export function LiquidityPositionsDialog({
                           text="Remove"
                           aria-label={`Remove ${position.pool}`}
                           isDisabled={run.isHeld}
-                          onPress={() => {
-                            setRemoving(position.pool);
-                            run.start(position.request);
-                          }}
+                          onPress={() => run.start(position.request)}
                         />
                       </div>
                       <dl className="mt-1 text-[13px] leading-[18px] tabular-nums">
@@ -131,9 +123,14 @@ export function LiquidityPositionsDialog({
                   />
                 </div>
                 <dl className="mt-1 flex flex-col gap-1 text-[13px] leading-[18px] tabular-nums">
-                  {merge.branches.length > 0 ? <AmountRow label="Branch merges return" amounts={merge.branches} /> : null}
+                  {merge.branches.length > 0 ? (
+                    <AmountRow label="Branch merges return" amounts={merge.branches} />
+                  ) : null}
                   {merge.parentMerge !== undefined ? (
-                    <AmountRow label="The parent merge returns" amounts={[{ label: "sDAI", amount: merge.parentMerge }]} />
+                    <AmountRow
+                      label="The parent merge returns"
+                      amounts={[{ label: "sDAI", amount: merge.parentMerge }]}
+                    />
                   ) : null}
                 </dl>
               </section>
