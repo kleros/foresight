@@ -615,6 +615,21 @@ export function createLiquidityRun(args: {
       report(undefined);
     },
 
+    /**
+     * Deletes this account's halted run, sends and all, signing nothing; for the UI to call once the user confirmed.
+     * A run with a send broadcast and not yet mined is kept.
+     */
+    discard() {
+      if (busy() || !failure || failure.reason === "pending" || orchestrator.getStatus() === "running") return;
+      const stored = run() ?? args.store.load<LiquiditySnapshot, LiquidityCtx>(args.flowId);
+      const account = args.account();
+      if (stored && !(account && isAddressEqual(stored.ctx.owner, account))) return;
+      if (stored) orchestrator.trash(args.flowId);
+      moved = false;
+      reviewing = false;
+      report(undefined);
+    },
+
     dispose() {
       disposed = true;
       orchestrator.dispose();

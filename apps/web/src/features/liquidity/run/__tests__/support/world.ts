@@ -56,7 +56,7 @@ import { createLiquidityRun } from "../../driver";
  *     sentWithNonce({ owner, nonce, fromBlock }): Promise<SentWithNonce>   // what took that nonce, from that block on
  *   }
  *
- *   LiquidityDriver { start(); recover(); resume(); retry(); reset(); dispose();
+ *   LiquidityDriver { start(); recover(); resume(); retry(); reset(); discard(); dispose();
  *                     getProgress(): LiquidityProgress; subscribe(listener) → unsubscribe }
  *     recover() loads a stored run for review (stage "review") and signs nothing; resume() continues it.
  *

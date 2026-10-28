@@ -32,6 +32,8 @@ export interface LiquidityRun {
   retry: () => void;
   /** Forgets a stopped run; what it already signed stays done. */
   reset: () => void;
+  /** Deletes a halted run that reset keeps, signing nothing; called only once the user confirmed. */
+  discard: () => void;
   /** Waiting on the wallet or the chain. */
   isRunning: boolean;
   /** A run holds this session's slot: running, or stopped until it is resumed, retried or reset. */
@@ -102,6 +104,7 @@ export function useLiquidityRun(parentMarket: Address, closesAt: Date | null): L
     resume: () => driver?.resume(),
     retry: () => driver?.retry(),
     reset: () => driver?.reset(),
+    discard: () => driver?.discard(),
     isRunning: stage === "signing" || stage === "confirming",
     isHeld: stage !== undefined && stage !== "idle" && stage !== "complete",
   };
