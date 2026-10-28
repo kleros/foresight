@@ -28,7 +28,12 @@ export function LiquidityPopupFooter({
       </div>
     ) : null;
   const primary = !isOwn ? (
-    <PopupButton text={idle.text} isDisabled={idle.isDisabled} onPress={idle.onPress} aria-describedby={idle.describedBy} />
+    <PopupButton
+      text={idle.text}
+      isDisabled={idle.isDisabled}
+      onPress={idle.onPress}
+      aria-describedby={idle.describedBy}
+    />
   ) : run.isRunning ? (
     <PopupButton text={idle.text} busyText={busyText(progress)} isDisabled onPress={idle.onPress} />
   ) : stage === "review" ? (
@@ -38,7 +43,12 @@ export function LiquidityPopupFooter({
   ) : stopped ? (
     <PopupButton text="Start over" isDisabled={false} onPress={run.reset} />
   ) : (
-    <PopupButton text={idle.text} isDisabled={idle.isDisabled} onPress={idle.onPress} aria-describedby={idle.describedBy} />
+    <PopupButton
+      text={idle.text}
+      isDisabled={idle.isDisabled}
+      onPress={idle.onPress}
+      aria-describedby={idle.describedBy}
+    />
   );
 
   return (

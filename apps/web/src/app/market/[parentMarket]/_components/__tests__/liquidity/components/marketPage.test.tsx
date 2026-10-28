@@ -117,7 +117,8 @@ function show(world: World, openingTime: string) {
   return sessionLoaded();
 }
 
-const removeButtons = (scope: HTMLElement = document.body) => within(scope).queryAllByRole("button", { name: /^remove/i });
+const removeButtons = (scope: HTMLElement = document.body) =>
+  within(scope).queryAllByRole("button", { name: /^remove/i });
 const positionsButton = () => screen.findByRole("button", { name: "Your positions" }, { timeout: 5000 });
 const summary = () => screen.getByTestId("liquidity-summary");
 
