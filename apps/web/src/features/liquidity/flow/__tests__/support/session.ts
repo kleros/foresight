@@ -268,8 +268,8 @@ export function txsOf(steps: readonly StepLike[], dustTokenId = (index: number) 
   let limit: bigint | undefined;
   return steps.map((step, index) => {
     if (step.tx) {
-      const decoded = decode(step.tx);
-      if (decoded.kind === "swap") limit = decoded.limitSqrtPrice;
+      const decoded = same(step.tx.to, LIST.swaprRouter) ? decode(step.tx) : undefined;
+      if (decoded?.kind === "swap") limit = decoded.limitSqrtPrice;
       return step.tx;
     }
     if (!step.build || limit === undefined) throw new Error(`step ${step.id} has neither tx nor a swap before it`);
