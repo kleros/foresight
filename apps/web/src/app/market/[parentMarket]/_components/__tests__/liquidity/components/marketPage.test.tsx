@@ -150,6 +150,20 @@ describe("the market page of a session with no liquidity", () => {
 
     expect(await liquidityDialog()).toBeInTheDocument();
   });
+
+  it("lists a position in a pool that reads as empty, with its Remove", async () => {
+    const world = createWorld();
+    const [first] = world.branches as [World["branches"][0]];
+    world.setPool(first.upToken, first.outcome, { sqrtPriceX96: Q96, liquidity: 0n, tickSpacing: 60 });
+    const [token0, token1] = sortPair(first.upToken, first.outcome);
+    // above the pool's tick 0, so the pool's active liquidity stays 0
+    world.holdPosition(owner, { tokenId: 11n, token0, token1, tickLower: 600, tickUpper: 1_200, liquidity: WAD });
+
+    await show(world, TRADING_CLOSE);
+
+    const remove = await screen.findByRole("button", { name: `Remove ${BRANCH_NAMES[0]} UP pool` }, { timeout: 5000 });
+    expect(disabled(remove)).toBe(false);
+  });
 });
 
 describe("the market page of a session with liquidity", () => {

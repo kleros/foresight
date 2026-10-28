@@ -138,7 +138,8 @@ export function useSessionLiquidity({
         ? []
         : (positions.data ?? []).flatMap((position): ShownPosition[] => {
             const pool = poolOf(data, position.token0, position.token1);
-            if (!pool || pool.state.status !== "live") return [];
+            // a pool reads as empty while every position in it is out of range
+            if (!pool || pool.state.status === "missing") return [];
             return [
               {
                 key: position.tokenId.toString(),
