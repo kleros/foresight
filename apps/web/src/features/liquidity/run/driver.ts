@@ -6,6 +6,7 @@ import {
   currentEntry,
   settledEntries,
   StorageWriteError,
+  type BalanceTxGateway,
   type FlowRunStore,
   type FlowTx,
   type TxGateway,
@@ -26,6 +27,7 @@ import {
 import { assertListed, UnlistedTxError } from "../flow/allowed";
 import { planMerge, planRemove, planSeed } from "../flow/plan";
 import { LIQUIDITY_ALLOW_LIST } from "../oracle/allowlist";
+import { GAS_RESERVE_WEI } from "../oracle/tolerances";
 import type {
   LiquidityFailureReason,
   LiquidityProgress,
@@ -137,7 +139,7 @@ const sleep = (ms: number, signal?: AbortSignal) =>
 
 /** Drives one liquidity run (seed, add, remove or merge) from the connected wallet, under adapter `liquidity-flow`. */
 export function createLiquidityRun(args: {
-  gateway: TxGateway;
+  gateway: BalanceTxGateway;
   wallet: LiquidityWallet;
   reader: LiquidityReader;
   store: FlowRunStore;
@@ -213,6 +215,17 @@ export function createLiquidityRun(args: {
     const steps = planned(request, chainTime);
     for (const step of steps) {
       if (step.tx) assertListed({ tx: step.tx, session, owner: request.input.owner, from: account });
+    }
+    const paying = steps.flatMap((step) => (!settled.has(step.id) && step.tx?.value ? [step.tx] : []));
+    const value = paying.reduce((sum, tx) => sum + tx.value!, 0n);
+    // L12: the reserve is what is left once the split has paid its value and its gas
+    if (value > 0n) {
+      const balance = await args.gateway.getBalance(account);
+      if (balance - value < GAS_RESERVE_WEI) throw new RunStop("gas-reserve", true);
+      const fees = await Promise.all(paying.map((tx) => args.gateway.estimateFee(tx, account)));
+      if (balance - value - fees.reduce((sum, fee) => sum + fee, 0n) < GAS_RESERVE_WEI) {
+        throw new RunStop("gas-reserve", true);
+      }
     }
     return { steps, account, session };
   }

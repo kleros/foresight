@@ -152,9 +152,7 @@ type ResolvedPool = ReturnType<typeof resolvePool>;
 
 interface Build {
   list: LiquidityAllowList;
-  chainId: number;
   owner: Address;
-  chainTime: bigint;
   deadline: bigint;
 }
 
@@ -216,14 +214,19 @@ function realignSteps(id: string, pool: ResolvedPool, current: bigint, b: Build)
     {
       id: `${id}:dust-withdraw`,
       withdraws: `${id}:dust`,
+      // a capped swap stops anywhere between `current` and `target`; amount0 falls and amount1 rises with the price
       build: ({ tokenId }) =>
-        planRemove({
-          chainId: b.chainId,
-          owner: b.owner,
-          chainTime: b.chainTime,
-          sqrtPriceX96: target,
-          position: { tokenId, token0, token1, tickLower, tickUpper, liquidity },
-        }).tx,
+        withdrawTx(
+          b.list,
+          b.owner,
+          tokenId,
+          liquidity,
+          held(
+            lessSlippage(amount0Delta(rising ? target : current, sqrtB, liquidity, false)),
+            lessSlippage(amount1Delta(sqrtA, rising ? current : target, liquidity, false)),
+          ),
+          b.deadline,
+        ),
     },
   ];
   const spendOf = (token: Address) => (token === token0 ? amount0 : amount1) + (token === tokenIn ? amountIn : 0n);
@@ -273,9 +276,7 @@ export function planSeed(input: SeedInput): SeedPlan {
   if (input.branches.length !== session.branches.length) throw new Error("A seed plans every branch of the session.");
   const b: Build = {
     list,
-    chainId: session.chainId,
     owner,
-    chainTime,
     deadline: chainTime + LIQUIDITY_DEADLINE_SECONDS,
   };
 
@@ -398,6 +399,30 @@ export function planSeed(input: SeedInput): SeedPlan {
   return { parentSplit, branches, leftovers: leftovers.filter(({ amount }) => amount > 0n), steps };
 }
 
+/** One multicall taking all of a position's liquidity out, collecting everything owed to `owner`, then burning it. */
+function withdrawTx(
+  list: LiquidityAllowList,
+  owner: Address,
+  tokenId: bigint,
+  liquidity: bigint,
+  mins: { amount0Min: bigint; amount1Min: bigint },
+  deadline: bigint,
+): FlowTx {
+  return multicallTx(list, [
+    encodeFunctionData({
+      abi: POSITION_MANAGER_ABI,
+      functionName: "decreaseLiquidity",
+      args: [{ tokenId, liquidity, ...mins, deadline }],
+    }),
+    encodeFunctionData({
+      abi: POSITION_MANAGER_ABI,
+      functionName: "collect",
+      args: [{ tokenId, recipient: owner, amount0Max: MAX_UINT128, amount1Max: MAX_UINT128 }],
+    }),
+    encodeFunctionData({ abi: POSITION_MANAGER_ABI, functionName: "burn", args: [tokenId] }),
+  ]);
+}
+
 /** A full withdrawal of a position: its liquidity out, everything owed to the owner, the emptied NFT burned (L6). */
 export function planRemove(input: RemoveInput): RemovePlan {
   const { position, owner, sqrtPriceX96: sqrtP } = input;
@@ -407,22 +432,8 @@ export function planRemove(input: RemoveInput): RemovePlan {
   const amount0 = amount0Delta(sqrtP, sqrtB, position.liquidity, false);
   const amount1 = amount1Delta(sqrtA, sqrtP, position.liquidity, false);
   const mins = held(lessSlippage(amount0), lessSlippage(amount1));
-  const { tokenId } = position;
-  const tx = multicallTx(list, [
-    encodeFunctionData({
-      abi: POSITION_MANAGER_ABI,
-      functionName: "decreaseLiquidity",
-      args: [
-        { tokenId, liquidity: position.liquidity, ...mins, deadline: input.chainTime + LIQUIDITY_DEADLINE_SECONDS },
-      ],
-    }),
-    encodeFunctionData({
-      abi: POSITION_MANAGER_ABI,
-      functionName: "collect",
-      args: [{ tokenId, recipient: owner, amount0Max: MAX_UINT128, amount1Max: MAX_UINT128 }],
-    }),
-    encodeFunctionData({ abi: POSITION_MANAGER_ABI, functionName: "burn", args: [tokenId] }),
-  ]);
+  const deadline = input.chainTime + LIQUIDITY_DEADLINE_SECONDS;
+  const tx = withdrawTx(list, owner, position.tokenId, position.liquidity, mins, deadline);
   return { amount0, amount1, ...mins, tx };
 }
 

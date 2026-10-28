@@ -58,6 +58,26 @@ describe("createViemTxGateway, against a real viem client", () => {
     await expect(gateway.getReceipt(HASH)).resolves.toBeNull();
   });
 
+  it("reads an account's native balance in wei", async () => {
+    const gateway = createViemTxGateway({
+      client: realClient({ eth_getBalance: () => "0xde0b6b3a7640000" }),
+      sendTransaction: vi.fn(),
+    });
+
+    await expect(gateway.getBalance(ADDRESS)).resolves.toBe(10n ** 18n);
+  });
+
+  it("bounds a send's gas cost by its estimate at the max fee per gas, in wei", async () => {
+    const estimateGas = vi.fn(async () => 21_000n);
+    const gateway = createViemTxGateway({
+      client: stubClient({ estimateGas, estimateFeesPerGas: vi.fn(async () => ({ maxFeePerGas: 3n })) } as never),
+      sendTransaction: vi.fn(),
+    });
+
+    await expect(gateway.estimateFee({ to: ADDRESS, data: "0x", value: 5n }, ADDRESS)).resolves.toBe(63_000n);
+    expect(estimateGas).toHaveBeenCalledWith({ account: ADDRESS, to: ADDRESS, data: "0x", value: 5n });
+  });
+
   it("lets a real RPC failure through rather than reporting an absent receipt", async () => {
     const gateway = createViemTxGateway({
       client: realClient({

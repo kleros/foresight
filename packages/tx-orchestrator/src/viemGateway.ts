@@ -1,12 +1,24 @@
 import { TransactionNotFoundError, TransactionReceiptNotFoundError } from "viem";
-import type { Hash, PublicClient } from "viem";
+import type { Address, Hash, PublicClient } from "viem";
 
 import type { FlowTx, TxGateway, TxReplacement } from "./types";
 
 export type ReceiptClient = Pick<
   PublicClient,
-  "getTransactionReceipt" | "getTransaction" | "waitForTransactionReceipt"
+  | "getTransactionReceipt"
+  | "getTransaction"
+  | "waitForTransactionReceipt"
+  | "getBalance"
+  | "estimateGas"
+  | "estimateFeesPerGas"
 >;
+
+/** A gateway that also reads an account's native balance and a send's gas cost, in wei. */
+export interface BalanceTxGateway extends TxGateway {
+  getBalance(account: Address): Promise<bigint>;
+  /** The most `tx` sent from `account` can charge for gas, in wei: its gas estimate at the current max fee per gas. */
+  estimateFee(tx: FlowTx, account: Address): Promise<bigint>;
+}
 
 const aborted = () => new DOMException("Aborted", "AbortError");
 
@@ -31,7 +43,7 @@ export function createViemTxGateway(opts: {
   sendTransaction: (tx: FlowTx) => Promise<Hash>;
   /** Bounds how long an abandoned background poll survives. Default 10 minutes. */
   waitTimeoutMs?: number;
-}): TxGateway {
+}): BalanceTxGateway {
   const { client, sendTransaction } = opts;
   const waitTimeoutMs = opts.waitTimeoutMs ?? 10 * 60 * 1000;
 
@@ -62,6 +74,16 @@ export function createViemTxGateway(opts: {
         if (isNotFound(error)) return null;
         throw error;
       }
+    },
+
+    getBalance: (account) => client.getBalance({ address: account }),
+
+    async estimateFee(tx, account) {
+      const [gas, { maxFeePerGas }] = await Promise.all([
+        client.estimateGas({ account, to: tx.to, data: tx.data, value: tx.value }),
+        client.estimateFeesPerGas(),
+      ]);
+      return gas * maxFeePerGas;
     },
 
     async isKnown(hash) {
