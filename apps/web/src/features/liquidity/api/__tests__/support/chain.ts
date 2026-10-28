@@ -98,6 +98,8 @@ export interface PositionSetup {
   liquidity: bigint;
   /** Who `ownerOf` names; defaults to the account it is enumerated under. */
   ownerOf?: Address;
+  /** Which reads of it revert: its `tokenOfOwnerByIndex`, or its `positions` and `ownerOf` (a burned token). */
+  reverts?: "enumeration" | "reads";
 }
 
 export interface BranchTokens {
@@ -125,7 +127,12 @@ export function branchTokens(index: number): BranchTokens {
   };
 }
 
-export function createChain(branchCount: number) {
+export interface ChainOptions {
+  /** The node refuses an `aggregate3` carrying more calls than this, as an eth_call gas or size cap does. */
+  maxCallsPerRequest?: number;
+}
+
+export function createChain(branchCount: number, { maxCallsPerRequest = Infinity }: ChainOptions = {}) {
   const parentMarket = at("b0");
   const parentInvalid = at("b9");
   const branches = Array.from({ length: branchCount }, (_, index) => branchTokens(index + 1));
@@ -178,11 +185,11 @@ export function createChain(branchCount: number) {
       if (functionName === "tokenOfOwnerByIndex") {
         const held = enumerated.get((args[0] as Address).toLowerCase()) ?? [];
         const position = held[Number(args[1] as bigint)];
-        if (!position) throw new Error("index out of bounds");
+        if (!position || position.reverts === "enumeration") throw new Error("index out of bounds");
         return position.tokenId;
       }
       const position = positionById(args[0] as bigint);
-      if (!position) throw new Error("invalid token id");
+      if (!position || position.reverts === "reads") throw new Error("invalid token id");
       if (functionName === "ownerOf") {
         const [enumeratedUnder] = [...enumerated.entries()].find(([, held]) => held.includes(position))!;
         return position.ownerOf ?? (enumeratedUnder as Address);
@@ -218,6 +225,13 @@ export function createChain(branchCount: number) {
     if (isAddressEqual(to, multicall3)) {
       const decoded = decodeFunctionData({ abi: multicall3Abi, data });
       if (decoded.functionName !== "aggregate3") throw new Error(`unexpected multicall ${decoded.functionName}`);
+      if (decoded.args[0].length > maxCallsPerRequest) {
+        throw new RpcRequestError({
+          body: { method, params },
+          error: { code: -32000, message: "out of gas" },
+          url: "fake",
+        });
+      }
       const results = decoded.args[0].map((call) => {
         const answered = answer(call.target, call.callData);
         return answered.ok ? { success: true, returnData: answered.data } : { success: false, returnData: "0x" as Hex };

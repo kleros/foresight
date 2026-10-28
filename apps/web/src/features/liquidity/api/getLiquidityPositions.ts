@@ -19,6 +19,9 @@ const NFPM_ABI = parseAbi([
   "function positions(uint256 tokenId) view returns (uint96 nonce, address operator, address token0, address token1, int24 tickLower, int24 tickUpper, uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128, uint128 tokensOwed0, uint128 tokensOwed1)",
 ]);
 
+/** Calldata bytes per Multicall3 request; a wallet anyone can send NFTs to is read in requests of this size. */
+export const POSITION_READ_BATCH_BYTES = 1_024;
+
 const pairKey = (a: Address, b: Address) => (BigInt(a) < BigInt(b) ? `${a}|${b}` : `${b}|${a}`).toLowerCase();
 
 /** What burning all of `liquidity` over [tickLower, tickUpper] returns at `sqrtP`, rounded down. */
@@ -54,26 +57,27 @@ export async function fetchLiquidityPositions(
 
   const indexes: bigint[] = [];
   for (let index = 0n; index < balance; index += 1n) indexes.push(index);
-  const tokenIds = await client.multicall({
+  const enumerated = await client.multicall({
     contracts: indexes.map((index) => ({
       ...manager,
       functionName: "tokenOfOwnerByIndex" as const,
       args: [owner, index] as const,
     })),
-    allowFailure: false,
-    batchSize: 0,
+    batchSize: POSITION_READ_BATCH_BYTES,
   });
+  const tokenIds = enumerated.flatMap((each) => (each.status === "success" ? [each.result] : []));
   const reads = await client.multicall({
     contracts: tokenIds.flatMap((tokenId) => [
       { ...manager, functionName: "positions" as const, args: [tokenId] as const },
       { ...manager, functionName: "ownerOf" as const, args: [tokenId] as const },
     ]),
-    allowFailure: false,
-    batchSize: 0,
+    batchSize: POSITION_READ_BATCH_BYTES,
   });
 
   return tokenIds.flatMap((tokenId, index) => {
-    const [position, holder] = reads.slice(index * 2, index * 2 + 2) as [
+    const [read, held] = [reads[index * 2]!, reads[index * 2 + 1]!];
+    if (read.status !== "success" || held.status !== "success") return [];
+    const [position, holder] = [read.result, held.result] as [
       readonly [bigint, Address, Address, Address, number, number, bigint, ...bigint[]],
       Address,
     ];
