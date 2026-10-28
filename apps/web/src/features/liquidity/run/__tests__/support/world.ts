@@ -432,6 +432,7 @@ export function driverOn(args: {
   flowId?: string;
   closesAt?: bigint;
   now?: () => number;
+  chainId?: () => number;
 }) {
   const storage = args.storage ?? createMemoryStorage();
   const store = createFlowRunStore({ storage });
@@ -443,7 +444,7 @@ export function driverOn(args: {
     store,
     flowId,
     account: args.account ?? (() => owner),
-    chainId: () => 100,
+    chainId: args.chainId ?? (() => 100),
     request: () => args.request,
     closesAt: args.closesAt ?? CLOSES_AT,
     now: args.now ?? (() => 1_700_000_000_000),

@@ -127,6 +127,24 @@ describe("createLiquidityRun discard", () => {
     expect(progressOf(driver).failure?.reason).toBe("pending");
   });
 
+  it("keeps a run while the wallet is on another chain than the run's", async () => {
+    const { fake, left } = await leftOpen();
+    const { driver, store, flowId } = driverOn({
+      world: fake,
+      gateway: gateway(fake, owner),
+      wallet: wallet(fake, owner),
+      request: seedRequest(),
+      storage: left,
+      chainId: () => 1,
+    });
+    driver.recover();
+    expect(progressOf(driver).failure?.reason).toBe("wrong-chain");
+
+    await driver.discard();
+
+    expect(storedRun(store, flowId)).not.toBeNull();
+  });
+
   it("keeps another account's run", async () => {
     const { fake, left } = await leftOpen();
     const { driver, store, flowId } = await reopened(fake, left, stranger);
