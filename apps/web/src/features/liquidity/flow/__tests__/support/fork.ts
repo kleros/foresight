@@ -20,6 +20,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect } from "vitest";
 
 import { decode, movedSqrtPrice, sortPair } from "./session";
 import { LIQUIDITY_ALLOW_LIST } from "../../../oracle/allowlist";
+import { readSentWithNonce } from "../../../run/sentWithNonce";
 import type {
   LiquidityProgress,
   LiquidityReader,
@@ -187,6 +188,8 @@ export function useFork() {
       ]);
       return pending > latest;
     },
+    blockNumber: () => client.getBlockNumber({ cacheTime: 0 }),
+    sentWithNonce: (args) => readSentWithNonce(client, args),
   };
 
   async function poolPrice(tokenA: Address, tokenB: Address) {

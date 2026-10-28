@@ -1,5 +1,6 @@
 import { parseAbi, type PublicClient } from "viem";
 
+import { nonceCounts, readSentWithNonce } from "./sentWithNonce";
 import { fetchPoolState } from "../api/getLiquidityPools";
 import { LIQUIDITY_ALLOW_LIST } from "../oracle/allowlist";
 import type { LiquidityReader } from "../types";
@@ -22,11 +23,10 @@ export function createLiquidityReader(client: PublicClient, chainId: number): Li
       }),
     nextNonce: (account) => client.getTransactionCount({ address: account, blockTag: "latest" }),
     async hasPending(account) {
-      const [mined, pending] = await Promise.all([
-        client.getTransactionCount({ address: account, blockTag: "latest" }),
-        client.getTransactionCount({ address: account, blockTag: "pending" }),
-      ]);
+      const [mined, pending] = await nonceCounts(client, account);
       return pending > mined;
     },
+    blockNumber: () => client.getBlockNumber({ cacheTime: 0 }),
+    sentWithNonce: (args) => readSentWithNonce(client, args),
   };
 }

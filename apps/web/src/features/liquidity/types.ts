@@ -1,5 +1,5 @@
 import type { FlowTx } from "@foresight/tx-orchestrator";
-import type { Address } from "viem";
+import type { Address, Hash, Hex } from "viem";
 
 /** One child market of a session: its parent outcome `O` and the child's three outcome tokens. */
 export interface LiquidityBranchTokens {
@@ -166,7 +166,21 @@ export interface LiquidityReader {
   nextNonce(account: Address): Promise<number>;
   /** A send of the account is broadcast and not yet mined. */
   hasPending(account: Address): Promise<boolean>;
+  /** The latest block's number. */
+  blockNumber(): Promise<bigint>;
+  /** What took `owner`'s `nonce`, looked for from block `fromBlock` on. */
+  sentWithNonce(args: { owner: Address; nonce: number; fromBlock: bigint }): Promise<SentWithNonce>;
 }
+
+/**
+ * An account's send at one nonce: mined with its call, broadcast, unused, or `taken` (mined before the block
+ * looked from, or a contract creation).
+ */
+export type SentWithNonce =
+  | { status: "mined"; hash: Hash; to: Address; input: Hex; value: bigint }
+  | { status: "pending" }
+  | { status: "none" }
+  | { status: "taken" };
 
 /** Why a run halted: the orchestrator's own causes, then the liquidity run's. */
 export type LiquidityFailureReason =
@@ -184,7 +198,7 @@ export type LiquidityFailureReason =
   | "wrong-chain"
   /** The account has a send not yet mined, or a sent batch is not yet confirmed. */
   | "pending"
-  /** A prompt open when the tab went away may still be answered; its step is not signed again meanwhile. */
+  /** A step was asked of the wallet and the chain shows no send of it; it is never signed again, only discarded. */
   | "held"
   | "storage"
   /** The wallet cannot report a sent batch, so it is never sent again. */

@@ -33,6 +33,7 @@ import {
   NEW_POOL_TICK_SPACING,
   SEED_PRICE_TOLERANCE_TICKS,
 } from "../../oracle/tolerances";
+import { readSentWithNonce } from "../../run/sentWithNonce";
 import type {
   LiquidityProgress,
   LiquidityReader,
@@ -235,6 +236,8 @@ describe.skipIf(!FORK_RPC_URL)("the liquidity flow, against a gnosis fork", () =
       ]);
       return pending > latest;
     },
+    blockNumber: () => client.getBlockNumber({ cacheTime: 0 }),
+    sentWithNonce: (args) => readSentWithNonce(client, args),
   };
 
   async function poolAddress(tokenA: Address, tokenB: Address) {

@@ -21,6 +21,7 @@ import {
   zeroAddress,
   type Address,
   type Hash,
+  type Hex,
   type TransactionReceipt,
 } from "viem";
 
@@ -39,9 +40,6 @@ import type {
   SeedInput,
 } from "../types";
 
-/** A prompt open when its tab went away may still be approved; for this long, in ms, its step is not signed again. */
-export const SEND_HOLD_MS = 600_000;
-
 export const BATCH = "batch";
 
 /** EIP-5792's error for a batch id the wallet does not know. */
@@ -49,10 +47,11 @@ const UNKNOWN_BUNDLE = 5730;
 
 const TRANSFER_ABI = parseAbi(["event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)"]);
 
-/** A send asked of the wallet: the account's next nonce when it was asked, and when. */
+/** A send asked of the wallet: the transaction built for it, the account's next nonce, and the head block before. */
 interface SendRecord {
+  tx: FlowTx;
   nonce: number;
-  heldAt: number;
+  fromBlock: bigint;
 }
 
 export interface LiquiditySnapshot {
@@ -114,6 +113,10 @@ const poolKey = (pool: PoolState) =>
     ? "missing"
     : `${pool.status}:${pool.sqrtPriceX96}:${pool.tickSpacing}:${pool.status === "live" ? pool.liquidity : ""}`;
 
+/** Whether a mined call is `tx`, by target, calldata and native value. */
+const sameCall = (mined: { to: Address; input: Hex; value: bigint }, tx: FlowTx) =>
+  isAddressEqual(mined.to, tx.to) && mined.input === (tx.data ?? "0x") && mined.value === (tx.value ?? 0n);
+
 /** The NFT a position manager mint in `receipt` gave out. */
 function mintedTokenId(receipt: TransactionReceipt, positionManager: Address): bigint | undefined {
   for (const log of receipt.logs) {
@@ -154,7 +157,6 @@ export function createLiquidityRun(args: {
   /** How often a sent batch's status is asked, in ms. */
   pollMs?: number;
 }) {
-  const now = args.now ?? Date.now;
   const pollMs = args.pollMs ?? 2_000;
   const listeners = new Set<() => void>();
 
@@ -232,13 +234,28 @@ export function createLiquidityRun(args: {
 
   const run = () => orchestrator.getRun();
 
-  /** Stores the account's nonce with the run before the wallet is asked, so a prompt answered after the tab closed is found. */
-  async function recordSend(stepId: string, account: Address) {
+  /** Stores `tx` and the account's nonce with the run before the wallet is asked, so a prompt answered after the tab closed is found. */
+  async function recordSend(stepId: string, account: Address, tx: FlowTx) {
+    // read before the nonce, so the send mines after this block
+    const fromBlock = await args.reader.blockNumber();
     if (await args.reader.hasPending(account)) throw new RunStop("pending", true);
     const nonce = await args.reader.nextNonce(account);
-    orchestrator.updateSnapshot((prev) => ({ ...prev, sends: { ...prev.sends, [stepId]: { nonce, heldAt: now() } } }), {
+    const send: SendRecord = { tx, nonce, fromBlock };
+    orchestrator.updateSnapshot((prev) => ({ ...prev, sends: { ...prev.sends, [stepId]: send } }), {
       source: "adapter",
       durable: true,
+    });
+  }
+
+  /** The snapshot patch recording the token id a dust mint step's `receipt` gave out, if it is one. */
+  function mintedPatch(chainId: number, stepId: string, receipt: TransactionReceipt) {
+    const list = LIQUIDITY_ALLOW_LIST[chainId];
+    if (!list || !dustIds.has(stepId)) return undefined;
+    const tokenId = mintedTokenId(receipt, list.positionManager);
+    if (tokenId === undefined) return undefined;
+    return (prev: Readonly<LiquiditySnapshot>): LiquiditySnapshot => ({
+      ...prev,
+      minted: { ...prev.minted, [stepId]: tokenId },
     });
   }
 
@@ -254,23 +271,29 @@ export function createLiquidityRun(args: {
     );
   }
 
-  /** Whether a send stored for `stepId` already landed; a send that may still land stops the run instead. */
-  async function sentAlready(stepId: string, snapshot: Readonly<LiquiditySnapshot>, owner: Address) {
-    const send = snapshot.sends[stepId];
+  /** Whether a send stored for `stepId` landed: only the owner's successful transaction at its nonce making its call. */
+  async function sentAlready(stepId: string, snapshot: Readonly<LiquiditySnapshot>, ctx: LiquidityCtx) {
+    const send = snapshot.sends[stepId] as Partial<SendRecord> | undefined;
     if (!send) return false;
-    if (await args.reader.hasPending(owner)) throw new RunStop("pending", true);
-    // with nothing pending, every send before it had mined when its nonce was read
-    if ((await args.reader.nextNonce(owner)) > send.nonce) return true;
-    if (now() - send.heldAt < SEND_HOLD_MS) throw new RunStop("held", true);
-    forget(stepId);
-    return false;
+    if (await args.reader.hasPending(ctx.owner)) throw new RunStop("pending", true);
+    // a record without its transaction cannot be matched to a mined one
+    if (!send.tx || send.nonce === undefined || send.fromBlock === undefined) throw new RunStop("held", true);
+    const found = await args.reader.sentWithNonce({ owner: ctx.owner, nonce: send.nonce, fromBlock: send.fromBlock });
+    if (found.status === "pending") throw new RunStop("pending", true);
+    if (found.status !== "mined" || !sameCall(found, send.tx)) throw new RunStop("held", true);
+    const receipt = await args.gateway.getReceipt(found.hash);
+    if (!receipt) throw new RunStop("pending", true);
+    if (receipt.status !== "success") throw new RunStop("reverted", false);
+    const patch = mintedPatch(ctx.chainId, stepId, receipt);
+    if (patch) orchestrator.updateSnapshot(patch, { source: "adapter", durable: true });
+    return true;
   }
 
   function sequentialStep(id: string): TxStep<LiquiditySnapshot, LiquidityCtx> {
     return {
       id,
       label: id,
-      canSkip: (ctx, snapshot) => sentAlready(id, snapshot, ctx.owner),
+      canSkip: (ctx, snapshot) => sentAlready(id, snapshot, ctx),
       build: async (_ctx, snapshot) => {
         const settled = new Set(settledEntries(run()?.steps ?? []).map((entry) => entry.stepId));
         const { steps, account, session } = await checkedSteps(snapshot.request, settled);
@@ -285,7 +308,7 @@ export function createLiquidityRun(args: {
           tx = step.build({ tokenId });
           assertListed({ tx, session, owner: snapshot.request.input.owner, from: account });
         }
-        await recordSend(id, account);
+        await recordSend(id, account, tx);
         return tx;
       },
     };
@@ -368,11 +391,8 @@ export function createLiquidityRun(args: {
     now: args.now,
     hooks: {
       afterStep: ({ ctx, completed, receipt }) => {
-        const list = LIQUIDITY_ALLOW_LIST[ctx.chainId];
-        if (!receipt || !list || !dustIds.has(completed.stepId)) return;
-        const tokenId = mintedTokenId(receipt, list.positionManager);
-        if (tokenId === undefined) return;
-        return { snapshotPatch: (prev) => ({ ...prev, minted: { ...prev.minted, [completed.stepId]: tokenId } }) };
+        const patch = receipt && mintedPatch(ctx.chainId, completed.stepId, receipt);
+        return patch ? { snapshotPatch: patch } : undefined;
       },
     },
     classifyError: (error) => {
@@ -447,9 +467,9 @@ export function createLiquidityRun(args: {
   }
 
   orchestrator.subscribe(notify);
-  // a refused prompt sent nothing, so a later use of its nonce is not this step's
+  // a refused prompt sent nothing, and a cancelled send can no longer mine: either step may be asked for again
   orchestrator.on("step:failed", ({ stepId, error }) => {
-    if (error.cause === "rejected") forget(stepId);
+    if (error.cause === "rejected" || error.cause === "cancelled") forget(stepId);
   });
   orchestrator.on("flow:paused", () => halt(true));
   orchestrator.on("flow:failed", () => halt(false));
