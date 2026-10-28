@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { owner } from "@/features/liquidity/api/__tests__/support/chain";
 import { draftAssessment } from "@/features/session-create/__tests__/support/drafts";
@@ -135,5 +135,31 @@ describe("DeployStep's Seed liquidity after the session's close", () => {
     const seed = screen.getByRole("button", { name: "Seed liquidity" });
     expect(seed).toBeDisabled();
     expect(seed).toHaveAccessibleDescription(/clos/i);
+  });
+});
+
+describe("DeployStep's Seed liquidity at the session's close", () => {
+  // the draft's decision time defaults to 12:00 UTC
+  const CLOSE = Date.UTC(2030, 0, 1, 12);
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("is a link one millisecond before the close", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(CLOSE - 1);
+    renderDeployed(createWorld().parentMarket, "2030-01-01");
+
+    expect(seedLink()).toBeInTheDocument();
+  });
+
+  it("is disabled at the close itself", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(CLOSE);
+    renderDeployed(createWorld().parentMarket, "2030-01-01");
+
+    expect(screen.queryByRole("link", { name: "Seed liquidity" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Seed liquidity" })).toBeDisabled();
   });
 });
