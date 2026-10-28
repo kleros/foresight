@@ -36,6 +36,7 @@ import type {
   LiquidityRequest,
   LiquiditySession,
   LiquidityStep,
+  PoolLeft,
   PoolState,
   SeedInput,
 } from "../types";
@@ -117,6 +118,19 @@ const poolKey = (pool: PoolState) =>
 const sameCall = (mined: { to: Address; input: Hex; value: bigint }, tx: FlowTx) =>
   isAddressEqual(mined.to, tx.to) && mined.input === (tx.data ?? "0x") && mined.value === (tx.value ?? 0n);
 
+const onPair = (left: PoolLeft, a: Address, b: Address) =>
+  (isAddressEqual(left.token0, a) && isAddressEqual(left.token1, b)) ||
+  (isAddressEqual(left.token0, b) && isAddressEqual(left.token1, a));
+
+/** Whether `pool` reads as a run's own step on it left it, on the reviewed pool's tick spacing. */
+function leftAs(pool: PoolState, left: PoolLeft, reviewed: PoolState) {
+  if (pool.status === "missing" || reviewed.status === "missing" || pool.tickSpacing !== reviewed.tickSpacing) {
+    return false;
+  }
+  const liquidity = pool.status === "live" ? pool.liquidity : 0n;
+  return liquidity === left.liquidity && pool.sqrtPriceX96 >= left.low && pool.sqrtPriceX96 <= left.high;
+}
+
 /** The NFT a position manager mint in `receipt` gave out. */
 function mintedTokenId(receipt: TransactionReceipt, positionManager: Address): bigint | undefined {
   for (const log of receipt.logs) {
@@ -178,21 +192,20 @@ export function createLiquidityRun(args: {
     if (!isAddressEqual(await args.reader.ownerOf(tokenId), account)) throw new RunStop("unlisted", false);
   }
 
-  /** Throws when a pool the seed reviewed reads otherwise now. */
-  async function assertPoolsAsReviewed(input: SeedInput, settled: ReadonlySet<string>) {
+  /** Throws when a pool the seed reviewed reads otherwise now than the review and the run's own settled steps left it. */
+  async function assertPoolsAsReviewed(input: SeedInput, steps: LiquidityStep[], settled: ReadonlySet<string>) {
     const reads = input.branches.flatMap((reviewed, index) => {
       const tokens = input.session.branches[index]!;
-      // the run's own seed mint moves both of its branch's pools
+      // nothing of the run touches a branch's pools after its seed mint
       if (settled.has(`branch:${index}:seed`)) return [];
-      return (
-        (["up", "down"] as const)
-          // the run's own dust mint moves a pool it realigns; the swap's cap and the seed's minimums hold it after (L3)
-          .filter((side) => !settled.has(`branch:${index}:${side}:dust`))
-          .map(async (side) => {
-            const child = side === "up" ? tokens.upToken : tokens.downToken;
-            return poolKey(await args.reader.pool(child, tokens.outcome)) === poolKey(reviewed.pools[side]);
-          })
-      );
+      return (["up", "down"] as const).map(async (side) => {
+        const child = side === "up" ? tokens.upToken : tokens.downToken;
+        const pool = await args.reader.pool(child, tokens.outcome);
+        const left = steps
+          .filter((step) => settled.has(step.id) && step.leaves && onPair(step.leaves, child, tokens.outcome))
+          .at(-1)?.leaves;
+        return left ? leftAs(pool, left, reviewed.pools[side]) : poolKey(pool) === poolKey(reviewed.pools[side]);
+      });
     });
     if (!(await Promise.all(reads)).every(Boolean)) throw new RunStop("moved", false);
   }
@@ -204,9 +217,10 @@ export function createLiquidityRun(args: {
     const session = sessionOf(request);
     if (args.chainId() !== session.chainId) throw new RunStop("wrong-chain", true);
     const chainTime = await args.reader.chainTime();
+    const steps = planned(request, chainTime);
     if (request.kind === "seed") {
       if (chainTime >= args.closesAt) throw new RunStop("closed", false);
-      await assertPoolsAsReviewed(request.input, settled);
+      await assertPoolsAsReviewed(request.input, steps, settled);
     }
     if (request.kind === "remove") {
       const { position, sqrtPriceX96 } = request.input;
@@ -214,7 +228,6 @@ export function createLiquidityRun(args: {
       if (pool.status !== "live" || pool.sqrtPriceX96 !== sqrtPriceX96) throw new RunStop("moved", false);
       await assertHolds(position.tokenId, account);
     }
-    const steps = planned(request, chainTime);
     for (const step of steps) {
       if (step.tx) assertListed({ tx: step.tx, session, owner: request.input.owner, from: account });
     }
@@ -305,7 +318,9 @@ export function createLiquidityRun(args: {
           const tokenId = snapshot.minted[step.withdraws];
           if (tokenId === undefined) throw new RunStop("unknown", false);
           await assertHolds(tokenId, account);
-          tx = step.build({ tokenId });
+          const pool = await args.reader.pool(step.leaves.token0, step.leaves.token1);
+          if (pool.status === "missing") throw new RunStop("moved", false);
+          tx = step.build({ tokenId, sqrtPriceX96: pool.sqrtPriceX96 });
           assertListed({ tx, session, owner: snapshot.request.input.owner, from: account });
         }
         await recordSend(id, account, tx);

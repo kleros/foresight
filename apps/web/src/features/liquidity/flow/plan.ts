@@ -203,27 +203,33 @@ function realignSteps(id: string, pool: ResolvedPool, current: bigint, b: Build)
     }),
   };
 
+  // a capped swap stops anywhere from `current` to `target`
+  const band = rising ? { low: current, high: target } : { low: target, high: current };
   const steps: LiquidityStep[] = [
     ...approvals(`${id}:dust`, b.list.positionManager, [
       [token0, amount0],
       [token1, amount1],
     ]),
-    { id: `${id}:dust`, tx: multicallTx(b.list, [mintCall(dust, b.owner, b.deadline)]) },
+    {
+      id: `${id}:dust`,
+      tx: multicallTx(b.list, [mintCall(dust, b.owner, b.deadline)]),
+      leaves: { token0, token1, liquidity, low: current, high: current },
+    },
     ...approvals(`${id}:swap`, b.list.swaprRouter, [[tokenIn, amountIn]]),
-    { id: `${id}:swap`, tx: swap },
+    { id: `${id}:swap`, tx: swap, leaves: { token0, token1, liquidity, ...band } },
     {
       id: `${id}:dust-withdraw`,
       withdraws: `${id}:dust`,
-      // a capped swap stops anywhere between `current` and `target`; amount0 falls and amount1 rises with the price
-      build: ({ tokenId }) =>
+      leaves: { token0, token1, liquidity: 0n, ...band },
+      build: ({ tokenId, sqrtPriceX96 }) =>
         withdrawTx(
           b.list,
           b.owner,
           tokenId,
           liquidity,
           held(
-            lessSlippage(amount0Delta(rising ? target : current, sqrtB, liquidity, false)),
-            lessSlippage(amount1Delta(sqrtA, rising ? current : target, liquidity, false)),
+            lessSlippage(amount0Delta(sqrtPriceX96, sqrtB, liquidity, false)),
+            lessSlippage(amount1Delta(sqrtA, sqrtPriceX96, liquidity, false)),
           ),
           b.deadline,
         ),

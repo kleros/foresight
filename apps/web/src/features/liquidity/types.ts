@@ -97,10 +97,25 @@ export interface Leftover {
   amount: bigint;
 }
 
-/** A transaction of a run, or one built from the token id a dust mint returned. */
+/** What a pool reads as once a run's own step on it has mined: its liquidity, and its price within [low, high]. */
+export interface PoolLeft {
+  token0: Address;
+  token1: Address;
+  liquidity: bigint;
+  low: bigint;
+  high: bigint;
+}
+
+/** A transaction of a run, or one built from the token id a dust mint returned and the pool's price read at build. */
 export type LiquidityStep =
-  | { id: string; tx: FlowTx; withdraws?: never; build?: never }
-  | { id: string; tx?: never; withdraws: string; build: (minted: { tokenId: bigint }) => FlowTx };
+  | { id: string; tx: FlowTx; leaves?: PoolLeft; withdraws?: never; build?: never }
+  | {
+      id: string;
+      tx?: never;
+      leaves: PoolLeft;
+      withdraws: string;
+      build: (at: { tokenId: bigint; sqrtPriceX96: bigint }) => FlowTx;
+    };
 
 export interface SeedPlan {
   parentSplit: bigint;
