@@ -177,6 +177,22 @@ describe("the market page of a session with liquidity", () => {
     expect(precedes(predictButton(), controls[0]!)).toBe(true);
   });
 
+  it("shows no banner when one branch's pool is live and the other branch has none", async () => {
+    const world = createWorld();
+    const [first] = world.branches as [World["branches"][0]];
+    world.setPool(first.upToken, first.outcome, { sqrtPriceX96: Q96, liquidity: 10n * WAD, tickSpacing: 60 });
+    const [token0, token1] = sortPair(first.upToken, first.outcome);
+    world.holdPosition(owner, { tokenId: 7n, token0, token1, tickLower, tickUpper, liquidity: WAD });
+
+    await show(world, TRADING_CLOSE);
+
+    // the position is listed once the pools are read
+    await waitFor(() => expect(removeButtons()).toHaveLength(1), { timeout: 5000 });
+    const controls = addControls();
+    expect(controls).toHaveLength(1);
+    expect(precedes(predictButton(), controls[0]!)).toBe(true);
+  });
+
   it("lists each of the wallet's positions with its own Remove, in the section", async () => {
     await show(seeded(), TRADING_CLOSE);
 

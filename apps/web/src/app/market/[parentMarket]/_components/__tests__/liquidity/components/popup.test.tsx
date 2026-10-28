@@ -1,13 +1,15 @@
 import type { ReactNode } from "react";
 
 import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { parseAbi } from "viem";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { owner } from "@/features/liquidity/api/__tests__/support/chain";
 import { fetchLiquidityPools } from "@/features/liquidity/api/getLiquidityPools";
 import { sqrtPriceForBps } from "@/features/liquidity/flow/math";
 import { planSeed } from "@/features/liquidity/flow/plan";
-import type { PoolState } from "@/features/liquidity/types";
+import type { PoolState, SeedCollateral } from "@/features/liquidity/types";
 
 import { fetchGraphql } from "@/lib/graphql/batcher";
 
@@ -129,6 +131,33 @@ beforeEach(() => {
   window.history.replaceState(null, "", "/");
 });
 
+/** The frozen planner on the world's pools: branch 0 at UP 0.5, branch 1 at its pool's locked 0.4. */
+async function planned(world: World, depths: [bigint, bigint], collateral: SeedCollateral = "sDAI") {
+  const pools = await fetchLiquidityPools(world.client, world.markets);
+  const branchPools: { up: PoolState; down: PoolState }[] = pools.branches;
+  const previewDeposit =
+    collateral === "xDAI"
+      ? await world.client.readContract({
+          address: S_DAI,
+          abi: parseAbi(["function previewDeposit(uint256 assets) view returns (uint256)"]),
+          functionName: "previewDeposit",
+          args: [T],
+        })
+      : undefined;
+  return planSeed({
+    session: pools.session,
+    owner,
+    total: T,
+    collateral,
+    ...(previewDeposit !== undefined ? { previewDeposit } : {}),
+    chainTime: world.chainTime,
+    branches: [
+      { depth: depths[0], upPriceBps: 5_000n, pools: branchPools[0]! },
+      { depth: depths[1], upPriceBps: 4_000n, pools: branchPools[1]! },
+    ],
+  });
+}
+
 describe("the liquidity popup's form", () => {
   it("takes the total in sDAI or xDAI", async () => {
     const dialog = await openPopup(mixedWorld());
@@ -191,22 +220,6 @@ describe("the liquidity popup's form", () => {
 });
 
 describe("what the liquidity popup says a seed does", () => {
-  async function planned(world: World, depths: [bigint, bigint]) {
-    const pools = await fetchLiquidityPools(world.client, world.markets);
-    const branchPools: { up: PoolState; down: PoolState }[] = pools.branches;
-    return planSeed({
-      session: pools.session,
-      owner,
-      total: T,
-      collateral: "sDAI",
-      chainTime: world.chainTime,
-      branches: [
-        { depth: depths[0], upPriceBps: 5_000n, pools: branchPools[0]! },
-        { depth: depths[1], upPriceBps: 4_000n, pools: branchPools[1]! },
-      ],
-    });
-  }
-
   it("shows, per pool, both tokens it receives", async () => {
     const world = mixedWorld();
     const dialog = await openPopup(world);
@@ -252,5 +265,68 @@ describe("what the liquidity popup says a seed does", () => {
     await waitFor(() =>
       expect(within(dialog).queryAllByRole("listitem", { name: /^Timeline item/ }).length).toBeGreaterThanOrEqual(3),
     );
+  });
+});
+
+describe("the liquidity popup paying in xDAI", () => {
+  it("shows the pools what an xDAI seed of the total puts in them", async () => {
+    const world = mixedWorld();
+    const dialog = await openPopup(world);
+    await userEvent.click(within(dialog).getByRole("button", { name: "xDAI" }));
+    await enterTotal(dialog, "37");
+    const [xDai, sDai] = [await planned(world, [T, T], "xDAI"), await planned(world, [T, T])];
+    const amountsOf = (plan: typeof xDai) =>
+      plan.branches.flatMap((branch) =>
+        (["up", "down"] as const).flatMap((side) => [branch.pools[side].amount0, branch.pools[side].amount1]),
+      );
+    expect(amountsOf(xDai)).not.toEqual(amountsOf(sDai));
+
+    await waitFor(() => {
+      amountsOf(xDai).forEach((amount, index) => expectShown(dialog, amount, `pool amount ${index} of the xDAI plan`));
+    });
+  });
+});
+
+describe("the liquidity popup against the wallet's balance", () => {
+  it("refuses a total above the wallet's sDAI, saying so", async () => {
+    const world = mixedWorld();
+    world.setBalance(S_DAI, 10n * WAD);
+    const dialog = await openPopup(world);
+    await enterTotal(dialog, "37");
+
+    const submit = within(dialog).getByRole("button", { name: /^add liquidity$/i });
+    await waitFor(() => expect(submit).toHaveAccessibleDescription(/not enough sDAI/i));
+    expect(submit).toBeDisabled();
+  });
+
+  it("takes a total the wallet's sDAI covers", async () => {
+    const world = mixedWorld();
+    world.setBalance(S_DAI, T);
+    const dialog = await openPopup(world);
+    await enterTotal(dialog, "37");
+
+    const submit = within(dialog).getByRole("button", { name: /^add liquidity$/i });
+    await waitFor(() => expect(submit).toBeEnabled());
+  });
+});
+
+describe("the liquidity popup's timeline", () => {
+  it("gives the parent split and each branch the number of signatures its steps take", async () => {
+    const world = mixedWorld();
+    const dialog = await openPopup(world);
+    await enterTotal(dialog, "37");
+    const plan = await planned(world, [T, T]);
+    const scopes = ["parent:", ...world.branches.map((_, index) => `branch:${index}:`)];
+    const counts = scopes.map((scope) => plan.steps.filter((step) => step.id.startsWith(scope)).length);
+    expect(counts.some((count) => count > 1)).toBe(true);
+
+    await waitFor(() => {
+      const items = within(dialog).queryAllByRole("listitem", { name: /^Timeline item/ });
+      expect(items).toHaveLength(scopes.length);
+      items.forEach((item, index) => {
+        const count = counts[index]!;
+        expect(item).toHaveTextContent(`${count} ${count === 1 ? "signature" : "signatures"}`);
+      });
+    });
   });
 });
