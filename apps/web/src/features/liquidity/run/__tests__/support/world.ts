@@ -1,11 +1,11 @@
 import {
   createFlowRunStore,
   createMemoryStorage,
+  type BalanceTxGateway,
   type FlowRunStorage,
   type FlowRunStore,
   type FlowTx,
   type PersistedFlowRun,
-  type TxGateway,
 } from "@foresight/tx-orchestrator";
 import {
   isAddressEqual,
@@ -26,7 +26,7 @@ import { createLiquidityRun } from "../../driver";
  * Fakes for the liquidity run driver tests, and the API these tests hold `run/driver.ts` to:
  *
  *   createLiquidityRun({
- *     gateway: TxGateway,                 // sequential sends, through the tx-orchestrator under adapter "liquidity-flow"
+ *     gateway: BalanceTxGateway,          // sequential sends, through the tx-orchestrator under adapter "liquidity-flow"
  *     wallet: { request({ method, params }) → Promise<unknown> },
  *                                         // the connected wallet's EIP-1193 provider: wallet_getCapabilities,
  *                                         // wallet_sendCalls and wallet_getCallsStatus (EIP-5792 v2, hex chain ids)
@@ -112,6 +112,8 @@ export interface Broadcast {
 export function chain(opts: { chainTime?: bigint; pools?: [Address, Address, PoolState][] } = {}) {
   const state = {
     chainTime: opts.chainTime ?? 1_900_000_000n,
+    /** Every account's native balance, in wei; sends do not spend it. */
+    native: 10n ** 30n,
     block: 19_000_000n,
     pools: new Map<string, PoolState>((opts.pools ?? []).map(([a, b, pool]) => [pairKey(a, b), pool])),
     owners: new Map<bigint, Address>(),
@@ -206,7 +208,7 @@ export function gateway(
   const hung: FlowTx[] = [];
   let onHang: (() => void) | undefined;
 
-  const port: TxGateway = {
+  const port: BalanceTxGateway = {
     sendTransaction: (tx) => {
       const index = prompts.length;
       prompts.push(tx);
@@ -228,6 +230,7 @@ export function gateway(
       return Promise.resolve(sent?.mined ? world.receiptOf(sent) : null);
     },
     isKnown: (hash) => Promise.resolve(world.find(hash) !== undefined),
+    getBalance: () => Promise.resolve(world.state.native),
   };
 
   return {

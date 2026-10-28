@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { TOKEN_ID, TOKENS, live, removeRequest, seedRequest } from "./support/requests";
+import { DEPTH, TOKEN_ID, TOKENS, live, removeRequest, seedInput, seedRequest } from "./support/requests";
 import { chain, copyStorage, disposeDrivers, driverOn, gateway, progressOf, wallet } from "./support/world";
 import { owner, stranger } from "../../flow/__tests__/support/session";
+import { GAS_RESERVE_WEI } from "../../oracle/tolerances";
 
 afterEach(disposeDrivers);
 
@@ -21,6 +22,49 @@ describe("createLiquidityRun guards before a prompt", () => {
 
     expect(progressOf(driver).failure).toEqual({ reason: "pending", retryable: true });
     expect(sends.prompts).toEqual([]);
+  });
+
+  const xdaiSeed = { kind: "seed" as const, input: { ...seedInput(), collateral: "xDAI" as const, previewDeposit: DEPTH } };
+
+  it("prompts for nothing when the run's xDAI would leave the account under GAS_RESERVE_WEI (L12)", async () => {
+    const fake = chain();
+    fake.state.native = DEPTH + GAS_RESERVE_WEI - 1n;
+    const sends = gateway(fake, owner);
+    const { driver } = driverOn({ world: fake, gateway: sends, wallet: wallet(fake, owner), request: xdaiSeed });
+
+    driver.start();
+    await halted(driver);
+
+    expect(progressOf(driver).failure).toEqual({ reason: "gas-reserve", retryable: true });
+    expect(sends.prompts).toEqual([]);
+  });
+
+  it("seeds from xDAI when the account keeps exactly GAS_RESERVE_WEI after the split (L12)", async () => {
+    const fake = chain();
+    fake.state.native = DEPTH + GAS_RESERVE_WEI;
+    const sends = gateway(fake, owner);
+    const { driver } = driverOn({ world: fake, gateway: sends, wallet: wallet(fake, owner), request: xdaiSeed });
+
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("complete"), { timeout: 3_000 });
+
+    expect(sends.prompts.some((tx) => tx.value === DEPTH)).toBe(true);
+  });
+
+  it("counts no xDAI of a split already mined against the reserve (L12)", async () => {
+    const fake = chain();
+    fake.state.native = DEPTH + GAS_RESERVE_WEI;
+    const sends = gateway(fake, owner, {
+      onBroadcast: (tx) => {
+        if (tx.value === DEPTH) fake.state.native = GAS_RESERVE_WEI;
+      },
+    });
+    const { driver } = driverOn({ world: fake, gateway: sends, wallet: wallet(fake, owner), request: xdaiSeed });
+
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("complete"), { timeout: 3_000 });
+
+    expect(sends.prompts.findIndex((tx) => tx.value === DEPTH)).toBeLessThan(sends.prompts.length - 1);
   });
 
   it("withdraws no position the connected account does not hold (L4)", async () => {
