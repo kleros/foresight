@@ -167,6 +167,29 @@ describe("createLiquidityRun discard", () => {
     expect(timesBroadcast(fake, PLANNED)).toEqual(PLANNED.map(() => 1));
   });
 
+  it("keeps a run whose submitted send has no receipt while the node reports nothing pending", async () => {
+    const fake = chain();
+    const sends = gateway(fake, owner, { script: (index) => (index === SPLIT_AT ? "unmined" : "sign") });
+    const wait = sends.port.waitForReceipt;
+    sends.port.waitForReceipt = (args) =>
+      sameTx(fake.find(args.hash)!.tx, PLANNED[SPLIT_AT]!) ? Promise.reject(new Error("boom")) : wait(args);
+    const { driver, store, flowId } = driverOn({
+      world: fake,
+      gateway: sends,
+      wallet: wallet(fake, owner),
+      request: seedRequest(),
+    });
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("halted"));
+    // a node that never saw the transaction in its mempool
+    fake.reader.hasPending = () => Promise.resolve(false);
+
+    await driver.discard();
+
+    expect(storedRun(store, flowId)).not.toBeNull();
+    expect(progressOf(driver)).toEqual({ stage: "halted", failure: { reason: "pending", retryable: true } });
+  });
+
   it("keeps a run held on a prompt that was approved, broadcast and not yet mined since it halted", async () => {
     const { fake, left, hung } = await leftOpen();
     const { driver, store, flowId } = await reopened(fake, left);

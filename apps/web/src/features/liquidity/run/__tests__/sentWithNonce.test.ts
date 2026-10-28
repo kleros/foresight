@@ -7,6 +7,8 @@ import { readSentWithNonce } from "../sentWithNonce";
 const OWNER: Address = "0x00000000000000000000000000000000000000a1";
 const TARGET: Address = "0x00000000000000000000000000000000000000c7";
 const INPUT: Hex = "0xdeadbeef";
+const STRANGER: Address = "0x00000000000000000000000000000000000000f6";
+const STRANGER_HASH: Hash = `0x${"f".repeat(64)}`;
 
 const hashOf = (nonce: number): Hash => `0x${(nonce + 1).toString(16).padStart(64, "0")}`;
 
@@ -14,7 +16,14 @@ const hashOf = (nonce: number): Hash => `0x${(nonce + 1).toString(16).padStart(6
  * A node, as JSON-RPC: the owner's nonces mined at the blocks `minedAt` gives, `broadcast` more waiting.
  * No library builds a node's side of these methods, so the shapes follow the Ethereum JSON-RPC spec.
  */
-function node(opts: { head: bigint; minedAt: Record<number, bigint>; broadcast?: number; pruned?: boolean }) {
+function node(opts: {
+  head: bigint;
+  minedAt: Record<number, bigint>;
+  broadcast?: number;
+  pruned?: boolean;
+  /** Another account's transactions, listed in their block ahead of the owner's. */
+  others?: { nonce: number; block: bigint }[];
+}) {
   const blocksRead: bigint[] = [];
   const countAfter = (block: bigint) => Object.values(opts.minedAt).filter((at) => at <= block).length;
   const request = async ({ method, params }: { method: string; params?: unknown }): Promise<unknown> => {
@@ -34,26 +43,30 @@ function node(opts: { head: bigint; minedAt: Record<number, bigint>; broadcast?:
       case "eth_getBlockByNumber": {
         const number = BigInt(args[0] as string);
         blocksRead.push(number);
-        const transactions = Object.entries(opts.minedAt)
-          .filter(([, at]) => at === number)
-          .map(([nonce]) => ({
-            hash: hashOf(Number(nonce)),
-            from: OWNER,
-            to: TARGET,
-            nonce: numberToHex(Number(nonce)),
-            input: INPUT,
-            value: "0x7",
-            gas: "0x5208",
-            gasPrice: "0x1",
-            blockHash: `0x${"b".repeat(64)}`,
-            blockNumber: numberToHex(number),
-            transactionIndex: "0x0",
-            type: "0x0",
-            chainId: numberToHex(gnosis.id),
-            v: "0x1b",
-            r: `0x${"1".repeat(64)}`,
-            s: `0x${"2".repeat(64)}`,
-          }));
+        const sent = [
+          ...(opts.others ?? []).filter((each) => each.block === number).map((each) => ({ ...each, from: STRANGER })),
+          ...Object.entries(opts.minedAt)
+            .filter(([, at]) => at === number)
+            .map(([nonce, block]) => ({ nonce: Number(nonce), block, from: OWNER })),
+        ];
+        const transactions = sent.map(({ nonce, from }) => ({
+          hash: from === OWNER ? hashOf(nonce) : STRANGER_HASH,
+          from,
+          to: TARGET,
+          nonce: numberToHex(nonce),
+          input: INPUT,
+          value: "0x7",
+          gas: "0x5208",
+          gasPrice: "0x1",
+          blockHash: `0x${"b".repeat(64)}`,
+          blockNumber: numberToHex(number),
+          transactionIndex: "0x0",
+          type: "0x0",
+          chainId: numberToHex(gnosis.id),
+          v: "0x1b",
+          r: `0x${"1".repeat(64)}`,
+          s: `0x${"2".repeat(64)}`,
+        }));
         return {
           number: numberToHex(number),
           hash: `0x${number.toString(16).padStart(64, "0")}`,
@@ -115,5 +128,32 @@ describe("readSentWithNonce", () => {
     const { client } = node({ head: 2_000n, minedAt: { 0: 10n } });
 
     expect(await readSentWithNonce(client, { owner: OWNER, nonce: 1, fromBlock: 1_000n })).toEqual({ status: "none" });
+  });
+
+  it("finds the owner's call when another account's transaction at the same nonce shares its block", async () => {
+    const { client } = node({ head: 2_000n, minedAt: { 0: 10n, 1: 1_004n }, others: [{ nonce: 1, block: 1_004n }] });
+
+    expect(await readSentWithNonce(client, { owner: OWNER, nonce: 1, fromBlock: 1_000n })).toMatchObject({
+      status: "mined",
+      hash: hashOf(1),
+    });
+  });
+
+  it("finds the call at its own nonce when the owner mined two in one block", async () => {
+    const { client } = node({ head: 2_000n, minedAt: { 0: 10n, 1: 1_004n, 2: 1_004n } });
+
+    expect(await readSentWithNonce(client, { owner: OWNER, nonce: 2, fromBlock: 1_000n })).toMatchObject({
+      status: "mined",
+      hash: hashOf(2),
+    });
+  });
+
+  it("finds a call mined in the latest block", async () => {
+    const { client } = node({ head: 1_004n, minedAt: { 0: 10n, 1: 1_004n } });
+
+    expect(await readSentWithNonce(client, { owner: OWNER, nonce: 1, fromBlock: 1_000n })).toMatchObject({
+      status: "mined",
+      hash: hashOf(1),
+    });
   });
 });

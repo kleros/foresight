@@ -322,4 +322,60 @@ describe("createLiquidityRun realigning an empty pool (L3)", () => {
     expect(withdrawn(sends.prompts)).toEqual([DUST_ID]);
     expect(sends.prompts.filter(isSeedMint)).toEqual([]);
   });
+
+  /** A realign run where, once the dust mint is broadcast, the pool reads as `after` with the dust's liquidity. */
+  function afterDustMint(after: (dust: bigint) => PoolState) {
+    return realignRun({
+      mintLogs: true,
+      meanwhile: (tx, fake) => {
+        const mint = decode(tx);
+        if (!isDustMint(tx) || mint.kind !== "multicall" || mint.inner[0]!.name !== "mint") return;
+        const dust = liquidityFor(FROM, sqrtA, sqrtB, mint.inner[0]!.amount0Desired, mint.inner[0]!.amount1Desired);
+        fake.setPool(TOKENS.upToken, TOKENS.outcome, after(dust));
+      },
+    });
+  }
+
+  it("stops for a new review before the swap when someone moved the price, not the liquidity, after the dust mint (L10)", async () => {
+    // between the pool's price and the target, where a capped swap of the run's own could stop
+    const { driver, sends } = afterDustMint((dust) => ({
+      status: "live",
+      sqrtPriceX96: userSqrtPrice(4_000n, true),
+      liquidity: dust,
+      tickSpacing: 60,
+    }));
+
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("moved"), { timeout: 3_000 });
+
+    expect(sends.prompts.filter(isSwap)).toEqual([]);
+  });
+
+  it("stops for a new review before the swap when the pool reads another tick spacing after the dust mint (L10)", async () => {
+    const { driver, sends } = afterDustMint((dust) => ({
+      status: "live",
+      sqrtPriceX96: FROM,
+      liquidity: dust,
+      tickSpacing: 10,
+    }));
+
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("moved"), { timeout: 3_000 });
+
+    expect(sends.prompts.filter(isSwap)).toEqual([]);
+  });
+
+  it("stops before the dust withdrawal when its pool cannot be read", async () => {
+    const { driver, sends } = realignRun({
+      mintLogs: true,
+      meanwhile: (tx, fake) => {
+        if (isSwap(tx)) fake.setPool(TOKENS.upToken, TOKENS.outcome, { status: "missing" });
+      },
+    });
+
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("moved"), { timeout: 3_000 });
+
+    expect(sends.prompts.filter(isWithdraw)).toEqual([]);
+  });
 });

@@ -103,6 +103,61 @@ describe("createLiquidityRun recovering a prompt open when its tab closed (L8)",
     expect(timesBroadcast(fake, [hung])).toEqual([0]);
   });
 
+  const nearCalls: Array<[string, (hung: FlowTx) => FlowTx]> = [
+    ["its target with other calldata", (hung) => ({ ...hung, data: `${hung.data ?? "0x"}00` })],
+    ["its target and calldata with other value", (hung) => ({ ...hung, value: (hung.value ?? 0n) + 1n })],
+    ["its calldata to another target", (hung) => ({ ...hung, to: stranger })],
+  ];
+
+  it.each(nearCalls)(
+    "halts needing the visitor, signing nothing, when a call to %s took its nonce",
+    async (_, near) => {
+      const { fake, left, hung } = await leftOpen();
+      fake.broadcast(near(hung), owner, true);
+
+      const { driver, sends } = await reopened(fake, left);
+
+      expect(progressOf(driver)).toEqual({ stage: "halted", failure: { reason: "held", retryable: true } });
+      expect(sends.prompts).toEqual([]);
+      expect(timesBroadcast(fake, [hung])).toEqual([0]);
+    },
+  );
+
+  it("halts as pending, signing nothing, when the call approved after the tab closed has no receipt to read yet", async () => {
+    const { fake, left, hung } = await leftOpen();
+    const approved = fake.approveLater(hung, owner);
+    const sends = gateway(fake, owner);
+    const read = sends.port.getReceipt;
+    sends.port.getReceipt = (hash) => (hash === approved.hash ? Promise.resolve(null) : read(hash));
+    const { driver } = driverOn({
+      world: fake,
+      gateway: sends,
+      wallet: wallet(fake, owner),
+      request: seedRequest(),
+      storage: left,
+    });
+    driver.recover();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("review"));
+
+    driver.resume();
+    await settled(driver);
+
+    expect(progressOf(driver)).toEqual({ stage: "halted", failure: { reason: "pending", retryable: true } });
+    expect(sends.prompts).toEqual([]);
+  });
+
+  it("halts as pending, signing nothing, when the prompt's send is broadcast after the account read as having none", async () => {
+    const { fake, left, hung } = await leftOpen();
+    fake.broadcast(hung, owner, false);
+    // the node's pending count lags the transaction it already serves
+    fake.reader.hasPending = () => Promise.resolve(false);
+
+    const { driver, sends } = await reopened(fake, left);
+
+    expect(progressOf(driver)).toEqual({ stage: "halted", failure: { reason: "pending", retryable: true } });
+    expect(sends.prompts).toEqual([]);
+  });
+
   it("halts as reverted, signing nothing, when the prompt approved after the tab closed reverted", async () => {
     const { fake, left, hung } = await leftOpen();
     fake.broadcast(hung, owner, true, { reverted: true });
