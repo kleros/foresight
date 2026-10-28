@@ -186,6 +186,8 @@ export function createLiquidityRun(args: {
   let stopped: RunStop | undefined;
   /** Steps whose minted token id a later step withdraws. */
   let dustIds = new Set<string>();
+  /** The steps that withdraw them. */
+  let withdrawIds = new Set<string>();
   /** The batch the atomic step's build checked, sent by the gateway right after. */
   let batch: { id: string; account: Address; calls: FlowTx[] } | undefined;
 
@@ -211,15 +213,22 @@ export function createLiquidityRun(args: {
     if (!(await Promise.all(reads)).every(Boolean)) throw new RunStop("moved", false);
   }
 
-  /** The request's steps as the chain stands now, every static one checked against flow/allowed.ts (L4, L5, L7, L10, L13). */
-  async function checkedSteps(request: LiquidityRequest, settled: ReadonlySet<string> = new Set()) {
+  /**
+   * The request's steps as the chain stands now, every static one checked against flow/allowed.ts (L4, L5, L7, L10, L13).
+   * `withdrawing`: a dust withdrawal takes out only the run's own position, so neither the close nor the pools stop it (L3).
+   */
+  async function checkedSteps(
+    request: LiquidityRequest,
+    settled: ReadonlySet<string> = new Set(),
+    withdrawing = false,
+  ) {
     const account = args.account();
     if (!account) throw new RunStop("wrong-wallet", true);
     const session = sessionOf(request);
     if (args.chainId() !== session.chainId) throw new RunStop("wrong-chain", true);
     const chainTime = await args.reader.chainTime();
     const steps = planned(request, chainTime);
-    if (request.kind === "seed") {
+    if (request.kind === "seed" && !withdrawing) {
       if (chainTime >= args.closesAt) throw new RunStop("closed", false);
       await assertPoolsAsReviewed(request.input, steps, settled);
     }
@@ -310,7 +319,7 @@ export function createLiquidityRun(args: {
       canSkip: (ctx, snapshot) => sentAlready(id, snapshot, ctx),
       build: async (_ctx, snapshot) => {
         const settled = new Set(settledEntries(run()?.steps ?? []).map((entry) => entry.stepId));
-        const { steps, account, session } = await checkedSteps(snapshot.request, settled);
+        const { steps, account, session } = await checkedSteps(snapshot.request, settled, withdrawIds.has(id));
         const step = steps.find((each) => each.id === id);
         if (!step) throw new RunStop("unknown", false);
         let tx: FlowTx;
@@ -493,6 +502,7 @@ export function createLiquidityRun(args: {
   function stepsFor(snapshot: LiquiditySnapshot) {
     const plan = planned(snapshot.request);
     dustIds = new Set(plan.flatMap((step) => (step.withdraws ? [step.withdraws] : [])));
+    withdrawIds = new Set(plan.flatMap((step) => (step.withdraws ? [step.id] : [])));
     return snapshot.atomic ? [batchStep] : plan.map((step) => sequentialStep(step.id));
   }
 
