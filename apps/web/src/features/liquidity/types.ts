@@ -130,3 +130,52 @@ export interface MergePlan {
   parentMerge: bigint;
   txs: FlowTx[];
 }
+
+/** What the popup reviewed when Add, Remove or Merge was pressed; a seed's `branches[].pools` is the reviewed pool state. */
+export type LiquidityRequest =
+  | { kind: "seed"; input: SeedInput }
+  | { kind: "remove"; session: LiquiditySession; input: RemoveInput }
+  | { kind: "merge"; input: MergeInput };
+
+/** The chain reads a liquidity run makes before each prompt. */
+export interface LiquidityReader {
+  /** The latest block's timestamp, in seconds. */
+  chainTime(): Promise<bigint>;
+  /** The pair's pool, tokens in either order. */
+  pool(tokenA: Address, tokenB: Address): Promise<PoolState>;
+  ownerOf(tokenId: bigint): Promise<Address>;
+  /** The account's next nonce, counting mined sends only. */
+  nextNonce(account: Address): Promise<number>;
+  /** A send of the account is broadcast and not yet mined. */
+  hasPending(account: Address): Promise<boolean>;
+}
+
+/** Why a run halted: the orchestrator's own causes, then the liquidity run's. */
+export type LiquidityFailureReason =
+  | "rejected"
+  | "cancelled"
+  | "reverted"
+  | "rpc"
+  | "unknown"
+  /** A transaction departs from flow/allowed.ts or the owner rule, so it was not sent. */
+  | "unlisted"
+  /** A seed or add at or after the session's close by chain time. */
+  | "closed"
+  /** The run belongs to another account than the connected one, or none is connected. */
+  | "wrong-wallet"
+  | "wrong-chain"
+  /** The account has a send not yet mined, or a sent batch is not yet confirmed. */
+  | "pending"
+  /** A prompt open when the tab went away may still be answered; its step is not signed again meanwhile. */
+  | "held"
+  | "storage"
+  /** The wallet cannot report a sent batch, so it is never sent again. */
+  | "batch-unknown"
+  /** The wallet reports the batch did not land. */
+  | "batch-failed";
+
+export interface LiquidityProgress {
+  /** `moved`: a pool read at build differs from the reviewed one; nothing more is signed until a new review. */
+  stage: "idle" | "signing" | "confirming" | "review" | "moved" | "halted" | "complete";
+  failure?: { reason: LiquidityFailureReason; retryable: boolean };
+}
