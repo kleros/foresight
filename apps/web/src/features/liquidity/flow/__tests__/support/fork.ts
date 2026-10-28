@@ -316,7 +316,8 @@ export function useFork() {
       const timer = setTimeout(() => reject(new Error("the run did not settle")), RUN_TIMEOUT_MS - 10_000);
       const check = () => {
         const now = driver.getProgress();
-        if (now.stage === "complete" || now.stage === "halted" || now.stage === "moved") {
+        // the orchestrator's own stop notifies before the driver has named its failure
+        if (now.stage === "complete" || (now.stage === "halted" && now.failure) || now.stage === "moved") {
           clearTimeout(timer);
           unsubscribe();
           resolve(now);
