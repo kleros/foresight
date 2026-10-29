@@ -25,8 +25,8 @@ import { LIQUIDITY_ALLOW_LIST } from "../../../oracle/allowlist";
  *       The dust position's tokenId is known only once its mint lands, so its withdrawal is built from it and
  *       the pool's price read at build.
  *   planRemove({ chainId, owner, chainTime, sqrtPriceX96,
- *                position: { tokenId, token0, token1, tickLower, tickUpper, liquidity } })
- *     → { amount0, amount1, amount0Min, amount1Min, tx }
+ *                positions: [{ tokenId, token0, token1, tickLower, tickUpper, liquidity }] })
+ *     → { amount0, amount1, amount0Min, amount1Min, tx }   // amounts summed; positions of one pool, each named once
  *   planMerge({ session, owner, balances: { branches: [{ outcome, up, down, invalid }], parentInvalid } })
  *     → { branches: [{ merge }], parentMerge, txs }
  *   departures({ tx, session, owner, from? }) → string[];  assertListed(same) throws UnlistedTxError

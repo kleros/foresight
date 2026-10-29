@@ -63,7 +63,7 @@ import { createLiquidityRun } from "../../driver";
  *   LiquidityProgress {
  *     stage: "idle" | "signing" | "confirming" | "review" | "moved" | "halted" | "complete";
  *     failure?: { reason: string; retryable: boolean };
- *     kind?: "seed" | "remove" | "merge";  tokenId?: bigint;  atomic?: true;   // tokenId: a remove's position
+ *     kind?: "seed" | "remove" | "merge";  tokenIds?: bigint[];  atomic?: true;   // tokenIds: a remove's positions
  *     rows: { id; view: "idle" | "running" | "done" | "failed"; signatures: { done; total } }[];
  *     signatures: { done; total };   // one per transaction, or one for a batch
  *     signature?: { position; total; status: "building" | "awaiting-signature" | "submitted" };

@@ -40,8 +40,13 @@ describe("remove plan (L6)", () => {
       owner,
       chainTime: CHAIN_TIME,
       sqrtPriceX96,
-      position: { tokenId, token0, token1, tickLower, tickUpper, liquidity },
+      positions: [{ tokenId, token0, token1, tickLower, tickUpper, liquidity }],
     });
+  }
+
+  function position(tokenId: bigint, liquidity: bigint, pair: readonly [Address, Address] = [token0, token1]) {
+    const { tickLower, tickUpper } = fullRange(60);
+    return { tokenId, token0: pair[0], token1: pair[1], tickLower, tickUpper, liquidity };
   }
 
   it("withdraws the full liquidity, collects everything to the owner and burns the position, in one multicall", () => {
@@ -68,6 +73,51 @@ describe("remove plan (L6)", () => {
     });
     expect(d.inner[1]!.name === "collect" && same(d.inner[1]!.recipient, owner)).toBe(true);
     expect(d.inner[2]).toEqual({ name: "burn", tokenId: 77n });
+  });
+
+  it("withdraws every position of a pool in one multicall, each held to its own minimums, and shows their sum", () => {
+    const sqrtP = userSqrtPrice(4_000n, true);
+    const [a, b] = [position(77n, 10n ** 21n), position(78n, 3n * 10n ** 20n)];
+    const one = (each: typeof a) =>
+      planRemove({ chainId: 100, owner, chainTime: CHAIN_TIME, sqrtPriceX96: sqrtP, positions: [each] });
+
+    const plan = planRemove({ chainId: 100, owner, chainTime: CHAIN_TIME, sqrtPriceX96: sqrtP, positions: [a, b] });
+    const d = decode(plan.tx);
+
+    if (d.kind !== "multicall") throw new Error("not a multicall");
+    expect(d.inner.map((call) => [call.name, "tokenId" in call ? call.tokenId : undefined])).toEqual([
+      ["decreaseLiquidity", 77n],
+      ["collect", 77n],
+      ["burn", 77n],
+      ["decreaseLiquidity", 78n],
+      ["collect", 78n],
+      ["burn", 78n],
+    ]);
+    for (const [at, each] of [
+      [0, a],
+      [3, b],
+    ] as const) {
+      expect(d.inner[at]).toMatchObject({
+        liquidity: each.liquidity,
+        amount0Min: one(each).amount0Min,
+        amount1Min: one(each).amount1Min,
+      });
+    }
+    for (const call of d.inner) if (call.name === "collect") expect(same(call.recipient, owner)).toBe(true);
+    for (const field of ["amount0", "amount1", "amount0Min", "amount1Min"] as const) {
+      expect(plan[field]).toBe(one(a)[field] + one(b)[field]);
+    }
+  });
+
+  it("refuses no positions, positions of two pools, and a position named twice", () => {
+    const at = { chainId: 100, owner, chainTime: CHAIN_TIME, sqrtPriceX96: userSqrtPrice(4_000n, true) };
+    const down = sortPair(b.downToken, b.outcome);
+
+    expect(() => planRemove({ ...at, positions: [] })).toThrow();
+    expect(() =>
+      planRemove({ ...at, positions: [position(77n, 10n ** 21n), position(78n, 10n ** 21n, down)] }),
+    ).toThrow();
+    expect(() => planRemove({ ...at, positions: [position(77n, 10n ** 21n), position(77n, 10n ** 21n)] })).toThrow();
   });
 
   it("shows what a full withdrawal returns at the current price and holds it to LIQUIDITY_SLIPPAGE_BPS below that", () => {

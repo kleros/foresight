@@ -156,7 +156,7 @@ describe.skipIf(!FORK_RPC_URL)("the liquidity flow's amounts, against a gnosis f
           owner: OWNER,
           chainTime: await fork.reader.chainTime(),
           sqrtPriceX96: price,
-          position,
+          positions: [position],
         };
         let moved = false;
         // 400 ticks moves the sqrt price 2%, which a withdrawal's token0 falls by

@@ -14,9 +14,16 @@ import { DEFAULT_CHAIN_ID } from "@/config/chains";
 import { useLiquidityBalances, type LiquidityBalances } from "../api/getLiquidityBalances";
 import { liquidityKeyPrefix, sessionHasLiquidity, useLiquidityPools } from "../api/getLiquidityPools";
 import { useLiquidityPositions } from "../api/getLiquidityPositions";
-import { planMerge } from "../flow/plan";
+import { planMerge, planRemove } from "../flow/plan";
 import { createLiquidityReader } from "../run/reader";
-import type { LiquidityRequest, LiquiditySession, SessionPools } from "../types";
+import type {
+  LiquidityPosition,
+  LiquidityRequest,
+  LiquiditySession,
+  RemovedPosition,
+  RemoveInput,
+  SessionPools,
+} from "../types";
 import { useLiquidityRun } from "./useLiquidityRun";
 
 export interface LiquidityBranchName {
@@ -31,10 +38,13 @@ export interface TokenAmount {
   amount: bigint;
 }
 
+/** One pool's positions, or one position a remove cannot plan with the rest of its pool. */
 export interface ShownPosition {
   key: string;
   pool: string;
-  /** What withdrawing all of it returns now. */
+  /** The position NFTs the row withdraws. */
+  count: number;
+  /** What withdrawing all of them returns now. */
   returns: TokenAmount[];
   request: LiquidityRequest;
 }
@@ -104,6 +114,79 @@ export function useChainTime() {
   });
 }
 
+/** Whether a remove can plan `position` alone: in range and large enough to hold to non-zero minimums. */
+function withdrawable(input: Omit<RemoveInput, "positions">, position: RemovedPosition) {
+  try {
+    planRemove({ ...input, positions: [position] });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The wallet's positions as the popup lists them: one row per pool, its Remove withdrawing all of them in one
+ * multicall. A position the remove cannot plan gets a row of its own, so it never blocks the rest of its pool.
+ */
+export function shownPools({
+  pools,
+  positions,
+  owner,
+  chainTime,
+  names,
+}: {
+  pools: SessionPools;
+  positions: LiquidityPosition[];
+  owner: Address;
+  chainTime: bigint;
+  names: string[];
+}): ShownPosition[] {
+  const label = tokenLabels(pools.session, names);
+  const rows = new Map<string, { pool: string; input: Omit<RemoveInput, "positions">; held: LiquidityPosition[] }>();
+  for (const position of positions) {
+    const pool = poolOf(pools, position.token0, position.token1);
+    // a pool reads as empty while every position in it is out of range
+    if (!pool || pool.state.status === "missing") continue;
+    const input = { chainId: pools.session.chainId, owner, chainTime, sqrtPriceX96: pool.state.sqrtPriceX96 };
+    const key = withdrawable(input, position) ? `${pool.index}:${pool.side}` : position.tokenId.toString();
+    const row = rows.get(key) ?? {
+      pool: `${names[pool.index] ?? ""} ${pool.side === "up" ? "UP" : "DOWN"} pool`,
+      input,
+      held: [],
+    };
+    row.held.push(position);
+    rows.set(key, row);
+  }
+  return [...rows].map(([key, { pool, input, held }]) => {
+    const [first] = held as [LiquidityPosition];
+    const sum = (pick: (each: LiquidityPosition) => bigint) => held.reduce((total, each) => total + pick(each), 0n);
+    return {
+      key,
+      pool,
+      count: held.length,
+      returns: [
+        { label: label(first.token0), amount: sum((each) => each.amount0) },
+        { label: label(first.token1), amount: sum((each) => each.amount1) },
+      ],
+      request: {
+        kind: "remove",
+        session: pools.session,
+        input: {
+          ...input,
+          positions: held.map(({ tokenId, token0, token1, tickLower, tickUpper, liquidity }) => ({
+            tokenId,
+            token0,
+            token1,
+            tickLower,
+            tickUpper,
+            liquidity,
+          })),
+        },
+      },
+    };
+  });
+}
+
 /** A session's liquidity as the market page shows it: its pools, the wallet's positions and merge, and the run. */
 export function useSessionLiquidity({
   parentMarket,
@@ -131,44 +214,11 @@ export function useSessionLiquidity({
   const shown = useMemo(() => {
     const data = pools.data;
     if (!data || !owner) return { positions: [], merge: undefined };
-    const label = tokenLabels(data.session, names);
     const time = chainTime.data;
     const shownPositions =
       time === undefined
         ? []
-        : (positions.data ?? []).flatMap((position): ShownPosition[] => {
-            const pool = poolOf(data, position.token0, position.token1);
-            // a pool reads as empty while every position in it is out of range
-            if (!pool || pool.state.status === "missing") return [];
-            return [
-              {
-                key: position.tokenId.toString(),
-                pool: `${names[pool.index] ?? ""} ${pool.side === "up" ? "UP" : "DOWN"} pool`,
-                returns: [
-                  { label: label(position.token0), amount: position.amount0 },
-                  { label: label(position.token1), amount: position.amount1 },
-                ],
-                request: {
-                  kind: "remove",
-                  session: data.session,
-                  input: {
-                    chainId: data.session.chainId,
-                    owner,
-                    chainTime: time,
-                    sqrtPriceX96: pool.state.sqrtPriceX96,
-                    position: {
-                      tokenId: position.tokenId,
-                      token0: position.token0,
-                      token1: position.token1,
-                      tickLower: position.tickLower,
-                      tickUpper: position.tickUpper,
-                      liquidity: position.liquidity,
-                    },
-                  },
-                },
-              },
-            ];
-          });
+        : shownPools({ pools: data, positions: positions.data ?? [], owner, chainTime: time, names });
     return {
       positions: shownPositions,
       merge: balances.data && shownMerge(data.session, owner, balances.data, names),

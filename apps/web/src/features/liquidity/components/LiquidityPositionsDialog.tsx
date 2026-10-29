@@ -19,7 +19,7 @@ import { runStatus, runSteps } from "../utils/runSteps";
 /** A seed holds the session, so nothing here can start until it is finished or started over. */
 const HELD_BY_SEED = "Adding liquidity from this wallet is unfinished. Finish it in Add liquidity first.";
 
-/** The wallet's positions in this session, each with its Remove, then the merge of complete sets, then the run's steps. */
+/** The wallet's positions in this session, one row per pool with its Remove, then the merge of complete sets, then the run's steps. */
 export function LiquidityPositionsDialog({
   isOpen,
   onClose,
@@ -37,12 +37,13 @@ export function LiquidityPositionsDialog({
 }) {
   const { isRunning, progress } = run;
   const kind = progress?.kind;
-  // a completed remove burns its NFT, so the refetched list no longer holds it
+  // a completed remove burns its NFTs, so the refetched list no longer holds them
   const [pressed, setPressed] = useState<{ tokenId: bigint; pool: string }>();
+  const removingId = progress?.tokenIds?.[0];
   const removing =
     positions.find(
-      (position) => position.request.kind === "remove" && position.request.input.position.tokenId === progress?.tokenId,
-    )?.pool ?? (pressed && pressed.tokenId === progress?.tokenId ? pressed.pool : undefined);
+      (position) => position.request.kind === "remove" && position.request.input.positions[0]?.tokenId === removingId,
+    )?.pool ?? (pressed && pressed.tokenId === removingId ? pressed.pool : undefined);
   const isOwn = kind === "remove" || kind === "merge";
 
   const steps = isOwn
@@ -90,8 +91,11 @@ export function LiquidityPositionsDialog({
                   {positions.map((position) => (
                     <li key={position.key} className="py-2.5">
                       <div className="flex items-center gap-3">
-                        <div className="text-fs-popup-text min-w-0 flex-1 text-sm font-semibold wrap-anywhere">
-                          {position.pool}
+                        <div className="min-w-0 flex-1">
+                          <div className="text-fs-popup-text text-sm font-semibold wrap-anywhere">{position.pool}</div>
+                          {position.count > 1 ? (
+                            <div className="text-fs-popup-text-2 text-xs leading-4">{position.count} positions</div>
+                          ) : null}
                         </div>
                         <Button
                           small
@@ -100,9 +104,9 @@ export function LiquidityPositionsDialog({
                           aria-label={`Remove ${position.pool}`}
                           isDisabled={run.isHeld}
                           onPress={() => {
-                            if (position.request.kind === "remove") {
-                              setPressed({ tokenId: position.request.input.position.tokenId, pool: position.pool });
-                            }
+                            const first =
+                              position.request.kind === "remove" ? position.request.input.positions[0] : undefined;
+                            if (first) setPressed({ tokenId: first.tokenId, pool: position.pool });
                             run.start(position.request);
                           }}
                         />

@@ -47,6 +47,16 @@ function removeChain(): Chain {
 const runs: Array<[string, () => Chain, LiquidityRequestLike, FlowTx[]]> = [
   ["a seed", () => chain(), seedRequest(), seedTxs(seedInput())],
   ["a remove", removeChain, removeRequest(), [removeTx(removeInput())]],
+  [
+    "a remove of two positions",
+    () => {
+      const world = removeChain();
+      world.state.owners.set(TOKEN_ID + 1n, owner);
+      return world;
+    },
+    removeRequest({ tokenIds: [TOKEN_ID, TOKEN_ID + 1n] }),
+    [removeTx(removeInput({ tokenIds: [TOKEN_ID, TOKEN_ID + 1n] }))],
+  ],
   ["a merge", () => chain(), mergeRequest(), mergeTxs(mergeInput())],
 ];
 

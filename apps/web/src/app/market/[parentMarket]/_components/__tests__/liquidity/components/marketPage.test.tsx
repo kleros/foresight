@@ -221,6 +221,21 @@ describe("the market page of a session with liquidity", () => {
     expect(within(dialog).getByRole("button", { name: `Remove ${BRANCH_NAMES[1]} DOWN pool` })).toBeInTheDocument();
   });
 
+  it("lists two positions in one pool as one row with one Remove, and counts both in the section", async () => {
+    const world = seeded();
+    const [first] = world.branches as [World["branches"][0]];
+    const [token0, token1] = sortPair(first.upToken, first.outcome);
+    world.holdPosition(owner, { tokenId: 8n, token0, token1, tickLower, tickUpper, liquidity: 3n * WAD });
+
+    await show(world, TRADING_CLOSE);
+    await waitFor(() => expect(summary()).toHaveTextContent(/^3 positions\b/), { timeout: 5000 });
+    const dialog = await openPositions();
+
+    await waitFor(() => expect(removeButtons(dialog)).toHaveLength(2), { timeout: 5000 });
+    const remove = within(dialog).getByRole("button", { name: `Remove ${BRANCH_NAMES[0]} UP pool` });
+    expect(remove.closest("li")).toHaveTextContent("2 positions");
+  });
+
   it("offers the merge after the positions, showing exactly what it returns", async () => {
     const world = seeded();
     holdCompleteSets(world);

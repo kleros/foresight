@@ -130,16 +130,20 @@ export interface RemoveInput {
   chainTime: bigint;
   /** The pool's current price. */
   sqrtPriceX96: bigint;
-  position: {
-    tokenId: bigint;
-    token0: Address;
-    token1: Address;
-    tickLower: number;
-    tickUpper: number;
-    liquidity: bigint;
-  };
+  /** Every position withdrawn, all in one pool: the same token0 and token1. */
+  positions: RemovedPosition[];
 }
 
+export interface RemovedPosition {
+  tokenId: bigint;
+  token0: Address;
+  token1: Address;
+  tickLower: number;
+  tickUpper: number;
+  liquidity: bigint;
+}
+
+/** Amounts summed over the positions withdrawn. */
 export interface RemovePlan {
   amount0: bigint;
   amount1: bigint;
@@ -243,8 +247,8 @@ export interface LiquidityProgress {
   failure?: { reason: LiquidityFailureReason; retryable: boolean };
   /** What the run signs; absent before a run. */
   kind?: LiquidityRequest["kind"];
-  /** A remove's position, by token id. */
-  tokenId?: bigint;
+  /** A remove's positions, by token id. */
+  tokenIds?: bigint[];
   /** The run is one EIP-5792 batch, so one signature. */
   atomic?: true;
   /** Empty before a run. */

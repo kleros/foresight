@@ -329,12 +329,12 @@ describe("a remove's progress", () => {
     expect(rowViews(driver)).toEqual([["remove", "done"]]);
   });
 
-  it("names the position it withdraws", async () => {
+  it("names the positions it withdraws", async () => {
     const { driver, sends } = removeRun("hang");
 
     await sends.held();
 
-    expect(progress(driver).tokenId).toBe(TOKEN_ID);
+    expect(progress(driver).tokenIds).toEqual([TOKEN_ID]);
   });
 
   it("says it confirms once broadcast", async () => {
@@ -362,7 +362,7 @@ describe("a remove's progress", () => {
     again.recover();
     await atStage(again, "review");
 
-    expect(progress(again)).toMatchObject({ kind: "remove", tokenId: TOKEN_ID, signatures: { done: 0, total: 1 } });
+    expect(progress(again)).toMatchObject({ kind: "remove", tokenIds: [TOKEN_ID], signatures: { done: 0, total: 1 } });
     expect(rowViews(again)).toEqual([["remove", "idle"]]);
   });
 
@@ -380,7 +380,7 @@ describe("a remove's progress", () => {
 
     await vi.waitFor(() => expect(progress(driver).stage).toBe("signing"), { timeout: 3_000 });
     expect(store.load(flowId)).toBeNull();
-    expect(progress(driver)).toMatchObject({ kind: "remove", tokenId: TOKEN_ID });
+    expect(progress(driver)).toMatchObject({ kind: "remove", tokenIds: [TOKEN_ID] });
     expect(progress(driver).rows).toEqual([{ id: "remove", view: "idle", signatures: { done: 0, total: 1 } }]);
   });
 

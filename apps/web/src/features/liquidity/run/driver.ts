@@ -224,10 +224,12 @@ export function createLiquidityRun(args: {
       await assertPoolsAsReviewed(request.input, steps, settled);
     }
     if (request.kind === "remove") {
-      const { position, sqrtPriceX96 } = request.input;
-      const pool = await args.reader.pool(position.token0, position.token1);
+      const { positions, sqrtPriceX96 } = request.input;
+      const [first] = positions;
+      if (!first) throw new RunStop("unknown", false);
+      const pool = await args.reader.pool(first.token0, first.token1);
       if (pool.status !== "live" || pool.sqrtPriceX96 !== sqrtPriceX96) throw new RunStop("moved", false);
-      await assertHolds(position.tokenId, account);
+      for (const position of positions) await assertHolds(position.tokenId, account);
     }
     for (const step of steps) {
       if (step.tx) assertListed({ tx: step.tx, session, owner: request.input.owner, from: account });
@@ -497,7 +499,7 @@ export function createLiquidityRun(args: {
           : "building";
     return {
       kind: request.kind,
-      ...(request.kind === "remove" ? { tokenId: request.input.position.tokenId } : {}),
+      ...(request.kind === "remove" ? { tokenIds: request.input.positions.map((each) => each.tokenId) } : {}),
       ...(atomic ? { atomic: true as const } : {}),
       rows,
       signatures: { done: settled.size, total },

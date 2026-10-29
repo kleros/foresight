@@ -1,5 +1,5 @@
 import type { FlowTx } from "@foresight/tx-orchestrator";
-import { encodeFunctionData, erc20Abi, type Address, type Hex } from "viem";
+import { encodeFunctionData, erc20Abi, isAddressEqual, type Address, type Hex } from "viem";
 
 import { ALGEBRA_ROUTER_ABI } from "@/lib/swap/algebraRouter";
 import { sqrtPriceAtTick } from "@/lib/swap/tickMath";
@@ -38,6 +38,7 @@ import type {
   PoolPlan,
   PoolState,
   RemoveInput,
+  RemovedPosition,
   RemovePlan,
   SeedInput,
   SeedPlan,
@@ -405,16 +406,15 @@ export function planSeed(input: SeedInput): SeedPlan {
   return { parentSplit, branches, leftovers: leftovers.filter(({ amount }) => amount > 0n), steps };
 }
 
-/** One multicall taking all of a position's liquidity out, collecting everything owed to `owner`, then burning it. */
-function withdrawTx(
-  list: LiquidityAllowList,
+/** A position's liquidity out, everything owed collected to `owner`, then the emptied NFT burned. */
+function withdrawCalls(
   owner: Address,
   tokenId: bigint,
   liquidity: bigint,
   mins: { amount0Min: bigint; amount1Min: bigint },
   deadline: bigint,
-): FlowTx {
-  return multicallTx(list, [
+): Hex[] {
+  return [
     encodeFunctionData({
       abi: POSITION_MANAGER_ABI,
       functionName: "decreaseLiquidity",
@@ -426,21 +426,48 @@ function withdrawTx(
       args: [{ tokenId, recipient: owner, amount0Max: MAX_UINT128, amount1Max: MAX_UINT128 }],
     }),
     encodeFunctionData({ abi: POSITION_MANAGER_ABI, functionName: "burn", args: [tokenId] }),
-  ]);
+  ];
 }
 
-/** A full withdrawal of a position: its liquidity out, everything owed to the owner, the emptied NFT burned (L6). */
+/** One multicall withdrawing one position, as `withdrawCalls` does. */
+function withdrawTx(
+  list: LiquidityAllowList,
+  owner: Address,
+  tokenId: bigint,
+  liquidity: bigint,
+  mins: { amount0Min: bigint; amount1Min: bigint },
+  deadline: bigint,
+): FlowTx {
+  return multicallTx(list, withdrawCalls(owner, tokenId, liquidity, mins, deadline));
+}
+
+/** A full withdrawal of every position in one pool, in one multicall: each one's liquidity out, collected, burned (L6). */
 export function planRemove(input: RemoveInput): RemovePlan {
-  const { position, owner, sqrtPriceX96: sqrtP } = input;
+  const { positions, owner, sqrtPriceX96: sqrtP } = input;
+  const first = positions[0];
+  if (!first) throw new Error("A remove withdraws at least one position.");
+  const samePool = (each: RemovedPosition) =>
+    isAddressEqual(each.token0, first.token0) && isAddressEqual(each.token1, first.token1);
+  if (!positions.every(samePool)) throw new Error("A remove withdraws positions of one pool.");
+  if (new Set(positions.map((each) => each.tokenId)).size !== positions.length) {
+    throw new Error("A remove names each position once.");
+  }
   const list = listFor(input.chainId);
-  const sqrtA = sqrtPriceAtTick(position.tickLower);
-  const sqrtB = sqrtPriceAtTick(position.tickUpper);
-  const amount0 = amount0Delta(sqrtP, sqrtB, position.liquidity, false);
-  const amount1 = amount1Delta(sqrtA, sqrtP, position.liquidity, false);
-  const mins = held(lessSlippage(amount0), lessSlippage(amount1));
   const deadline = input.chainTime + LIQUIDITY_DEADLINE_SECONDS;
-  const tx = withdrawTx(list, owner, position.tokenId, position.liquidity, mins, deadline);
-  return { amount0, amount1, ...mins, tx };
+  const total = { amount0: 0n, amount1: 0n, amount0Min: 0n, amount1Min: 0n };
+  const calls = positions.flatMap((position) => {
+    const sqrtA = sqrtPriceAtTick(position.tickLower);
+    const sqrtB = sqrtPriceAtTick(position.tickUpper);
+    const amount0 = amount0Delta(sqrtP, sqrtB, position.liquidity, false);
+    const amount1 = amount1Delta(sqrtA, sqrtP, position.liquidity, false);
+    const mins = held(lessSlippage(amount0), lessSlippage(amount1));
+    total.amount0 += amount0;
+    total.amount1 += amount1;
+    total.amount0Min += mins.amount0Min;
+    total.amount1Min += mins.amount1Min;
+    return withdrawCalls(owner, position.tokenId, position.liquidity, mins, deadline);
+  });
+  return { ...total, tx: multicallTx(list, calls) };
 }
 
 const min = (...values: bigint[]) => values.reduce((least, value) => (value < least ? value : least));

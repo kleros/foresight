@@ -248,8 +248,9 @@ const position = (tokenId: bigint, pool: string): ShownPosition => {
   return {
     key: tokenId.toString(),
     pool,
+    count: 1,
     returns: [{ label: "sDAI", amount: WAD }],
-    request: { kind: "remove", session: SESSION, input: { ...base, position: { ...base.position, tokenId } } },
+    request: { kind: "remove", session: SESSION, input: { ...base, positions: [{ ...base.positions[0]!, tokenId }] } },
   };
 };
 const UP_POOL = `${NAMES[0]} UP pool`;
@@ -265,7 +266,7 @@ const removing = (stage: LiquidityProgress["stage"], tokenId: bigint, extra: Par
   ({
     stage,
     kind: "remove",
-    tokenId,
+    tokenIds: [tokenId],
     rows: [row("remove", stage === "review" ? "idle" : "running", 0, 1)],
     signatures: { done: 0, total: 1 },
     ...extra,

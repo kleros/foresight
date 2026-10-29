@@ -284,7 +284,7 @@ describe("built liquidity runs against the allow-list (L13)", () => {
       owner,
       chainTime: CHAIN_TIME,
       sqrtPriceX96: userSqrtPrice(5_000n, true),
-      position: { tokenId: 5n, token0: upPair[0], token1: upPair[1], tickLower, tickUpper, liquidity: 10n ** 20n },
+      positions: [{ tokenId: 5n, token0: upPair[0], token1: upPair[1], tickLower, tickUpper, liquidity: 10n ** 20n }],
     });
     const merge = planMerge({
       session: s,

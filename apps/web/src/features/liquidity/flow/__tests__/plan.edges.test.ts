@@ -231,14 +231,16 @@ describe("plans it refuses to build", () => {
         owner,
         chainTime: CHAIN_TIME,
         sqrtPriceX96: userSqrtPrice(5_000n, true),
-        position: {
-          tokenId: 1n,
-          token0: s.branches[0]!.upToken,
-          token1: s.branches[0]!.outcome,
-          tickLower,
-          tickUpper,
-          liquidity: WAD,
-        },
+        positions: [
+          {
+            tokenId: 1n,
+            token0: s.branches[0]!.upToken,
+            token1: s.branches[0]!.outcome,
+            tickLower,
+            tickUpper,
+            liquidity: WAD,
+          },
+        ],
       }),
     ).toThrow();
     expect(() =>

@@ -65,21 +65,24 @@ export const TOKEN_ID = 77n;
 /** The UP pool's price at 50%, as `live(5_000n, true)` holds it: the UP token is token0. */
 export const REMOVE_PRICE = userSqrtPrice(5_000n, true);
 
-export function removeInput(opts: { owner?: Address; sqrtPriceX96?: bigint; chainTime?: bigint } = {}): RemoveInput {
+/** Withdraws the UP pool's positions `tokenIds`, by default the one under TOKEN_ID. */
+export function removeInput(
+  opts: { owner?: Address; sqrtPriceX96?: bigint; chainTime?: bigint; tokenIds?: bigint[] } = {},
+): RemoveInput {
   const { tickLower, tickUpper } = fullRange(60);
   return {
     chainId: 100,
     owner: opts.owner ?? owner,
     chainTime: opts.chainTime ?? CHAIN_TIME,
     sqrtPriceX96: opts.sqrtPriceX96 ?? REMOVE_PRICE,
-    position: {
-      tokenId: TOKEN_ID,
+    positions: (opts.tokenIds ?? [TOKEN_ID]).map((tokenId) => ({
+      tokenId,
       token0: TOKENS.upToken,
       token1: TOKENS.outcome,
       tickLower,
       tickUpper,
       liquidity: 10n ** 21n,
-    },
+    })),
   };
 }
 

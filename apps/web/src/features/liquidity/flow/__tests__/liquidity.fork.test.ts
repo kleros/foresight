@@ -925,7 +925,7 @@ describe.skipIf(!FORK_RPC_URL)("the liquidity flow, against a gnosis fork", () =
             owner: OWNER,
             chainTime: await reader.chainTime(),
             sqrtPriceX96: price,
-            position,
+            positions: [position],
           };
           const plan = app.planRemove(input);
           const before = [await balanceOf(position.token0), await balanceOf(position.token1)];
@@ -943,6 +943,48 @@ describe.skipIf(!FORK_RPC_URL)("the liquidity flow, against a gnosis fork", () =
           }
           expect(await burned(position.tokenId)).toBe(true);
         }
+      },
+      RUN_TIMEOUT_MS,
+    );
+
+    it(
+      "withdraws every position of a pool in one transaction, returning their summed amounts and burning each",
+      async () => {
+        await seeded();
+        const add = await seedRequest({
+          total: parseEther("2"),
+          branches: [
+            { depth: parseEther("2"), upPriceBps: 7_000n },
+            { depth: parseEther("1"), upPriceBps: 3_000n },
+          ],
+        });
+        expect(await drive(add, ownerGateway())).toEqual({ stage: "complete" });
+        const tokens = session.branches[0]!;
+        const positions = (await positionsOf(OWNER)).filter((each) => inPool(each, tokens.upToken, tokens.outcome));
+        expect(positions).toHaveLength(2);
+        const [first] = positions as [Position];
+        const { price } = await poolPrice(first.token0, first.token1);
+        const input = {
+          chainId: CHAIN_ID,
+          owner: OWNER,
+          chainTime: await reader.chainTime(),
+          sqrtPriceX96: price,
+          positions,
+        };
+        const plan = app.planRemove(input);
+        const before = [await balanceOf(first.token0), await balanceOf(first.token1)];
+        const gateway = ownerGateway();
+
+        expect(await drive({ kind: "remove", session, input }, gateway)).toEqual({ stage: "complete" });
+
+        expect(gateway.sent).toHaveLength(1);
+        const received = [(await balanceOf(first.token0)) - before[0]!, (await balanceOf(first.token1)) - before[1]!];
+        for (const [at, amount] of [plan.amount0, plan.amount1].entries()) {
+          expect(received[at]!).toBeGreaterThanOrEqual([plan.amount0Min, plan.amount1Min][at]!);
+          const off = received[at]! > amount ? received[at]! - amount : amount - received[at]!;
+          expect(off).toBeLessThanOrEqual((amount * SLIPPAGE) / BPS);
+        }
+        for (const each of positions) expect(await burned(each.tokenId)).toBe(true);
       },
       RUN_TIMEOUT_MS,
     );

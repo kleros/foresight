@@ -47,7 +47,10 @@ export function LiquiditySection({
             Liquidity
           </h2>
           <p data-testid="liquidity-summary" className="type-label text-fs-text-secondary text-pretty tabular-nums">
-            {summary(positions.length, merge !== undefined)}
+            {summary(
+              positions.reduce((sum, row) => sum + row.count, 0),
+              merge !== undefined,
+            )}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">

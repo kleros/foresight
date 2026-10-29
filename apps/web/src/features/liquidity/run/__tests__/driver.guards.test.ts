@@ -101,6 +101,22 @@ describe("createLiquidityRun guards before a prompt", () => {
     expect(sends.prompts).toEqual([]);
   });
 
+  it("withdraws none of a pool's positions while the connected account does not hold one of them (L4)", async () => {
+    const fake = chain();
+    fake.setPool(TOKENS.upToken, TOKENS.outcome, live(5_000n, true));
+    fake.state.owners.set(TOKEN_ID, owner);
+    fake.state.owners.set(TOKEN_ID + 1n, stranger);
+    const sends = gateway(fake, owner);
+    const request = removeRequest({ tokenIds: [TOKEN_ID, TOKEN_ID + 1n] });
+    const { driver } = driverOn({ world: fake, gateway: sends, wallet: wallet(fake, owner), request });
+
+    driver.start();
+    await halted(driver);
+
+    expect(progressOf(driver).failure?.reason).toBe("unlisted");
+    expect(sends.prompts).toEqual([]);
+  });
+
   it("halts a reloaded batch the wallet reports as reverted, sending it again neither way", async () => {
     const fake = chain();
     const first = wallet(fake, owner, { atomic: "supported", sendCalls: "hang" });
