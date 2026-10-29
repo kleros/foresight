@@ -3,17 +3,19 @@ import localFont from "next/font/local";
 
 import { AppProviders } from "@/components/providers/AppProviders";
 
-import { env } from "@/config/env";
-import { siteConfig } from "@/config/site";
+import { pageMetadata, siteDescription, siteTitle, siteUrl } from "@/config/metadata";
 
 import "react-toastify/dist/ReactToastify.css";
 import "@/styles/global.css";
 
-export const metadata: Metadata = {
-  title: siteConfig.name,
-  description: siteConfig.description,
-  metadataBase: env.SITE_URL ? new URL(env.SITE_URL) : null,
-};
+// A canonical here would be inherited by every page that sets none, the 404 included.
+const { alternates: _canonical, ...siteMetadata } = pageMetadata({
+  title: siteTitle,
+  description: siteDescription,
+  path: "/",
+});
+
+export const metadata: Metadata = { ...siteMetadata, metadataBase: siteUrl };
 
 // the same files the component harnesses load (e2e/harness/inter.css)
 const inter = localFont({

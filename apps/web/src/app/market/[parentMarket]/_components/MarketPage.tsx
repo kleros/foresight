@@ -1,7 +1,6 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
@@ -24,8 +23,10 @@ import { optionNoun, optionNounSingular } from "@/features/sessions/utils/option
 import { sessionStatus } from "@/features/sessions/utils/toSessionDetail";
 import { TradeWallet } from "@/features/trade-executor/components/TradeWallet/TradeWallet";
 
+import { PageMessage } from "@/components/layout/PageMessage";
+
 import { LIQUIDITY_CLOSED_REASON } from "@/config/liquidity";
-import { ADD_LIQUIDITY_PARAM, paths } from "@/config/paths";
+import { ADD_LIQUIDITY_PARAM } from "@/config/paths";
 
 import { AdvancedSection } from "./AdvancedSection";
 import { OptionCard } from "./OptionCard";
@@ -211,18 +212,6 @@ function MarketPageSkeleton() {
         <div className="fs-skeleton h-14" />
         <div className="fs-skeleton h-14" />
       </div>
-    </div>
-  );
-}
-
-function PageMessage({ title, hint }: { title: string; hint: string }) {
-  return (
-    <div className="border-fs-border rounded-fs my-20 flex flex-col items-center gap-3 border p-13 text-center">
-      <h1 className="text-fs-text-primary text-base font-semibold">{title}</h1>
-      <p className="text-fs-text-secondary text-sm">{hint}</p>
-      <Link href={paths.home.getHref()} className="type-label text-fs-text-accent">
-        Browse sessions
-      </Link>
     </div>
   );
 }

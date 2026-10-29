@@ -1,8 +1,20 @@
+/**
+ * Headers that restrict nothing the app loads. No CSP or frame-ancestors: Reown's
+ * iframes, relays and wallet-specific origins would each need allowlisting.
+ */
+const securityHeaders = [
+  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), browsing-topics=()" },
+];
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
     remotePatterns: [],
   },
+  headers: async () => [{ source: "/:path*", headers: securityHeaders }],
   webpack: (config) => {
     // Grab the existing rule that handles SVG imports
     const fileLoaderRule = config.module.rules.find((rule) => rule.test?.test?.(".svg"));
