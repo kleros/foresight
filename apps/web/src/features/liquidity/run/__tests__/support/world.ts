@@ -359,8 +359,8 @@ export function wallet(
     capabilityChain?: Hex;
     /** `unmined`: the wallet answers and broadcasts the batch, which mines on `land()`. */
     sendCalls?: "answer" | "hang" | "unmined";
-    /** The first wallet_sendCalls is answered with an error of this code, broadcasting nothing. */
-    sendCallsRefuse?: number;
+    /** The first wallet_sendCalls is answered with an error of this code (and message), broadcasting nothing. */
+    sendCallsRefuse?: number | { code?: number; message: string };
     /** The first wallet_getCallsStatus is answered with an error of this code. */
     statusRefuse?: number;
     status?: BatchStatusScript;
@@ -392,7 +392,11 @@ export function wallet(
         opts.onSendCalls?.(call);
         onSend?.();
         if (opts.sendCallsRefuse !== undefined && sendCalls.length === 1) {
-          throw Object.assign(new Error("The wallet answered with an error."), { code: opts.sendCallsRefuse });
+          const refusal =
+            typeof opts.sendCallsRefuse === "number"
+              ? { code: opts.sendCallsRefuse, message: "The wallet answered with an error." }
+              : opts.sendCallsRefuse;
+          throw Object.assign(new Error(refusal.message), refusal.code === undefined ? {} : { code: refusal.code });
         }
         if (opts.sendCalls === "hang") return new Promise(() => {});
         // an atomic batch lands as one transaction

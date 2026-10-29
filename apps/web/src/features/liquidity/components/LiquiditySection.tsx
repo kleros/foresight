@@ -8,7 +8,7 @@ import { AddLiquidityButton } from "./AddLiquidityButton";
 import { LiquidityPositionsDialog } from "./LiquidityPositionsDialog";
 import { LiquidityRunStatus } from "./LiquidityRunStatus";
 import type { LiquidityRun } from "../hooks/useLiquidityRun";
-import type { ShownMerge, ShownPosition } from "../hooks/useSessionLiquidity";
+import { mergeShownOf, type ShownMerge, type ShownPosition } from "../hooks/useSessionLiquidity";
 import { POSITIONS_UNREAD } from "../utils/runSteps";
 
 function summary(positions: number, canMerge: boolean, unread: boolean): string {
@@ -43,7 +43,10 @@ export function LiquiditySection({
   run: LiquidityRun;
 }) {
   const [isManaging, setManaging] = useState(false);
-  const canManage = positions.length > 0 || merge !== undefined;
+  const request = run.progress?.request;
+  // a held merge signs its stored amounts, which today's balances may no longer give
+  const shownMerge = run.isHeld && request?.kind === "merge" ? mergeShownOf(request.input, names) : merge;
+  const canManage = positions.length > 0 || shownMerge !== undefined;
 
   return (
     <section aria-labelledby="liquidity-heading" className="fs-card mt-8 flex flex-col gap-3 px-6 py-5">
@@ -55,7 +58,7 @@ export function LiquiditySection({
           <p data-testid="liquidity-summary" className="type-label text-fs-text-secondary text-pretty tabular-nums">
             {summary(
               positions.reduce((sum, row) => sum + row.count, 0),
-              merge !== undefined,
+              shownMerge !== undefined,
               positionsUnread,
             )}
           </p>
@@ -85,7 +88,7 @@ export function LiquiditySection({
         names={names}
         positions={positions}
         positionsUnread={positionsUnread}
-        merge={merge}
+        merge={shownMerge}
         run={run}
       />
     </section>

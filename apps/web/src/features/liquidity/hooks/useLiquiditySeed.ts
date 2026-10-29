@@ -28,11 +28,11 @@ export interface SeedForm {
   prices: (string | undefined)[];
 }
 
-/** The form a seed request was reviewed from, so a stored run shows the amounts it signs. */
+/** A seed request as the form shows it, every wei of it, so a stored run's fields read what it signs. */
 export const formOf = (input: SeedInput): SeedForm => ({
-  total: formatAmount(input.total, 18),
+  total: formatAmount(input.total, 18, 18),
   collateral: input.collateral,
-  depths: input.branches.map((branch) => formatAmount(branch.depth, 18)),
+  depths: input.branches.map((branch) => formatAmount(branch.depth, 18, 18)),
   prices: input.branches.map((branch) => formatAmount(branch.upPriceBps, PRICE_DECIMALS)),
 });
 
@@ -56,6 +56,47 @@ function planned(input: SeedInput): SeedPlan | undefined {
   }
 }
 
+/** The popup's figures for `plan`: what each pool gets, what stays in the wallet, and the timeline's rows. */
+function shownOf(input: SeedInput, plan: SeedPlan, names: string[]) {
+  const label = tokenLabels(input.session, names);
+  const amount = (token: Address, value: bigint): TokenAmount => ({ label: label(token), amount: value });
+  return {
+    pools: plan.branches.map((branch, index) => ({
+      name: names[index] ?? "",
+      up: [
+        amount(branch.pools.up.token0, branch.pools.up.amount0),
+        amount(branch.pools.up.token1, branch.pools.up.amount1),
+      ],
+      down: [
+        amount(branch.pools.down.token0, branch.pools.down.amount0),
+        amount(branch.pools.down.token1, branch.pools.down.amount1),
+      ],
+    })),
+    leftovers: plan.leftovers.map((each) => amount(each.token, each.amount)),
+    /** The timeline's rows: the parent split, then each branch, with their signature counts. */
+    steps: rowsOf({ kind: "seed", input }, plan.steps).map((row): PlannedRow => ({
+      id: row.id,
+      signatures: row.stepIds.length,
+    })),
+  };
+}
+
+/** A stored seed's own fields and plan: its pools, chain time and sDAI rate, not today's. */
+function storedSeed(stored: SeedInput, names: string[]) {
+  const pools: SessionPools = { session: stored.session, branches: stored.branches.map((branch) => branch.pools) };
+  const form = formOf(stored);
+  const fields = stored.branches.map((_, index) => ({
+    depth: form.depths[index]!,
+    price: form.prices[index]!,
+    priceLocked: lockedUpBps(pools, index) !== undefined,
+  }));
+  const plan = planned(stored);
+  const request: LiquidityRequest = { kind: "seed", input: stored };
+  return plan
+    ? { fields, problem: undefined, request, shown: shownOf(stored, plan, names) }
+    : { fields, problem: "This run's plan can't be read back.", request };
+}
+
 /** The popup's form read against the pools: each field's shown value, the plan, and why it cannot be signed yet. */
 export function useLiquiditySeed({
   pools,
@@ -65,6 +106,7 @@ export function useLiquiditySeed({
   chainTime,
   closed,
   form,
+  stored,
 }: {
   pools: SessionPools | undefined;
   owner: Address | undefined;
@@ -73,6 +115,8 @@ export function useLiquiditySeed({
   chainTime: bigint | undefined;
   closed: boolean;
   form: SeedForm;
+  /** The request a held run signs: shown as it is, never planned again from live reads. */
+  stored?: SeedInput;
 }) {
   const total = parseAmount(form.total, 18) ?? undefined;
   const previewDeposit = useSDaiPreviewDeposit(
@@ -81,6 +125,7 @@ export function useLiquiditySeed({
   );
 
   return useMemo(() => {
+    if (stored) return storedSeed(stored, names);
     const count = pools?.branches.length ?? 0;
     const locked = Array.from({ length: count }, (_, index) => (pools ? lockedUpBps(pools, index) : undefined));
     const fields = locked.map((bps, index) => ({
@@ -138,30 +183,13 @@ export function useLiquiditySeed({
     const plan = planned(input);
     if (!plan) return { fields, problem: problem ?? "Too small to seed. Raise the amounts." };
 
-    const label = tokenLabels(pools.session, names);
-    const amount = (token: Address, value: bigint): TokenAmount => ({ label: label(token), amount: value });
     const balance = form.collateral === "sDAI" ? balances?.collateral : balances?.native;
     const request: LiquidityRequest = { kind: "seed", input };
     return {
       fields,
       problem: problem ?? (balance !== undefined && total > balance ? `Not enough ${form.collateral}.` : undefined),
       request,
-      shown: {
-        pools: plan.branches.map((branch, index) => ({
-          name: names[index] ?? "",
-          up: [
-            amount(branch.pools.up.token0, branch.pools.up.amount0),
-            amount(branch.pools.up.token1, branch.pools.up.amount1),
-          ],
-          down: [
-            amount(branch.pools.down.token0, branch.pools.down.amount0),
-            amount(branch.pools.down.token1, branch.pools.down.amount1),
-          ],
-        })),
-        leftovers: plan.leftovers.map((each) => amount(each.token, each.amount)),
-        /** The timeline's rows: the parent split, then each branch, with their signature counts. */
-        steps: rowsOf(request, plan.steps).map((row): PlannedRow => ({ id: row.id, signatures: row.stepIds.length })),
-      },
+      shown: shownOf(input, plan, names),
     };
-  }, [pools, owner, names, balances, chainTime, closed, form, total, previewDeposit.data]);
+  }, [pools, owner, names, balances, chainTime, closed, form, total, previewDeposit.data, stored]);
 }

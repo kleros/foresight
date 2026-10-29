@@ -17,6 +17,7 @@ import { useLiquidityPositions } from "../api/getLiquidityPositions";
 import { planMerge, planRemove } from "../flow/plan";
 import { createLiquidityReader } from "../run/reader";
 import type {
+  MergeInput,
   LiquidityPosition,
   LiquidityRequest,
   LiquiditySession,
@@ -93,7 +94,14 @@ function shownMerge(
   balances: LiquidityBalances,
   names: string[],
 ): ShownMerge | undefined {
-  const input = { session, owner, balances: { branches: balances.branches, parentInvalid: balances.parentInvalid } };
+  return mergeShownOf(
+    { session, owner, balances: { branches: balances.branches, parentInvalid: balances.parentInvalid } },
+    names,
+  );
+}
+
+/** What merging `input` returns, as Your positions shows it; a held merge run shows its own stored input. */
+export function mergeShownOf(input: MergeInput, names: string[]): ShownMerge | undefined {
   const plan = planMerge(input);
   if (plan.txs.length === 0) return undefined;
   return {

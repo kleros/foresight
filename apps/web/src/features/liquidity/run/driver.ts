@@ -296,14 +296,19 @@ export function createLiquidityRun(args: {
 
   function forget(stepId: string) {
     if (!run()) return;
-    orchestrator.updateSnapshot(
-      (prev) => {
-        const { [stepId]: _forgotten, ...sends } = prev.sends;
-        const { callsId: _id, ...rest } = prev;
-        return stepId === BATCH ? { ...rest, sends } : { ...prev, sends };
-      },
-      { source: "adapter" },
-    );
+    const patch = (prev: Readonly<LiquiditySnapshot>): LiquiditySnapshot => {
+      const { [stepId]: _forgotten, ...sends } = prev.sends;
+      const { callsId: _id, ...rest } = prev;
+      return stepId === BATCH ? { ...rest, sends } : { ...prev, sends };
+    };
+    try {
+      // written through, or resume would take the send back in from storage as another tab's
+      orchestrator.updateSnapshot(patch, { source: "adapter", durable: true });
+    } catch (error) {
+      // storage still holding the send only makes the next try stop as held
+      if (!(error instanceof StorageWriteError)) throw error;
+      orchestrator.updateSnapshot(patch, { source: "adapter" });
+    }
   }
 
   /** Drops the sends and batch id of every step not settled, so each is built and asked for afresh. */
@@ -441,7 +446,9 @@ export function createLiquidityRun(args: {
         // only the send request's own answer; a batch the wallet took is polled after, under its stored id
         const asking = sent ? (batchSent ? undefined : BATCH) : currentEntry(run()?.steps ?? [])?.stepId;
         // the failure persists the run right after, without the send
-        if (asking && isUserRejection(error)) forget(asking);
+        // a declined wallet_sendCalls returned no bundle id, so wording or a wallet's own code may be trusted there
+        const declined = asking === BATCH ? classifyTxError(error) === "rejected" : isUserRejection(error);
+        if (asking && declined) forget(asking);
         else if (asking && answeredWithoutPrompt(error)) {
           forget(asking);
           refused = error;
@@ -590,7 +597,27 @@ export function createLiquidityRun(args: {
     return action;
   }
 
-  const resumeRun = detached(() => orchestrator.resume());
+  /** The run as storage holds it, where another tab driving the same run stores its sends before its prompts. */
+  const storedSnapshot = () => args.store.load<LiquiditySnapshot, LiquidityCtx>(args.flowId)?.snapshot;
+
+  /** Takes in the sends and batch id another tab of this run stored, before this tab's resume writes over them. */
+  function adoptStored() {
+    const stored = storedSnapshot();
+    if (!run() || !stored) return;
+    orchestrator.updateSnapshot(
+      (prev) => ({
+        ...prev,
+        sends: { ...stored.sends, ...prev.sends },
+        ...(prev.callsId === undefined && stored.callsId !== undefined ? { callsId: stored.callsId } : {}),
+      }),
+      { source: "adapter" },
+    );
+  }
+
+  const resumeRun = detached(async () => {
+    adoptStored();
+    await orchestrator.resume();
+  });
 
   function halt(paused: boolean) {
     const raised = stopped;

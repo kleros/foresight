@@ -5,6 +5,8 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import { formatDisplayAmount } from "@/utils/amount";
+
 import { branch, decode, owner, session } from "../../flow/__tests__/support/session";
 import { planMerge, planSeed } from "../../flow/plan";
 import type { LiquidityRun } from "../../hooks/useLiquidityRun";
@@ -205,6 +207,31 @@ describe("the Add liquidity popup during a seed", () => {
         .map((field) => (field as HTMLInputElement).value),
     ).toEqual(["0.6", "0.6"]);
     expect(within(popup).getByRole("button", { name: "Resume" })).toBeEnabled();
+  });
+
+  it("shows a recovered xDAI run's own plan, every wei of it, not one made again from today's reads (L10)", () => {
+    // the stored rate and total differ from anything the live reads would give, and the total has 18 decimals
+    const stored: SeedInput = {
+      ...input,
+      collateral: "xDAI",
+      total: 7n * WAD + 1n,
+      previewDeposit: (63n * WAD) / 10n + 7n,
+      branches: input.branches.map((branch) => ({ ...branch, depth: 6n * WAD + 1n, upPriceBps: 6_000n })),
+    };
+    const plan = planSeed(stored);
+    render(addPopup({ ...recovered, request: { kind: "seed", input: stored } }, { readable: true }));
+
+    const popup = dialog("Add liquidity");
+    expect(popup.querySelector<HTMLInputElement>('[data-id="total"]')!.value).toBe("7.000000000000000001");
+    for (const branch of plan.branches) {
+      for (const pool of [branch.pools.up, branch.pools.down]) {
+        for (const amount of [pool.amount0, pool.amount1]) {
+          expect(
+            within(popup).getAllByText(new RegExp(formatDisplayAmount(amount, 18).replace(".", "\\."))).length,
+          ).toBeGreaterThan(0);
+        }
+      }
+    }
   });
 
   it("shows a recovered run's settled rows as done, and offers to resume it", () => {
@@ -582,6 +609,35 @@ describe("the market page's Liquidity section", () => {
 
     expect(onAdd).toHaveBeenCalledTimes(1);
     expect(run.resume).not.toHaveBeenCalled();
+  });
+
+  it("shows a held merge's stored amounts in Your positions, not what today's balances would merge", async () => {
+    const storedInput: MergeInput = {
+      session: TWO,
+      owner,
+      balances: {
+        branches: TWO.branches.map(() => ({ outcome: 0n, up: 5n * WAD, down: 5n * WAD, invalid: 5n * WAD })),
+        parentInvalid: 0n,
+      },
+    };
+    const run = {
+      ...runAt({
+        stage: "review",
+        kind: "merge",
+        request: { kind: "merge", input: storedInput },
+        rows: [],
+        signatures: { done: 0, total: 1 },
+      }),
+    };
+    render(wrap(<LiquiditySection onAdd={() => {}} names={NAMES} positions={[]} merge={MERGE} run={run} />));
+
+    await userEvent.click(screen.getByRole("button", { name: "Review" }));
+
+    const merge = within(dialog("Your positions")).getByRole("region", { name: "Merge" });
+    planMerge(storedInput).branches.forEach((each, index) =>
+      expect(merge).toHaveTextContent(`${formatDisplayAmount(each.merge, 18)} ${NAMES[index]}`),
+    );
+    expect(merge).not.toHaveTextContent(`${formatDisplayAmount(MERGE.branches[0]!.amount, 18)} ${NAMES[0]}`);
   });
 
   it("opens Your positions for a recovered remove instead of resuming it from the section", async () => {

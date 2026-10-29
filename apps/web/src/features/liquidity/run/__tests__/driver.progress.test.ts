@@ -224,6 +224,15 @@ describe("a recovered seed's progress", () => {
     expect(progress(driver).signatures).toEqual({ done: SECOND_BRANCH_AT, total: TOTAL });
   });
 
+  it("names the stored request it signs, which no press of this tab made, so the popup can show it (L10)", async () => {
+    const driver = await reopened();
+
+    driver.recover();
+    await atStage(driver, "review");
+
+    expect(progress(driver).request).toEqual(SEED);
+  });
+
   it("never says the wallet asks while it checks what the stored run left on chain", async () => {
     const driver = await reopened();
     const seen: (string | undefined)[] = [];

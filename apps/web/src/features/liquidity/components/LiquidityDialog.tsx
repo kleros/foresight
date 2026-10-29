@@ -65,7 +65,7 @@ export function LiquidityDialog({
   // a held seed shows the request it signs, which a run recovered from storage does not share with what was typed
   const signing = isLocked && progress?.request?.kind === "seed" ? progress.request.input : undefined;
   const form = useMemo(() => (signing ? formOf(signing) : typed), [signing, typed]);
-  const seed = useLiquiditySeed({ pools, owner, names, balances, chainTime, closed, form });
+  const seed = useLiquiditySeed({ pools, owner, names, balances, chainTime, closed, form, stored: signing });
   const id = useId();
   const balance = form.collateral === "sDAI" ? balances?.collateral : balances?.native;
 
