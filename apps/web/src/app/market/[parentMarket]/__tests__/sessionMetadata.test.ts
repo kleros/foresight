@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// The page component is never rendered here; its wallet tree only slows the import.
+vi.mock("../_components/MarketPage", () => ({ MarketPage: () => null }));
+
 // config/env parses at module load, so the module is imported after these are stubbed.
 const ENV = {
   NEXT_PUBLIC_REOWN_PROJECT_ID: "test-project",
@@ -27,9 +30,10 @@ const row = (overrides: Record<string, unknown> = {}) => ({
 
 const answer = (sessions: unknown[]) => Response.json({ data: { Session: sessions } });
 
+/** Through the route's own export, the one Next calls. */
 const metadataFor = async (parentMarket = PARENT) => {
-  const { generateSessionMetadata } = await import("../sessionMetadata");
-  return generateSessionMetadata(parentMarket);
+  const { generateMetadata } = await import("../page");
+  return generateMetadata({ params: { parentMarket } });
 };
 
 beforeEach(() => {
@@ -42,7 +46,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("generateSessionMetadata for an indexed session", () => {
+describe("generateMetadata for an indexed session", () => {
   it("titles the page after the session and links its canonical lowercase url", async () => {
     vi.stubGlobal(
       "fetch",
@@ -104,7 +108,7 @@ describe("generateSessionMetadata for an indexed session", () => {
   });
 });
 
-describe("generateSessionMetadata without a session", () => {
+describe("generateMetadata without a session", () => {
   it("keeps an unindexed address out of search results", async () => {
     vi.stubGlobal(
       "fetch",
@@ -125,7 +129,7 @@ describe("generateSessionMetadata without a session", () => {
   });
 });
 
-describe("generateSessionMetadata while the indexer is down", () => {
+describe("generateMetadata while the indexer is down", () => {
   const expectGenericSessionPage = (metadata: Awaited<ReturnType<typeof metadataFor>>) => {
     expect(metadata.title).toEqual({ absolute: "Session | Foresight" });
     expect(metadata.alternates?.canonical).toBe(PATH);
@@ -160,14 +164,11 @@ describe("generateSessionMetadata while the indexer is down", () => {
     expectGenericSessionPage(await metadataFor());
   });
 
-  it("stops waiting for an indexer that never answers", async () => {
-    // A fetch that settles only when its abort signal fires, as the real one does.
+  it("stops waiting for an indexer that never answers, even where the abort signal is dropped", async () => {
+    // Next's revalidation of a stale entry fetches without the caller's signal.
     vi.stubGlobal(
       "fetch",
-      vi.fn(
-        (_url: string, init: RequestInit) =>
-          new Promise((_resolve, reject) => init.signal?.addEventListener("abort", () => reject(init.signal?.reason))),
-      ),
+      vi.fn(() => new Promise(() => {})),
     );
     const { METADATA_TIMEOUT_MS } = await import("@/features/sessions/api/getSessionMetadata");
     const started = Date.now();

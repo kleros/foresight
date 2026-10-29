@@ -42,7 +42,7 @@ const SESSION_PATHS = /* GraphQL */ `
   }
 `;
 
-async function subgraph<T>(query: string, variables: Record<string, unknown>, revalidate: number): Promise<T> {
+async function request<T>(query: string, variables: Record<string, unknown>, revalidate: number): Promise<T> {
   const response = await fetch(env.SUBGRAPH_URL, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -54,6 +54,19 @@ async function subgraph<T>(query: string, variables: Record<string, unknown>, re
   const body = (await response.json()) as { data?: T; errors?: unknown };
   if (!body.data) throw new Error("Subgraph answered without data");
   return body.data;
+}
+
+/** Next 14 drops `signal` when it refetches a stale cache entry, so the race is what bounds the wait. */
+async function subgraph<T>(text: string, variables: Record<string, unknown>, revalidate: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("Subgraph timed out")), METADATA_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([request<T>(text, variables, revalidate), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export type SessionMetadataResult =
