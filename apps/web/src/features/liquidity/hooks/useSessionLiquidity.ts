@@ -234,6 +234,9 @@ export function useSessionLiquidity({
     chainTime: chainTime.data,
     owner,
     positions: shown.positions,
+    /** The wallet's positions could not be read, so none are listed; never read as holding none. */
+    positionsUnread: Boolean(owner) && positions.isError && positions.data === undefined,
+    rereadPositions: () => void positions.refetch(),
     merge: shown.merge,
     run,
   };

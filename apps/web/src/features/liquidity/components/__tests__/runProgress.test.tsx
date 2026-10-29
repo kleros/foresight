@@ -276,7 +276,7 @@ const removing = (stage: LiquidityProgress["stage"], tokenId: bigint, extra: Par
 
 const positionsPopup = (
   run: LiquidityRun,
-  opts: { merge?: ShownMerge; onClose?: () => void; positions?: ShownPosition[] } = {},
+  opts: { merge?: ShownMerge; onClose?: () => void; positions?: ShownPosition[]; unread?: boolean } = {},
 ) =>
   wrap(
     <LiquidityPositionsDialog
@@ -284,6 +284,7 @@ const positionsPopup = (
       onClose={opts.onClose ?? (() => {})}
       names={NAMES}
       positions={opts.positions ?? POSITIONS}
+      positionsUnread={opts.unread}
       merge={opts.merge}
       run={run}
     />,
@@ -378,6 +379,15 @@ describe("Your positions during a remove", () => {
 });
 
 describe("Your positions' actions", () => {
+  it("says the positions could not be read, not that the wallet holds none, while still offering the merge", () => {
+    render(positionsPopup(runAt(IDLE), { positions: [], unread: true, merge: MERGE }));
+
+    const popup = dialog("Your positions");
+    expect(within(popup).getByText("Your positions could not be read.")).toBeVisible();
+    expect(within(popup).queryByText(/holds no liquidity/)).toBeNull();
+    expect(within(popup).getByRole("button", { name: "Merge" })).toBeEnabled();
+  });
+
   it("offers Remove and Merge while no run holds the session", () => {
     render(positionsPopup(runAt(IDLE), { merge: MERGE }));
 

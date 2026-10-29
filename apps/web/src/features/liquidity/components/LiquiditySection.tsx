@@ -9,9 +9,11 @@ import { LiquidityPositionsDialog } from "./LiquidityPositionsDialog";
 import { LiquidityRunStatus } from "./LiquidityRunStatus";
 import type { LiquidityRun } from "../hooks/useLiquidityRun";
 import type { ShownMerge, ShownPosition } from "../hooks/useSessionLiquidity";
+import { POSITIONS_UNREAD } from "../utils/runSteps";
 
-function summary(positions: number, canMerge: boolean): string {
+function summary(positions: number, canMerge: boolean, unread: boolean): string {
   const merging = canMerge ? "Complete sets can merge back to sDAI." : "";
+  if (unread) return merging ? `${POSITIONS_UNREAD} ${merging}` : POSITIONS_UNREAD;
   if (positions === 0) return merging || "This wallet holds no liquidity in this session.";
   const held = `${positions} ${positions === 1 ? "position" : "positions"} in this session.`;
   return merging ? `${held} ${merging}` : held;
@@ -26,6 +28,8 @@ export function LiquiditySection({
   onAdd,
   names,
   positions,
+  positionsUnread = false,
+  onRereadPositions,
   merge,
   run,
 }: {
@@ -33,6 +37,8 @@ export function LiquiditySection({
   onAdd: () => void;
   names: string[];
   positions: ShownPosition[];
+  positionsUnread?: boolean;
+  onRereadPositions?: () => void;
   merge?: ShownMerge;
   run: LiquidityRun;
 }) {
@@ -50,10 +56,14 @@ export function LiquiditySection({
             {summary(
               positions.reduce((sum, row) => sum + row.count, 0),
               merge !== undefined,
+              positionsUnread,
             )}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          {positionsUnread && onRereadPositions ? (
+            <Button small variant="secondary" text="Read again" onPress={onRereadPositions} />
+          ) : null}
           {canManage ? (
             <Button
               small
@@ -74,6 +84,7 @@ export function LiquiditySection({
         onClose={() => setManaging(false)}
         names={names}
         positions={positions}
+        positionsUnread={positionsUnread}
         merge={merge}
         run={run}
       />

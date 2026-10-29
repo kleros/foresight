@@ -87,6 +87,26 @@ describe("fetchLiquidityPositions in a wallet others have sent NFTs to", () => {
     expect(positions.map((each) => each.tokenId)).toEqual(tokenIds);
   });
 
+  it("lists every position over a node that refuses a JSON-RPC batch of more than one request", async () => {
+    const chain = createChain(1, { maxBatchLength: 1 });
+    const [only] = chain.branches as [Chain["branches"][0]];
+    chain.setPool(only.upToken, only.outcome, { sqrtPriceX96: Q96, liquidity: 10n * WAD, tickSpacing: 60 });
+    const [token0, token1] = sortPair(only.upToken, only.outcome);
+    // more NFTs than one aggregate3 of POSITION_READ_BATCH_BYTES carries, so the read takes several requests
+    const tokenIds = Array.from({ length: 2 * CALLS_PER_BATCH + 1 }, (_, index) => 3_000n + BigInt(index));
+    for (const tokenId of tokenIds) {
+      chain.holdPosition(owner, { tokenId, token0, token1, ...fullRange(60), liquidity: WAD });
+    }
+    const pools = await fetchLiquidityPools(chain.client, chain.markets);
+    chain.batchLengths.length = 0;
+
+    const positions = await fetchLiquidityPositions(chain.client, { pools, owner });
+
+    expect(positions.map((each) => each.tokenId)).toEqual(tokenIds);
+    expect(chain.batchLengths.length).toBeGreaterThan(2);
+    expect(Math.max(...chain.batchLengths)).toBe(1);
+  });
+
   it.each(["enumeration", "reads", "positions", "ownerOf"] as const)(
     "lists the readable positions when another NFT's %s revert",
     async (reverts) => {

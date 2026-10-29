@@ -3,6 +3,7 @@
 import { skipToken, useQuery } from "@tanstack/react-query";
 import {
   ContractFunctionExecutionError,
+  encodeFunctionData,
   isAddressEqual,
   parseAbi,
   type Address,
@@ -33,6 +34,42 @@ function ownCallReverted(entry: { status: "success" | "failure"; error?: unknown
   if (entry.status === "success") return false;
   if (entry.error instanceof ContractFunctionExecutionError && entry.error.functionName === functionName) return true;
   throw entry.error;
+}
+
+type PositionRead = {
+  address: Address;
+  abi: typeof NFPM_ABI;
+  functionName: "tokenOfOwnerByIndex" | "positions" | "ownerOf";
+  args: readonly unknown[];
+};
+
+/**
+ * `reads` cut into aggregate3 calls of POSITION_READ_BATCH_BYTES as viem cuts them, each sent once the one before
+ * answered: an HTTP transport with batching on sends concurrent calls as one JSON-RPC batch, which a node that caps
+ * batches refuses whole.
+ */
+async function readInTurn(
+  client: PublicClient,
+  reads: PositionRead[],
+): Promise<{ status: "success" | "failure"; result?: unknown; error?: unknown }[]> {
+  const chunks: PositionRead[][] = [];
+  let size = 0;
+  for (const read of reads) {
+    const bytes = (encodeFunctionData(read as Parameters<typeof encodeFunctionData>[0]).length - 2) / 2;
+    const last = chunks.at(-1);
+    if (last && size + bytes <= POSITION_READ_BATCH_BYTES) {
+      last.push(read);
+      size += bytes;
+    } else {
+      chunks.push([read]);
+      size = bytes;
+    }
+  }
+  const results: { status: "success" | "failure"; result?: unknown; error?: unknown }[] = [];
+  for (const contracts of chunks) {
+    results.push(...(await client.multicall({ contracts, batchSize: POSITION_READ_BATCH_BYTES })));
+  }
+  return results;
 }
 
 const pairKey = (a: Address, b: Address) => (BigInt(a) < BigInt(b) ? `${a}|${b}` : `${b}|${a}`).toLowerCase();
@@ -70,24 +107,20 @@ export async function fetchLiquidityPositions(
 
   const indexes: bigint[] = [];
   for (let index = 0n; index < balance; index += 1n) indexes.push(index);
-  const enumerated = await client.multicall({
-    contracts: indexes.map((index) => ({
-      ...manager,
-      functionName: "tokenOfOwnerByIndex" as const,
-      args: [owner, index] as const,
-    })),
-    batchSize: POSITION_READ_BATCH_BYTES,
-  });
+  const enumerated = await readInTurn(
+    client,
+    indexes.map((index) => ({ ...manager, functionName: "tokenOfOwnerByIndex", args: [owner, index] })),
+  );
   const tokenIds = enumerated.flatMap((each) =>
     ownCallReverted(each, "tokenOfOwnerByIndex") ? [] : [each.result as bigint],
   );
-  const reads = await client.multicall({
-    contracts: tokenIds.flatMap((tokenId) => [
-      { ...manager, functionName: "positions" as const, args: [tokenId] as const },
-      { ...manager, functionName: "ownerOf" as const, args: [tokenId] as const },
+  const reads = await readInTurn(
+    client,
+    tokenIds.flatMap((tokenId): PositionRead[] => [
+      { ...manager, functionName: "positions", args: [tokenId] },
+      { ...manager, functionName: "ownerOf", args: [tokenId] },
     ]),
-    batchSize: POSITION_READ_BATCH_BYTES,
-  });
+  );
 
   return tokenIds.flatMap((tokenId, index) => {
     const [read, held] = [reads[index * 2]!, reads[index * 2 + 1]!];

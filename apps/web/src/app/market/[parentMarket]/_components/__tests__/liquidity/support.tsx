@@ -182,6 +182,13 @@ export function createWorld() {
         if (isAddressEqual(to, gnosis.contracts.multicall3.address)) {
           const decoded = decodeFunctionData({ abi: multicall3Abi, data });
           if (decoded.functionName !== "aggregate3") throw new Error(`unexpected multicall ${decoded.functionName}`);
+          if (decoded.args[0].some((each) => chain.isRefused(each.callData))) {
+            throw new RpcRequestError({
+              body: { method, params },
+              error: { code: -32000, message: "out of gas" },
+              url: "fake",
+            });
+          }
           const results = await Promise.all(
             decoded.args[0].map(async (each) => {
               try {

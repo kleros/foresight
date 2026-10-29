@@ -1,6 +1,7 @@
 import {
   createPublicClient,
   custom,
+  http,
   decodeFunctionData,
   encodeFunctionResult,
   getAddress,
@@ -130,9 +131,14 @@ export function branchTokens(index: number): BranchTokens {
 export interface ChainOptions {
   /** The node refuses an `aggregate3` carrying more calls than this, as an eth_call gas or size cap does. */
   maxCallsPerRequest?: number;
+  /**
+   * The client reaches the node over HTTP with JSON-RPC batching on, as the app's transport does, and the node
+   * refuses a batch of more requests than this, every request in it.
+   */
+  maxBatchLength?: number;
 }
 
-export function createChain(branchCount: number, { maxCallsPerRequest = Infinity }: ChainOptions = {}) {
+export function createChain(branchCount: number, { maxCallsPerRequest = Infinity, maxBatchLength }: ChainOptions = {}) {
   const parentMarket = at("b0");
   const parentInvalid = at("b9");
   const branches = Array.from({ length: branchCount }, (_, index) => branchTokens(index + 1));
@@ -141,6 +147,8 @@ export function createChain(branchCount: number, { maxCallsPerRequest = Infinity
   const calls: Call[] = [];
   const refused = new Set<bigint>();
   let ethCalls = 0;
+  /** How many requests each HTTP message carried, with maxBatchLength set. */
+  const batchLengths: number[] = [];
 
   const marketOutcomes = new Map<string, Address[]>([
     [parentMarket.toLowerCase(), [...branches.map((each) => each.outcome), parentInvalid]],
@@ -220,6 +228,17 @@ export function createChain(branchCount: number, { maxCallsPerRequest = Infinity
 
   const multicall3 = gnosis.contracts.multicall3.address;
 
+  /** Whether a call carries a value `refuseRequestsCarrying` named, so the node refuses any request holding it. */
+  function isRefused(callData: Hex) {
+    try {
+      return (decodeFunctionData({ abi: WORLD_ABI, data: callData }).args ?? []).some(
+        (arg) => typeof arg === "bigint" && refused.has(arg),
+      );
+    } catch {
+      return false;
+    }
+  }
+
   async function request({ method, params }: { method: string; params?: unknown }): Promise<unknown> {
     if (method === "eth_chainId") return "0x64";
     if (method !== "eth_call") throw new Error(`unexpected rpc ${method}`);
@@ -228,15 +247,7 @@ export function createChain(branchCount: number, { maxCallsPerRequest = Infinity
     if (isAddressEqual(to, multicall3)) {
       const decoded = decodeFunctionData({ abi: multicall3Abi, data });
       if (decoded.functionName !== "aggregate3") throw new Error(`unexpected multicall ${decoded.functionName}`);
-      const carriesRefused = decoded.args[0].some((call) => {
-        try {
-          return (decodeFunctionData({ abi: WORLD_ABI, data: call.callData }).args ?? []).some(
-            (arg) => typeof arg === "bigint" && refused.has(arg),
-          );
-        } catch {
-          return false;
-        }
-      });
+      const carriesRefused = decoded.args[0].some((call) => isRefused(call.callData));
       if (decoded.args[0].length > maxCallsPerRequest || carriesRefused) {
         throw new RpcRequestError({
           body: { method, params },
@@ -260,10 +271,42 @@ export function createChain(branchCount: number, { maxCallsPerRequest = Infinity
     });
   }
 
+  /** One JSON-RPC message as a node answers it over HTTP: its result, or its error object. */
+  async function answerMessage(message: { id: number; method: string; params?: unknown }) {
+    try {
+      return { jsonrpc: "2.0", id: message.id, result: await request(message) };
+    } catch (error) {
+      const { code, message: text } = (error as { cause?: { code?: number; message?: string } }).cause ?? {};
+      return { jsonrpc: "2.0", id: message.id, error: { code: code ?? -32000, message: text ?? "error" } };
+    }
+  }
+
+  async function fetchFn(_url: string | URL | Request, init?: RequestInit): Promise<Response> {
+    const body = JSON.parse(String(init?.body)) as
+      { id: number; method: string; params?: unknown } | { id: number; method: string; params?: unknown }[];
+    if (Array.isArray(body)) {
+      batchLengths.push(body.length);
+      const refuse = maxBatchLength !== undefined && body.length > maxBatchLength;
+      const answers = refuse
+        ? body.map((message) => ({
+            jsonrpc: "2.0",
+            id: message.id,
+            error: { code: -32005, message: "batch too large" },
+          }))
+        : await Promise.all(body.map(answerMessage));
+      return new Response(JSON.stringify(answers), { headers: { "content-type": "application/json" } });
+    }
+    batchLengths.push(1);
+    return new Response(JSON.stringify(await answerMessage(body)), { headers: { "content-type": "application/json" } });
+  }
+
   /** Configured like the app's own `publicClient`: Gnosis, with multicall batching on. */
   const client: PublicClient = createPublicClient({
     chain: gnosis,
-    transport: custom({ request }),
+    transport:
+      maxBatchLength === undefined
+        ? custom({ request })
+        : http("http://node.test", { batch: true, fetchFn, retryCount: 0 }),
     batch: { multicall: true },
   });
 
@@ -276,6 +319,8 @@ export function createChain(branchCount: number, { maxCallsPerRequest = Infinity
     calls,
     /** JSON-RPC `eth_call` requests made so far: one per round trip, however many reads it carries. */
     ethCalls: () => ethCalls,
+    /** How many requests each HTTP message carried, with maxBatchLength set. */
+    batchLengths,
     /** Creates the pair's pool, or sets the state of the one already there. */
     setPool(tokenA: Address, tokenB: Address, state: PoolSetup): Address {
       const key = pairKey(tokenA, tokenB);
@@ -294,6 +339,7 @@ export function createChain(branchCount: number, { maxCallsPerRequest = Infinity
     refuseRequestsCarrying(value: bigint) {
       refused.add(value);
     },
+    isRefused,
     /** Lists a position under `account`'s `tokenOfOwnerByIndex`. */
     holdPosition(account: Address, position: PositionSetup) {
       const key = account.toLowerCase();

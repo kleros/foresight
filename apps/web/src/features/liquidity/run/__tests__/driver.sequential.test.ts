@@ -202,6 +202,7 @@ describe("createLiquidityRun across retry, reload and recovery (L8)", () => {
     },
   );
 
+  // thirty interrupted runs, each with a reload, at about 160ms a run
   it("sends no split, mint, withdrawal or merge twice, wherever a seed is interrupted and however it comes back", async () => {
     const modes: PromptScript[] = ["reject", "hang", "unmined"];
     await fc.assert(
@@ -244,5 +245,5 @@ describe("createLiquidityRun across retry, reload and recovery (L8)", () => {
       ),
       { numRuns: 30 },
     );
-  });
+  }, 20_000);
 });

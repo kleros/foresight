@@ -219,8 +219,27 @@ describe("the market page of a session with liquidity", () => {
 
     await waitFor(() => expect(removeButtons(dialog)).toHaveLength(2), { timeout: 5000 });
     for (const remove of removeButtons(dialog)) expect(disabled(remove)).toBe(false);
-    expect(within(dialog).getByRole("button", { name: removeButton(`${BRANCH_NAMES[0]} UP pool`) })).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: removeButton(`${BRANCH_NAMES[1]} DOWN pool`) })).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: removeButton(`${BRANCH_NAMES[0]} UP pool`) }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: removeButton(`${BRANCH_NAMES[1]} DOWN pool`) }),
+    ).toBeInTheDocument();
+  });
+
+  it("says the positions could not be read, not that the wallet holds none, and reads them again on request", async () => {
+    const world = seeded();
+    world.refuseRequestsCarrying(7n);
+
+    await show(world, TRADING_CLOSE);
+
+    await waitFor(() => expect(summary()).toHaveTextContent(/^Your positions could not be read\./), {
+      timeout: 5000,
+    });
+    expect(summary()).not.toHaveTextContent(/holds no liquidity/);
+    const before = world.ethCalls();
+    await userEvent.click(screen.getByRole("button", { name: "Read again" }));
+    await waitFor(() => expect(world.ethCalls()).toBeGreaterThan(before));
   });
 
   it("lists two positions in one pool as one row with one Remove, and counts both in the section", async () => {

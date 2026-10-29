@@ -16,7 +16,7 @@ import { AmountRow } from "./AmountRow";
 import { LiquidityPopupFooter } from "./LiquidityPopupFooter";
 import type { LiquidityRun } from "../hooks/useLiquidityRun";
 import type { ShownMerge, ShownPosition, TokenAmount } from "../hooks/useSessionLiquidity";
-import { runStatus, runSteps } from "../utils/runSteps";
+import { POSITIONS_UNREAD, runStatus, runSteps } from "../utils/runSteps";
 
 /** The amounts a row returns, as its Remove reads them out: "4.99 Movie A UP and 2.49 Movie A". */
 const spoken = (amounts: TokenAmount[]) =>
@@ -31,6 +31,7 @@ export function LiquidityPositionsDialog({
   onClose,
   names,
   positions,
+  positionsUnread = false,
   merge,
   run,
 }: {
@@ -38,6 +39,7 @@ export function LiquidityPositionsDialog({
   onClose: () => void;
   names: string[];
   positions: ShownPosition[];
+  positionsUnread?: boolean;
   merge?: ShownMerge;
   run: LiquidityRun;
 }) {
@@ -127,7 +129,9 @@ export function LiquidityPositionsDialog({
                   ))}
                 </ul>
               ) : (
-                <p className="text-fs-popup-text-2 py-2.5 text-sm">This wallet holds no liquidity in this session.</p>
+                <p className="text-fs-popup-text-2 py-2.5 text-sm">
+                  {positionsUnread ? POSITIONS_UNREAD : "This wallet holds no liquidity in this session."}
+                </p>
               )}
             </section>
 

@@ -161,6 +161,8 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
           onAdd={() => setAddingLiquidity(true)}
           names={liquidity.names}
           positions={liquidity.positions}
+          positionsUnread={liquidity.positionsUnread}
+          onRereadPositions={liquidity.rereadPositions}
           merge={liquidity.merge}
           run={liquidity.run}
         />

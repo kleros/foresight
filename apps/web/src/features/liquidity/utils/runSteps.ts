@@ -34,6 +34,9 @@ const STAGE_COPY: Partial<Record<LiquidityProgress["stage"], PopupStatusLine>> =
   complete: { text: "Done. Your liquidity is updated.", tone: "neutral" },
 };
 
+/** Shown in place of the positions while the read of them failed. */
+export const POSITIONS_UNREAD = "Your positions could not be read.";
+
 /** Shown before Start over lets go of a send the wallet may still be asking about. */
 export const START_OVER_WARNING =
   "Reject the open prompt in your wallet first. Anything that already went through stays done, and its tokens stay in your wallet.";
