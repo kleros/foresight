@@ -26,7 +26,6 @@ import { TradeWallet } from "@/features/trade-executor/components/TradeWallet/Tr
 
 import { PageMessage } from "@/components/layout/PageMessage";
 
-import { LIQUIDITY_CLOSED_REASON } from "@/config/liquidity";
 import { ADD_LIQUIDITY_PARAM } from "@/config/paths";
 
 import { AdvancedSection } from "./AdvancedSection";
@@ -88,14 +87,11 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
   const status = sessionStatus(detail, new Date());
   const noun = optionNoun(detail.itemNamePlural);
   const walletMarket = toWalletMarket(detail);
-  const addLiquidityReason =
-    status === "closed"
-      ? LIQUIDITY_CLOSED_REASON
-      : !detail.setupComplete
-        ? "The session is still being set up."
-        : liquidity.pools.isError
-          ? "Could not read the pools. Reload in a moment."
-          : undefined;
+  const addLiquidityReason = !detail.setupComplete
+    ? "The session is still being set up."
+    : liquidity.pools.isError
+      ? "Could not read the pools. Reload in a moment."
+      : undefined;
   // the pool's number is an unbounded float; held on each option's grid so "at the market" is exact
   const latest = chart.data ? latestEstimates(chart.data) : {};
   const marketEstimates = Object.fromEntries(
@@ -116,7 +112,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
         poolBalancesPending={poolBalances.isPending}
         usdPrice={usdPrice.data}
       />
-      {liquidity.hasLiquidity === false ? (
+      {liquidity.hasLiquidity === false && status !== "closed" ? (
         <LiquidityBanner reason={addLiquidityReason} onAdd={() => setAddingLiquidity(true)} />
       ) : null}
       {chart.isPending ? (
@@ -171,6 +167,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
         {walletMarket ? <TradeWallet market={walletMarket} noun={optionNounSingular(detail.itemName)} /> : null}
         <AdvancedSection parentMarket={detail.parentMarket} />
         <LiquiditySection
+          closed={status === "closed"}
           reason={addLiquidityReason}
           onAdd={() => setAddingLiquidity(true)}
           names={liquidity.names}

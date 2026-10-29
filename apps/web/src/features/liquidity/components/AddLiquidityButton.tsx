@@ -17,6 +17,7 @@ export function AddLiquidityButton({
     <span className="flex flex-wrap items-center gap-3">
       <Button
         text="Add liquidity"
+        variant="secondary"
         small={small}
         isDisabled={reason !== undefined}
         aria-describedby={reason !== undefined ? reasonId : undefined}
