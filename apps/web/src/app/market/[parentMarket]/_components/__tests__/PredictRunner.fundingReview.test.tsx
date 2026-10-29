@@ -70,6 +70,8 @@ let quoteFailed = false;
 let lossBps = 1_000n;
 let native = false;
 const OPTIONS = [option(1), option(2)];
+/** A whole retry flow is rendered and driven; its cost is CPU, which parallel suites stretch past 5s. */
+const FULL_FLOW_MS = 20_000;
 const STATE = chainState();
 
 vi.mock("@/app/market/[parentMarket]/_components/usePredictFunding", () => ({
@@ -283,30 +285,34 @@ function parentBase(tx: FlowTx): bigint {
 }
 
 describe("UI truth after a partial credits-funded run", () => {
-  it("keeps the original credits amount and quote historical when retry pauses at changed trades", async () => {
-    const { sent, reader, creditsQuoter } = setup();
-    swaps = await previewCreditsSwap(ctx(), nominal, 20, { reader, creditsQuoter });
-    minted = swaps.minted;
-    expect(minted).toBe(89_811_018n * 10n ** 12n);
-    mount();
-    await begin();
-    expect(driver.getProgress().batchesDone).toBe(1);
-    expect(parentBase(sent.find((tx) => tx.to === addresses.executor)!)).toBe(swaps.floor);
-    expect(screen.queryByTestId("trade-mint")).toBeNull();
-    expect(screen.getByTestId("credits-swap")).toHaveTextContent("Credits swapped100 credits");
+  it(
+    "keeps the original credits amount and quote historical when retry pauses at changed trades",
+    async () => {
+      const { sent, reader, creditsQuoter } = setup();
+      swaps = await previewCreditsSwap(ctx(), nominal, 20, { reader, creditsQuoter });
+      minted = swaps.minted;
+      expect(minted).toBe(89_811_018n * 10n ** 12n);
+      mount();
+      await begin();
+      expect(driver.getProgress().batchesDone).toBe(1);
+      expect(parentBase(sent.find((tx) => tx.to === addresses.executor)!)).toBe(swaps.floor);
+      expect(screen.queryByTestId("trade-mint")).toBeNull();
+      expect(screen.getByTestId("credits-swap")).toHaveTextContent("Credits swapped100 credits");
 
-    act(() => useSlippageStore.getState().setSlippage("tradeBps", 1_000));
-    await userEvent.click(screen.getByRole("button", { name: "Try the rest" }));
-    await waitFor(() => expect(driver.getProgress().stage).toBe("moved"));
-    expect(driver.getProgress().moved?.bySlippage).toBe(true);
-    expect(screen.queryByTestId("trade-mint")).toBeNull();
-    expect(screen.getByTestId("credits-swap")).toHaveTextContent("Credits swapped100 credits");
-    const sentBefore = sent.length;
-    await userEvent.click(screen.getByRole("button", { name: "Confirm trades" }));
-    await waitFor(() => expect(driver.getProgress().stage).toBe("idle"));
-    expect(sent).toHaveLength(sentBefore + 1);
-    expect(parentBase(sent.at(-1)!)).toBe(0n);
-  });
+      act(() => useSlippageStore.getState().setSlippage("tradeBps", 1_000));
+      await userEvent.click(screen.getByRole("button", { name: "Try the rest" }));
+      await waitFor(() => expect(driver.getProgress().stage).toBe("moved"));
+      expect(driver.getProgress().moved?.bySlippage).toBe(true);
+      expect(screen.queryByTestId("trade-mint")).toBeNull();
+      expect(screen.getByTestId("credits-swap")).toHaveTextContent("Credits swapped100 credits");
+      const sentBefore = sent.length;
+      await userEvent.click(screen.getByRole("button", { name: "Confirm trades" }));
+      await waitFor(() => expect(driver.getProgress().stage).toBe("idle"));
+      expect(sent).toHaveLength(sentBefore + 1);
+      expect(parentBase(sent.at(-1)!)).toBe(0n);
+    },
+    FULL_FLOW_MS,
+  );
 });
 
 describe("reviewed amount on Resume", () => {

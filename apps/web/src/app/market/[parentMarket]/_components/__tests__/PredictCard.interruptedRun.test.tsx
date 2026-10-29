@@ -368,6 +368,9 @@ beforeEach(() => {
   connect(undefined);
 });
 
+/** Each test renders and drives two whole visits; their cost is CPU, which parallel suites stretch past 5s. */
+const FULL_VISIT_MS = 20_000;
+
 describe("an interrupted run on the next visit", () => {
   const interrupted = [
     ["the deposit landed and the prediction was turned down", leaveDepositLandedPredictionRejected],
@@ -375,30 +378,38 @@ describe("an interrupted run on the next visit", () => {
   ] as const;
 
   describe.each(interrupted)("when %s", (_name, leave) => {
-    it("is surfaced on the card, with its parked deposit, before anything is pressed", async () => {
-      await leave();
+    it(
+      "is surfaced on the card, with its parked deposit, before anything is pressed",
+      async () => {
+        await leave();
 
-      const { since } = await nextVisit();
+        const { since } = await nextVisit();
 
-      expect(await cardResume()).toBeInTheDocument();
-      expect(screen.queryByRole("dialog")).toBeNull();
-      expect(document.body.textContent).toContain("7.25");
-      expect(since()).toEqual([]);
-    });
+        expect(await cardResume()).toBeInTheDocument();
+        expect(screen.queryByRole("dialog")).toBeNull();
+        expect(document.body.textContent).toContain("7.25");
+        expect(since()).toEqual([]);
+      },
+      FULL_VISIT_MS,
+    );
 
-    it("finishes the saved prediction from the card's Resume without signing the deposit again", async () => {
-      await leave();
-      const { since } = await nextVisit();
-      chain.asked.length = 0;
+    it(
+      "finishes the saved prediction from the card's Resume without signing the deposit again",
+      async () => {
+        await leave();
+        const { since } = await nextVisit();
+        chain.asked.length = 0;
 
-      await resumeFromCard();
+        await resumeFromCard();
 
-      await waitFor(() => expect(screen.getByText("Prediction done")).toBeInTheDocument());
-      expect(since().length).toBeGreaterThan(0);
-      expect(since().filter(isDeposit)).toEqual([]);
-      expect(chain.asked.length).toBeGreaterThan(0);
-      for (const targets of chain.asked) expect(targets).toEqual(targetsFor(SAVED.estimate));
-    });
+        await waitFor(() => expect(screen.getByText("Prediction done")).toBeInTheDocument());
+        expect(since().length).toBeGreaterThan(0);
+        expect(since().filter(isDeposit)).toEqual([]);
+        expect(chain.asked.length).toBeGreaterThan(0);
+        for (const targets of chain.asked) expect(targets).toEqual(targetsFor(SAVED.estimate));
+      },
+      FULL_VISIT_MS,
+    );
   });
 
   it("is not surfaced when no run was left unfinished", async () => {
