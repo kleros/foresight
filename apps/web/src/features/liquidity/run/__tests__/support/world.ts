@@ -77,7 +77,7 @@ import { createLiquidityRun } from "../../driver";
  *     reasons these tests name: "unlisted" (flow/allowed.ts found a departure, including a run whose owner is not
  *     the connected account), "closed" (seed or add at or after the close by chain time), "wrong-wallet"
  *     (a recovered run belongs to another account than the connected one, or none is connected), "wallet" (the
- *     wallet answered a prompt with 4100, 4200, 4900, 4901, -32601, -32602 or 3; the send is let go of, retryable).
+ *     wallet answered a send request with 4100, 4200, -32601, -32602 or 3; the send is let go of, retryable).
  *
  *   Atomic path: when wallet_getCapabilities reports atomic "supported" or "ready" for 0x64, the run is one
  *   wallet_sendCalls whose params[0] carries an app-chosen `id` (stored before the request) and atomicRequired true.
@@ -346,6 +346,10 @@ export function wallet(
     capabilityChain?: Hex;
     /** `unmined`: the wallet answers and broadcasts the batch, which mines on `land()`. */
     sendCalls?: "answer" | "hang" | "unmined";
+    /** The first wallet_sendCalls is answered with an error of this code, broadcasting nothing. */
+    sendCallsRefuse?: number;
+    /** The first wallet_getCallsStatus is answered with an error of this code. */
+    statusRefuse?: number;
     status?: BatchStatusScript;
     onSendCalls?: (params: SendCallsRequest) => void;
   } = {},
@@ -353,6 +357,7 @@ export function wallet(
   const requests: { method: string; params?: unknown }[] = [];
   const sendCalls: SendCallsRequest[] = [];
   let onSend: (() => void) | undefined;
+  let statusRefused = false;
 
   const request = async ({ method, params }: { method: string; params?: unknown }): Promise<unknown> => {
     requests.push({ method, params });
@@ -373,6 +378,9 @@ export function wallet(
         sendCalls.push(call);
         opts.onSendCalls?.(call);
         onSend?.();
+        if (opts.sendCallsRefuse !== undefined && sendCalls.length === 1) {
+          throw Object.assign(new Error("The wallet answered with an error."), { code: opts.sendCallsRefuse });
+        }
         if (opts.sendCalls === "hang") return new Promise(() => {});
         // an atomic batch lands as one transaction
         const mined = opts.sendCalls !== "unmined" && (opts.status ?? "confirmed") === "confirmed";
@@ -382,6 +390,10 @@ export function wallet(
       }
       case "wallet_getCallsStatus": {
         const [id] = params as [string];
+        if (opts.statusRefuse !== undefined && !statusRefused) {
+          statusRefused = true;
+          throw Object.assign(new Error("The wallet answered with an error."), { code: opts.statusRefuse });
+        }
         const status = opts.status ?? "confirmed";
         if (status === "unknown") throw Object.assign(new Error("Unknown bundle id"), { code: 5730 });
         const sent = world.batches.get(id);

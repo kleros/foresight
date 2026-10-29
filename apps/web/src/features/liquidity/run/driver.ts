@@ -137,10 +137,11 @@ const errorCode = (error: unknown) =>
   typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
 
 /**
- * Wallet answers that leave no prompt open and nothing signed: EIP-1193 unauthorized, unsupported method and
- * disconnected, JSON-RPC method not found and invalid params, and EIP-1474 execution reverted.
+ * Wallet answers to a send request that leave no prompt open and nothing signed: EIP-1193 unauthorized and
+ * unsupported method, JSON-RPC method not found and invalid params, and EIP-1474 execution reverted. A disconnect
+ * (4900, 4901) is not one: the wallet may have signed before the connection dropped.
  */
-const NO_PROMPT_CODES: ReadonlySet<unknown> = new Set([4100, 4200, 4900, 4901, -32601, -32602, 3]);
+const NO_PROMPT_CODES: ReadonlySet<unknown> = new Set([4100, 4200, -32601, -32602, 3]);
 
 function answeredWithoutPrompt(error: unknown): boolean {
   for (let link = error, depth = 0; link && depth < 8; depth += 1) {
@@ -435,8 +436,9 @@ export function createLiquidityRun(args: {
       try {
         return await (sent ? sendBatch(sent, options?.signal) : args.gateway.sendTransaction(tx, options));
       } catch (error) {
+        // only the send request's own answer; a batch the wallet took is polled after, under its stored id
+        const asking = sent ? (batchSent ? undefined : BATCH) : currentEntry(run()?.steps ?? [])?.stepId;
         // the failure persists the run right after, without the send
-        const asking = sent ? BATCH : currentEntry(run()?.steps ?? [])?.stepId;
         if (asking && answeredWithoutPrompt(error)) {
           forget(asking);
           refused = error;
