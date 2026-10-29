@@ -52,7 +52,7 @@ test("a deployed session says on chain what was typed into the wizard", async ({
   await expect(page.getByText(DEPLOYED)).toBeVisible({ timeout: 30_000 });
   const sessionId = await latestSessionId();
   await expect(page.getByText(`${draft.outcomes.length + 1} of ${draft.outcomes.length + 1} created`)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Seed liquidity" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Seed liquidity" })).toBeVisible();
 
   const session = await readSession(sessionId);
   const { parent, children } = await readSessionMarkets(sessionId);
