@@ -78,9 +78,9 @@ describe("createLiquidityRun discard", () => {
     expect(sends.prompts).toEqual([]);
   });
 
-  it("forgets a run halted as reverted, which reset keeps, and sends nothing", async () => {
+  it("forgets a run halted as reverted with no step settled, which reset keeps, and sends nothing", async () => {
     const fake = chain();
-    const sends = gateway(fake, owner, { script: (index) => (index === SPLIT_AT ? "revert" : "sign") });
+    const sends = gateway(fake, owner, { script: (index) => (index === 0 ? "revert" : "sign") });
     const { driver, store, flowId } = driverOn({
       world: fake,
       gateway: sends,
@@ -101,8 +101,14 @@ describe("createLiquidityRun discard", () => {
     expect(sends.prompts).toHaveLength(before);
   });
 
-  it("forgets a run held on a prompt the chain shows no send of, and signs nothing", async () => {
-    const { fake, left } = await leftOpen();
+  it("forgets a run held on its first prompt, which the chain shows no send of, and signs nothing", async () => {
+    const fake = chain();
+    const first = gateway(fake, owner, { script: () => "hang" });
+    const tab = driverOn({ world: fake, gateway: first, wallet: wallet(fake, owner), request: seedRequest() });
+    tab.driver.start();
+    await first.held();
+    const left = copyStorage(tab.storage);
+    tab.driver.dispose();
     const { driver, store, flowId, sends } = await reopened(fake, left);
     expect(progressOf(driver).failure?.reason).toBe("held");
 
@@ -112,6 +118,56 @@ describe("createLiquidityRun discard", () => {
     expect(progressOf(driver)).toEqual({ stage: "idle" });
     expect(storedRun(store, flowId)).toBeNull();
     expect(sends.prompts).toEqual([]);
+  });
+
+  it("keeps the settled steps of a run held on a later prompt, and resume asks only for the rest, each once (L8)", async () => {
+    const { fake, left, hung } = await leftOpen();
+    const { driver, store, flowId, sends } = await reopened(fake, left);
+    expect(progressOf(driver).failure?.reason).toBe("held");
+    expect(driver.getProgress().holdsSend).toBe(true);
+
+    await driver.discard();
+
+    expect(progressOf(driver)).toEqual({ stage: "review" });
+    expect(driver.getProgress().holdsSend).toBeUndefined();
+    const kept = storedRun(store, flowId)!;
+    expect(kept.steps.slice(0, SPLIT_AT).map((step) => step.outcome.status)).toEqual(
+      PLANNED.slice(0, SPLIT_AT).map(() => "confirmed"),
+    );
+    expect(Object.keys((kept.snapshot as { sends: object }).sends)).toHaveLength(SPLIT_AT);
+    expect(sends.prompts).toEqual([]);
+
+    driver.resume();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("complete"));
+
+    expect(sameTx(sends.prompts[0]!, hung)).toBe(true);
+    expect(sends.prompts).toHaveLength(PLANNED.length - SPLIT_AT);
+    expect(timesBroadcast(fake, PLANNED)).toEqual(PLANNED.map(() => 1));
+  });
+
+  it("keeps the settled steps of a run halted as reverted, and resume asks again for the reverted step", async () => {
+    const fake = chain();
+    let reverted = false;
+    const sends = gateway(fake, owner, {
+      script: (index) => (index === SPLIT_AT && !reverted ? ((reverted = true), "revert") : "sign"),
+    });
+    const { driver, store, flowId } = driverOn({
+      world: fake,
+      gateway: sends,
+      wallet: wallet(fake, owner),
+      request: seedRequest(),
+    });
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).failure?.reason).toBe("reverted"));
+
+    await driver.discard();
+
+    expect(progressOf(driver)).toEqual({ stage: "review" });
+    expect(storedRun(store, flowId)).not.toBeNull();
+    driver.resume();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("complete"));
+    // the reverted split and its retry, every other step once
+    expect(timesBroadcast(fake, PLANNED)).toEqual(PLANNED.map((_, index) => (index === SPLIT_AT ? 2 : 1)));
   });
 
   it("keeps a run whose send is broadcast and not yet mined", async () => {

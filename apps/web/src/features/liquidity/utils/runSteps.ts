@@ -21,6 +21,7 @@ const FAILURE_COPY: Record<LiquidityFailureReason, string> = {
   "wrong-chain": "Switch the wallet to Gnosis.",
   pending: "The wallet has a transaction waiting. Wait for it to land first.",
   held: "A wallet prompt from before may still be open. Answer it, or wait before signing again.",
+  wallet: "The wallet turned the request down before asking you. Check the wallet, then try again.",
   storage: "This browser could not save the run, so nothing was sent.",
   "batch-unknown": "The wallet cannot say whether its batch landed, so it is not sent again.",
   "batch-failed": "The wallet's batch did not land.",
@@ -32,6 +33,10 @@ const STAGE_COPY: Partial<Record<LiquidityProgress["stage"], PopupStatusLine>> =
   moved: { text: "A pool moved since you reviewed it, so nothing more was signed.", tone: "warning" },
   complete: { text: "Done. Your liquidity is updated.", tone: "neutral" },
 };
+
+/** Shown before Start over lets go of a send the wallet may still be asking about. */
+export const START_OVER_WARNING =
+  "Reject the open prompt in your wallet first. Anything that already went through stays done, and its tokens stay in your wallet.";
 
 const signatures = (count: number) => `${count} ${count === 1 ? "signature" : "signatures"}`;
 

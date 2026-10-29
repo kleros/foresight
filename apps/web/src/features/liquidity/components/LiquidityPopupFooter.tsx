@@ -3,7 +3,8 @@ import clsx from "clsx";
 import { PopupButton } from "@/components/ui/PopupButton";
 
 import type { LiquidityRun } from "../hooks/useLiquidityRun";
-import { busyText } from "../utils/runSteps";
+import { useStartOver } from "../hooks/useStartOver";
+import { busyText, START_OVER_WARNING } from "../utils/runSteps";
 
 /**
  * A liquidity popup's sticky footer: while the run is this popup's (`isOwn`), the action that carries it on,
@@ -21,10 +22,28 @@ export function LiquidityPopupFooter({
   const progress = run.progress;
   const stage = progress?.stage;
   const stopped = stage === "halted" || stage === "moved";
+  const startingOver = useStartOver(run);
+
+  if (isOwn && startingOver.isAsking) {
+    return (
+      <div className="predict-footer bg-fs-surface landscape-phone:pb-2 sticky bottom-0 flex flex-col gap-2 pt-2 pb-4 short:pb-3">
+        <p role="alert" className="text-fs-popup-text-2 px-1 text-xs leading-4 text-pretty">
+          {START_OVER_WARNING}
+        </p>
+        <div className="flex gap-2 [@media(max-width:374px)]:flex-col">
+          <div className="fs-enter w-28 shrink-0 [@media(max-width:374px)]:w-full">
+            <PopupButton text="Back" quiet isDisabled={false} onPress={startingOver.cancel} />
+          </div>
+          <PopupButton text="Start over" isDisabled={false} onPress={startingOver.confirm} />
+        </div>
+      </div>
+    );
+  }
+
   const startOver =
     isOwn && progress?.failure?.retryable ? (
       <div className="fs-enter w-28 shrink-0 [@media(max-width:374px)]:w-full">
-        <PopupButton text="Start over" quiet isDisabled={false} onPress={run.reset} />
+        <PopupButton text="Start over" quiet isDisabled={false} onPress={startingOver.press} />
       </div>
     ) : null;
   const primary = !isOwn ? (
@@ -41,7 +60,7 @@ export function LiquidityPopupFooter({
   ) : progress?.failure?.retryable ? (
     <PopupButton text="Try again" isDisabled={false} onPress={run.retry} />
   ) : stopped ? (
-    <PopupButton text="Start over" isDisabled={false} onPress={run.reset} />
+    <PopupButton text="Start over" isDisabled={false} onPress={startingOver.press} />
   ) : (
     <PopupButton
       text={idle.text}

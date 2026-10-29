@@ -240,7 +240,7 @@ export function LiquidityDialog({
             <div className="pt-1">
               <StepsTimeline rows={steps} stopped={stopped} className="liquidity-steps" />
             </div>
-            {stopped ? (
+            {stopped && !run.progress?.holdsSend ? (
               <p className="text-fs-popup-text-2 px-1 pb-1 text-xs leading-4 text-pretty">
                 Starting over keeps what this run already signed in your wallet; a new run splits again.
               </p>

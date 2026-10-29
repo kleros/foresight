@@ -219,6 +219,8 @@ export type LiquidityFailureReason =
   | "pending"
   /** A step was asked of the wallet and the chain shows no send of it; it is never signed again, only discarded. */
   | "held"
+  /** The wallet answered with an error that leaves no prompt open, so the step can be asked again. */
+  | "wallet"
   | "storage"
   /** The wallet cannot report a sent batch, so it is never sent again. */
   | "batch-unknown"
@@ -251,6 +253,8 @@ export interface LiquidityProgress {
   tokenIds?: bigint[];
   /** The run is one EIP-5792 batch, so one signature. */
   atomic?: true;
+  /** The stopped run holds a send or batch id not settled, which only a confirmed discard lets go of. */
+  holdsSend?: true;
   /** Empty before a run. */
   rows: LiquidityProgressRow[];
   /** Wallet prompts settled and planned: one per transaction, or one for a batch. */

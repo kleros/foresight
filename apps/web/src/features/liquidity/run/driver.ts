@@ -136,6 +136,20 @@ function mintedTokenId(receipt: TransactionReceipt, positionManager: Address): b
 const errorCode = (error: unknown) =>
   typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
 
+/**
+ * Wallet answers that leave no prompt open and nothing signed: EIP-1193 unauthorized, unsupported method and
+ * disconnected, JSON-RPC method not found and invalid params, and EIP-1474 execution reverted.
+ */
+const NO_PROMPT_CODES: ReadonlySet<unknown> = new Set([4100, 4200, 4900, 4901, -32601, -32602, 3]);
+
+function answeredWithoutPrompt(error: unknown): boolean {
+  for (let link = error, depth = 0; link && depth < 8; depth += 1) {
+    if (NO_PROMPT_CODES.has(errorCode(link))) return true;
+    link = typeof link === "object" ? (link as { cause?: unknown }).cause : undefined;
+  }
+  return false;
+}
+
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve) => {
     const timer = setTimeout(resolve, ms);
@@ -181,6 +195,8 @@ export function createLiquidityRun(args: {
   let prompting = false;
   /** The wallet took the batch, which has not landed yet. */
   let batchSent = false;
+  /** The send error the wallet answered without opening a prompt, read when the orchestrator classifies it. */
+  let refused: unknown;
 
   async function assertHolds(tokenId: bigint, account: Address) {
     if (!isAddressEqual(await args.reader.ownerOf(tokenId), account)) throw new RunStop("unlisted", false);
@@ -284,6 +300,19 @@ export function createLiquidityRun(args: {
         return stepId === BATCH ? { ...rest, sends } : { ...prev, sends };
       },
       { source: "adapter" },
+    );
+  }
+
+  /** Drops the sends and batch id of every step not settled, so each is built and asked for afresh. */
+  function forgetUnsettled() {
+    const settled = new Set(settledEntries(run()?.steps ?? []).map((entry) => entry.stepId));
+    orchestrator.updateSnapshot(
+      (prev) => {
+        const sends = Object.fromEntries(Object.entries(prev.sends).filter(([stepId]) => settled.has(stepId)));
+        const { callsId: _id, ...rest } = prev;
+        return { ...rest, sends };
+      },
+      { source: "adapter", durable: true },
     );
   }
 
@@ -405,6 +434,14 @@ export function createLiquidityRun(args: {
       notify();
       try {
         return await (sent ? sendBatch(sent, options?.signal) : args.gateway.sendTransaction(tx, options));
+      } catch (error) {
+        // the failure persists the run right after, without the send
+        const asking = sent ? BATCH : currentEntry(run()?.steps ?? [])?.stepId;
+        if (asking && answeredWithoutPrompt(error)) {
+          forget(asking);
+          refused = error;
+        }
+        throw error;
       } finally {
         // the orchestrator announces what came of the send right after
         prompting = false;
@@ -427,6 +464,8 @@ export function createLiquidityRun(args: {
     classifyError: (error) => {
       if (error instanceof UnlistedTxError) error = new RunStop("unlisted", false);
       if (error instanceof StorageWriteError) error = new RunStop("storage", true);
+      if (error !== undefined && error === refused) error = new RunStop("wallet", true);
+      refused = undefined;
       if (error instanceof RunStop) {
         stopped = error;
         return error.retryable ? "rpc" : "unknown";
@@ -497,8 +536,15 @@ export function createLiquidityRun(args: {
         : prompting && live?.outcome.status === "awaiting-signature"
           ? "awaiting-signature"
           : "building";
+    const holdsSend =
+      current !== null &&
+      current !== undefined &&
+      current.status !== "running" &&
+      (current.snapshot.callsId !== undefined ||
+        Object.keys(current.snapshot.sends).some((stepId) => !settled.has(stepId)));
     return {
       kind: request.kind,
+      ...(holdsSend ? { holdsSend: true as const } : {}),
       ...(request.kind === "remove" ? { tokenIds: request.input.positions.map((each) => each.tokenId) } : {}),
       ...(atomic ? { atomic: true as const } : {}),
       rows,
@@ -723,11 +769,13 @@ export function createLiquidityRun(args: {
     },
 
     /**
-     * Deletes this account's halted run, sends and all, signing nothing; for the UI to call once the user confirmed.
-     * Refused, as `pending`, while the chain shows one of its sends broadcast, mined, or its batch pending or confirmed.
+     * Lets go of a halted run's stuck sends, signing nothing; for the UI to call once the user confirmed.
+     * A run with settled steps keeps them and waits for resume, which asks only for the rest; any other run is
+     * deleted. Refused, as `pending`, while the chain shows one of its sends broadcast, mined, or its batch
+     * pending or confirmed.
      */
     async discard() {
-      if (busy() || !failure || orchestrator.getStatus() === "running") return;
+      if (busy() || !(failure || moved) || orchestrator.getStatus() === "running") return;
       const stored = run() ?? args.store.load<LiquiditySnapshot, LiquidityCtx>(args.flowId);
       const account = args.account();
       if (stored && !(account && isAddressEqual(stored.ctx.owner, account))) return;
@@ -746,6 +794,24 @@ export function createLiquidityRun(args: {
       if (disposed) return;
       if (landing) {
         report("pending", resumeRun);
+        return;
+      }
+      if (
+        stored &&
+        stored.steps.some((step) => step.outcome.status === "confirmed" || step.outcome.status === "skipped")
+      ) {
+        try {
+          if (!run()) orchestrator.restore({ flowId: args.flowId, steps: stepsFor(stored.snapshot) });
+          // a submitted step whose receipt reverted is asked for again
+          orchestrator.releaseInFlight();
+          forgetUnsettled();
+        } catch (error) {
+          stop(error, resumeRun);
+          return;
+        }
+        moved = false;
+        reviewing = true;
+        report(undefined);
         return;
       }
       if (stored) orchestrator.trash(args.flowId);

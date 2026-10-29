@@ -59,11 +59,14 @@ import { createLiquidityRun } from "../../driver";
  *   LiquidityDriver { start(); recover(); resume(); retry(); reset(); discard(); dispose();
  *                     getProgress(): LiquidityProgress; subscribe(listener) → unsubscribe }
  *     recover() loads a stored run for review (stage "review") and signs nothing; resume() continues it.
+ *     discard(): a halted run with settled steps keeps them, drops its unsettled sends and goes to "review";
+ *     any other run is deleted. Refused, as "pending", while a send of it may still land.
  *
  *   LiquidityProgress {
  *     stage: "idle" | "signing" | "confirming" | "review" | "moved" | "halted" | "complete";
  *     failure?: { reason: string; retryable: boolean };
  *     kind?: "seed" | "remove" | "merge";  tokenIds?: bigint[];  atomic?: true;   // tokenIds: a remove's positions
+ *     holdsSend?: true;   // a stopped run holds a send or batch id not settled; reset() refuses it, discard() does not
  *     rows: { id; view: "idle" | "running" | "done" | "failed"; signatures: { done; total } }[];
  *     signatures: { done; total };   // one per transaction, or one for a batch
  *     signature?: { position; total; status: "building" | "awaiting-signature" | "submitted" };
@@ -73,7 +76,8 @@ import { createLiquidityRun } from "../../driver";
  *     stage "moved": a pool read at build differs from the reviewed one; nothing more is signed until a new review.
  *     reasons these tests name: "unlisted" (flow/allowed.ts found a departure, including a run whose owner is not
  *     the connected account), "closed" (seed or add at or after the close by chain time), "wrong-wallet"
- *     (a recovered run belongs to another account than the connected one, or none is connected).
+ *     (a recovered run belongs to another account than the connected one, or none is connected), "wallet" (the
+ *     wallet answered a prompt with 4100, 4200, 4900, 4901, -32601, -32602 or 3; the send is let go of, retryable).
  *
  *   Atomic path: when wallet_getCapabilities reports atomic "supported" or "ready" for 0x64, the run is one
  *   wallet_sendCalls whose params[0] carries an app-chosen `id` (stored before the request) and atomicRequired true.
@@ -94,9 +98,10 @@ export type LiquidityDriverLike = ReturnType<typeof createLiquidityRun>;
 
 /**
  * What the wallet does with the n-th prompt (from 0): mine it, refuse it, never answer, broadcast it unmined, mine it
- * reverted, or broadcast it and then cancel it with a self-send at its nonce.
+ * reverted, broadcast it and then cancel it with a self-send at its nonce, or answer with an error carrying
+ * `refuse` as its code, one cause deep, broadcasting nothing.
  */
-export type PromptScript = "sign" | "reject" | "hang" | "unmined" | "revert" | "cancel";
+export type PromptScript = "sign" | "reject" | "hang" | "unmined" | "revert" | "cancel" | { refuse: number };
 
 /** EIP-5792's atomic capability status, or no `atomic` entry at all. */
 export type AtomicStatus = "supported" | "ready" | "unsupported" | "absent";
@@ -290,6 +295,10 @@ export function gateway(
       const step = opts.script?.(index, tx) ?? "sign";
       if (step === "reject")
         return Promise.reject(new UserRejectedRequestError(new Error("User rejected the request.")));
+      if (typeof step === "object") {
+        const answer = Object.assign(new Error("The wallet answered with an error."), { code: step.refuse });
+        return Promise.reject(new Error("Sending the transaction failed.", { cause: answer }));
+      }
       if (step === "hang") {
         hung.push(tx);
         onHang?.();

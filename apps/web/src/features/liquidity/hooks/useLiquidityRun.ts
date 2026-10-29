@@ -32,7 +32,7 @@ export interface LiquidityRun {
   retry: () => void;
   /** Forgets a stopped run; what it already signed stays done. */
   reset: () => void;
-  /** Deletes a halted run that reset keeps, signing nothing; called only once the user confirmed. */
+  /** Lets go of a stopped run's unsettled sends, keeping its settled steps; called only once the user confirmed. */
   discard: () => void;
   /** Waiting on the wallet or the chain. */
   isRunning: boolean;
