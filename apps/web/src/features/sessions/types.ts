@@ -101,6 +101,64 @@ export interface SessionStats {
   pools: SessionPool[];
 }
 
+/** One option's slice of a prediction, as the indexer's `Prediction` row holds it; amounts in wei, prices 1e18-scaled. */
+export interface TradeOption {
+  childMarket: Address;
+  /** Signed net movements over the transaction, positive into the trade wallet. */
+  underlyingDelta: bigint;
+  downDelta: bigint;
+  upDelta: bigint;
+  /** Balances once the transaction settled. */
+  downBalance: bigint;
+  upBalance: bigint;
+  /** Totals over the side's swaps, signed from the trade wallet's side. */
+  downSwapUnderlying: bigint;
+  downSwapTokens: bigint;
+  upSwapUnderlying: bigint;
+  upSwapTokens: bigint;
+  downAvgPrice: bigint | null;
+  upAvgPrice: bigint | null;
+  /** Pool prices before the side's first swap and after its last; null where the side did not swap. */
+  downPriceBefore: bigint | null;
+  downPriceAfter: bigint | null;
+  upPriceBefore: bigint | null;
+  upPriceAfter: bigint | null;
+}
+
+/** One transaction by one trade wallet, across every option it touched. */
+export interface PredictionTrade {
+  kind: "prediction";
+  /** `transactionHash-executor` */
+  id: string;
+  transactionHash: string;
+  blockNumber: bigint;
+  /** Unix seconds. */
+  timestamp: number;
+  /** The account that owns the trade wallet. */
+  owner: Address;
+  options: TradeOption[];
+  /** Signed sum of the options' net underlying. */
+  underlyingDelta: bigint;
+}
+
+/** A swap straight through a pool, outside any trade wallet. */
+export interface ExternalTrade {
+  kind: "external";
+  id: string;
+  transactionHash: string;
+  blockNumber: bigint;
+  timestamp: number;
+  /** The transaction's sender; null where the indexer did not record one. */
+  sender: Address | null;
+  childMarket: Address;
+  side: PoolSide;
+  bought: boolean;
+  /** Underlying paid or received, in wei. */
+  underlying: bigint;
+}
+
+export type SessionTrade = PredictionTrade | ExternalTrade;
+
 /** A pool's own holdings, keyed by lowercase pool address. */
 export type PoolBalances = Record<string, { outcome: bigint; underlying: bigint }>;
 

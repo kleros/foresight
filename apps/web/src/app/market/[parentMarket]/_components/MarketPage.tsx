@@ -35,6 +35,7 @@ import { ParticipateSection } from "./ParticipateSection";
 import { PredictCard } from "./PredictCard";
 import { SessionHeader } from "./SessionHeader";
 import { toWalletMarket } from "./toWalletMarket";
+import { TradeHistory } from "./TradeHistory";
 import { useOptionPositions } from "./useOptionPositions";
 
 const SessionChart = dynamic(() => import("@/features/sessions/components/SessionChart").then((m) => m.SessionChart), {
@@ -166,6 +167,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
           marketEstimates={marketEstimates}
           isMarketUnknown={chart.data === undefined}
         />
+        <TradeHistory session={detail} />
         {walletMarket ? <TradeWallet market={walletMarket} noun={optionNounSingular(detail.itemName)} /> : null}
         <AdvancedSection parentMarket={detail.parentMarket} />
         <LiquiditySection
