@@ -258,7 +258,7 @@ describe("createLiquidityRun discard", () => {
     driver.start();
     await vi.waitFor(() => expect(progressOf(driver).stage).toBe("halted"));
     // a node that never saw the transaction in its mempool
-    fake.reader.hasPending = () => Promise.resolve(false);
+    fake.state.mempool = false;
 
     await driver.discard();
 
@@ -280,6 +280,20 @@ describe("createLiquidityRun discard", () => {
     driver.retry();
     await vi.waitFor(() => expect(progressOf(driver).stage).toBe("complete"));
     expect(timesBroadcast(fake, PLANNED)).toEqual(PLANNED.map(() => 1));
+  });
+
+  it("keeps a run whose send broadcast at a later nonce than the stored one, after another send took that nonce", async () => {
+    const { fake, left, hung } = await leftOpen();
+    const { driver, store, flowId } = await reopened(fake, left);
+    expect(progressOf(driver).failure?.reason).toBe("held");
+    const elsewhere = { to: stranger, data: "0x", value: 0n } as const;
+    fake.broadcast(elsewhere, owner, true);
+    fake.broadcast(hung, owner, false);
+
+    await driver.discard();
+
+    expect(storedRun(store, flowId)).not.toBeNull();
+    expect(progressOf(driver)).toEqual({ stage: "halted", failure: { reason: "pending", retryable: true } });
   });
 
   it("keeps a run held on a prompt that was approved and mined since it halted, and that send lands once", async () => {

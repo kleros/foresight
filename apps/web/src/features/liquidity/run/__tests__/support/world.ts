@@ -158,6 +158,8 @@ export function chain(opts: { chainTime?: bigint; pools?: [Address, Address, Poo
     block: 19_000_000n,
     pools: new Map<string, PoolState>((opts.pools ?? []).map(([a, b, pool]) => [pairKey(a, b), pool])),
     owners: new Map<bigint, Address>(),
+    /** Whether the app's node sees broadcast sends before they mine; false is a node whose mempool never had them. */
+    mempool: true,
   };
   const broadcasts: Broadcast[] = [];
   /** Atomic batches by the id they were sent under, so a reloaded tab's wallet can report on them. */
@@ -184,6 +186,13 @@ export function chain(opts: { chainTime?: bigint; pools?: [Address, Address, Poo
 
   const ofAccount = (account: Address) =>
     broadcasts.filter((sent) => !sent.dropped && isAddressEqual(sent.from, account));
+
+  /** `account`'s transaction counts at the latest and pending block tags, as run/sentWithNonce.ts reads them. */
+  const counts = (account: Address) => {
+    const sends = ofAccount(account);
+    const mined = sends.filter((sent) => sent.mined).length;
+    return { mined, pending: state.mempool ? sends.length : mined };
+  };
 
   function broadcast(tx: FlowTx, from: Address, mined: boolean, how: { reverted?: boolean } = {}): Broadcast {
     const sent: Broadcast = {
@@ -236,24 +245,26 @@ export function chain(opts: { chainTime?: bigint; pools?: [Address, Address, Poo
       const holder = state.owners.get(tokenId);
       return holder ? Promise.resolve(holder) : Promise.reject(new Error(`no token ${tokenId}`));
     },
-    nextNonce: (account: Address) => Promise.resolve(ofAccount(account).filter((sent) => sent.mined).length),
-    hasPending: (account: Address) => Promise.resolve(ofAccount(account).some((sent) => !sent.mined)),
+    nextNonce: (account: Address) => Promise.resolve(counts(account).mined),
+    hasPending: (account: Address) => {
+      const { mined, pending } = counts(account);
+      return Promise.resolve(pending > mined);
+    },
     blockNumber: () => Promise.resolve(state.block),
     sentWithNonce: ({ owner: account, nonce, fromBlock }: { owner: Address; nonce: number; fromBlock: bigint }) => {
-      const sent = ofAccount(account).find((each) => each.nonce === nonce);
-      const found: SentWithNonce = !sent
-        ? { status: "none" }
-        : !sent.mined
-          ? { status: "pending" }
-          : sent.minedIn! < fromBlock
-            ? { status: "taken" }
-            : {
-                status: "mined",
-                hash: sent.hash,
-                to: sent.tx.to,
-                input: sent.tx.data ?? "0x",
-                value: sent.tx.value ?? 0n,
-              };
+      const { mined, pending } = counts(account);
+      if (mined <= nonce) return Promise.resolve<SentWithNonce>({ status: pending > nonce ? "pending" : "none" });
+      const sent = ofAccount(account).find((each) => each.mined && each.nonce === nonce);
+      const found: SentWithNonce =
+        !sent || sent.minedIn! < fromBlock
+          ? { status: "taken" }
+          : {
+              status: "mined",
+              hash: sent.hash,
+              to: sent.tx.to,
+              input: sent.tx.data ?? "0x",
+              value: sent.tx.value ?? 0n,
+            };
       return Promise.resolve(found);
     },
   };
