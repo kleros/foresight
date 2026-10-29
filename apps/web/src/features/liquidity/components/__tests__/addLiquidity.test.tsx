@@ -48,6 +48,9 @@ function secondaryClass(props: { small?: boolean; isDisabled?: boolean }): strin
   return className;
 }
 
+/** A class that paints the house gradient, or restyles a descendant such as the button from outside it. */
+const PAINTS_GRADIENT = /grad|axis|cta|linear|radial|conic|image|^(from|via|to)-|\[&|^\*{1,2}:/;
+
 describe("the Liquidity section after the session's close", () => {
   it("holds only the heading, the positions line and Your positions", () => {
     render(section({ closed: true }));
@@ -73,6 +76,20 @@ describe("Add liquidity", () => {
     render(section());
 
     expect(screen.getByRole("button", { name: "Add liquidity" }).className).toBe(secondaryClass({ small: true }));
+  });
+
+  it.each([
+    ["banner", () => <LiquidityBanner onAdd={() => {}} />],
+    ["section", () => section()],
+  ])("gets no gradient fill from any element around it in the %s", (_where, ui) => {
+    const { container } = render(ui());
+
+    const button = screen.getByRole("button", { name: "Add liquidity" });
+    for (let element: HTMLElement | null = button; element && element !== container; element = element.parentElement) {
+      const tokens = [...element.classList];
+      expect(tokens.filter((token) => PAINTS_GRADIENT.test(token))).toEqual([]);
+      expect(element.getAttribute("style") ?? "").not.toMatch(/gradient|grad/);
+    }
   });
 
   it("stays the plain secondary button while it is disabled with a reason", () => {
