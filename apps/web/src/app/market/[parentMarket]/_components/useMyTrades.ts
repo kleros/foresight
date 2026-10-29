@@ -9,7 +9,7 @@ import type { PredictionTrade, SessionDetail, SessionOption } from "@/features/s
 import { avgEntry, optionPnl, sessionPnl, type OptionPnl } from "@/features/sessions/utils/positionPnl";
 import { useExecutor } from "@/features/trade-executor/api/getExecutor";
 
-export interface OptionPosition {
+export interface PositionPnl {
   option: SessionOption;
   held: { up: bigint; down: bigint };
   /** Underlying per token, 1e18-scaled; null until the pool prices. */
@@ -23,7 +23,7 @@ export type MyTrades =
   | {
       status: "ready";
       trades: PredictionTrade[];
-      positions: OptionPosition[];
+      positions: PositionPnl[];
       total: ReturnType<typeof sessionPnl>;
     };
 
@@ -51,7 +51,7 @@ export function useMyTrades(session: SessionDetail): MyTrades {
     stats.data?.pools.find((pool) => pool.market === option.market.toLowerCase() && pool.side === side)
       ?.underlyingPerOutcome ?? null;
 
-  const positions = session.options.flatMap((option): OptionPosition[] => {
+  const positions = session.options.flatMap((option): PositionPnl[] => {
     const market = option.market.toLowerCase();
     const predictions = trades.data.trades.flatMap((trade) =>
       trade.options.filter((each) => each.childMarket === market),

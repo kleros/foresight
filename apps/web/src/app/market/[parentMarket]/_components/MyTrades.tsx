@@ -9,7 +9,7 @@ import { formatDisplayAmount } from "@/utils/amount";
 import { formatEstimate } from "@/utils/formatEstimate";
 
 import { TradeList, TradeListSkeleton } from "./TradeList";
-import { useMyTrades, type OptionPosition } from "./useMyTrades";
+import { useMyTrades, type PositionPnl } from "./useMyTrades";
 
 /** Outcome tokens and prices per token are 18-decimal. */
 const tokens = (value: bigint) => formatDisplayAmount(value, 18, 4);
@@ -36,7 +36,7 @@ function sideLine(side: "UP" | "DOWN", held: bigint, entry: bigint | null, spot:
   return parts.join(" · ");
 }
 
-function PositionRow({ session, position }: { session: SessionDetail; position: OptionPosition }) {
+function PositionRow({ session, position }: { session: SessionDetail; position: PositionPnl }) {
   const { option, held, entry, spot, pnl } = position;
   const sides = [sideLine("UP", held.up, entry.up, spot.up), sideLine("DOWN", held.down, entry.down, spot.down)].filter(
     (line) => line !== null,
