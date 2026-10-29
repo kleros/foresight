@@ -235,6 +235,9 @@ type Swap {
   "set when the swap paid out to one of our executors"
   executor: Executor @index
 
+  "the transaction's sender, lowercase; the pool event's own sender is the router that called it"
+  sender: String
+
   "signed from the pool's side, so the outcome amount is negative when the trader bought"
   outcomeAmount: BigInt!
   underlyingAmount: BigInt!

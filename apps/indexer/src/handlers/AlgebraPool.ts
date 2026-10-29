@@ -89,6 +89,7 @@ indexer.onEvent({ contract: "AlgebraPool", event: "Swap" }, async ({ event, cont
     pool_id: poolId,
     childMarket_id: pool.childMarket_id,
     executor_id: executor === undefined ? undefined : recipient,
+    sender: event.transaction.from?.toLowerCase(),
     outcomeAmount,
     underlyingAmount,
     priceBefore: pool.price,

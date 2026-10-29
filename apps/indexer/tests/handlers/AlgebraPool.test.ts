@@ -182,6 +182,18 @@ describe("Algebra pool indexing", () => {
     ]);
   });
 
+  it("records the transaction's sender, not the router the pool reports", async (t) => {
+    const indexer = createTestIndexer();
+    await seedMarket(indexer, MARKET);
+    const trader = "0x00000000000000000000000000000000000ABCDE";
+    const swap = { ...swapped(UP_POOL, STRANGER_TOKEN, AFTER_FIRST, 120n), transaction: { from: trader } };
+
+    await indexEvents(indexer, [poolCreated(UNDERLYING, UP, UP_POOL), initialized(UP_POOL, START_PRICE), swap]);
+
+    const [indexed] = await indexer.Swap.getAll();
+    t.expect(indexed!.sender).toBe(trader.toLowerCase());
+  });
+
   it("attributes a swap to the executor it paid out to", async (t) => {
     const indexer = createTestIndexer();
     await seedMarket(indexer, MARKET);

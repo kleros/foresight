@@ -22,6 +22,10 @@ contracts:
     events:
       - event: Initialize(uint160 price, int24 tick)
       - event: Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 price, uint128 liquidity, int24 tick)
+        field_selection:
+          transaction_fields:
+            - hash
+            - from
 chains:
   - id: 31337
     start_block: 2
