@@ -156,6 +156,24 @@ describe("SessionHeader", () => {
     expect(container.querySelectorAll(".fs-skeleton")).toHaveLength(4);
   });
 
+  it("holds a skeleton on Liquidity alone while the pool balances load", () => {
+    const { container } = render(
+      <SessionHeader
+        session={toSessionDetail(row(), GATEWAY)}
+        status="trading"
+        stats={stats}
+        statsPending={false}
+        poolBalances={undefined}
+        poolBalancesPending
+        usdPrice={undefined}
+      />,
+    );
+
+    const skeletons = container.querySelectorAll(".fs-skeleton");
+    expect(skeletons).toHaveLength(1);
+    expect(skeletons[0]!.parentElement).toHaveTextContent("Liquidity:");
+  });
+
   it("omits the trading period while the closing time is unknown", () => {
     renderHeader({ overrides: { openingTime: null } });
 

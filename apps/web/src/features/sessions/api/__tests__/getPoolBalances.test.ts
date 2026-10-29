@@ -51,6 +51,26 @@ describe("a pool's side and balances", () => {
     });
   });
 
+  it("takes the side from outcomeIndex alone, not from which token sorts first", () => {
+    const row = { childMarket_id: "0xc1", underlyingPerOutcome: null, volumeUnderlying: "0", volumeOutcome: "0" };
+    const stats = toSessionStats({
+      Prediction: [],
+      Pool: [
+        { ...row, id: "0xb1", outcomeIndex: 1, outcomeToken: LOW, underlyingToken: HIGH },
+        { ...row, id: "0xb2", outcomeIndex: 0, outcomeToken: HIGH, underlyingToken: LOW },
+        { ...row, id: "0xb3", outcomeIndex: 1, outcomeToken: HIGH, underlyingToken: LOW },
+        { ...row, id: "0xb4", outcomeIndex: 0, outcomeToken: LOW, underlyingToken: HIGH },
+      ],
+    });
+
+    expect(stats.pools.map(({ id, side }) => [id, side])).toEqual([
+      ["0xb1", "UP"],
+      ["0xb2", "DOWN"],
+      ["0xb3", "UP"],
+      ["0xb4", "DOWN"],
+    ]);
+  });
+
   it("reads nothing for a session with no pools", async () => {
     const client = {
       multicall: () => {
