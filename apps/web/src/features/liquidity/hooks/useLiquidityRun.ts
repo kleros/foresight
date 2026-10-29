@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { createViemTxGateway } from "@foresight/tx-orchestrator";
 import { useQueryClient } from "@tanstack/react-query";
@@ -14,7 +14,7 @@ import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
 import { liquidityKeyPrefix } from "../api/getLiquidityPools";
 import { LIQUIDITY_ALLOW_LIST } from "../oracle/allowlist";
-import { createLiquidityRun } from "../run/driver";
+import { createLiquidityRun, type LiquidityDriver } from "../run/driver";
 import { createLiquidityReader } from "../run/reader";
 import { liquidityRunStore } from "../run/store";
 import type { LiquidityProgress, LiquidityRequest } from "../types";
@@ -52,11 +52,14 @@ export function useLiquidityRun(parentMarket: Address, closesAt: Date | null): L
   const request = useRef<LiquidityRequest | undefined>(undefined);
   const closes = closesAt ? BigInt(closesAt.getTime()) / 1000n : NO_CLOSE;
 
-  const driver = useMemo(() => {
+  const [driver, setDriver] = useState<LiquidityDriver | null>(null);
+
+  // built here, not in render, so a StrictMode replay disposes only the driver its own run created
+  useEffect(() => {
     // the local chain has no allow list, so nothing there is ever signed
-    if (!address || !LIQUIDITY_ALLOW_LIST[DEFAULT_CHAIN_ID]) return null;
+    if (!address || !LIQUIDITY_ALLOW_LIST[DEFAULT_CHAIN_ID]) return;
     const owner = address;
-    return createLiquidityRun({
+    const next = createLiquidityRun({
       gateway: createViemTxGateway({
         client: publicClient,
         sendTransaction: async (tx) =>
@@ -79,13 +82,14 @@ export function useLiquidityRun(parentMarket: Address, closesAt: Date | null): L
       },
       closesAt: closes,
     });
-  }, [address, parentMarket, closes]);
-
-  useEffect(() => {
+    setDriver(next);
     // a run stored by an earlier visit shows for review rather than waiting for the next press to take its place
-    driver?.recover();
-    return () => driver?.dispose();
-  }, [driver]);
+    next.recover();
+    return () => {
+      next.dispose();
+      setDriver(null);
+    };
+  }, [address, parentMarket, closes]);
 
   const progress = useSyncExternalStore(
     (listener) => driver?.subscribe(listener) ?? (() => {}),
