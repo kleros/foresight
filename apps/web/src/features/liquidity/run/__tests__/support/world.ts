@@ -59,8 +59,9 @@ import { createLiquidityRun } from "../../driver";
  *   LiquidityDriver { start(); recover(); resume(); retry(); reset(); discard(); dispose();
  *                     getProgress(): LiquidityProgress; subscribe(listener) → unsubscribe }
  *     recover() loads a stored run for review (stage "review") and signs nothing; resume() continues it.
- *     discard(): a halted run with settled steps keeps them, drops its unsettled sends and goes to "review";
- *     any other run is deleted. Refused, as "pending", while a send of it may still land.
+ *     discard(): a stopped run with settled steps keeps them, drops its unsettled sends and goes to "review";
+ *     any other run is deleted. Refused, as "pending", while a send of it may still land, and as "batch-unknown"
+ *     while the wallet cannot report its batch.
  *
  *   LiquidityProgress {
  *     stage: "idle" | "signing" | "confirming" | "review" | "moved" | "halted" | "complete";

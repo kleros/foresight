@@ -30,7 +30,8 @@ export function LiquidityRunStatus({ run }: { run: LiquidityRun }) {
         </p>
         {progress?.stage === "review" ? <Button small text="Resume" onPress={run.resume} /> : null}
         {progress?.failure?.retryable ? <Button small text="Try again" onPress={run.retry} /> : null}
-        {progress?.stage === "halted" || progress?.stage === "moved" ? (
+        {(progress?.stage === "halted" || progress?.stage === "moved") &&
+        progress.failure?.reason !== "batch-unknown" ? (
           <Button small variant="secondary" text="Start over" onPress={startingOver.press} />
         ) : null}
       </div>

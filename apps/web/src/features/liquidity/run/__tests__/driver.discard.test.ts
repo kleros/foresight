@@ -56,7 +56,7 @@ async function reopened(fake: Chain, left: ReturnType<typeof copyStorage>, accou
 }
 
 describe("createLiquidityRun discard", () => {
-  it("forgets a run halted as batch-unknown, which reset keeps, and sends nothing (L9)", async () => {
+  it("keeps a run halted as batch-unknown, which neither reset nor discard lets go of, and sends nothing (L9)", async () => {
     const fake = chain();
     const firstWallet = wallet(fake, owner, { atomic: "supported", sendCalls: "hang" });
     const first = driverOn({ world: fake, gateway: gateway(fake, owner), wallet: firstWallet, request: seedRequest() });
@@ -72,8 +72,10 @@ describe("createLiquidityRun discard", () => {
     driver.discard();
     await tick();
 
-    expect(progressOf(driver)).toEqual({ stage: "idle" });
-    expect(storedRun(store, flowId)).toBeNull();
+    expect(progressOf(driver)).toEqual({ stage: "halted", failure: { reason: "batch-unknown", retryable: false } });
+    expect(storedRun(store, flowId)).not.toBeNull();
+    driver.start();
+    await tick();
     expect(batch.sendCalls).toEqual([]);
     expect(sends.prompts).toEqual([]);
   });

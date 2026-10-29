@@ -65,6 +65,26 @@ describe.each([
     expect(run.discard).not.toHaveBeenCalled();
   });
 
+  it("asks again on a later hold, not carrying an earlier press over a run that went on", async () => {
+    const run = runAt(held);
+    const { rerender } = render(view(run));
+    await userEvent.click(screen.getByRole("button", { name: "Start over" }));
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+
+    rerender(view({ ...run, progress: { ...held, stage: "signing", failure: undefined, holdsSend: undefined } }));
+    rerender(view(run));
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(run.discard).not.toHaveBeenCalled();
+  });
+
+  it("offers no Start over on a run whose batch the wallet cannot report (L9)", () => {
+    const run = runAt({ ...held, failure: { reason: "batch-unknown", retryable: false } });
+    render(view(run));
+
+    expect(screen.queryByRole("button", { name: "Start over" })).toBeNull();
+  });
+
   it("forgets a run that holds no send at once, without asking", async () => {
     const run = runAt(declined);
     render(view(run));

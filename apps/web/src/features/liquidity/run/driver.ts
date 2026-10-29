@@ -687,14 +687,8 @@ export function createLiquidityRun(args: {
     stored: Pick<PersistedFlowRun<LiquiditySnapshot, LiquidityCtx>, "snapshot" | "ctx" | "steps">,
   ) {
     const { snapshot, ctx, steps } = stored;
-    if (snapshot.callsId !== undefined) {
-      try {
-        if ((await callsStatus(snapshot.callsId)).status < 300) return true;
-      } catch (error) {
-        // a batch the wallet cannot report is never sent again (L9)
-        if (!(error instanceof RunStop)) throw error;
-      }
-    }
+    // a batch the wallet cannot report throws batch-unknown, so the run is kept and never sent again (L9)
+    if (snapshot.callsId !== undefined && (await callsStatus(snapshot.callsId)).status < 300) return true;
     for (const step of steps) {
       if (step.outcome.status !== "submitted") continue;
       const receipt = await args.gateway.getReceipt(step.outcome.hash);
@@ -771,10 +765,10 @@ export function createLiquidityRun(args: {
     },
 
     /**
-     * Lets go of a halted run's stuck sends, signing nothing; for the UI to call once the user confirmed.
+     * Lets go of a stopped run's stuck sends, signing nothing; for the UI to call once the user confirmed.
      * A run with settled steps keeps them and waits for resume, which asks only for the rest; any other run is
      * deleted. Refused, as `pending`, while the chain shows one of its sends broadcast, mined, or its batch
-     * pending or confirmed.
+     * pending or confirmed, and as `batch-unknown` while the wallet cannot report its batch.
      */
     async discard() {
       if (busy() || !(failure || moved) || orchestrator.getStatus() === "running") return;

@@ -39,7 +39,7 @@ export const POSITIONS_UNREAD = "Your positions could not be read.";
 
 /** Shown before Start over lets go of a send the wallet may still be asking about. */
 export const START_OVER_WARNING =
-  "Reject the open prompt in your wallet first. Anything that already went through stays done, and its tokens stay in your wallet.";
+  "If your wallet still shows a prompt from this run, reject it first. Anything that already went through stays done, and its tokens stay in your wallet.";
 
 const signatures = (count: number) => `${count} ${count === 1 ? "signature" : "signatures"}`;
 

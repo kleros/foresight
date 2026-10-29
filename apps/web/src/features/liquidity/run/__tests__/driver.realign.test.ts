@@ -219,6 +219,7 @@ describe("createLiquidityRun realigning an empty pool (L3)", () => {
 
     expect(sends.prompts.filter(isDustMint)).toHaveLength(1);
     expect(sends.prompts.filter(isSwap)).toEqual([]);
+    expect(sends.prompts.filter(isWithdraw)).toEqual([]);
   });
 
   it("stops for a new review before the seed mint when someone seeded the pool after the dust withdrawal (L10)", async () => {

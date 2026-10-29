@@ -30,11 +30,12 @@ export function LiquidityPopupFooter({
         <p role="alert" className="text-fs-popup-text-2 px-1 text-xs leading-4 text-pretty">
           {START_OVER_WARNING}
         </p>
+        {/* Back takes the wide slot the press was made in, so a double press does not confirm */}
         <div className="flex gap-2 [@media(max-width:374px)]:flex-col">
           <div className="fs-enter w-28 shrink-0 [@media(max-width:374px)]:w-full">
-            <PopupButton text="Back" quiet isDisabled={false} onPress={startingOver.cancel} />
+            <PopupButton text="Start over" quiet isDisabled={false} onPress={startingOver.confirm} />
           </div>
-          <PopupButton text="Start over" isDisabled={false} onPress={startingOver.confirm} />
+          <PopupButton text="Back" isDisabled={false} onPress={startingOver.cancel} />
         </div>
       </div>
     );
@@ -59,7 +60,7 @@ export function LiquidityPopupFooter({
     <PopupButton text="Resume" isDisabled={false} onPress={run.resume} />
   ) : progress?.failure?.retryable ? (
     <PopupButton text="Try again" isDisabled={false} onPress={run.retry} />
-  ) : stopped ? (
+  ) : stopped && progress?.failure?.reason !== "batch-unknown" ? (
     <PopupButton text="Start over" isDisabled={false} onPress={startingOver.press} />
   ) : (
     <PopupButton
