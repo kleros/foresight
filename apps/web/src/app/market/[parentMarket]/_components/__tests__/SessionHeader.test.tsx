@@ -6,7 +6,7 @@ import type { SessionStats, SessionStatus } from "@/features/sessions/types";
 import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 import { type SessionDetailRow, toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
 
-import { GATEWAY } from "@/testing/fixtures";
+import { addresses, GATEWAY } from "@/testing/fixtures";
 
 import { SessionHeader } from "../SessionHeader";
 
@@ -15,7 +15,23 @@ function row(overrides: Partial<SessionDetailRow> = {}): SessionDetailRow {
 }
 
 // Volume expectation reads "92,000.5" because that is the string parseEther is given, regrouped.
-const stats: SessionStats = { traders: 148, volumeUnderlying: parseEther("92000.5") };
+const stats: SessionStats = {
+  traders: 148,
+  volumeUnderlying: parseEther("92000.5"),
+  volumeOutcome: parseEther("100"),
+  pools: [
+    {
+      id: addresses.childMarkets[1]!,
+      market: addresses.childMarkets[0]!,
+      side: "UP",
+      outcomeToken: addresses.upToken,
+      underlyingToken: addresses.underlyingToken,
+      underlyingPerOutcome: null,
+      volumeUnderlying: parseEther("92000.5"),
+      volumeOutcome: parseEther("100"),
+    },
+  ],
+};
 
 function renderHeader({ overrides = {}, status = "trading" as SessionStatus } = {}) {
   return render(
@@ -24,6 +40,9 @@ function renderHeader({ overrides = {}, status = "trading" as SessionStatus } = 
       status={status}
       stats={stats}
       statsPending={false}
+      poolBalances={undefined}
+      poolBalancesPending={false}
+      usdPrice={undefined}
     />,
   );
 }
@@ -95,13 +114,13 @@ describe("SessionHeader", () => {
     renderHeader();
 
     // 92000.5 over the fixture's 2 outcomes.
-    expect(screen.getByText("46,000.25 sDAI")).toBeInTheDocument();
+    expect(screen.getByText("~46,000.25 sDAI")).toBeInTheDocument();
   });
 
   it("keeps showing volume, unnamed, where the collateral read failed", () => {
     renderHeader({ overrides: { collateralDecimals: null, collateralSymbol: null, children: [] } });
 
-    expect(screen.getByText("46,000.25")).toBeInTheDocument();
+    expect(screen.getByText("~46,000.25")).toBeInTheDocument();
   });
 
   it("shows a dash where the stats could not be loaded", () => {
@@ -111,19 +130,30 @@ describe("SessionHeader", () => {
         status="trading"
         stats={undefined}
         statsPending={false}
+        poolBalances={undefined}
+        poolBalancesPending
+        usdPrice={undefined}
       />,
     );
 
-    expect(screen.getAllByText("-")).toHaveLength(2);
+    expect(screen.getAllByText("-")).toHaveLength(4);
   });
 
   it("holds skeletons, not numbers, while the stats load", () => {
     const { container } = render(
-      <SessionHeader session={toSessionDetail(row(), GATEWAY)} status="trading" stats={undefined} statsPending />,
+      <SessionHeader
+        session={toSessionDetail(row(), GATEWAY)}
+        status="trading"
+        stats={undefined}
+        statsPending
+        poolBalances={undefined}
+        poolBalancesPending
+        usdPrice={undefined}
+      />,
     );
 
     expect(screen.queryByText("-")).toBeNull();
-    expect(container.querySelectorAll(".fs-skeleton")).toHaveLength(2);
+    expect(container.querySelectorAll(".fs-skeleton")).toHaveLength(4);
   });
 
   it("omits the trading period while the closing time is unknown", () => {

@@ -21,7 +21,13 @@ const SESSION_STATS = graphql(`
     }
     Pool(where: { childMarket: { session_id: { _eq: $sessionId } } }) {
       id
+      childMarket_id
+      outcomeToken
+      underlyingToken
+      outcomeIndex
+      underlyingPerOutcome
       volumeUnderlying
+      volumeOutcome
     }
   }
 `);
@@ -50,7 +56,12 @@ export async function refreshSessionAfterTrade(queryClient: QueryClient, session
     await new Promise((resolve) => setTimeout(resolve, POLL_MS));
     try {
       const now = await fetchSessionStats(sessionId);
-      if (!seen || now.traders !== seen.traders || now.volumeUnderlying !== seen.volumeUnderlying) {
+      if (
+        !seen ||
+        now.traders !== seen.traders ||
+        now.volumeUnderlying !== seen.volumeUnderlying ||
+        now.volumeOutcome !== seen.volumeOutcome
+      ) {
         seen = now;
         await refresh();
       }
