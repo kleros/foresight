@@ -99,7 +99,10 @@ export function useLiquidityRun(parentMarket: Address, closesAt: Date | null): L
 
   const stage = progress?.stage;
   useEffect(() => {
-    if (stage === "complete" || stage === "moved") void queryClient.invalidateQueries({ queryKey: liquidityKeyPrefix });
+    // a halted run may have landed sends before it stopped
+    if (stage === "complete" || stage === "moved" || stage === "halted") {
+      void queryClient.invalidateQueries({ queryKey: liquidityKeyPrefix });
+    }
   }, [stage, queryClient]);
 
   return {
