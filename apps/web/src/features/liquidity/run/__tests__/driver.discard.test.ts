@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { seedInput, seedRequest, seedTxs } from "./support/requests";
+import { live, seedInput, seedRequest, seedTxs, TOKENS } from "./support/requests";
 import {
   chain,
   copyStorage,
@@ -170,6 +170,51 @@ describe("createLiquidityRun discard", () => {
     await vi.waitFor(() => expect(progressOf(driver).stage).toBe("complete"));
     // the reverted split and its retry, every other step once
     expect(timesBroadcast(fake, PLANNED)).toEqual(PLANNED.map((_, index) => (index === SPLIT_AT ? 2 : 1)));
+  });
+
+  it("keeps the settled steps of a run stopped as moved, for a new review", async () => {
+    const fake = chain();
+    const sends = gateway(fake, owner, {
+      onBroadcast: (tx) => {
+        if (sameTx(tx, PLANNED[SPLIT_AT]!)) fake.setPool(TOKENS.upToken, TOKENS.outcome, live(4_000n, true));
+      },
+    });
+    const { driver, store, flowId } = driverOn({
+      world: fake,
+      gateway: sends,
+      wallet: wallet(fake, owner),
+      request: seedRequest(),
+    });
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("moved"));
+
+    await driver.discard();
+
+    expect(progressOf(driver)).toEqual({ stage: "review" });
+    const kept = storedRun(store, flowId)!;
+    expect(kept.steps.slice(0, SPLIT_AT + 1).map((step) => step.outcome.status)).toEqual(
+      PLANNED.slice(0, SPLIT_AT + 1).map(() => "confirmed"),
+    );
+  });
+
+  it("forgets a run stopped as moved before anything was signed", async () => {
+    const fake = chain();
+    fake.setPool(TOKENS.upToken, TOKENS.outcome, live(4_000n, true));
+    const sends = gateway(fake, owner);
+    const { driver, store, flowId } = driverOn({
+      world: fake,
+      gateway: sends,
+      wallet: wallet(fake, owner),
+      request: seedRequest(),
+    });
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("moved"));
+
+    await driver.discard();
+
+    expect(progressOf(driver)).toEqual({ stage: "idle" });
+    expect(storedRun(store, flowId)).toBeNull();
+    expect(sends.prompts).toEqual([]);
   });
 
   it("keeps a run whose send is broadcast and not yet mined", async () => {
