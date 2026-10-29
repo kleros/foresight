@@ -171,6 +171,23 @@ describe("createLiquidityRun when the wallet answers a prompt with an error", ()
     },
   );
 
+  it("asks again for a send WalletConnect declined with 5000, however the decline is worded", async () => {
+    const fake = chain();
+    let declined = false;
+    const sends = gateway(fake, owner, {
+      script: (index) =>
+        index === SPLIT_AT && !declined ? ((declined = true), { refuse: 5000, message: "x" }) : "sign",
+    });
+    const { driver } = driverOn({ world: fake, gateway: sends, wallet: wallet(fake, owner), request: seedRequest() });
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).failure).toEqual({ reason: "rejected", retryable: true }));
+    expect(driver.getProgress().holdsSend).toBeUndefined();
+
+    driver.retry();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("complete"));
+    expect(timesBroadcast(fake, PLANNED)).toEqual(PLANNED.map(() => 1));
+  });
+
   it("keeps the batch id of a wallet_sendCalls declined in wording alone, which may follow a taken batch (L9)", async () => {
     const fake = chain();
     const batch = wallet(fake, owner, {

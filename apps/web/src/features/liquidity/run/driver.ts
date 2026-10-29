@@ -479,6 +479,8 @@ export function createLiquidityRun(args: {
       if (error instanceof StorageWriteError) error = new RunStop("storage", true);
       if (error !== undefined && error === refused) error = new RunStop("wallet", true);
       refused = undefined;
+      // the shared classifier knows no WalletConnect codes, so a decline whose wording it misses would not retry
+      if (walletConnectRejection(error)) return "rejected";
       if (error instanceof RunStop) {
         stopped = error;
         return error.retryable ? "rpc" : "unknown";
