@@ -121,6 +121,8 @@ const removeButtons = (scope: HTMLElement = document.body) =>
   within(scope).queryAllByRole("button", { name: /^remove/i });
 const positionsButton = () => screen.findByRole("button", { name: "Your positions" }, { timeout: 5000 });
 const summary = () => screen.getByTestId("liquidity-summary");
+/** A pool row's Remove, whose name goes on to read out the amounts it returns. */
+const removeButton = (pool: string) => new RegExp(`^Remove ${pool}, `);
 
 /** Opens Your positions from the section, once the wallet's positions are read. */
 async function openPositions() {
@@ -170,7 +172,7 @@ describe("the market page of a session with no liquidity", () => {
     await show(world, TRADING_CLOSE);
     const dialog = await openPositions();
 
-    const remove = await within(dialog).findByRole("button", { name: `Remove ${BRANCH_NAMES[0]} UP pool` });
+    const remove = await within(dialog).findByRole("button", { name: removeButton(`${BRANCH_NAMES[0]} UP pool`) });
     expect(disabled(remove)).toBe(false);
   });
 });
@@ -217,8 +219,8 @@ describe("the market page of a session with liquidity", () => {
 
     await waitFor(() => expect(removeButtons(dialog)).toHaveLength(2), { timeout: 5000 });
     for (const remove of removeButtons(dialog)) expect(disabled(remove)).toBe(false);
-    expect(within(dialog).getByRole("button", { name: `Remove ${BRANCH_NAMES[0]} UP pool` })).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: `Remove ${BRANCH_NAMES[1]} DOWN pool` })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: removeButton(`${BRANCH_NAMES[0]} UP pool`) })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: removeButton(`${BRANCH_NAMES[1]} DOWN pool`) })).toBeInTheDocument();
   });
 
   it("lists two positions in one pool as one row with one Remove, and counts both in the section", async () => {
@@ -232,7 +234,7 @@ describe("the market page of a session with liquidity", () => {
     const dialog = await openPositions();
 
     await waitFor(() => expect(removeButtons(dialog)).toHaveLength(2), { timeout: 5000 });
-    const remove = within(dialog).getByRole("button", { name: `Remove ${BRANCH_NAMES[0]} UP pool` });
+    const remove = within(dialog).getByRole("button", { name: removeButton(`${BRANCH_NAMES[0]} UP pool`) });
     expect(remove.closest("li")).toHaveTextContent("2 positions");
   });
 

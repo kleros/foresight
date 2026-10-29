@@ -255,6 +255,8 @@ const position = (tokenId: bigint, pool: string): ShownPosition => {
 };
 const UP_POOL = `${NAMES[0]} UP pool`;
 const DOWN_POOL = `${NAMES[0]} DOWN pool`;
+/** A pool row's Remove, whose name goes on to read out the amounts it returns. */
+const removeButton = (pool: string) => new RegExp(`^Remove ${pool}, `);
 const POSITIONS = [position(78n, UP_POOL), position(77n, DOWN_POOL)];
 const MERGE: ShownMerge = {
   branches: [{ label: NAMES[0]!, amount: WAD }],
@@ -290,7 +292,7 @@ const positionsPopup = (
 describe("Your positions during a remove", () => {
   it("names the position the run withdraws, not the one pressed last", async () => {
     const view = render(positionsPopup(runAt(IDLE)));
-    await userEvent.click(screen.getByRole("button", { name: `Remove ${UP_POOL}` }));
+    await userEvent.click(screen.getByRole("button", { name: removeButton(UP_POOL) }));
 
     // the stored run of token 77 was recovered for review in place of a new one
     view.rerender(positionsPopup(runAt(removing("review", 77n))));
@@ -302,7 +304,7 @@ describe("Your positions during a remove", () => {
 
   it("still names the pool once the removed position drops out of the refetched list", async () => {
     const view = render(positionsPopup(runAt(IDLE)));
-    await userEvent.click(screen.getByRole("button", { name: `Remove ${DOWN_POOL}` }));
+    await userEvent.click(screen.getByRole("button", { name: removeButton(DOWN_POOL) }));
     view.rerender(positionsPopup(runAt(removing("signing", 77n))));
 
     const done = removing("complete", 77n, { rows: [row("remove", "done", 1, 1)], signatures: { done: 1, total: 1 } });
@@ -380,16 +382,27 @@ describe("Your positions' actions", () => {
     render(positionsPopup(runAt(IDLE), { merge: MERGE }));
 
     const popup = dialog("Your positions");
-    expect(within(popup).getByRole("button", { name: `Remove ${UP_POOL}` })).toBeEnabled();
+    expect(within(popup).getByRole("button", { name: removeButton(UP_POOL) })).toBeEnabled();
     expect(within(popup).getByRole("button", { name: "Merge" })).toBeEnabled();
+  });
+
+  it("names two rows of one pool apart by the amounts each Remove reads out", () => {
+    const up = position(78n, UP_POOL);
+    const alone = { ...position(79n, UP_POOL), returns: [{ label: "Movie A UP", amount: (WAD * 5n) / 2n }] };
+    render(positionsPopup(runAt(IDLE), { positions: [up, alone] }));
+
+    const names = within(dialog("Your positions"))
+      .getAllByRole("button", { name: removeButton(UP_POOL) })
+      .map((button) => button.getAttribute("aria-label"));
+    expect(names).toEqual([`Remove ${UP_POOL}, 1 sDAI`, `Remove ${UP_POOL}, 2.5 Movie A UP`]);
   });
 
   it("disables Remove and Merge, and offers no way to carry the seed on, while a seed holds the session", () => {
     render(positionsPopup(runAt(declined), { merge: MERGE }));
 
     const popup = dialog("Your positions");
-    expect(within(popup).getByRole("button", { name: `Remove ${UP_POOL}` })).toBeDisabled();
-    expect(within(popup).getByRole("button", { name: `Remove ${DOWN_POOL}` })).toBeDisabled();
+    expect(within(popup).getByRole("button", { name: removeButton(UP_POOL) })).toBeDisabled();
+    expect(within(popup).getByRole("button", { name: removeButton(DOWN_POOL) })).toBeDisabled();
     expect(within(popup).getByRole("button", { name: "Merge" })).toBeDisabled();
     expect(within(popup).queryByRole("button", { name: "Try again" })).toBeNull();
     expect(within(popup).queryByRole("button", { name: "Start over" })).toBeNull();

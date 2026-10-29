@@ -10,11 +10,17 @@ import { ScrollFade } from "@/components/ui/ScrollFade";
 import { StatusCallout } from "@/components/ui/StatusCallout";
 import { StepsTimeline } from "@/components/ui/StepsTimeline";
 
+import { formatDisplayAmount } from "@/utils/amount";
+
 import { AmountRow } from "./AmountRow";
 import { LiquidityPopupFooter } from "./LiquidityPopupFooter";
 import type { LiquidityRun } from "../hooks/useLiquidityRun";
-import type { ShownMerge, ShownPosition } from "../hooks/useSessionLiquidity";
+import type { ShownMerge, ShownPosition, TokenAmount } from "../hooks/useSessionLiquidity";
 import { runStatus, runSteps } from "../utils/runSteps";
+
+/** The amounts a row returns, as its Remove reads them out: "4.99 Movie A UP and 2.49 Movie A". */
+const spoken = (amounts: TokenAmount[]) =>
+  amounts.map(({ label, amount }) => `${formatDisplayAmount(amount, 18)} ${label}`).join(" and ");
 
 /** A seed holds the session, so nothing here can start until it is finished or started over. */
 const HELD_BY_SEED = "Adding liquidity from this wallet is unfinished. Finish it in Add liquidity first.";
@@ -104,7 +110,7 @@ export function LiquidityPositionsDialog({
                           small
                           variant="secondary"
                           text="Remove"
-                          aria-label={`Remove ${position.pool}`}
+                          aria-label={`Remove ${position.pool}, ${spoken(position.returns)}`}
                           isDisabled={run.isHeld}
                           onPress={() => {
                             const first =
