@@ -149,7 +149,6 @@ describe("createLiquidityRun when the wallet answers a prompt with an error", ()
   it.each([
     ["4001", 4001],
     ["WalletConnect's 5000", { code: 5000, message: "User rejected." }],
-    ["rejection wording alone", { message: "User rejected the request." }],
   ] as const)(
     "asks again for a batch whose wallet_sendCalls was declined with %s, which returned no bundle id (L9)",
     async (_, refusal) => {
@@ -171,6 +170,22 @@ describe("createLiquidityRun when the wallet answers a prompt with an error", ()
       expect(fake.broadcasts).toHaveLength(1);
     },
   );
+
+  it("keeps the batch id of a wallet_sendCalls declined in wording alone, which may follow a taken batch (L9)", async () => {
+    const fake = chain();
+    const batch = wallet(fake, owner, {
+      atomic: "supported",
+      sendCallsRefuse: { message: "Sending failed: request rejected by the relay." },
+    });
+    const { driver } = driverOn({ world: fake, gateway: gateway(fake, owner), wallet: batch, request: seedRequest() });
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("halted"));
+
+    expect(driver.getProgress().holdsSend).toBe(true);
+    if (progressOf(driver).failure?.retryable) driver.retry();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("halted"));
+    expect(batch.sendCalls).toHaveLength(1);
+  });
 
   it("keeps the batch id of a wallet_sendCalls answered 5720, a duplicate id the wallet already holds (L9)", async () => {
     const fake = chain();
