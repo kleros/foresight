@@ -429,7 +429,6 @@ function withdrawCalls(
   ];
 }
 
-/** One multicall withdrawing one position, as `withdrawCalls` does. */
 function withdrawTx(
   list: LiquidityAllowList,
   owner: Address,
@@ -441,7 +440,7 @@ function withdrawTx(
   return multicallTx(list, withdrawCalls(owner, tokenId, liquidity, mins, deadline));
 }
 
-/** A full withdrawal of every position in one pool, in one multicall: each one's liquidity out, collected, burned (L6). */
+/** A full withdrawal of the given positions, all of one pool, in one multicall: each one's liquidity out, collected, burned (L6). */
 export function planRemove(input: RemoveInput): RemovePlan {
   const { positions, owner, sqrtPriceX96: sqrtP } = input;
   const first = positions[0];

@@ -313,6 +313,28 @@ describe("Your positions during a remove", () => {
     ]);
   });
 
+  it("names the pool of a remove of several positions, and once they all burn, says positions", async () => {
+    const base = removeInput({ tokenIds: [77n, 79n] });
+    const pool: ShownPosition = {
+      key: "0:down",
+      pool: DOWN_POOL,
+      count: 2,
+      returns: [{ label: "sDAI", amount: WAD }],
+      request: { kind: "remove", session: SESSION, input: base },
+    };
+    const both = { tokenIds: [77n, 79n] };
+    const view = render(positionsPopup(runAt(removing("signing", 77n, both)), { positions: [pool] }));
+    expect(timelineItems().map((each) => each.getAttribute("aria-label"))).toEqual([
+      `Timeline item: Remove ${DOWN_POOL}`,
+    ]);
+
+    const done = removing("complete", 77n, { ...both, rows: [row("remove", "done", 1, 1)] });
+    view.rerender(positionsPopup(runAt(done), { positions: [] }));
+    expect(timelineItems().map((each) => each.getAttribute("aria-label"))).toEqual([
+      "Timeline item: Remove the positions",
+    ]);
+  });
+
   it("says the one signature without a count, while the wallet asks and once it is broadcast", () => {
     const view = render(
       positionsPopup(

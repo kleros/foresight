@@ -52,7 +52,10 @@ export function LiquidityPositionsDialog({
         planned: [],
         progress,
         title: (row) => {
-          if (row === "remove") return removing ? `Remove ${removing}` : "Remove the position";
+          if (row === "remove") {
+            if (removing) return `Remove ${removing}`;
+            return (progress?.tokenIds?.length ?? 1) > 1 ? "Remove the positions" : "Remove the position";
+          }
           if (row === "parent") return "Merge back to sDAI";
           return `Merge ${names[Number(row.split(":")[1])] ?? "a branch"}`;
         },

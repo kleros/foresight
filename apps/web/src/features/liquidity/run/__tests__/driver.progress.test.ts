@@ -329,6 +329,20 @@ describe("a remove's progress", () => {
     expect(rowViews(driver)).toEqual([["remove", "done"]]);
   });
 
+  it("names every position a remove of a pool withdraws, in the order it withdraws them", async () => {
+    const fake = chain();
+    fake.setPool(TOKENS.upToken, TOKENS.outcome, live(5_000n, true));
+    for (const tokenId of [TOKEN_ID, TOKEN_ID + 1n]) fake.state.owners.set(tokenId, owner);
+    const sends = gateway(fake, owner);
+    const request = removeRequest({ tokenIds: [TOKEN_ID + 1n, TOKEN_ID] });
+    const { driver } = driverOn({ world: fake, gateway: sends, wallet: wallet(fake, owner), request });
+
+    driver.start();
+    await atStage(driver, "complete");
+
+    expect(progress(driver).tokenIds).toEqual([TOKEN_ID + 1n, TOKEN_ID]);
+  });
+
   it("names the positions it withdraws", async () => {
     const { driver, sends } = removeRun("hang");
 
