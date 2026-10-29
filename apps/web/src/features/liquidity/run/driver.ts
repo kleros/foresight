@@ -4,6 +4,7 @@ import {
   classifyTxError,
   createTxOrchestrator,
   currentEntry,
+  isUserRejection,
   settledEntries,
   StorageWriteError,
   type BalanceTxGateway,
@@ -138,10 +139,11 @@ const errorCode = (error: unknown) =>
 
 /**
  * Wallet answers to a send request that leave no prompt open and nothing signed: EIP-1193 unauthorized and
- * unsupported method, JSON-RPC method not found and invalid params, and EIP-1474 execution reverted. A disconnect
- * (4900, 4901) is not one: the wallet may have signed before the connection dropped.
+ * unsupported method, JSON-RPC method not found and invalid params, EIP-1474 execution reverted, and EIP-5792's
+ * refusals that create no bundle (5700, 5710, 5740, 5750, 5760). Not a disconnect (4900, 4901), after which the
+ * wallet may have signed, nor 5720, a duplicate id the wallet already holds.
  */
-const NO_PROMPT_CODES: ReadonlySet<unknown> = new Set([4100, 4200, -32601, -32602, 3]);
+const NO_PROMPT_CODES: ReadonlySet<unknown> = new Set([4100, 4200, -32601, -32602, 3, 5700, 5710, 5740, 5750, 5760]);
 
 function answeredWithoutPrompt(error: unknown): boolean {
   for (let link = error, depth = 0; link && depth < 8; depth += 1) {
@@ -439,7 +441,8 @@ export function createLiquidityRun(args: {
         // only the send request's own answer; a batch the wallet took is polled after, under its stored id
         const asking = sent ? (batchSent ? undefined : BATCH) : currentEntry(run()?.steps ?? [])?.stepId;
         // the failure persists the run right after, without the send
-        if (asking && answeredWithoutPrompt(error)) {
+        if (asking && isUserRejection(error)) forget(asking);
+        else if (asking && answeredWithoutPrompt(error)) {
           forget(asking);
           refused = error;
         }
@@ -542,10 +545,11 @@ export function createLiquidityRun(args: {
       current !== null &&
       current !== undefined &&
       current.status !== "running" &&
-      (current.snapshot.callsId !== undefined ||
+      ((current.snapshot.callsId !== undefined && !settled.has(BATCH)) ||
         Object.keys(current.snapshot.sends).some((stepId) => !settled.has(stepId)));
     return {
       kind: request.kind,
+      request,
       ...(holdsSend ? { holdsSend: true as const } : {}),
       ...(request.kind === "remove" ? { tokenIds: request.input.positions.map((each) => each.tokenId) } : {}),
       ...(atomic ? { atomic: true as const } : {}),
@@ -599,8 +603,9 @@ export function createLiquidityRun(args: {
 
   orchestrator.subscribe(notify);
   // a refused prompt sent nothing, and a cancelled send can no longer mine: either step may be asked for again
+  // a cancelled send can no longer mine; a refused prompt is let go of in the gateway, where its code is known
   orchestrator.on("step:failed", ({ stepId, error }) => {
-    if (error.cause === "rejected" || error.cause === "cancelled") forget(stepId);
+    if (error.cause === "cancelled") forget(stepId);
   });
   orchestrator.on("flow:paused", () => halt(true));
   orchestrator.on("flow:failed", () => halt(false));
@@ -753,7 +758,7 @@ export function createLiquidityRun(args: {
           (step) => step.outcome.status !== "confirmed" && step.outcome.status !== "skipped",
         );
         const outstanding =
-          stored.snapshot.callsId !== undefined ||
+          (stored.snapshot.callsId !== undefined && live.some((step) => step.stepId === BATCH)) ||
           live.some((step) => step.outcome.status === "submitted" || stored.snapshot.sends[step.stepId]);
         if (outstanding) return;
         if (account && isAddressEqual(stored.ctx.owner, account)) orchestrator.trash(args.flowId);

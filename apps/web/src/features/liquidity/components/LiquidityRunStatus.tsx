@@ -5,7 +5,8 @@ import { useStartOver } from "../hooks/useStartOver";
 import { runStatus, START_OVER_WARNING } from "../utils/runSteps";
 
 /** What the run is doing or why it stopped, with the actions that carry it on or let it go. */
-export function LiquidityRunStatus({ run }: { run: LiquidityRun }) {
+/** `onReview` opens the popup that shows what a run under review signs, where it is resumed. */
+export function LiquidityRunStatus({ run, onReview }: { run: LiquidityRun; onReview: () => void }) {
   const progress = run.progress;
   const text = runStatus(progress)?.text;
   const startingOver = useStartOver(run);
@@ -28,7 +29,7 @@ export function LiquidityRunStatus({ run }: { run: LiquidityRun }) {
         <p role="status" aria-live="polite" className="type-label text-fs-text-secondary min-w-48 flex-1 text-pretty">
           {text}
         </p>
-        {progress?.stage === "review" ? <Button small text="Resume" onPress={run.resume} /> : null}
+        {progress?.stage === "review" ? <Button small text="Review" onPress={onReview} /> : null}
         {progress?.failure?.retryable ? <Button small text="Try again" onPress={run.retry} /> : null}
         {(progress?.stage === "halted" || progress?.stage === "moved") &&
         progress.failure?.reason !== "batch-unknown" ? (

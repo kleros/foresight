@@ -249,6 +249,8 @@ export interface LiquidityProgress {
   failure?: { reason: LiquidityFailureReason; retryable: boolean };
   /** What the run signs; absent before a run. */
   kind?: LiquidityRequest["kind"];
+  /** The request the run signs, which a recovered run takes from storage rather than from the form. */
+  request?: LiquidityRequest;
   /** A remove's positions, by token id. */
   tokenIds?: bigint[];
   /** The run is one EIP-5792 batch, so one signature. */

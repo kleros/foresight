@@ -180,6 +180,33 @@ describe("the Add liquidity popup during a seed", () => {
     expect(within(dialog("Add liquidity")).getByRole("button", { name: "Start over" })).toBeEnabled();
   });
 
+  it("shows the amounts a recovered run signs, not the empty form, before Resume", () => {
+    const stored = {
+      ...input,
+      total: 7n * WAD,
+      branches: input.branches.map((branch, index) => ({
+        ...branch,
+        depth: (7n - BigInt(index)) * WAD,
+        upPriceBps: 6_000n,
+      })),
+    };
+    render(addPopup({ ...recovered, request: { kind: "seed", input: stored } }, { readable: true }));
+
+    const popup = dialog("Add liquidity");
+    expect(popup.querySelector<HTMLInputElement>('[data-id="total"]')!.value).toBe("7");
+    expect(
+      within(popup)
+        .getAllByRole("textbox", { name: /Depth$/ })
+        .map((field) => (field as HTMLInputElement).value),
+    ).toEqual(["7", "6"]);
+    expect(
+      within(popup)
+        .getAllByRole("textbox", { name: /UP price$/ })
+        .map((field) => (field as HTMLInputElement).value),
+    ).toEqual(["0.6", "0.6"]);
+    expect(within(popup).getByRole("button", { name: "Resume" })).toBeEnabled();
+  });
+
   it("shows a recovered run's settled rows as done, and offers to resume it", () => {
     render(addPopup(recovered));
 
@@ -544,5 +571,26 @@ describe("the market page's Liquidity section", () => {
     render(wrap(<LiquiditySection onAdd={() => {}} names={NAMES} positions={[]} merge={MERGE} run={runAt(IDLE)} />));
 
     expect(screen.getByRole("button", { name: "Your positions" })).toBeEnabled();
+  });
+
+  it("opens Add liquidity, where a recovered seed's amounts show, instead of resuming it from the section", async () => {
+    const onAdd = vi.fn();
+    const run = { ...runAt(recovered), resume: vi.fn() };
+    render(wrap(<LiquiditySection onAdd={onAdd} names={NAMES} positions={POSITIONS} run={run} />));
+
+    await userEvent.click(screen.getByRole("button", { name: "Review" }));
+
+    expect(onAdd).toHaveBeenCalledTimes(1);
+    expect(run.resume).not.toHaveBeenCalled();
+  });
+
+  it("opens Your positions for a recovered remove instead of resuming it from the section", async () => {
+    const run = { ...runAt(removing("review", 77n)), resume: vi.fn() };
+    render(wrap(<LiquiditySection onAdd={() => {}} names={NAMES} positions={POSITIONS} run={run} />));
+
+    await userEvent.click(screen.getByRole("button", { name: "Review" }));
+
+    expect(dialog("Your positions")).toBeVisible();
+    expect(run.resume).not.toHaveBeenCalled();
   });
 });

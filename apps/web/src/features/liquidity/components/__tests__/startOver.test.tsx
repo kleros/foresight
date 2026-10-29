@@ -37,7 +37,7 @@ const footer = (run: LiquidityRun) => (
 
 describe.each([
   ["the popup's footer", footer],
-  ["the section's run status", (run: LiquidityRun) => <LiquidityRunStatus run={run} />],
+  ["the section's run status", (run: LiquidityRun) => <LiquidityRunStatus run={run} onReview={() => {}} />],
 ])("Start over in %s", (_, view) => {
   it("asks the user to reject the open prompt before it lets go of a held send, and only then discards", async () => {
     const run = runAt(held);

@@ -77,7 +77,7 @@ export function LiquiditySection({
         </div>
       </div>
 
-      <LiquidityRunStatus run={run} />
+      <LiquidityRunStatus run={run} onReview={run.progress?.kind === "seed" ? onAdd : () => setManaging(true)} />
 
       <LiquidityPositionsDialog
         isOpen={isManaging}

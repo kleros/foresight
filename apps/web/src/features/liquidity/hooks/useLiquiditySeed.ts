@@ -28,6 +28,14 @@ export interface SeedForm {
   prices: (string | undefined)[];
 }
 
+/** The form a seed request was reviewed from, so a stored run shows the amounts it signs. */
+export const formOf = (input: SeedInput): SeedForm => ({
+  total: formatAmount(input.total, 18),
+  collateral: input.collateral,
+  depths: input.branches.map((branch) => formatAmount(branch.depth, 18)),
+  prices: input.branches.map((branch) => formatAmount(branch.upPriceBps, PRICE_DECIMALS)),
+});
+
 const childIsToken0 = (child: Address, outcome: Address) => BigInt(child) < BigInt(outcome);
 
 /** UP's price where a pool of the branch holds liquidity: the UP pool's own, else one less the DOWN pool's (L2, L3). */

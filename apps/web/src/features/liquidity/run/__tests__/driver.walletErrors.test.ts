@@ -82,7 +82,7 @@ describe("createLiquidityRun when the wallet answers a prompt with an error", ()
     expect(fake.broadcasts).toHaveLength(1);
   });
 
-  it.each([-32601, 4200, 3])(
+  it.each([-32601, 4200, 3, 4001])(
     "keeps a batch the wallet took when its status read is answered with %i, and never sends it again (L9)",
     async (code) => {
       const fake = chain();
@@ -104,6 +104,77 @@ describe("createLiquidityRun when the wallet answers a prompt with an error", ()
       expect(fake.broadcasts).toHaveLength(1);
     },
   );
+
+  it("keeps a send whose wallet error only reads as a rejection, so a split that broadcast is not sent again (L8)", async () => {
+    const fake = chain();
+    let failed = false;
+    const sends = gateway(fake, owner, {
+      script: (index) =>
+        index === SPLIT_AT && !failed
+          ? ((failed = true), { message: "User rejected the request.", broadcast: true })
+          : "sign",
+    });
+    const { driver } = driverOn({ world: fake, gateway: sends, wallet: wallet(fake, owner), request: seedRequest() });
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("halted"));
+    expect(driver.getProgress().holdsSend).toBe(true);
+
+    driver.retry();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("complete"));
+
+    expect(timesBroadcast(fake, PLANNED)).toEqual(PLANNED.map(() => 1));
+  });
+
+  it.each([5700, 5710, 5740, 5750, 5760])(
+    "asks again for a batch whose wallet_sendCalls was refused with %i, which creates no bundle (L9)",
+    async (code) => {
+      const fake = chain();
+      const batch = wallet(fake, owner, { atomic: "supported", sendCallsRefuse: code });
+      const { driver } = driverOn({
+        world: fake,
+        gateway: gateway(fake, owner),
+        wallet: batch,
+        request: seedRequest(),
+      });
+      driver.start();
+      await vi.waitFor(() => expect(progressOf(driver).failure).toEqual({ reason: "wallet", retryable: true }));
+
+      driver.retry();
+      await vi.waitFor(() => expect(progressOf(driver).stage).toBe("complete"));
+      expect(batch.sendCalls).toHaveLength(2);
+      expect(fake.broadcasts).toHaveLength(1);
+    },
+  );
+
+  it("keeps the batch id of a wallet_sendCalls answered 5720, a duplicate id the wallet already holds (L9)", async () => {
+    const fake = chain();
+    const batch = wallet(fake, owner, { atomic: "supported", sendCallsRefuse: 5720 });
+    const { driver } = driverOn({ world: fake, gateway: gateway(fake, owner), wallet: batch, request: seedRequest() });
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("halted"));
+
+    expect(progressOf(driver).failure?.reason).not.toBe("wallet");
+    expect(driver.getProgress().holdsSend).toBe(true);
+  });
+
+  it("lets a completed batch run go, so the next run can start", async () => {
+    const fake = chain();
+    const batch = wallet(fake, owner, { atomic: "supported" });
+    const { driver, store, flowId } = driverOn({
+      world: fake,
+      gateway: gateway(fake, owner),
+      wallet: batch,
+      request: seedRequest(),
+    });
+    driver.start();
+    await vi.waitFor(() => expect(progressOf(driver).stage).toBe("complete"));
+    expect(driver.getProgress().holdsSend).toBeUndefined();
+
+    driver.reset();
+
+    expect(progressOf(driver)).toEqual({ stage: "idle" });
+    expect(storedRun(store, flowId)).toBeNull();
+  });
 
   it("reads a code-3 revert from the chain while building as no wallet answer", async () => {
     const fake = chain();

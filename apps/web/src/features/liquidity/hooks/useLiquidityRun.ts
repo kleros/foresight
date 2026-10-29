@@ -79,7 +79,11 @@ export function useLiquidityRun(parentMarket: Address, closesAt: Date | null): L
     });
   }, [address, parentMarket, closes]);
 
-  useEffect(() => () => driver?.dispose(), [driver]);
+  useEffect(() => {
+    // a run stored by an earlier visit shows for review rather than waiting for the next press to take its place
+    driver?.recover();
+    return () => driver?.dispose();
+  }, [driver]);
 
   const progress = useSyncExternalStore(
     (listener) => driver?.subscribe(listener) ?? (() => {}),

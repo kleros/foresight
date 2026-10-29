@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 
 import clsx from "clsx";
 import type { Address } from "viem";
@@ -17,7 +17,7 @@ import { AmountRow } from "./AmountRow";
 import { LiquidityPopupFooter } from "./LiquidityPopupFooter";
 import type { LiquidityBalances } from "../api/getLiquidityBalances";
 import type { LiquidityRun } from "../hooks/useLiquidityRun";
-import { useLiquiditySeed, type SeedForm } from "../hooks/useLiquiditySeed";
+import { formOf, useLiquiditySeed, type SeedForm } from "../hooks/useLiquiditySeed";
 import type { SeedCollateral, SessionPools } from "../types";
 import { runStatus, runSteps } from "../utils/runSteps";
 
@@ -57,14 +57,17 @@ export function LiquidityDialog({
   closed: boolean;
   run: LiquidityRun;
 }) {
-  const [form, setForm] = useState<SeedForm>({ total: "", collateral: "sDAI", depths: [], prices: [] });
+  const [typed, setForm] = useState<SeedForm>({ total: "", collateral: "sDAI", depths: [], prices: [] });
   const { isRunning, progress } = run;
-  const seed = useLiquiditySeed({ pools, owner, names, balances, chainTime, closed, form });
-  const id = useId();
-  const balance = form.collateral === "sDAI" ? balances?.collateral : balances?.native;
   // a remove or merge holds the same slot; its steps and actions are the positions popup's
   const isOwn = progress?.kind === undefined || progress.kind === "seed";
   const isLocked = isRunning || (run.isHeld && isOwn);
+  // a held seed shows the request it signs, which a run recovered from storage does not share with what was typed
+  const signing = isLocked && progress?.request?.kind === "seed" ? progress.request.input : undefined;
+  const form = useMemo(() => (signing ? formOf(signing) : typed), [signing, typed]);
+  const seed = useLiquiditySeed({ pools, owner, names, balances, chainTime, closed, form });
+  const id = useId();
+  const balance = form.collateral === "sDAI" ? balances?.collateral : balances?.native;
 
   const edit = (key: "depths" | "prices", index: number, value: string) =>
     setForm((now) => {

@@ -78,7 +78,8 @@ import { createLiquidityRun } from "../../driver";
  *     reasons these tests name: "unlisted" (flow/allowed.ts found a departure, including a run whose owner is not
  *     the connected account), "closed" (seed or add at or after the close by chain time), "wrong-wallet"
  *     (a recovered run belongs to another account than the connected one, or none is connected), "wallet" (the
- *     wallet answered a send request with 4100, 4200, -32601, -32602 or 3; the send is let go of, retryable).
+ *     wallet answered a send request with 4100, 4200, -32601, -32602, 3 or EIP-5792 5700, 5710, 5740, 5750, 5760;
+ *     the send is let go of, retryable; a 4001 lets it go as "rejected", a rejection read only from wording does not).
  *
  *   Atomic path: when wallet_getCapabilities reports atomic "supported" or "ready" for 0x64, the run is one
  *   wallet_sendCalls whose params[0] carries an app-chosen `id` (stored before the request) and atomicRequired true.
@@ -100,9 +101,17 @@ export type LiquidityDriverLike = ReturnType<typeof createLiquidityRun>;
 /**
  * What the wallet does with the n-th prompt (from 0): mine it, refuse it, never answer, broadcast it unmined, mine it
  * reverted, broadcast it and then cancel it with a self-send at its nonce, or answer with an error carrying
- * `refuse` as its code, one cause deep, broadcasting nothing.
+ * `refuse` as its code, one cause deep, broadcasting nothing; with `message` the error has that text and no code,
+ * and with `broadcast` the send is mined before the error is answered.
  */
-export type PromptScript = "sign" | "reject" | "hang" | "unmined" | "revert" | "cancel" | { refuse: number };
+export type PromptScript =
+  | "sign"
+  | "reject"
+  | "hang"
+  | "unmined"
+  | "revert"
+  | "cancel"
+  | { refuse?: number; message?: string; broadcast?: boolean };
 
 /** EIP-5792's atomic capability status, or no `atomic` entry at all. */
 export type AtomicStatus = "supported" | "ready" | "unsupported" | "absent";
@@ -297,7 +306,10 @@ export function gateway(
       if (step === "reject")
         return Promise.reject(new UserRejectedRequestError(new Error("User rejected the request.")));
       if (typeof step === "object") {
-        const answer = Object.assign(new Error("The wallet answered with an error."), { code: step.refuse });
+        if (step.broadcast) world.broadcast(tx, from, true);
+        const answer = Object.assign(new Error(step.message ?? "The wallet answered with an error."), {
+          ...(step.refuse === undefined ? {} : { code: step.refuse }),
+        });
         return Promise.reject(new Error("Sending the transaction failed.", { cause: answer }));
       }
       if (step === "hang") {
