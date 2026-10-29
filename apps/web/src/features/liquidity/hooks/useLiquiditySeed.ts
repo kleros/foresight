@@ -91,6 +91,14 @@ export function useLiquiditySeed({
     const depths = fields.map((field) => parseAmount(field.depth, 18));
     const prices = fields.map((field, index) => locked[index] ?? parseAmount(field.price, PRICE_DECIMALS));
     const inRange = (bps: bigint | null) => bps !== null && bps >= MIN_SEED_PRICE_BPS && bps <= MAX_SEED_PRICE_BPS;
+    // a live DOWN pool mints at its own price, which UP's locked price does not show
+    const downPrices = Array.from({ length: count }, (_, index) => {
+      const down = pools?.branches[index]?.down;
+      const tokens = pools?.session.branches[index];
+      return down?.status === "live" && down.liquidity > 0n && tokens
+        ? bpsForSqrtPrice(down.sqrtPriceX96, childIsToken0(tokens.downToken, tokens.outcome))
+        : undefined;
+    });
 
     const problem = (() => {
       if (closed) return LIQUIDITY_CLOSED_REASON;
@@ -99,9 +107,10 @@ export function useLiquiditySeed({
       if (total === undefined) return "Enter a total.";
       if (depths.some((depth) => depth === null)) return "Enter a depth for each branch.";
       if (depths.some((depth) => depth !== null && depth > total)) return "A branch can't be deeper than the total.";
-      if (!prices.every(inRange)) {
-        const [min, max] = [MIN_SEED_PRICE_BPS, MAX_SEED_PRICE_BPS].map((bps) => formatAmount(bps, PRICE_DECIMALS));
-        return `An UP price is between ${min} and ${max}.`;
+      const [min, max] = [MIN_SEED_PRICE_BPS, MAX_SEED_PRICE_BPS].map((bps) => formatAmount(bps, PRICE_DECIMALS));
+      if (!prices.every(inRange)) return `An UP price is between ${min} and ${max}.`;
+      if (!downPrices.every((bps) => bps === undefined || inRange(bps))) {
+        return `A DOWN pool's own price is outside ${min} to ${max}, so this session can't be seeded here.`;
       }
       if (form.collateral === "xDAI" && previewDeposit.data === undefined) return "Reading the sDAI rate…";
       return undefined;
@@ -110,6 +119,7 @@ export function useLiquiditySeed({
     if (!pools || !owner || chainTime === undefined || total === undefined) return { fields, problem };
     if (!depths.every((depth) => depth !== null && depth <= total) || !prices.every(inRange))
       return { fields, problem };
+    if (!downPrices.every((bps) => bps === undefined || inRange(bps))) return { fields, problem };
     if (form.collateral === "xDAI" && previewDeposit.data === undefined) return { fields, problem };
 
     const input: SeedInput = {

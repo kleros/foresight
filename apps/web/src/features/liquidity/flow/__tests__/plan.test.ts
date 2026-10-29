@@ -132,6 +132,20 @@ describe("liquidity plan module (A1)", () => {
 
 describe("seed prices (L2)", () => {
   it.each([
+    ["DOWN above the range", { up: live(5_000n, true, 60), down: live(MAX_SEED_PRICE_BPS + 1n, false, 60) }],
+    ["DOWN below the range", { up: live(5_000n, true, 60), down: live(MIN_SEED_PRICE_BPS - 1n, false, 60) }],
+    ["UP above the range, DOWN missing", { up: live(MAX_SEED_PRICE_BPS + 1n, true, 60), down: missing }],
+  ] as const)("refuses to mint into a pool whose own price is outside the seed range: %s", (_, pools) => {
+    expect(() => seed(pools)).toThrow(/outside the seed range/);
+  });
+
+  it("mints into live pools whose own prices sit at the range's edges", () => {
+    const { plan } = seed({ up: live(MIN_SEED_PRICE_BPS, true, 60), down: live(MAX_SEED_PRICE_BPS, false, 60) });
+
+    expect([plan.branches[0]!.pools.up.priceLocked, plan.branches[0]!.pools.down.priceLocked]).toEqual([true, true]);
+  });
+
+  it.each([
     [3_000n, { up: true, down: true }],
     [3_000n, { up: false, down: false }],
     [MIN_SEED_PRICE_BPS, { up: true, down: false }],
@@ -179,7 +193,7 @@ describe("seed prices (L2)", () => {
   });
 
   it("holds a live pool's mint to LIQUIDITY_SLIPPAGE_BPS under the shown amounts", () => {
-    const { plan } = seed({ up: live(6_000n, false, 60), down: live(4_000n, true, 60) });
+    const { plan } = seed({ up: live(6_000n, true, 60), down: live(4_000n, false, 60) });
 
     for (const pool of [plan.branches[0]!.pools.up, plan.branches[0]!.pools.down]) {
       for (const [shown, min] of [
@@ -343,7 +357,7 @@ describe("self-realign of an empty pool (L3)", () => {
 });
 
 describe("seed calldata (L4, L5, L7)", () => {
-  const mixed = { up: missing, down: live(4_500n, true, 60) };
+  const mixed = { up: missing, down: live(4_500n, false, 60) };
 
   it("puts a branch's creates and seed mints in one position manager multicall, each create before its mint", () => {
     const { plan, txs } = seed({ up: missing, down: missing });
@@ -409,7 +423,7 @@ describe("seed calldata (L4, L5, L7)", () => {
   it.each([CHAIN_TIME, CHAIN_TIME + 12_345n])(
     "dates every mint the chain's time %s plus LIQUIDITY_DEADLINE_SECONDS",
     (chainTime) => {
-      const { txs } = seed({ up: missing, down: live(4_500n, true, 60) }, { chainTime });
+      const { txs } = seed({ up: missing, down: live(4_500n, false, 60) }, { chainTime });
 
       const mints = mintsOf(txs);
       expect(mints.length).toBe(2);

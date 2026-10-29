@@ -13,6 +13,7 @@ import { publicClient } from "@/lib/web3/public-client";
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
 import { liquidityKeyPrefix } from "../api/getLiquidityPools";
+import { LIQUIDITY_ALLOW_LIST } from "../oracle/allowlist";
 import { createLiquidityRun } from "../run/driver";
 import { createLiquidityReader } from "../run/reader";
 import { liquidityRunStore } from "../run/store";
@@ -52,7 +53,8 @@ export function useLiquidityRun(parentMarket: Address, closesAt: Date | null): L
   const closes = closesAt ? BigInt(closesAt.getTime()) / 1000n : NO_CLOSE;
 
   const driver = useMemo(() => {
-    if (!address) return null;
+    // the local chain has no allow list, so nothing there is ever signed
+    if (!address || !LIQUIDITY_ALLOW_LIST[DEFAULT_CHAIN_ID]) return null;
     const owner = address;
     return createLiquidityRun({
       gateway: createViemTxGateway({

@@ -11,6 +11,7 @@ import {
   BPS,
   amount0Delta,
   amount1Delta,
+  bpsForSqrtPrice,
   fullRange,
   liquidityForAmount0,
   liquidityForAmount1,
@@ -346,6 +347,12 @@ export function planSeed(input: SeedInput): SeedPlan {
       resolvePool(tokens.outcome, tokens.upToken, upPriceBps, branchInput.pools.up),
       resolvePool(tokens.outcome, tokens.downToken, downPriceBps, branchInput.pools.down),
     ] as const;
+    for (const pool of sides) {
+      const own = pool.priceLocked ? bpsForSqrtPrice(pool.sqrtPriceX96, pool.childIsToken0) : undefined;
+      if (own !== undefined && (own < MIN_SEED_PRICE_BPS || own > MAX_SEED_PRICE_BPS)) {
+        throw new Error(`A pool's own price of ${own} bps is outside the seed range.`);
+      }
+    }
     const realigns = sides.map((pool, at) =>
       pool.realignFrom === undefined
         ? undefined

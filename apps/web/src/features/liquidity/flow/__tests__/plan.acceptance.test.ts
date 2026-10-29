@@ -108,7 +108,8 @@ const pairsOf = (tokens: BranchTokens) =>
   [tokens.upToken, tokens.downToken].map((child) => sortPair(child, tokens.outcome).join("|").toLowerCase());
 const pairOf = (call: { token0: Address; token1: Address }) => `${call.token0}|${call.token1}`.toLowerCase();
 
-describe("a seed run across several branches (A1, A4)", () => {
+// each property plans a hundred multi-branch runs, about 2-6s a test under a full parallel run
+describe("a seed run across several branches (A1, A4)", { timeout: 30_000 }, () => {
   it("puts each branch's creates and seed mints in one position manager multicall naming only its own pairs", () => {
     fc.assert(
       fc.property(runCase, (c) => {
