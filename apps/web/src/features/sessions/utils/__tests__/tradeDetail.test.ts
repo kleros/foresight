@@ -67,6 +67,11 @@ describe("setsMinted", () => {
     );
   });
 
+  it("counts only the sets both sides account for when one side moved further", () => {
+    expect(setsMinted(option({ downDelta: parseEther("5"), upDelta: parseEther("3") }))).toBe(parseEther("3"));
+    expect(setsMinted(option({ downDelta: -parseEther("2"), upDelta: -parseEther("7") }))).toBe(-parseEther("2"));
+  });
+
   it("finds no sets when one side arrived and the other left beyond the swaps", () => {
     expect(setsMinted(option({ downDelta: parseEther("2"), upDelta: -parseEther("3") }))).toBe(0n);
   });
