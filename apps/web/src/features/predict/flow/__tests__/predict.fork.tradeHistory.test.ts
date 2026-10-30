@@ -13,7 +13,7 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { gnosis } from "viem/chains";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { CREDITS_SLIPPAGE_BPS } from "../../oracle/tolerances";
 import type { PredictCtx, PredictOption, PredictSnapshot } from "../types";
@@ -21,17 +21,17 @@ import type { PredictCtx, PredictOption, PredictSnapshot } from "../types";
 /**
  * Acceptance test A6 of issue 2026-10-30-foresight-market-trade-history: after a prediction across
  * two options on the fork, the app's trade history has one row for it naming both options, sized at
- * the net underlying the trade wallet moved in that transaction.
+ * the underlying the trade wallet put into them in that transaction.
  *
  * Needs `yarn local-stack gnosis-fork` with the indexer built from the trade-history branch, and
  * `yarn simulate:session:gnosis-fork --liquidity`; skips with no FORK_RPC_URL.
  *
  * The history is read through `fetchSessionTrades(sessionId)` from
  * `@/features/sessions/api/getSessionTrades`, which resolves to `{ trades }`, newest first, where a
- * prediction is `{ kind: "prediction", transactionHash, options: { childMarket }[], underlyingDelta }`
- * and `underlyingDelta` is the signed sum over its options, as a bigint.
+ * prediction is `{ kind: "prediction", transactionHash, options: { childMarket }[], cost }` and `cost`
+ * is the underlying summed over its options, as a bigint.
  *
- * It sends from its own account and takes no snapshot, so the trade stays on chain for the indexer.
+ * It sends from its own account and rewinds the fork once the indexer has served the trade.
  */
 const FORK_RPC_URL = process.env.FORK_RPC_URL;
 const FORK_RPC_TIMEOUT_MS = 60_000;
@@ -93,16 +93,38 @@ async function newestSessionWithTwoPricedOptions(): Promise<ForkSession> {
   return session;
 }
 
+async function rpc<T>(method: string, params: unknown[] = []): Promise<T> {
+  const response = await fetch(FORK_RPC_URL!, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  const body = (await response.json()) as { result: T; error?: { message: string } };
+  if (body.error) throw new Error(`${method}: ${body.error.message}`);
+  return body.result;
+}
+
+const transfersOf = (receipt: TransactionReceipt, token: Address) =>
+  parseEventLogs({ abi: erc20Abi, eventName: "Transfer", logs: receipt.logs }).filter(
+    (log) => log.address.toLowerCase() === token.toLowerCase(),
+  );
+
 /** The trade wallet's net movement of `token` in one receipt, read off its Transfer logs. */
 function netMoved(receipt: TransactionReceipt, token: Address, wallet: Address): bigint {
-  return parseEventLogs({ abi: erc20Abi, eventName: "Transfer", logs: receipt.logs })
-    .filter((log) => log.address.toLowerCase() === token.toLowerCase())
-    .reduce((sum, log) => {
-      const into = log.args.to.toLowerCase() === wallet.toLowerCase() ? log.args.value : 0n;
-      const out = log.args.from.toLowerCase() === wallet.toLowerCase() ? log.args.value : 0n;
-      return sum + into - out;
-    }, 0n);
+  return transfersOf(receipt, token).reduce((sum, log) => {
+    const into = log.args.to.toLowerCase() === wallet.toLowerCase() ? log.args.value : 0n;
+    const out = log.args.from.toLowerCase() === wallet.toLowerCase() ? log.args.value : 0n;
+    return sum + into - out;
+  }, 0n);
 }
+
+/** What one receipt moved of `token` from `from` to `to`. */
+const sent = (receipt: TransactionReceipt, token: Address, from: Address, to: Address) =>
+  transfersOf(receipt, token)
+    .filter(
+      (log) => log.args.from.toLowerCase() === from.toLowerCase() && log.args.to.toLowerCase() === to.toLowerCase(),
+    )
+    .reduce((sum, log) => sum + log.args.value, 0n);
 
 const touchesOutcomes = (receipt: TransactionReceipt, child: ForkSession["children"][number], wallet: Address) =>
   netMoved(receipt, child.upToken, wallet) !== 0n || netMoved(receipt, child.downToken, wallet) !== 0n;
@@ -112,6 +134,7 @@ describe("the All trades history after a prediction, against a gnosis fork", () 
   let client: PublicClient;
   let wallet: WalletClient;
   let session: ForkSession;
+  let snapshotId: string | undefined;
 
   beforeAll(async () => {
     if (!FORK_RPC_URL) return;
@@ -119,10 +142,21 @@ describe("the All trades history after a prediction, against a gnosis fork", () 
     client = createPublicClient({ chain: gnosis, transport }) as PublicClient;
     wallet = createWalletClient({ account, chain: gnosis, transport });
     session = await newestSessionWithTwoPricedOptions();
+    snapshotId = await rpc<string>("evm_snapshot");
+  }, 120_000);
+
+  // The indexer reads a rewound height as a reorg; mining past the height reached lets it settle
+  // on empty blocks before anything else is seeded on the fork.
+  afterAll(async () => {
+    if (!FORK_RPC_URL || !snapshotId) return;
+    const reached = BigInt(await rpc<string>("eth_blockNumber"));
+    await rpc("evm_revert", [snapshotId]);
+    const head = BigInt(await rpc<string>("eth_blockNumber"));
+    if (head <= reached) await rpc("hardhat_mine", [`0x${(reached - head + 1n).toString(16)}`]);
   }, 120_000);
 
   it.skipIf(!FORK_RPC_URL)(
-    "lists a two-option prediction as one row naming both options, sized at the underlying it moved",
+    "lists a two-option prediction as one row naming both options, sized at the underlying it put into them",
     async () => {
       const {
         createLensQuoter,
@@ -249,9 +283,14 @@ describe("the All trades history after a prediction, against a gnosis fork", () 
       );
       expect(trade, `no transaction traded both options\n${leftOut.join("\n")}`).toBeDefined();
       const hash = trade!.transactionHash.toLowerCase();
-      // what the trade wallet's underlying did in that transaction, from the chain's own logs
-      const expectedSize =
-        netMoved(trade!, first.underlyingToken, predicted) + netMoved(trade!, second.underlyingToken, predicted);
+      // The sDAI split at the parent credits each option's underlying one for one; what the option
+      // took in is that credit less what its underlying netted in the same receipt.
+      const credited = sent(trade!, collateral, predicted, router);
+      expect(credited, "the trade's own receipt splits sDAI at the parent").toBeGreaterThan(0n);
+      const expectedSize = [first, second].reduce(
+        (sum, child) => sum + credited - netMoved(trade!, child.underlyingToken, predicted),
+        0n,
+      );
 
       const deadline = Date.now() + INDEXED_WITHIN_MS;
       for (;;) {
@@ -271,7 +310,7 @@ describe("the All trades history after a prediction, against a gnosis fork", () 
       expect(row.options.map((option) => option.childMarket.toLowerCase()).sort()).toEqual(
         [first.id.toLowerCase(), second.id.toLowerCase()].sort(),
       );
-      expect(row.underlyingDelta).toBe(expectedSize);
+      expect(row.cost).toBe(expectedSize);
     },
     600_000,
   );

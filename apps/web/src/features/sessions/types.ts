@@ -137,8 +137,8 @@ export interface PredictionTrade {
   /** The account that owns the trade wallet. */
   owner: Address;
   options: TradeOption[];
-  /** Signed sum of the options' net underlying. */
-  underlyingDelta: bigint;
+  /** The options' `optionCost`, summed: underlying put in, negative where more came out. */
+  cost: bigint;
 }
 
 /** A swap straight through a pool, outside any trade wallet. */

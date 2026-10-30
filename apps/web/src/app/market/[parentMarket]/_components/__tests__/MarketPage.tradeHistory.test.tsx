@@ -68,6 +68,20 @@ const OPTION_NAMES = new RegExp(`${GERWIG.name}|${VILLENEUVE.name}`);
 /** A minute ago, so every fixture trade is in the past; trades step back a minute each. */
 const NOW = Math.floor(Date.now() / 1000) - 60;
 
+/**
+ * The columns the indexer sets for an outright UP buy that paid `underlying` for one UP, or a sell of one UP
+ * that returned it; no sets minted, so the underlying the option took in is what the buy paid.
+ */
+const upSwap = (underlying: string, side: "buy" | "sell" = "buy") => {
+  const [paid, got] = side === "buy" ? ["-", ""] : ["", "-"];
+  return {
+    underlyingDelta: `${paid}${wei(underlying)}`,
+    upDelta: `${got}${wei("1")}`,
+    upSwapTokens: `${got}${wei("1")}`,
+    upSwapUnderlying: `${paid}${wei(underlying)}`,
+  };
+};
+
 function renderPage(tables: Tables) {
   const fake = createFakeIndexer(tables);
   fetchMock.mockImplementation(indexerAnswers(fake) as typeof fetchGraphql);
@@ -137,21 +151,21 @@ describe("All trades, a prediction across two options (A1)", () => {
           executor: trader,
           option: GERWIG,
           timestamp: NOW,
-          columns: { underlyingDelta: `-${wei("3.25")}` },
+          columns: upSwap("3.25"),
         }),
         predictionRow({
           tx,
           executor: trader,
           option: VILLENEUVE,
           timestamp: NOW,
-          columns: { underlyingDelta: `-${wei("1.5")}` },
+          columns: upSwap("1.5"),
         }),
         predictionRow({
           tx: txHash(2),
           executor: other,
           option: GERWIG,
           timestamp: NOW - 60,
-          columns: { underlyingDelta: `-${wei("0.6")}` },
+          columns: upSwap("0.6"),
         }),
       ],
     });
@@ -162,7 +176,7 @@ describe("All trades, a prediction across two options (A1)", () => {
     expectNamesBothOptions(rowOf(trader, [trader, other]));
   });
 
-  it("sizes that row at the sum of both options' net underlying", async () => {
+  it("sizes that row at the underlying both options took in, summed", async () => {
     const trader = traderAddress(0);
     const other = traderAddress(1);
     const tx = txHash(1);
@@ -176,21 +190,21 @@ describe("All trades, a prediction across two options (A1)", () => {
           executor: trader,
           option: GERWIG,
           timestamp: NOW,
-          columns: { underlyingDelta: `-${wei("3.25")}` },
+          columns: upSwap("3.25"),
         }),
         predictionRow({
           tx,
           executor: trader,
           option: VILLENEUVE,
           timestamp: NOW,
-          columns: { underlyingDelta: `-${wei("1.5")}` },
+          columns: upSwap("1.5"),
         }),
         predictionRow({
           tx: txHash(2),
           executor: other,
           option: GERWIG,
           timestamp: NOW - 60,
-          columns: { underlyingDelta: `-${wei("0.6")}` },
+          columns: upSwap("0.6"),
         }),
       ],
     });
@@ -201,7 +215,7 @@ describe("All trades, a prediction across two options (A1)", () => {
     expect(rowText(rowOf(other, [trader, other]))).toMatch(amountPattern("0.6"));
   });
 
-  it("gives every (transaction, trade wallet) one row sized at its options' summed net underlying", async () => {
+  it("gives every (transaction, trade wallet) one row sized at the underlying its options took in, summed", async () => {
     /** A trade: one or two options, all spent or all received, in cents so the sum is exact. */
     const trade = fc.record({
       cents: fc.array(fc.integer({ min: 1, max: 49_999 }), { minLength: 1, maxLength: 2 }),
@@ -221,7 +235,7 @@ describe("All trades, a prediction across two options (A1)", () => {
                 executor: traders[index]!,
                 option: leg === 0 ? GERWIG : VILLENEUVE,
                 timestamp: NOW - index * 60,
-                columns: { underlyingDelta: `${each.received ? "" : "-"}${wei((cents / 100).toFixed(2))}` },
+                columns: upSwap((cents / 100).toFixed(2), each.received ? "sell" : "buy"),
               }),
             ),
           ),
@@ -240,6 +254,39 @@ describe("All trades, a prediction across two options (A1)", () => {
       { numRuns: 8, seed: 20_261_030 },
     );
   }, 60_000);
+});
+
+describe("All trades, a prediction that split sDAI in its own transaction (A1)", () => {
+  it("sizes the row at the underlying the option took in, not at the net the split's credit leaves", async () => {
+    const trader = traderAddress(0);
+    renderPage({
+      ...baseTables(),
+      Executor: [executorRow(trader)],
+      Prediction: [
+        // the parent split credits 50 underlying; buying 10 UP spends 4.37 of it, so the net is +45.63
+        predictionRow({
+          tx: txHash(1),
+          executor: trader,
+          option: GERWIG,
+          timestamp: NOW,
+          columns: {
+            underlyingDelta: wei("45.63"),
+            upDelta: wei("10"),
+            upBalance: wei("10"),
+            upSwapTokens: wei("10"),
+            upSwapUnderlying: `-${wei("4.37")}`,
+            upAvgPrice: wei("0.437"),
+          },
+        }),
+      ],
+    });
+
+    await screen.findByText(suffixPattern(trader));
+
+    const row = rowText(rowOf(trader, [trader]));
+    expect(row).toMatch(amountPattern("4.37"));
+    expect(row).not.toMatch(amountPattern("45.63"));
+  });
 });
 
 describe("All trades, an external swap beside a prediction (A2)", () => {
@@ -311,13 +358,31 @@ describe("All trades, an external swap beside a prediction (A2)", () => {
     expect(rowText(rowOf(trader, [trader, outsider]))).not.toMatch(/external/i);
   });
 
-  it("opens nothing when the external row is clicked", async () => {
+  it("opens nothing when the external row's marker is clicked", async () => {
     renderPage(tables());
     await screen.findByText(suffixPattern(outsider));
     const row = rowOf(outsider, [trader, outsider]);
 
     await userEvent.click(within(row).getByText(/external/i));
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("opens nothing when the external row's sender is clicked", async () => {
+    renderPage(tables());
+    await screen.findByText(suffixPattern(outsider));
+    const row = rowOf(outsider, [trader, outsider]);
+
     await userEvent.click(within(row).getByText(suffixPattern(outsider)));
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("opens nothing when the external row itself is clicked", async () => {
+    renderPage(tables());
+    await screen.findByText(suffixPattern(outsider));
+    const row = rowOf(outsider, [trader, outsider]);
+
     await userEvent.click(row);
 
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -564,7 +629,7 @@ describe("All trades, paging (A4)", () => {
           executor: trader,
           option,
           timestamp: NOW - index * 60,
-          columns: { underlyingDelta: `-${wei(amount)}` },
+          columns: upSwap(amount),
         });
       return index === SPLIT ? [slice(GERWIG, "1.25"), slice(VILLENEUVE, "2.5")] : [slice(GERWIG, "1")];
     }),

@@ -83,7 +83,12 @@ describe("fetchSessionTrades, read page after page", () => {
                   executor: TRADERS[each.trader]!,
                   option,
                   timestamp: each.block,
-                  columns: { underlyingDelta: amount(each.cents) },
+                  // an outright UP buy paying -cents, or a sell returning cents, for one UP
+                  columns: {
+                    upDelta: amount(each.cents < 0 ? 100 : -100),
+                    upSwapTokens: amount(each.cents < 0 ? 100 : -100),
+                    upSwapUnderlying: amount(each.cents),
+                  },
                 }),
               ),
             ),
@@ -121,7 +126,7 @@ describe("fetchSessionTrades, read page after page", () => {
             expect(shown?.options.map((option) => option.childMarket).sort()).toEqual(
               each.legs.map((option) => option.id.toLowerCase()).sort(),
             );
-            expect(shown?.underlyingDelta).toBe(BigInt(amount(each.cents)) * BigInt(each.legs.length));
+            expect(shown?.cost).toBe(-BigInt(amount(each.cents)) * BigInt(each.legs.length));
           });
 
           const shownSwaps = trades.filter((trade) => trade.kind === "external");

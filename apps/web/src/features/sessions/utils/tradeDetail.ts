@@ -45,6 +45,14 @@ export function setsMinted(option: TradeOption): bigint {
   return 0n;
 }
 
+/**
+ * Underlying the prediction put into this option, in wei: sets minted (less merged) plus what its buys paid, less
+ * what its sells returned. Underlying a parent split credited and left unspent is not counted.
+ */
+export function optionCost(option: TradeOption): bigint {
+  return setsMinted(option) - option.upSwapUnderlying - option.downSwapUnderlying;
+}
+
 /** The estimate the pool price implies on the option's scale, from UP or else DOWN's mirror; null where neither swapped. */
 export function estimateAt(option: TradeOption, scale: OptionScale, moment: "before" | "after"): number | null {
   const up = moment === "before" ? option.upPriceBefore : option.upPriceAfter;

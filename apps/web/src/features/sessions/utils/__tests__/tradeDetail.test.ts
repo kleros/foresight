@@ -6,7 +6,7 @@ import { addresses } from "@/testing/fixtures";
 import type { OptionScale } from "@/types/optionScale";
 
 import type { TradeOption } from "../../types";
-import { estimateAt, setsMinted, sideSwaps } from "../tradeDetail";
+import { estimateAt, optionCost, setsMinted, sideSwaps } from "../tradeDetail";
 
 const option = (overrides: Partial<TradeOption> = {}): TradeOption => ({
   childMarket: addresses.childMarkets[0]!,
@@ -74,6 +74,70 @@ describe("setsMinted", () => {
 
   it("finds no sets when one side arrived and the other left beyond the swaps", () => {
     expect(setsMinted(option({ downDelta: parseEther("2"), upDelta: -parseEther("3") }))).toBe(0n);
+  });
+});
+
+/**
+ * Each fixture is one transaction's token movements on the trade wallet, as the indexer sums them into a
+ * Prediction row. The expected cost is worked by hand from those movements.
+ */
+describe("optionCost", () => {
+  const e = parseEther;
+
+  it("charges an outright buy after a parent split for the underlying the buy spent, not the split's credit", () => {
+    // 50 sDAI split at the parent: +50 underlying, which no field below reads
+    // buy 10 UP from its pool: -4 underlying, +10 UP; 46 underlying left unspent
+    const traded = option({
+      upDelta: e("10"),
+      upSwapTokens: e("10"),
+      upSwapUnderlying: -e("4"),
+      upAvgPrice: e("0.4"),
+    });
+
+    expect(optionCost(traded)).toBe(e("4"));
+  });
+
+  it("charges a mint that sold DOWN and bought UP for the sets minted plus the buy, less the sale", () => {
+    // split 10 underlying: -10 underlying, +10 DOWN, +10 UP
+    // sell the 10 DOWN: -10 DOWN, +6 underlying; buy 5 UP: -2.5 underlying, +5 UP
+    // cost 10 + 2.5 - 6 = 6.5
+    const traded = option({
+      downDelta: 0n,
+      upDelta: e("15"),
+      downSwapTokens: -e("10"),
+      downSwapUnderlying: e("6"),
+      upSwapTokens: e("5"),
+      upSwapUnderlying: -e("2.5"),
+    });
+
+    expect(optionCost(traded)).toBe(e("6.5"));
+  });
+
+  it("charges a plain outright buy what it paid", () => {
+    // buy 10 UP: -2.6 underlying, +10 UP
+    const traded = option({ upDelta: e("10"), upSwapTokens: e("10"), upSwapUnderlying: -e("2.6") });
+
+    expect(optionCost(traded)).toBe(e("2.6"));
+  });
+
+  it("gives back the underlying a merge returned in the same transaction", () => {
+    // split 10: -10 underlying, +10 DOWN, +10 UP; sell 6 DOWN: -6 DOWN, +3.6 underlying
+    // merge the 4 pairs left: -4 DOWN, -4 UP, +4 underlying; cost 10 - 3.6 - 4 = 2.4, 6 UP kept
+    const traded = option({
+      downDelta: 0n,
+      upDelta: e("6"),
+      downSwapTokens: -e("6"),
+      downSwapUnderlying: e("3.6"),
+    });
+
+    expect(optionCost(traded)).toBe(e("2.4"));
+  });
+
+  it("credits a sell of tokens held from before with what it returned", () => {
+    // sell 8 UP: -8 UP, +4 underlying
+    const traded = option({ upDelta: -e("8"), upSwapTokens: -e("8"), upSwapUnderlying: e("4") });
+
+    expect(optionCost(traded)).toBe(-e("4"));
   });
 });
 

@@ -90,7 +90,7 @@ export function TradeList({ session, trades }: { session: SessionDetail; trades:
           <span className="truncate">{first}</span>
           {rest.length > 0 ? <span className="text-fs-text-secondary shrink-0">+{rest.length}</span> : null}
         </span>
-        <span className="tabular-nums max-md:col-start-2 md:text-right">{size(trade.underlyingDelta)}</span>
+        <span className="tabular-nums max-md:col-start-2 md:text-right">{size(trade.cost)}</span>
       </button>
     );
   };

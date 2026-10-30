@@ -3,6 +3,7 @@ import type { Address } from "viem";
 import type { SessionTradesQuery } from "@/lib/graphql/generated/graphql";
 
 import type { ExternalTrade, PredictionTrade, SessionTrade, TradeOption } from "../types";
+import { optionCost } from "./tradeDetail";
 
 /** Trades a page shows at most, and the swap rows read for it: one row per external swap. */
 export const TRADE_PAGE = 20;
@@ -53,7 +54,7 @@ export function toPredictions(rows: PredictionRow[]): { trade: PredictionTrade; 
     const last = groups.at(-1);
     if (last?.trade.id === id) {
       last.trade.options.push(option);
-      last.trade.underlyingDelta += option.underlyingDelta;
+      last.trade.cost += optionCost(option);
       last.rows += 1;
       continue;
     }
@@ -67,7 +68,7 @@ export function toPredictions(rows: PredictionRow[]): { trade: PredictionTrade; 
         timestamp: Number(row.timestamp),
         owner: lower(row.executor?.owner ?? row.executor_id),
         options: [option],
-        underlyingDelta: option.underlyingDelta,
+        cost: optionCost(option),
       },
     });
   }
