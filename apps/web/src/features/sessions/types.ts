@@ -75,12 +75,34 @@ export interface SessionChartSeries {
 /** One series per option; an option whose pool never priced has no points. */
 export type SessionChartData = SessionChartSeries[];
 
+export type PoolSide = "UP" | "DOWN";
+
+/** One option's UP or DOWN pool, as the indexer serves it; addresses lowercase. */
+export interface SessionPool {
+  id: Address;
+  market: Address;
+  side: PoolSide;
+  outcomeToken: Address;
+  underlyingToken: Address;
+  /** Underlying per outcome token, 1e18-scaled; null until the pool prices. */
+  underlyingPerOutcome: bigint | null;
+  /** Lifetime amount swapped either way, in wei of each leg. */
+  volumeUnderlying: bigint;
+  volumeOutcome: bigint;
+}
+
 export interface SessionStats {
   /** Executors that have predicted in this session. */
   traders: number;
   /** Lifetime amount swapped through the session's pools, in underlying wei. */
   volumeUnderlying: bigint;
+  /** The same swaps' outcome-token leg, in outcome-token wei. */
+  volumeOutcome: bigint;
+  pools: SessionPool[];
 }
+
+/** A pool's own holdings, keyed by lowercase pool address. */
+export type PoolBalances = Record<string, { outcome: bigint; underlying: bigint }>;
 
 export interface SessionSummary extends SessionCore {
   branchCount: number;

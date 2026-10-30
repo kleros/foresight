@@ -53,7 +53,8 @@ import { MarketPage } from "../../MarketPage";
  *
  * The chain behind `publicClient` is api/__tests__/support/chain.ts plus: `eth_blockNumber`,
  * `eth_getBlockByNumber`, `eth_getBalance`, `eth_getTransactionCount`, and ERC20 `balanceOf`, `allowance`,
- * `decimals`, `symbol`, `name` on the session's tokens, and sDAI's `previewDeposit`/`convertToShares`.
+ * `decimals`, `symbol`, `name` on the session's tokens, and sDAI's `previewDeposit`/`convertToShares` (0.9 shares
+ * per xDAI) and `previewRedeem`/`convertToAssets` (its inverse).
  */
 
 export const WAD = 10n ** 18n;
@@ -74,6 +75,8 @@ const TOKEN_ABI = parseAbi([
   "function name() view returns (string)",
   "function previewDeposit(uint256 assets) view returns (uint256)",
   "function convertToShares(uint256 assets) view returns (uint256)",
+  "function previewRedeem(uint256 shares) view returns (uint256)",
+  "function convertToAssets(uint256 shares) view returns (uint256)",
 ]);
 
 /** The session's collateral as the pools read takes it. */
@@ -127,6 +130,9 @@ export function createWorld() {
         case "previewDeposit":
         case "convertToShares":
           return ((args[0] as bigint) * 9n) / 10n;
+        case "previewRedeem":
+        case "convertToAssets":
+          return ((args[0] as bigint) * 10n) / 9n;
       }
     })();
     return encodeFunctionResult({ abi: TOKEN_ABI, functionName, result } as never);

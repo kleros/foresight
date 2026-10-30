@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fetchGraphql } from "@/lib/graphql/batcher";
 
+import { toSessionStats } from "../../utils/toSessionStats";
 import { sessionChartKey } from "../getSessionChart";
 import { refreshSessionAfterTrade, sessionStatsKey } from "../getSessionStats";
 
@@ -11,9 +12,22 @@ vi.mock("@/lib/graphql/batcher", () => ({ fetchGraphql: vi.fn() }));
 const SESSION = "session-1";
 const POLL_MS = 5_000;
 
-const served = (traders: number, volume: number) => ({
+const served = (traders: number, volume: number, notional = 0) => ({
   Prediction: Array.from({ length: traders }, (_, i) => ({ executor_id: `0x${i}` })),
-  Pool: [{ id: "pool", volumeUnderlying: String(volume) }],
+  Pool: [
+    {
+      id: "pool",
+      childMarket: { id: "0xc1" },
+      childMarket_id: "0xc1",
+      outcomeToken: "0xf1",
+      underlyingToken: "0x81",
+      outcomeIndex: 1,
+      outcomeIsToken0: false,
+      underlyingPerOutcome: null,
+      volumeUnderlying: String(volume),
+      volumeOutcome: String(notional),
+    },
+  ],
 });
 
 describe("refreshSessionAfterTrade", () => {
@@ -42,7 +56,7 @@ describe("refreshSessionAfterTrade", () => {
   const settle = (ms: number) => vi.advanceTimersByTimeAsync(ms);
 
   it("invalidates nothing while the indexer still serves the pre-trade stats", async () => {
-    queryClient.setQueryData(sessionStatsKey(SESSION), { traders: 1, volumeUnderlying: 10n });
+    queryClient.setQueryData(sessionStatsKey(SESSION), toSessionStats(served(1, 10)));
     serveInOrder(served(1, 10));
 
     const done = refreshSessionAfterTrade(queryClient, SESSION);
@@ -54,7 +68,7 @@ describe("refreshSessionAfterTrade", () => {
   });
 
   it("invalidates the chart and the stats once the indexer serves the trade", async () => {
-    queryClient.setQueryData(sessionStatsKey(SESSION), { traders: 1, volumeUnderlying: 10n });
+    queryClient.setQueryData(sessionStatsKey(SESSION), toSessionStats(served(1, 10)));
     serveInOrder(served(1, 10), served(1, 10), served(2, 30));
 
     const done = refreshSessionAfterTrade(queryClient, SESSION);
@@ -70,7 +84,7 @@ describe("refreshSessionAfterTrade", () => {
   });
 
   it("invalidates when only the volume moves, as when a returning trader predicts again", async () => {
-    queryClient.setQueryData(sessionStatsKey(SESSION), { traders: 1, volumeUnderlying: 10n });
+    queryClient.setQueryData(sessionStatsKey(SESSION), toSessionStats(served(1, 10)));
     serveInOrder(served(1, 10), served(1, 30));
 
     const done = refreshSessionAfterTrade(queryClient, SESSION);
@@ -86,7 +100,7 @@ describe("refreshSessionAfterTrade", () => {
   });
 
   it("invalidates when only the trader count moves, as when the volume is not indexed yet", async () => {
-    queryClient.setQueryData(sessionStatsKey(SESSION), { traders: 1, volumeUnderlying: 10n });
+    queryClient.setQueryData(sessionStatsKey(SESSION), toSessionStats(served(1, 10)));
     serveInOrder(served(1, 10), served(2, 10));
 
     const done = refreshSessionAfterTrade(queryClient, SESSION);
@@ -102,7 +116,7 @@ describe("refreshSessionAfterTrade", () => {
   });
 
   it("keeps watching past someone else's trade so this prediction is still refreshed once indexed", async () => {
-    queryClient.setQueryData(sessionStatsKey(SESSION), { traders: 1, volumeUnderlying: 10n });
+    queryClient.setQueryData(sessionStatsKey(SESSION), toSessionStats(served(1, 10)));
     serveInOrder(served(2, 20), served(2, 20), served(2, 30));
 
     const done = refreshSessionAfterTrade(queryClient, SESSION);
@@ -117,6 +131,21 @@ describe("refreshSessionAfterTrade", () => {
     );
   });
 
+  it("invalidates when only the notional volume moves", async () => {
+    serveInOrder(served(1, 10, 40), served(1, 10, 40), served(1, 10, 60));
+
+    const done = refreshSessionAfterTrade(queryClient, SESSION);
+    await settle(POLL_MS * 2);
+    const beforeMove = invalidations.length;
+    await settle(POLL_MS);
+
+    expect(invalidations.slice(beforeMove).map((i) => JSON.stringify(i.key))).toEqual(
+      expect.arrayContaining([JSON.stringify(sessionChartKey(SESSION)), JSON.stringify(sessionStatsKey(SESSION))]),
+    );
+    await settle(POLL_MS * 20);
+    await done;
+  });
+
   it("refreshes when the page had no stats cached yet", async () => {
     serveInOrder(served(1, 10));
 
@@ -129,7 +158,7 @@ describe("refreshSessionAfterTrade", () => {
   });
 
   it("still refreshes both once the attempts run out without the indexer moving", async () => {
-    queryClient.setQueryData(sessionStatsKey(SESSION), { traders: 1, volumeUnderlying: 10n });
+    queryClient.setQueryData(sessionStatsKey(SESSION), toSessionStats(served(1, 10)));
     serveInOrder(served(1, 10));
 
     const done = refreshSessionAfterTrade(queryClient, SESSION);
@@ -143,7 +172,7 @@ describe("refreshSessionAfterTrade", () => {
   });
 
   it("keeps polling through a failed read", async () => {
-    queryClient.setQueryData(sessionStatsKey(SESSION), { traders: 1, volumeUnderlying: 10n });
+    queryClient.setQueryData(sessionStatsKey(SESSION), toSessionStats(served(1, 10)));
     let read = 0;
     vi.mocked(fetchGraphql).mockImplementation(async () => {
       if (read++ === 0) throw new Error("indexer down");

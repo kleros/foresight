@@ -14,6 +14,7 @@ import { EstimateActions } from "@/features/predict/components/EstimateActions";
 import { EstimateCsvDialog } from "@/features/predict/components/EstimateCsvDialog";
 import { useEstimateHydration } from "@/features/predict/hooks/useEstimateHydration";
 import { snapEstimate } from "@/features/predict/utils/estimates";
+import { usePoolBalances, useSDaiUsdPrice } from "@/features/sessions/api/getPoolBalances";
 import { useSession } from "@/features/sessions/api/getSession";
 import { useSessionChart } from "@/features/sessions/api/getSessionChart";
 import { useSessionStats } from "@/features/sessions/api/getSessionStats";
@@ -44,6 +45,8 @@ const SessionChart = dynamic(() => import("@/features/sessions/components/Sessio
 export function MarketPage({ parentMarket }: { parentMarket: string }) {
   const session = useSession(parentMarket);
   const stats = useSessionStats(session.data?.id);
+  const poolBalances = usePoolBalances(session.data?.id, stats.data?.pools);
+  const usdPrice = useSDaiUsdPrice(session.data?.collateralToken);
   const chart = useSessionChart(session.data ?? undefined);
   const positions = useOptionPositions(session.data ?? undefined);
   useRenderAtClose(session.data?.closesAt);
@@ -103,7 +106,15 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
 
   return (
     <PageColumn>
-      <SessionHeader session={detail} status={status} stats={stats.data} statsPending={stats.isPending} />
+      <SessionHeader
+        session={detail}
+        status={status}
+        stats={stats.data}
+        statsPending={stats.isPending}
+        poolBalances={poolBalances.data}
+        poolBalancesPending={poolBalances.isPending}
+        usdPrice={usdPrice.data}
+      />
       {liquidity.hasLiquidity === false ? (
         <LiquidityBanner reason={addLiquidityReason} onAdd={() => setAddingLiquidity(true)} />
       ) : null}

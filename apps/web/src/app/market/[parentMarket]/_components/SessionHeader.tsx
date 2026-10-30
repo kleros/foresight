@@ -1,29 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import { AlertMessage } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
 import { DisplayBlocks } from "@/features/sessions/components/DisplayBlocks";
+import {
+  approxCollateral,
+  METRIC_TITLES,
+  SessionMetricDialog,
+  type MetricKind,
+} from "@/features/sessions/components/SessionMetricDialog";
 import { SessionStat } from "@/features/sessions/components/SessionStat";
-import type { SessionDetail, SessionStats, SessionStatus } from "@/features/sessions/types";
+import type { PoolBalances, SessionDetail, SessionStats, SessionStatus } from "@/features/sessions/types";
 import { bannerStyle } from "@/features/sessions/utils/bannerStyle";
-import { collateralVolume } from "@/features/sessions/utils/collateralVolume";
+import { sessionMetrics } from "@/features/sessions/utils/sessionMetrics";
 import { statusChip } from "@/features/sessions/utils/statusChip";
 
 import { ExternalLink } from "@/components/ui/ExternalLink";
 import { ForesightIcon } from "@/components/ui/ForesightIcon";
 import { StatusChip } from "@/components/ui/StatusChip";
 
-import TradingIcon from "@/assets/svg/chart-bar.svg";
+import ChartIcon from "@/assets/svg/chart-bar.svg";
 import CountdownIcon from "@/assets/svg/cronometer.svg";
 import TradersIcon from "@/assets/svg/eye-outline.svg";
 import VolumeIcon from "@/assets/svg/tag-category.svg";
 
 import { shortenAddress } from "@/utils/address";
 import { formatUtcInstant, timeLeftUntil } from "@/utils/date";
-import { formatEstimate } from "@/utils/formatEstimate";
 
 import { DEFAULT_CHAIN } from "@/config/chains";
 import { explorerAddressUrl } from "@/config/site";
@@ -33,16 +38,35 @@ export function SessionHeader({
   status,
   stats,
   statsPending,
+  poolBalances,
+  poolBalancesPending,
+  usdPrice,
 }: {
   session: SessionDetail;
   status: SessionStatus;
   stats: SessionStats | undefined;
   statsPending: boolean;
+  poolBalances: PoolBalances | undefined;
+  poolBalancesPending: boolean;
+  /** USD per unit of collateral; only an sDAI session has one. */
+  usdPrice: number | undefined;
 }) {
   // a gateway that cannot serve an image leaves the gradient and no icon, not a broken image
   const [heroFailed, setHeroFailed] = useState(false);
   const [iconFailed, setIconFailed] = useState(false);
-  const volume = stats ? collateralVolume(session, stats.volumeUnderlying) : null;
+  const [openMetric, setOpenMetric] = useState<MetricKind | null>(null);
+  const closeMetric = useCallback(() => setOpenMetric(null), []);
+  const metrics = stats ? sessionMetrics(session, stats, poolBalances) : null;
+  const metricStat = (kind: MetricKind, Icon: typeof VolumeIcon, pending: boolean) => (
+    <SessionStat
+      Icon={Icon}
+      label={METRIC_TITLES[kind]}
+      pending={pending}
+      onOpen={metrics?.[kind] != null ? () => setOpenMetric(kind) : undefined}
+    >
+      {approxCollateral(metrics?.[kind] ?? null, session.collateralSymbol)}
+    </SessionStat>
+  );
   const explorer = explorerAddressUrl(session.parentMarket, DEFAULT_CHAIN);
 
   return (
@@ -51,7 +75,7 @@ export function SessionHeader({
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
         {session.closesAt ? (
-          <SessionStat Icon={TradingIcon} label="Trading until">
+          <SessionStat Icon={ChartIcon} label="Trading until">
             {formatUtcInstant(session.closesAt)}
           </SessionStat>
         ) : null}
@@ -63,10 +87,19 @@ export function SessionHeader({
         <SessionStat Icon={TradersIcon} label="Traders" pending={statsPending}>
           {stats ? String(stats.traders) : "-"}
         </SessionStat>
-        <SessionStat Icon={VolumeIcon} label="Volume" pending={statsPending}>
-          {volume !== null ? formatEstimate(volume, session.collateralSymbol) : "-"}
-        </SessionStat>
+        {metricStat("volume", VolumeIcon, statsPending)}
+        {metricStat("notional", VolumeIcon, statsPending)}
+        {metricStat("liquidity", ChartIcon, statsPending || (stats !== undefined && poolBalancesPending))}
       </div>
+      {openMetric && metrics ? (
+        <SessionMetricDialog
+          kind={openMetric}
+          onClose={closeMetric}
+          metrics={metrics}
+          symbol={session.collateralSymbol}
+          usdPrice={usdPrice}
+        />
+      ) : null}
 
       <div className="border-gradient-purple-blue bg-fs-surface relative">
         <div
