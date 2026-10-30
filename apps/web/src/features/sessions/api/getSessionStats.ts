@@ -8,6 +8,7 @@ import { STALE_TIME } from "@/lib/query";
 
 import type { SessionStats } from "../types";
 import { sessionChartKey } from "./getSessionChart";
+import { sessionTradesKey } from "./getSessionTrades";
 import { toSessionStats } from "../utils/toSessionStats";
 
 const SESSION_STATS = graphql(`
@@ -41,7 +42,7 @@ const POLL_ATTEMPTS = 12;
 
 /**
  * The indexer lags the confirmed transaction, and cached stats cannot say whether a change is this
- * prediction or someone else's. So it polls the whole window, marking the chart and stats stale each
+ * prediction or someone else's. So it polls the whole window, marking the chart, stats and trades stale each
  * time what the indexer serves moves, and once more at the end. Runs on the query client, so it
  * outlives the popup that started it.
  */
@@ -50,6 +51,7 @@ export async function refreshSessionAfterTrade(queryClient: QueryClient, session
     Promise.all([
       queryClient.invalidateQueries({ queryKey: sessionChartKey(sessionId) }),
       queryClient.invalidateQueries({ queryKey: sessionStatsKey(sessionId) }),
+      queryClient.invalidateQueries({ queryKey: sessionTradesKey(sessionId) }),
     ]);
   let seen = queryClient.getQueryData<SessionStats>(sessionStatsKey(sessionId));
   for (let attempt = 0; attempt < POLL_ATTEMPTS; attempt++) {

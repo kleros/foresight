@@ -6,6 +6,7 @@ import { fetchGraphql } from "@/lib/graphql/batcher";
 import { toSessionStats } from "../../utils/toSessionStats";
 import { sessionChartKey } from "../getSessionChart";
 import { refreshSessionAfterTrade, sessionStatsKey } from "../getSessionStats";
+import { sessionTradesKey } from "../getSessionTrades";
 
 vi.mock("@/lib/graphql/batcher", () => ({ fetchGraphql: vi.fn() }));
 
@@ -157,7 +158,7 @@ describe("refreshSessionAfterTrade", () => {
     await done;
   });
 
-  it("still refreshes both once the attempts run out without the indexer moving", async () => {
+  it("still refreshes the chart, stats and trades once the attempts run out without the indexer moving", async () => {
     queryClient.setQueryData(sessionStatsKey(SESSION), toSessionStats(served(1, 10)));
     serveInOrder(served(1, 10));
 
@@ -168,6 +169,7 @@ describe("refreshSessionAfterTrade", () => {
     expect(keysInvalidated()).toEqual([
       JSON.stringify(sessionChartKey(SESSION)),
       JSON.stringify(sessionStatsKey(SESSION)),
+      JSON.stringify(sessionTradesKey(SESSION)),
     ]);
   });
 

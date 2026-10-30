@@ -68,6 +68,23 @@ export function timeLeftUntil(isoString: string): string {
   return `after ${targetDate.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`;
 }
 
+const RELATIVE = new Intl.RelativeTimeFormat("en", { numeric: "auto", style: "short" });
+
+const UNIT_SECONDS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ["year", 365 * 86_400],
+  ["month", 30 * 86_400],
+  ["day", 86_400],
+  ["hour", 3_600],
+  ["minute", 60],
+];
+
+/** How long ago an instant was, in its largest whole unit: `5 min. ago`, `yesterday`, `now`. */
+export function timeAgo(instant: Date, now = new Date()): string {
+  const seconds = Math.round((instant.getTime() - now.getTime()) / 1000);
+  const [unit, size] = UNIT_SECONDS.find(([, size]) => Math.abs(seconds) >= size) ?? ["second", 1];
+  return RELATIVE.format(Math.trunc(seconds / size), unit);
+}
+
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /** Local date and time, safe in a filename: `2026-09-15_14-23`. */
