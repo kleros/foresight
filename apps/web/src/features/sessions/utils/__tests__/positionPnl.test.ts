@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { addresses } from "@/testing/fixtures";
 
-import type { TradeOption } from "../../types";
+import type { TradeOptionDetail } from "../../types";
 import { optionPnl, sessionPnl } from "../positionPnl";
 
 /**
@@ -13,7 +13,8 @@ import { optionPnl, sessionPnl } from "../positionPnl";
  *
  * The interface these tests hold the module to, all amounts in underlying or outcome-token wei:
  * - `optionPnl({ predictions, held: { up, down }, spot: { up, down } })`, where `predictions` are the
- *   wallet's `TradeOption` slices in that option and `spot` is each pool's `underlyingPerOutcome`
+ *   wallet's `TradeOptionDetail` slices in that option (the router's mints and merges in `operations`)
+ *   and `spot` is each pool's `underlyingPerOutcome`
  *   (1e18-scaled, null until the pool prices), returns `{ available: true, cost, value, pnl }` or
  *   `{ available: false }`; `cost` is the underlying put into the option: sets minted plus what buys
  *   paid, less what sells returned;
@@ -25,6 +26,8 @@ const e = (amount: string) => parseEther(amount);
 const ONE = 10n ** 18n;
 
 type Move = {
+  /** Sets Seer's router minted in the transaction, negative where it merged them. */
+  sets?: bigint;
   upDelta?: bigint;
   downDelta?: bigint;
   upSwapTokens?: bigint;
@@ -37,7 +40,7 @@ const avg = (tokens: bigint, underlying: bigint) =>
   tokens === 0n ? null : ((underlying < 0n ? -underlying : underlying) * ONE) / (tokens < 0n ? -tokens : tokens);
 
 /** The wallet's predictions in one option, in order, each row's balances carried on from the one before. */
-function history(moves: Move[]): TradeOption[] {
+function history(moves: Move[]): TradeOptionDetail[] {
   let up = 0n;
   let down = 0n;
   return moves.map((move) => {
@@ -61,12 +64,16 @@ function history(moves: Move[]): TradeOption[] {
       upPriceAfter: null,
       downPriceBefore: null,
       downPriceAfter: null,
+      operations: move.sets
+        ? [{ kind: move.sets > 0n ? "mint" : "merge", logIndex: 0, sets: move.sets > 0n ? move.sets : -move.sets }]
+        : [],
     };
   });
 }
 
 /** Deposit 10 underlying, mint 10 UP and 10 DOWN, sell the 10 DOWN for 6.5: 3.5 spent, 10 UP kept. */
 const mintAndSellDown: Move = {
+  sets: e("10"),
   upDelta: e("10"),
   downDelta: 0n,
   downSwapTokens: -e("10"),
@@ -98,7 +105,7 @@ describe("expected P&L per option (A3)", () => {
     const result = optionPnl({
       predictions: history([
         { downDelta: e("5"), downSwapTokens: e("5"), downSwapUnderlying: -e("2.5") },
-        { downDelta: e("4"), upSwapTokens: -e("4"), upSwapUnderlying: e("1") },
+        { sets: e("4"), downDelta: e("4"), upSwapTokens: -e("4"), upSwapUnderlying: e("1") },
       ]),
       held: { up: 0n, down: e("9") },
       spot: { up: e("0.3"), down: e("0.7") },
@@ -145,6 +152,7 @@ describe("expected P&L per option (A3)", () => {
             const upTokens = each.upSold ? -each.upTokens : each.upTokens;
             const downTokens = each.downSold ? -each.downTokens : each.downTokens;
             return {
+              sets: each.sets,
               upDelta: each.sets + upTokens,
               downDelta: each.sets + downTokens,
               upSwapTokens: upTokens,
@@ -194,6 +202,7 @@ describe("expected P&L after a prediction that split sDAI in the same transactio
     const result = optionPnl({
       predictions: history([
         {
+          sets: e("10"),
           upDelta: e("15"),
           downDelta: 0n,
           downSwapTokens: -e("10"),
@@ -255,6 +264,7 @@ describe("a full exit (A4)", () => {
           const heldDown = trades.reduce((sum, each) => sum + each.sets + each.down, 0n);
           const moves: Move[] = [
             ...trades.map((each) => ({
+              sets: each.sets,
               upDelta: each.sets + each.up,
               downDelta: each.sets + each.down,
               upSwapTokens: each.up,

@@ -1,13 +1,13 @@
 import { parseEther, type Address } from "viem";
 import { describe, expect, it } from "vitest";
 
-import type { TradeOption } from "../../types";
+import type { TradeOptionDetail } from "../../types";
 import { optionPnl } from "../positionPnl";
 
 const e = (amount: string) => parseEther(amount);
 
 /** One prediction's slice in an option: an outright buy of `upDelta` UP or `downDelta` DOWN for `paid`. */
-const slice = (paid: bigint, upDelta: bigint, downDelta: bigint): TradeOption => ({
+const slice = (paid: bigint, upDelta: bigint, downDelta: bigint): TradeOptionDetail => ({
   childMarket: "0x0000000000000000000000000000000000000001" as Address,
   downDelta,
   upDelta,
@@ -23,6 +23,7 @@ const slice = (paid: bigint, upDelta: bigint, downDelta: bigint): TradeOption =>
   downPriceAfter: null,
   upPriceBefore: null,
   upPriceAfter: null,
+  operations: [],
 });
 
 const spot = { up: e("0.3"), down: e("0.7") };

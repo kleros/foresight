@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { addresses } from "@/testing/fixtures";
 
-import type { TradeOption } from "../../types";
+import type { TradeOperation, TradeOptionDetail } from "../../types";
 import { optionPnl } from "../positionPnl";
 
 /**
@@ -55,9 +55,9 @@ function swap(ledger: Ledger, side: "up" | "down", tokens: bigint, underlying: b
 }
 
 /** Runs the transactions through the ledger, returning the indexer's rows and what the wallet ends with. */
-function simulate(transactions: Transaction[]): { rows: TradeOption[]; ledger: Ledger } {
+function simulate(transactions: Transaction[]): { rows: TradeOptionDetail[]; ledger: Ledger } {
   const ledger: Ledger = { underlying: 0n, credited: 0n, up: 0n, down: 0n, invalid: 0n };
-  const rows = transactions.map((tx): TradeOption => {
+  const rows = transactions.map((tx): TradeOptionDetail => {
     const before = { up: ledger.up, down: ledger.down };
     ledger.underlying += tx.credit;
     ledger.credited += tx.credit;
@@ -72,6 +72,11 @@ function simulate(transactions: Transaction[]): { rows: TradeOption[]; ledger: L
     ledger.down -= merged;
     ledger.invalid -= merged;
     ledger.underlying += merged;
+    // the router's paired DOWN and UP transfers for the mint and the merge
+    const operations: TradeOperation[] = [
+      ...(tx.mint > 0n ? [{ kind: "mint" as const, logIndex: 0, sets: tx.mint }] : []),
+      ...(merged > 0n ? [{ kind: "merge" as const, logIndex: 3, sets: merged }] : []),
+    ];
     return {
       childMarket: MARKET,
       upDelta: ledger.up - before.up,
@@ -88,6 +93,7 @@ function simulate(transactions: Transaction[]): { rows: TradeOption[]; ledger: L
       upPriceAfter: null,
       downPriceBefore: null,
       downPriceAfter: null,
+      operations,
     };
   });
   return { rows, ledger };
@@ -167,7 +173,7 @@ describe("expected P&L against a ledger of the wallet's underlying (A3, A4)", ()
           const { rows, ledger } = simulate(transactions);
           const moved = out ? -min(size, ledger.up, ledger.down) : size;
           fc.pre(moved !== 0n);
-          const transferred: TradeOption = {
+          const transferred: TradeOptionDetail = {
             ...rows.at(-1)!,
             upDelta: moved,
             downDelta: moved,
@@ -177,6 +183,7 @@ describe("expected P&L against a ledger of the wallet's underlying (A3, A4)", ()
             upSwapUnderlying: 0n,
             downSwapTokens: 0n,
             downSwapUnderlying: 0n,
+            operations: [],
           };
 
           const result = optionPnl({
@@ -206,7 +213,7 @@ describe("expected P&L against a ledger of the wallet's underlying (A3, A4)", ()
           fc.pre(moved !== 0n);
           // the transfer lands in the last transaction's row, beside its credit, mint, swaps and merge
           const last = rows.at(-1)!;
-          const netted: TradeOption = {
+          const netted: TradeOptionDetail = {
             ...last,
             upDelta: last.upDelta + moved,
             downDelta: last.downDelta + moved,
@@ -217,6 +224,45 @@ describe("expected P&L against a ledger of the wallet's underlying (A3, A4)", ()
           const result = optionPnl({
             predictions: [...rows.slice(0, -1), netted],
             held: { up: ledger.up + moved, down: ledger.down + moved, invalid: ledger.invalid },
+            spot: { up, down },
+          });
+
+          expect(result).toMatchObject({ available: false });
+        },
+      ),
+      { seed: SEED },
+    );
+  });
+
+  it("is unavailable once a whole set of UP, DOWN and INVALID moves by plain transfer, in or out", () => {
+    fc.assert(
+      fc.property(
+        fc.array(transaction, { minLength: 1, maxLength: 6 }),
+        grid(10n ** 12n).filter((each) => each > 0n),
+        fc.boolean(),
+        price,
+        price,
+        (transactions, size, out, up, down) => {
+          const { rows, ledger } = simulate(transactions);
+          const moved = out ? -min(size, ledger.up, ledger.down, ledger.invalid) : size;
+          fc.pre(moved !== 0n);
+          // INVALID is not an indexed token, so its move writes no row; the UP and DOWN row has no router transfer
+          const transferred: TradeOptionDetail = {
+            ...rows.at(-1)!,
+            upDelta: moved,
+            downDelta: moved,
+            upBalance: ledger.up + moved,
+            downBalance: ledger.down + moved,
+            upSwapTokens: 0n,
+            upSwapUnderlying: 0n,
+            downSwapTokens: 0n,
+            downSwapUnderlying: 0n,
+            operations: [],
+          };
+
+          const result = optionPnl({
+            predictions: [...rows, transferred],
+            held: { up: ledger.up + moved, down: ledger.down + moved, invalid: ledger.invalid + moved },
             spot: { up, down },
           });
 

@@ -18,6 +18,7 @@ import {
   predictionRow,
   sessionDetailAnswer,
   traderAddress,
+  transferRow,
   txHash,
   wei,
 } from "@/features/sessions/api/__tests__/support/tradeHistoryFixtures";
@@ -25,15 +26,16 @@ import {
 import { fetchGraphql } from "@/lib/graphql/batcher";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
+import { gnosisRouterAddress } from "@/config/contracts";
 
 import { addresses } from "@/testing/fixtures";
 
 import { MarketPage } from "../MarketPage";
 
 /**
- * My trades for an option the wallet minted sets in: a set mints the child's INVALID with UP and DOWN, so the
- * page reads the trade wallet's INVALID balance beside them, and UP and DOWN that arrive with no INVALID are a
- * plain transfer whose P&L is unavailable.
+ * My trades for an option the wallet minted sets in: Seer's router hands over the child's INVALID with UP and
+ * DOWN, so the page reads the router's transfers and the trade wallet's INVALID balance beside them. UP and
+ * DOWN from anyone else, INVALID or not, are a plain transfer whose P&L is unavailable.
  */
 
 const state = vi.hoisted(() => ({
@@ -86,6 +88,7 @@ const { gerwig: GERWIG, villeneuve: VILLENEUVE } = OPTIONS;
 const NOW = 1_756_000_000;
 const ME = "0x0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0eb0b1" as Address;
 const MY_WALLET = traderAddress(0) as Address;
+const ROUTER = gnosisRouterAddress(100)!.toLowerCase();
 
 /** Gerwig keeps the fixtures' child INVALID; Villeneuve gets its own, as every child market has. */
 const GERWIG_INVALID = addresses.childInvalidToken.toLowerCase();
@@ -128,10 +131,16 @@ const villeneuveBuy = () =>
     },
   });
 
-function tablesWith(gerwig: { columns: Record<string, string>; held: Record<string, string> }): Tables {
+/** Gerwig's transfers in its transaction, as `[logIndex, token, amount, counterparty]`. */
+type Leg = [number, string, string, string];
+
+function tablesWith(gerwig: { columns: Record<string, string>; held: Record<string, string>; legs: Leg[] }): Tables {
   return {
     ...baseTables(),
     Executor: [{ ...executorRow(MY_WALLET), owner: ME.toLowerCase() }],
+    Transfer: gerwig.legs.map(([logIndex, token, amount, counterparty]) =>
+      transferRow({ tx: txHash(1), logIndex, executor: MY_WALLET, token, amount, counterparty, timestamp: NOW }),
+    ),
     Prediction: [
       predictionRow({ tx: txHash(1), executor: MY_WALLET, option: GERWIG, timestamp: NOW, columns: gerwig.columns }),
       villeneuveBuy(),
@@ -192,6 +201,12 @@ describe("My trades for sets minted against the INVALID held (A5)", () => {
           downAvgPrice: wei("0.65"),
         },
         held: { [GERWIG.upToken]: "10", [GERWIG_INVALID]: "10" },
+        legs: [
+          [1, GERWIG.underlyingToken, `-${wei("10")}`, ROUTER],
+          [2, GERWIG.downToken, wei("10"), ROUTER],
+          [3, GERWIG.upToken, wei("10"), ROUTER],
+          [4, GERWIG_INVALID, wei("10"), ROUTER],
+        ],
       }),
     );
 
@@ -210,6 +225,10 @@ describe("My trades for sets minted against the INVALID held (A5)", () => {
         // 2 UP and 2 DOWN from the owner's wallet: the row reads like a mint of 2
         columns: { upDelta: wei("2"), upBalance: wei("2"), downDelta: wei("2"), downBalance: wei("2") },
         held: { [GERWIG.upToken]: "2", [GERWIG.downToken]: "2" },
+        legs: [
+          [1, GERWIG.downToken, wei("2"), ME.toLowerCase()],
+          [2, GERWIG.upToken, wei("2"), ME.toLowerCase()],
+        ],
       }),
     );
 
@@ -217,6 +236,54 @@ describe("My trades for sets minted against the INVALID held (A5)", () => {
 
     await waitFor(() => expect(textOf(positionRow(panel, GERWIG))).toMatch(/P&L unavailable/));
     expect(textOf(panel)).toMatch(/Excludes 1 option/);
+    expect(textOf(totalOf(panel))).toMatch(amountPattern("1.22"));
+  });
+
+  it("marks P&L unavailable for a whole set of UP, DOWN and INVALID that arrived by plain transfer", async () => {
+    renderPage(
+      tablesWith({
+        // 5 of each from the owner's wallet: the holdings of 5 sets minted, with no router transfer behind them
+        columns: { upDelta: wei("5"), upBalance: wei("5"), downDelta: wei("5"), downBalance: wei("5") },
+        held: { [GERWIG.upToken]: "5", [GERWIG.downToken]: "5", [GERWIG_INVALID]: "5" },
+        legs: [
+          [1, GERWIG.downToken, wei("5"), ME.toLowerCase()],
+          [2, GERWIG.upToken, wei("5"), ME.toLowerCase()],
+          [3, GERWIG_INVALID, wei("5"), ME.toLowerCase()],
+        ],
+      }),
+    );
+
+    const panel = await openMyTrades();
+
+    await waitFor(() => expect(textOf(positionRow(panel, GERWIG))).toMatch(/P&L unavailable/));
+    expect(textOf(panel)).toMatch(/Excludes 1 option/);
+    expect(textOf(totalOf(panel))).toMatch(amountPattern("1.22"));
+  });
+
+  it("marks P&L unavailable for a mint when more INVALID is held than the sets it minted", async () => {
+    renderPage(
+      tablesWith({
+        // the router mints 10 sets and the 10 DOWN are sold, as in the first case; 2 more INVALID came later
+        columns: {
+          upDelta: wei("10"),
+          upBalance: wei("10"),
+          downSwapTokens: `-${wei("10")}`,
+          downSwapUnderlying: wei("6.5"),
+          downAvgPrice: wei("0.65"),
+        },
+        held: { [GERWIG.upToken]: "10", [GERWIG_INVALID]: "12" },
+        legs: [
+          [1, GERWIG.underlyingToken, `-${wei("10")}`, ROUTER],
+          [2, GERWIG.downToken, wei("10"), ROUTER],
+          [3, GERWIG.upToken, wei("10"), ROUTER],
+          [4, GERWIG_INVALID, wei("10"), ROUTER],
+        ],
+      }),
+    );
+
+    const panel = await openMyTrades();
+
+    await waitFor(() => expect(textOf(positionRow(panel, GERWIG))).toMatch(/P&L unavailable/));
     expect(textOf(totalOf(panel))).toMatch(amountPattern("1.22"));
   });
 });
