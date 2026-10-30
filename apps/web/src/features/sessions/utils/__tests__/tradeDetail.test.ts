@@ -10,7 +10,6 @@ import { estimateAt, optionCost, setsMinted, sideSwaps } from "../tradeDetail";
 
 const option = (overrides: Partial<TradeOption> = {}): TradeOption => ({
   childMarket: addresses.childMarkets[0]!,
-  underlyingDelta: 0n,
   downDelta: 0n,
   upDelta: 0n,
   downBalance: 0n,

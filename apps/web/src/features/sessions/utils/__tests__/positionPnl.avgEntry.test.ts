@@ -11,7 +11,6 @@ const e = (amount: string) => parseEther(amount);
 /** A slice that swapped only UP: `tokens` positive for a buy, negative for a sell; avg price as the indexer sets it. */
 const upSwap = (tokens: bigint, underlying: bigint): TradeOption => ({
   childMarket: "0x0000000000000000000000000000000000000001" as Address,
-  underlyingDelta: underlying,
   downDelta: 0n,
   upDelta: tokens,
   downBalance: 0n,

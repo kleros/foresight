@@ -24,7 +24,6 @@ const WALLET_TRADES = graphql(`
       executor {
         owner
       }
-      underlyingDelta
       downDelta
       upDelta
       downBalance

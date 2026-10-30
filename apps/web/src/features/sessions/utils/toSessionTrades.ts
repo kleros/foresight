@@ -27,7 +27,6 @@ const optional = (value: string | null | undefined) => (value == null ? null : B
 function toOption(row: PredictionRow): TradeOption {
   return {
     childMarket: lower(row.childMarket_id),
-    underlyingDelta: BigInt(row.underlyingDelta),
     downDelta: BigInt(row.downDelta),
     upDelta: BigInt(row.upDelta),
     downBalance: BigInt(row.downBalance),

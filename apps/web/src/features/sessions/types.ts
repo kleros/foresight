@@ -105,7 +105,6 @@ export interface SessionStats {
 export interface TradeOption {
   childMarket: Address;
   /** Signed net movements over the transaction, positive into the trade wallet. */
-  underlyingDelta: bigint;
   downDelta: bigint;
   upDelta: bigint;
   /** Balances once the transaction settled. */

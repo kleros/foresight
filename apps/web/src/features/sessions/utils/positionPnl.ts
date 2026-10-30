@@ -1,4 +1,5 @@
 import type { TradeOption } from "../types";
+import { optionCost } from "./tradeDetail";
 
 const ONE = 10n ** 18n;
 
@@ -7,13 +8,13 @@ interface Sides<T> {
   down: T;
 }
 
-/** One option's expected P&L in underlying wei: what the held tokens are worth at spot, less what was paid net. */
+/** One option's expected P&L in underlying wei: what the held tokens are worth at spot, less what was put in. */
 export type OptionPnl = { available: true; cost: bigint; value: bigint; pnl: bigint } | { available: false };
 
 /**
- * Cost is the underlying the predictions took out of the trade wallet, net of what sells returned; value marks
- * the held tokens at the pools' spot prices (`underlyingPerOutcome`, 1e18-scaled). Unavailable when the holdings
- * differ from what the predictions net, or a held side's pool has no price.
+ * Cost is the predictions' `optionCost`, summed; value marks the held tokens at the pools' spot prices
+ * (`underlyingPerOutcome`, 1e18-scaled). Unavailable when the holdings differ from what the predictions net,
+ * or a held side's pool has no price.
  */
 export function optionPnl({
   predictions,
@@ -29,7 +30,7 @@ export function optionPnl({
   if (held.up !== netUp || held.down !== netDown) return { available: false };
   if ((held.up !== 0n && spot.up === null) || (held.down !== 0n && spot.down === null)) return { available: false };
 
-  const cost = predictions.reduce((sum, each) => sum - each.underlyingDelta, 0n);
+  const cost = predictions.reduce((sum, each) => sum + optionCost(each), 0n);
   const value = (held.up * (spot.up ?? 0n) + held.down * (spot.down ?? 0n)) / ONE;
   return { available: true, cost, value, pnl: value - cost };
 }

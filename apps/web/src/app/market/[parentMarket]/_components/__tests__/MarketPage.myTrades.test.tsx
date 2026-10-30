@@ -310,6 +310,41 @@ describe("My trades position summary", () => {
     expect(textOf(panel)).not.toMatch(/P&L unavailable/);
   });
 
+  it("charges a prediction that split sDAI in its own transaction for what it put in, not the split's credit", async () => {
+    connect();
+    renderPage({
+      ...baseTables(),
+      Executor: wallets(),
+      Prediction: [
+        // the parent split credits 50 Gerwig underlying; buying 10 UP spends 4.37 of it, so the net is +45.63
+        predictionRow({
+          tx: txHash(1),
+          executor: MY_WALLET,
+          option: GERWIG,
+          timestamp: NOW,
+          columns: {
+            underlyingDelta: wei("45.63"),
+            upDelta: wei("10"),
+            upBalance: wei("10"),
+            upSwapUnderlying: `-${wei("4.37")}`,
+            upSwapTokens: wei("10"),
+            upAvgPrice: wei("0.437"),
+          },
+        }),
+      ],
+      Position: [position(MY_WALLET, GERWIG.upToken, "10")],
+    });
+
+    const panel = await openMyTrades();
+
+    // 10 UP at the fixtures' UP spot of 0.3 is worth 3: 3 - 4.37
+    await waitFor(() => expect(textOf(panel)).toMatch(amountPattern("1.37")));
+    expect(textOf(panel)).toMatch(amountPattern("4.37"));
+    // 3 + 45.63, were the cost the net underlying
+    expect(textOf(panel)).not.toMatch(amountPattern("48.63"));
+    expect(textOf(panel)).not.toMatch(amountPattern("45.63"));
+  });
+
   it("marks an option holding transferred-in tokens P&L unavailable and says the total excludes it (A5)", async () => {
     connect();
     const tables = traded();

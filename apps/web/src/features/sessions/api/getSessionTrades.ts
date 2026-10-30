@@ -31,7 +31,6 @@ const SESSION_TRADES = graphql(`
       executor {
         owner
       }
-      underlyingDelta
       downDelta
       upDelta
       downBalance

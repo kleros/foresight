@@ -94,7 +94,8 @@ export function MyTrades({ session }: { session: SessionDetail }) {
           )}{" "}
         </div>
         <p className="text-fs-text-secondary text-xs">
-          Held tokens at current pool prices, less what you paid net. Not what selling would return.
+          Held tokens at current pool prices, less what you paid net. Underlying left unspent after a split carries no
+          cost or value. Not what selling would return.
           {excluded > 0
             ? ` Excludes ${excluded} ${excluded === 1 ? "option" : "options"} whose P&L is unavailable.`
             : null}
