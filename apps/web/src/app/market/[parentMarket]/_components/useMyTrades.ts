@@ -35,7 +35,7 @@ export function useMyTrades(session: SessionDetail): MyTrades {
   const executor = useExecutor();
   const wallet = address ? (executor.data?.deployed ?? undefined) : undefined;
   const tokens = session.options.flatMap((option) =>
-    [option.upToken, option.downToken].filter((token): token is Address => token !== null),
+    [option.upToken, option.downToken, option.invalidToken].filter((token): token is Address => token !== null),
   );
   const trades = useWalletTrades(session.id, wallet, tokens);
   const stats = useSessionStats(session.id);
@@ -58,6 +58,7 @@ export function useMyTrades(session: SessionDetail): MyTrades {
     );
     const held = { up: balances[lower(option.upToken)] ?? 0n, down: balances[lower(option.downToken)] ?? 0n };
     if (predictions.length === 0 && held.up === 0n && held.down === 0n) return [];
+    const invalid = balances[lower(option.invalidToken)] ?? 0n;
     const spot = { up: spotOf(option, "UP"), down: spotOf(option, "DOWN") };
     return [
       {
@@ -65,7 +66,7 @@ export function useMyTrades(session: SessionDetail): MyTrades {
         held,
         spot,
         entry: { up: avgEntry(predictions, "up"), down: avgEntry(predictions, "down") },
-        pnl: optionPnl({ predictions, held, spot }),
+        pnl: optionPnl({ predictions, held: { ...held, invalid }, spot }),
       },
     ];
   });

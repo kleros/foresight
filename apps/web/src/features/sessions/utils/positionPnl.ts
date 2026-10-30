@@ -22,12 +22,17 @@ export function optionPnl({
   spot,
 }: {
   predictions: TradeOption[];
-  held: Sides<bigint>;
+  held: Sides<bigint> & {
+    /** The child's INVALID; when given, it must be the sets minted less merged, as a set mints and burns it. */
+    invalid?: bigint;
+  };
   spot: Sides<bigint | null>;
 }): OptionPnl {
-  const tradedUp = predictions.reduce((sum, each) => sum + setsMinted(each) + each.upSwapTokens, 0n);
-  const tradedDown = predictions.reduce((sum, each) => sum + setsMinted(each) + each.downSwapTokens, 0n);
+  const sets = predictions.reduce((sum, each) => sum + setsMinted(each), 0n);
+  const tradedUp = predictions.reduce((sum, each) => sum + each.upSwapTokens, sets);
+  const tradedDown = predictions.reduce((sum, each) => sum + each.downSwapTokens, sets);
   if (held.up !== tradedUp || held.down !== tradedDown) return { available: false };
+  if (held.invalid !== undefined && held.invalid !== sets) return { available: false };
   if ((held.up !== 0n && spot.up === null) || (held.down !== 0n && spot.down === null)) return { available: false };
 
   const cost = predictions.reduce((sum, each) => sum + optionCost(each), 0n);
