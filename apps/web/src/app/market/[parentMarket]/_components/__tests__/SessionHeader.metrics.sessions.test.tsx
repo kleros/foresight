@@ -329,8 +329,12 @@ function answerIndexer(market: Market, collateral: { token: Address; symbol: str
     // resolves: a refresh awaits the chart refetch it starts
     if (queryName(document) === "SessionChart") return { Pool: [] };
     const { traders, pools } = market.state;
+    const trader = (i: number) => `0x${String(i + 1).padStart(40, "0")}`;
+    // the last trader swapped on a pool directly, the rest predicted through foresight
     return {
-      Prediction: Array.from({ length: traders }, (_, i) => ({ executor_id: `0x${String(i + 1).padStart(40, "0")}` })),
+      Prediction: Array.from({ length: traders - 1 }, (_, i) => ({ executor: { owner: trader(i) } })),
+      directSwaps: [{ sender: trader(traders - 1) }],
+      senderlessSwaps: [],
       Pool: SERVED_ORDER.map((key) => pools.find((pool) => pool.branch === key.branch && pool.side === key.side)!).map(
         (pool) => poolRow(market, pool),
       ),
