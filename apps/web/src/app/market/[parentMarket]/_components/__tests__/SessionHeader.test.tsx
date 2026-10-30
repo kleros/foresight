@@ -1,9 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { parseEther } from "viem";
+import { parseEther, parseUnits } from "viem";
 import { describe, expect, it } from "vitest";
 
-import type { SessionStats, SessionStatus } from "@/features/sessions/types";
+import type { PoolBalances, SessionStats, SessionStatus } from "@/features/sessions/types";
 import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 import { type SessionDetailRow, toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
 
@@ -45,6 +45,25 @@ function renderHeader({ overrides = {}, status = "trading" as SessionStatus } = 
       poolBalancesPending={false}
       usdPrice={undefined}
     />,
+  );
+}
+
+// the fixture's one pool holds 40 UP and 12.5 underlying
+const balances: PoolBalances = {
+  [stats.pools[0]!.id]: { outcome: parseEther("40"), underlying: parseEther("12.5") },
+};
+
+function headerWith(pool: { balances: PoolBalances | undefined; pending: boolean }) {
+  return (
+    <SessionHeader
+      session={toSessionDetail(row(), GATEWAY)}
+      status="trading"
+      stats={stats}
+      statsPending={false}
+      poolBalances={pool.balances}
+      poolBalancesPending={pool.pending}
+      usdPrice={undefined}
+    />
   );
 }
 
@@ -184,6 +203,75 @@ describe("SessionHeader", () => {
     await userEvent.keyboard("{Escape}");
 
     expect(screen.getByRole("button", { name: /^Volume/ })).toHaveFocus();
+  });
+
+  it("marks a stat expanded while its popup shows", async () => {
+    renderHeader();
+    const volume = screen.getByRole("button", { name: /^Volume/ });
+    expect(volume).toHaveAttribute("aria-expanded", "false");
+
+    await userEvent.click(volume);
+    expect(volume).toHaveAttribute("aria-expanded", "true");
+
+    await userEvent.click(volume);
+    expect(volume).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("swaps one stat's popup for another's when the other stat is pressed", async () => {
+    renderHeader();
+    await userEvent.click(screen.getByRole("button", { name: /^Volume/ }));
+
+    await userEvent.click(screen.getByRole("button", { name: /^Notional volume/ }));
+
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(screen.getByRole("dialog", { name: "Notional volume" })).toBeInTheDocument();
+  });
+
+  it("closes the Liquidity popup from its stat after the stat reloaded under it", async () => {
+    const { rerender } = render(headerWith({ balances, pending: false }));
+    const first = screen.getByRole("button", { name: /^Liquidity/ });
+    await userEvent.click(first);
+    rerender(headerWith({ balances: undefined, pending: true }));
+    rerender(headerWith({ balances, pending: false }));
+    expect(first).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Liquidity" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /^Liquidity/ }));
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("hands focus to the Liquidity stat on Escape after the stat reloaded under its popup", async () => {
+    const { rerender } = render(headerWith({ balances, pending: false }));
+    const first = screen.getByRole("button", { name: /^Liquidity/ });
+    await userEvent.click(first);
+    rerender(headerWith({ balances: undefined, pending: true }));
+    rerender(headerWith({ balances, pending: false }));
+    expect(first).not.toBeInTheDocument();
+
+    await userEvent.keyboard("{Escape}");
+
+    expect(screen.getByRole("button", { name: /^Liquidity/ })).toHaveFocus();
+  });
+
+  it("reads a pool's holdings in the collateral's own decimals", async () => {
+    // a 6-decimal collateral, whose outcome and underlying tokens share its decimals
+    const pool = { ...stats.pools[0]!, volumeUnderlying: parseUnits("10", 6), volumeOutcome: parseUnits("10", 6) };
+    render(
+      <SessionHeader
+        session={toSessionDetail(row({ collateralDecimals: 6, collateralSymbol: "USDC" }), GATEWAY)}
+        status="trading"
+        stats={{ ...stats, volumeUnderlying: pool.volumeUnderlying, volumeOutcome: pool.volumeOutcome, pools: [pool] }}
+        statsPending={false}
+        poolBalances={{ [pool.id]: { outcome: parseUnits("40", 6), underlying: parseUnits("12.5", 6) } }}
+        poolBalancesPending={false}
+        usdPrice={undefined}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: /^Liquidity/ }));
+
+    expect(screen.getByRole("dialog", { name: "Liquidity" })).toHaveTextContent("40 UP / 12.5 underlying");
   });
 
   it("holds a skeleton on Liquidity alone while the pool balances load", () => {

@@ -31,10 +31,11 @@ export async function fetchPoolBalances(client: PublicClient, pools: SessionPool
   );
 }
 
-// under the stats key, so the refresh after a trade that invalidates the stats rereads these too
+// under the stats key, so the refresh after a trade that invalidates the stats rereads these too;
+// ids sorted, as the indexer serves pools in no fixed order
 export function usePoolBalances(sessionId: string | undefined, pools: SessionPool[] | undefined) {
   return useQuery({
-    queryKey: [...sessionStatsKey(sessionId), "pool-balances", pools?.map((pool) => pool.id)],
+    queryKey: [...sessionStatsKey(sessionId), "pool-balances", pools?.map((pool) => pool.id).sort()],
     queryFn: pools ? () => fetchPoolBalances(publicClient, pools) : skipToken,
     staleTime: STALE_TIME.live,
   });

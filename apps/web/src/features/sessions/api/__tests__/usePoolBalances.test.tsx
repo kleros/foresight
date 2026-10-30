@@ -90,6 +90,18 @@ describe("usePoolBalances", () => {
     expect(result.current.data).toBeUndefined();
   });
 
+  it("keeps serving the balances it holds when the same pools come back in another order", async () => {
+    const { result, rerender } = renderBalances([UP, DOWN]);
+    await waitFor(() => expect(result.current.data).toBeDefined());
+
+    rerender({ list: [DOWN, UP] });
+
+    expect(result.current.data).toEqual({
+      [UP.id]: { outcome: parseEther("40"), underlying: parseEther("12.5") },
+      [DOWN.id]: { outcome: parseEther("20"), underlying: parseEther("6") },
+    });
+  });
+
   it("reads the balances again once the session's stats are reread after a failed read", async () => {
     chain.down = true;
     const { result, client } = renderBalances([UP]);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState, type RefObject } from "react";
 
 import { AlertMessage } from "@kleros/ui-components-library";
 import clsx from "clsx";
@@ -54,18 +54,23 @@ export function SessionHeader({
   // a gateway that cannot serve an image leaves the gradient and no icon, not a broken image
   const [heroFailed, setHeroFailed] = useState(false);
   const [iconFailed, setIconFailed] = useState(false);
-  const [openMetric, setOpenMetric] = useState<{ kind: MetricKind; opener: HTMLElement } | null>(null);
+  const [openMetric, setOpenMetric] = useState<MetricKind | null>(null);
+  const statButtons: Record<MetricKind, RefObject<HTMLButtonElement>> = {
+    volume: useRef<HTMLButtonElement>(null),
+    notional: useRef<HTMLButtonElement>(null),
+    liquidity: useRef<HTMLButtonElement>(null),
+  };
   const closeMetric = useCallback(() => setOpenMetric(null), []);
   const metrics = stats ? sessionMetrics(session, stats, poolBalances) : null;
-  const toggleMetric = (kind: MetricKind, opener: HTMLElement) =>
-    setOpenMetric((open) => (open?.kind === kind ? null : { kind, opener }));
+  const toggleMetric = (kind: MetricKind) => setOpenMetric((open) => (open === kind ? null : kind));
   const metricStat = (kind: MetricKind, Icon: typeof VolumeIcon, pending: boolean) => (
     <SessionStat
       Icon={Icon}
       label={METRIC_TITLES[kind]}
       pending={pending}
-      onOpen={metrics?.[kind] != null ? (button) => toggleMetric(kind, button) : undefined}
-      expanded={openMetric?.kind === kind}
+      onOpen={metrics?.[kind] != null ? () => toggleMetric(kind) : undefined}
+      buttonRef={statButtons[kind]}
+      expanded={openMetric === kind}
     >
       {approxCollateral(metrics?.[kind] ?? null, session.collateralSymbol)}
     </SessionStat>
@@ -96,9 +101,9 @@ export function SessionHeader({
       </div>
       {openMetric && metrics ? (
         <SessionMetricDialog
-          kind={openMetric.kind}
+          kind={openMetric}
           onClose={closeMetric}
-          opener={openMetric.opener}
+          opener={statButtons[openMetric]}
           metrics={metrics}
           symbol={session.collateralSymbol}
           decimals={session.collateralDecimals ?? 18}

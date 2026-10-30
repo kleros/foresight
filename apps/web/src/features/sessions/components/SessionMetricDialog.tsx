@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, type RefObject } from "react";
 
 import clsx from "clsx";
 
@@ -85,8 +85,8 @@ export function SessionMetricDialog({
 }: {
   kind: MetricKind;
   onClose: () => void;
-  /** The stat that opened it: a press on it is left to the stat, and closing hands focus back to it. */
-  opener: HTMLElement | null;
+  /** The stat that opened it, read at each use as its button remounts while its figures reload. */
+  opener: RefObject<HTMLElement>;
   metrics: SessionMetrics;
   symbol: string | null;
   /** The collateral's, which the outcome and underlying tokens share. */
@@ -104,7 +104,7 @@ export function SessionMetricDialog({
   // focus goes back to the stat from inside the popup or from nowhere; focus moved elsewhere on the page stays
   const close = useCallback(() => {
     const focused = document.activeElement;
-    if (!focused || focused === document.body || ref.current?.contains(focused)) opener?.focus();
+    if (!focused || focused === document.body || ref.current?.contains(focused)) opener.current?.focus();
     onClose();
   }, [onClose, opener]);
 
@@ -112,7 +112,8 @@ export function SessionMetricDialog({
     // mousedown, not click: the click that opened the popup is still bubbling when this runs
     const dismiss = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (!ref.current?.contains(target) && !opener?.contains(target)) onClose();
+      // a press on the stat is left to the stat, which toggles the popup
+      if (!ref.current?.contains(target) && !opener.current?.contains(target)) onClose();
     };
     const escape = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !event.defaultPrevented) close();

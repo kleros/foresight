@@ -25,7 +25,7 @@ function open() {
       <SessionMetricDialog
         kind="volume"
         onClose={onClose}
-        opener={null}
+        opener={{ current: null }}
         metrics={metrics}
         symbol="sDAI"
         decimals={18}
@@ -71,7 +71,7 @@ describe("SessionMetricDialog", () => {
         <SessionMetricDialog
           kind="volume"
           onClose={onClose}
-          opener={screen.getByRole("button", { name: "Volume" })}
+          opener={{ current: screen.getByRole("button", { name: "Volume" }) }}
           metrics={metrics}
           symbol="sDAI"
           decimals={18}
@@ -83,6 +83,89 @@ describe("SessionMetricDialog", () => {
     await userEvent.keyboard("{Escape}");
 
     expect(screen.getByRole("button", { name: "Volume" })).toHaveFocus();
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("hands focus back to what opened it on Escape when focus was lost to the page", async () => {
+    const onClose = vi.fn();
+    const { rerender } = render(<button type="button">Volume</button>);
+    rerender(
+      <>
+        <button type="button">Volume</button>
+        <SessionMetricDialog
+          kind="volume"
+          onClose={onClose}
+          opener={{ current: screen.getByRole("button", { name: "Volume" }) }}
+          metrics={metrics}
+          symbol="sDAI"
+          decimals={18}
+          usdPrice={undefined}
+        />
+      </>,
+    );
+    screen.getByRole("dialog", { name: "Volume" }).blur();
+    expect(document.body).toHaveFocus();
+
+    await userEvent.keyboard("{Escape}");
+
+    expect(screen.getByRole("button", { name: "Volume" })).toHaveFocus();
+  });
+
+  it("stays open on an Escape another handler on the page already took", async () => {
+    const onClose = vi.fn();
+    render(
+      <>
+        <input
+          aria-label="Search"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") event.preventDefault();
+          }}
+        />
+        <SessionMetricDialog
+          kind="volume"
+          onClose={onClose}
+          opener={{ current: null }}
+          metrics={metrics}
+          symbol="sDAI"
+          decimals={18}
+          usdPrice={undefined}
+        />
+      </>,
+    );
+    screen.getByRole("textbox", { name: "Search" }).focus();
+
+    await userEvent.keyboard("{Escape}");
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("closes on an Escape another handler on the page saw and left unhandled", async () => {
+    const onClose = vi.fn();
+    const sawEscape = vi.fn();
+    render(
+      <>
+        <input
+          aria-label="Search"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") sawEscape();
+          }}
+        />
+        <SessionMetricDialog
+          kind="volume"
+          onClose={onClose}
+          opener={{ current: null }}
+          metrics={metrics}
+          symbol="sDAI"
+          decimals={18}
+          usdPrice={undefined}
+        />
+      </>,
+    );
+    screen.getByRole("textbox", { name: "Search" }).focus();
+
+    await userEvent.keyboard("{Escape}");
+
+    expect(sawEscape).toHaveBeenCalledOnce();
     expect(onClose).toHaveBeenCalledOnce();
   });
 
@@ -106,7 +189,7 @@ describe("SessionMetricDialog", () => {
         <SessionMetricDialog
           kind="volume"
           onClose={onClose}
-          opener={opener}
+          opener={{ current: opener }}
           metrics={metrics}
           symbol="sDAI"
           decimals={18}
@@ -170,7 +253,7 @@ describe("SessionMetricDialog", () => {
       <SessionMetricDialog
         kind={kind}
         onClose={vi.fn()}
-        opener={null}
+        opener={{ current: null }}
         metrics={breakdown}
         symbol="sDAI"
         decimals={18}
@@ -243,7 +326,7 @@ describe("SessionMetricDialog", () => {
       <SessionMetricDialog
         kind="liquidity"
         onClose={vi.fn()}
-        opener={null}
+        opener={{ current: null }}
         metrics={sixDecimals}
         symbol="USDC"
         decimals={6}
