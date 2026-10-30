@@ -24,11 +24,14 @@ contracts:
     events:
       - event: Pool(address indexed token0, address indexed token1, address pool)
 
-  ## Registered from the factory's `Pool` event. `price` on both is the sqrt price the pool is
-  ## left at, so consecutive swaps chain into the before/after of a trade.
+  ## Registered from the factory's `Pool` event. `price` on Initialize and Swap is the sqrt price
+  ## the pool is left at, so consecutive swaps chain into the before/after of a trade.
   - name: AlgebraPool
     events:
       - event: Initialize(uint160 price, int24 tick)
+      ## Mint and Burn, in Algebra v1's layout, move the in-range liquidity between swaps.
+      - event: Mint(address sender, address indexed owner, int24 indexed bottomTick, int24 indexed topTick, uint128 liquidityAmount, uint256 amount0, uint256 amount1)
+      - event: Burn(address indexed owner, int24 indexed bottomTick, int24 indexed topTick, uint128 liquidityAmount, uint256 amount0, uint256 amount1)
       - event: Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 price, uint128 liquidity, int24 tick)
         field_selection:
           transaction_fields:

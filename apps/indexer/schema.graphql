@@ -30,7 +30,7 @@ type Session {
   collateralDecimals: Int
   collateralSymbol: String
 
-  "when trading stops"
+  "the Reality question's opening time, when answers can be submitted"
   openingTime: BigInt
 
   "emitted by SessionFactory, fixed at deploy"
@@ -214,7 +214,7 @@ type Pool {
   "the actual price: underlying per whole outcome token, 1e18-scaled; null until the pool prices"
   underlyingPerOutcome: BigInt
 
-  "the concentrated-liquidity L the last swap reported"
+  "the in-range concentrated liquidity L, as the pool's liquidity() reads it: set by each swap, moved by mints and burns around the pool's tick"
   liquidity: BigInt!
 
   "lifetime absolute amount swapped either way"

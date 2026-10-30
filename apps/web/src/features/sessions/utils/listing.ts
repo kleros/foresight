@@ -57,17 +57,23 @@ export const BOUNDARY_TICK_MS = 60_000;
 
 export const boundarySeconds = (now: number) => Math.floor(now / BOUNDARY_TICK_MS) * (BOUNDARY_TICK_MS / 1000);
 
+/** Any of the session's pools holds in-range liquidity, as the indexer last read it. */
+const ANY_POOL_LIQUID: Session_Bool_Exp = { children: { pools: { liquidity: { _gt: "0" } } } };
+
 /**
  * @param boundary seconds since the epoch, from `boundarySeconds`.
  *
- * A session whose opening time could not be read is in neither state, so it is
- * only reachable under "all"
+ * Trading: the resolution date is ahead, or a pool holds liquidity. A session whose date could not be
+ * read is under Trading while a pool holds liquidity, and otherwise only under "all".
  */
 export function sessionWhere({ query, state }: SessionFilters, boundary: number): Session_Bool_Exp {
   const where: Session_Bool_Exp = { keyword: { _ilike: keywordPattern(query) } };
 
-  if (state === "open") where.openingTime = { _gt: String(boundary) };
-  if (state === "closed") where.openingTime = { _lte: String(boundary) };
+  if (state === "open") where._or = [{ openingTime: { _gt: String(boundary) } }, ANY_POOL_LIQUID];
+  if (state === "closed") {
+    where.openingTime = { _lte: String(boundary) };
+    where._not = ANY_POOL_LIQUID;
+  }
 
   return where;
 }

@@ -61,6 +61,30 @@ indexer.onEvent({ contract: "AlgebraPool", event: "Initialize" }, async ({ event
   });
 });
 
+/** Algebra counts a position into the pool's `liquidity()` while bottomTick <= tick < topTick. */
+const inRange = (tick: number, bottomTick: bigint, topTick: bigint) =>
+  bottomTick <= BigInt(tick) && BigInt(tick) < topTick;
+
+indexer.onEvent({ contract: "AlgebraPool", event: "Mint" }, async ({ event, context }) => {
+  const pool = await context.Pool.get(event.srcAddress.toLowerCase());
+
+  if (context.isPreload || pool === undefined || !inRange(pool.tick, event.params.bottomTick, event.params.topTick)) {
+    return;
+  }
+
+  context.Pool.set({ ...pool, liquidity: pool.liquidity + event.params.liquidityAmount });
+});
+
+indexer.onEvent({ contract: "AlgebraPool", event: "Burn" }, async ({ event, context }) => {
+  const pool = await context.Pool.get(event.srcAddress.toLowerCase());
+
+  if (context.isPreload || pool === undefined || !inRange(pool.tick, event.params.bottomTick, event.params.topTick)) {
+    return;
+  }
+
+  context.Pool.set({ ...pool, liquidity: pool.liquidity - event.params.liquidityAmount });
+});
+
 indexer.onEvent({ contract: "AlgebraPool", event: "Swap" }, async ({ event, context }) => {
   const poolId = event.srcAddress.toLowerCase();
   const recipient = event.params.recipient.toLowerCase();
