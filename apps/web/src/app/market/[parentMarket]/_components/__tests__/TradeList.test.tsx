@@ -166,8 +166,8 @@ afterEach(() => {
 });
 
 describe("TradeList rows", () => {
-  it("sizes a prediction that took more underlying out than it put in by the amount, unsigned", () => {
-    // 10 UP sold for 3.1: cost -3.1
+  it("sizes a prediction that took more underlying out than it put in as a negative amount", () => {
+    // 10 UP sold for 3.1 in a one-outcome decision: cost -3.1
     const trades = toPredictions(
       [
         row("0x01", {
@@ -183,9 +183,7 @@ describe("TradeList rows", () => {
 
     render(<TradeList session={session} trades={trades} />);
 
-    const prediction = screen.getByRole("button");
-    expect(prediction.textContent).toContain("~3.1 sDAI");
-    expect(prediction.textContent).not.toMatch(/~-/);
+    expect(screen.getByRole("button").textContent).toContain("~-3.1 sDAI");
   });
 
   it("shows the first option a prediction traded and +1 for the second", () => {

@@ -32,7 +32,10 @@ export interface SessionPools {
   branches: { up: PoolState; down: PoolState }[];
 }
 
-/** A wallet's position in one of a session's pools, with what withdrawing all of it returns now (rounded down). */
+/**
+ * A wallet's position in one of a session's pools, with what withdrawing all of it returns now: its liquidity at the
+ * pool's price (rounded down) plus the tokensOwed and earned fees `collect` pays.
+ */
 export interface LiquidityPosition {
   tokenId: bigint;
   token0: Address;

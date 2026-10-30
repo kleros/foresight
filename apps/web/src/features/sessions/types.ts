@@ -117,7 +117,7 @@ export interface TradeOption {
   upSwapTokens: bigint;
   downAvgPrice: bigint | null;
   upAvgPrice: bigint | null;
-  /** Pool prices before the side's first swap and after its last; null where the side did not swap. */
+  /** Pool prices as the transaction first moved the option's tokens and as it left the pool; null where unknown. */
   downPriceBefore: bigint | null;
   downPriceAfter: bigint | null;
   upPriceBefore: bigint | null;

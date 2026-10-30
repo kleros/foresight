@@ -141,10 +141,10 @@ export function createWorld() {
   const reverted = (method: string, params: unknown) =>
     new RpcRequestError({ body: { method, params }, error: { code: 3, message: "execution reverted" }, url: "fake" });
 
-  async function call(to: Address, data: Hex): Promise<Hex> {
+  async function call(to: Address, data: Hex, from?: Address): Promise<Hex> {
     const mine = tokenAnswer(to, data);
     if (mine) return mine;
-    return (await chain.client.request({ method: "eth_call", params: [{ to, data }, "latest"] } as never)) as Hex;
+    return (await chain.client.request({ method: "eth_call", params: [{ to, data, from }, "latest"] } as never)) as Hex;
   }
 
   const block = () => ({
@@ -184,7 +184,7 @@ export function createWorld() {
       case "eth_getTransactionCount":
         return "0x0";
       case "eth_call": {
-        const [{ to, data }] = params as [{ to: Address; data: Hex }];
+        const [{ to, data, from }] = params as [{ to: Address; data: Hex; from?: Address }];
         if (isAddressEqual(to, gnosis.contracts.multicall3.address)) {
           const decoded = decodeFunctionData({ abi: multicall3Abi, data });
           if (decoded.functionName !== "aggregate3") throw new Error(`unexpected multicall ${decoded.functionName}`);
@@ -207,7 +207,7 @@ export function createWorld() {
           return encodeFunctionResult({ abi: multicall3Abi, functionName: "aggregate3", result: results });
         }
         try {
-          return await call(to, data);
+          return await call(to, data, from);
         } catch {
           throw reverted(method, params);
         }

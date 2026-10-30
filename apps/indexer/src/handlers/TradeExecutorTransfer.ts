@@ -81,9 +81,10 @@ indexer.onEvent(
         const moved = await context.Position.get(positionId(side.executor, token));
 
         if (market !== undefined) {
-          const [previous, legs, down, up, underlying] = await Promise.all([
+          const [previous, legs, pools, down, up, underlying] = await Promise.all([
             context.Prediction.get(predictionId(hash, side.executor, market.id)),
             context.Transfer.getWhere({ transactionHash: { _eq: hash }, token: { _eq: market.underlyingToken } }),
+            context.Pool.getWhere({ childMarket_id: { _eq: market.id } }),
             ...[market.downToken, market.upToken, market.underlyingToken].map((held) =>
               isAvailable(held) ? context.Position.get(positionId(side.executor, held)) : undefined,
             ),
@@ -93,7 +94,7 @@ indexer.onEvent(
             .filter((row) => row.executor_id === side.executor)
             .reduce((sum, row) => sum + row.amount, 0n);
 
-          return { ...side, kind: "outcome" as const, moved, market, previous, leg, down, up, underlying };
+          return { ...side, kind: "outcome" as const, moved, market, previous, leg, pools, down, up, underlying };
         }
 
         const [legs, predictions] = await Promise.all([
@@ -139,9 +140,13 @@ indexer.onEvent(
       });
 
       if (loaded.kind === "outcome") {
-        const { market, previous, leg, down, up, underlying } = loaded;
+        const { market, previous, leg, pools, down, up, underlying } = loaded;
         const base = previous ?? blankPrediction(event, executor, market.id);
+        const spot = (outcomeIndex: number) =>
+          pools.find((pool) => pool.outcomeIndex === outcomeIndex)?.underlyingPerOutcome;
+        const [downSpot, upSpot] = [spot(0), spot(1)];
 
+        // a transfer precedes the Swap log of its own swap, so the pool still reads its price before that swap
         context.Prediction.set({
           ...base,
           underlyingDelta: leg,
@@ -150,6 +155,10 @@ indexer.onEvent(
           underlyingBalance: underlying?.balance ?? 0n,
           downBalance: market.downToken === token ? balance : (down?.balance ?? 0n),
           upBalance: market.upToken === token ? balance : (up?.balance ?? 0n),
+          downPriceBefore: base.downPriceBefore ?? downSpot,
+          downPriceAfter: downSpot ?? base.downPriceAfter,
+          upPriceBefore: base.upPriceBefore ?? upSpot,
+          upPriceAfter: upSpot ?? base.upPriceAfter,
         });
         continue;
       }

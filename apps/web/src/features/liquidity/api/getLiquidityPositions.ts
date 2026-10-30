@@ -3,8 +3,10 @@
 import { skipToken, useQuery } from "@tanstack/react-query";
 import {
   ContractFunctionExecutionError,
+  decodeFunctionResult,
   encodeFunctionData,
   isAddressEqual,
+  maxUint128,
   parseAbi,
   type Address,
   type PublicClient,
@@ -14,6 +16,7 @@ import { STALE_TIME } from "@/lib/query";
 import { sqrtPriceAtTick } from "@/lib/swap/tickMath";
 import { publicClient } from "@/lib/web3/public-client";
 
+import { POSITION_MANAGER_ABI } from "../flow/abi";
 import { amount0Delta, amount1Delta } from "../flow/math";
 import { LIQUIDITY_ALLOW_LIST } from "../oracle/allowlist";
 import type { LiquidityPosition, SessionPools } from "../types";
@@ -28,6 +31,9 @@ const NFPM_ABI = parseAbi([
 
 /** Calldata bytes per Multicall3 request; a wallet anyone can send NFTs to is read in requests of this size. */
 export const POSITION_READ_BATCH_BYTES = 1_024;
+
+/** Positions whose `collect` one simulated position-manager multicall carries. */
+export const COLLECT_READ_BATCH = 20;
 
 /** True when the entry's own call reverted; a failure naming `aggregate3` is a refused request, rethrown to retry. */
 function ownCallReverted(entry: { status: "success" | "failure"; error?: unknown }, functionName: string) {
@@ -86,7 +92,39 @@ function withdrawal(sqrtP: bigint, tickLower: number, tickUpper: number, liquidi
   };
 }
 
-/** The owner's position NFTs in this session's pools that hold liquidity and that `ownerOf` names the owner of. */
+/**
+ * What `collect` pays each position now: its tokensOwed and the fees earned since last poked. Simulated from the
+ * owner through the position manager's own multicall, since `collect` refuses a caller not holding the token.
+ */
+async function collectable(client: PublicClient, manager: Address, owner: Address, tokenIds: bigint[]) {
+  const owed: { amount0: bigint; amount1: bigint }[] = [];
+  for (let start = 0; start < tokenIds.length; start += COLLECT_READ_BATCH) {
+    const calls = tokenIds.slice(start, start + COLLECT_READ_BATCH).map((tokenId) =>
+      encodeFunctionData({
+        abi: POSITION_MANAGER_ABI,
+        functionName: "collect",
+        args: [{ tokenId, recipient: owner, amount0Max: maxUint128, amount1Max: maxUint128 }],
+      }),
+    );
+    const { result } = await client.simulateContract({
+      address: manager,
+      abi: POSITION_MANAGER_ABI,
+      functionName: "multicall",
+      args: [calls],
+      account: owner,
+    });
+    for (const data of result) {
+      const [amount0, amount1] = decodeFunctionResult({ abi: POSITION_MANAGER_ABI, functionName: "collect", data });
+      owed.push({ amount0, amount1 });
+    }
+  }
+  return owed;
+}
+
+/**
+ * The owner's position NFTs in this session's pools that hold liquidity and that `ownerOf` names the owner of, each
+ * with what a Remove of it pays: its liquidity's principal at the pool's price, plus what `collect` pays.
+ */
 export async function fetchLiquidityPositions(
   client: PublicClient,
   { pools, owner }: { pools: SessionPools; owner: Address },
@@ -122,7 +160,7 @@ export async function fetchLiquidityPositions(
     ]),
   );
 
-  return tokenIds.flatMap((tokenId, index) => {
+  const listed = tokenIds.flatMap((tokenId, index): LiquidityPosition[] => {
     const [read, held] = [reads[index * 2]!, reads[index * 2 + 1]!];
     const reverted = [ownCallReverted(read, "positions"), ownCallReverted(held, "ownerOf")];
     if (reverted.includes(true)) return [];
@@ -145,6 +183,17 @@ export async function fetchLiquidityPositions(
       },
     ];
   });
+  const owed = await collectable(
+    client,
+    list.positionManager,
+    owner,
+    listed.map((position) => position.tokenId),
+  );
+  return listed.map((position, index) => ({
+    ...position,
+    amount0: position.amount0 + owed[index]!.amount0,
+    amount1: position.amount1 + owed[index]!.amount1,
+  }));
 }
 
 export function useLiquidityPositions(pools: SessionPools | undefined, owner: Address | undefined) {

@@ -980,7 +980,7 @@ export type Prediction = {
   downBalance: Scalars['numeric']['output'];
   downDelta: Scalars['numeric']['output'];
   downPriceAfter?: Maybe<Scalars['numeric']['output']>;
-  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) as the transaction first moved the market's tokens and as it left the pool */
   downPriceBefore?: Maybe<Scalars['numeric']['output']>;
   downSwapTokens: Scalars['numeric']['output'];
   /** totals over every swap on that side in the transaction */
@@ -1030,7 +1030,7 @@ export type Prediction_Avg_Order_By = {
   downBalance?: InputMaybe<Order_By>;
   downDelta?: InputMaybe<Order_By>;
   downPriceAfter?: InputMaybe<Order_By>;
-  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) as the transaction first moved the market's tokens and as it left the pool */
   downPriceBefore?: InputMaybe<Order_By>;
   downSwapTokens?: InputMaybe<Order_By>;
   /** totals over every swap on that side in the transaction */
@@ -1092,7 +1092,7 @@ export type Prediction_Max_Order_By = {
   downBalance?: InputMaybe<Order_By>;
   downDelta?: InputMaybe<Order_By>;
   downPriceAfter?: InputMaybe<Order_By>;
-  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) as the transaction first moved the market's tokens and as it left the pool */
   downPriceBefore?: InputMaybe<Order_By>;
   downSwapTokens?: InputMaybe<Order_By>;
   /** totals over every swap on that side in the transaction */
@@ -1126,7 +1126,7 @@ export type Prediction_Min_Order_By = {
   downBalance?: InputMaybe<Order_By>;
   downDelta?: InputMaybe<Order_By>;
   downPriceAfter?: InputMaybe<Order_By>;
-  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) as the transaction first moved the market's tokens and as it left the pool */
   downPriceBefore?: InputMaybe<Order_By>;
   downSwapTokens?: InputMaybe<Order_By>;
   /** totals over every swap on that side in the transaction */
@@ -1238,7 +1238,7 @@ export type Prediction_Stddev_Order_By = {
   downBalance?: InputMaybe<Order_By>;
   downDelta?: InputMaybe<Order_By>;
   downPriceAfter?: InputMaybe<Order_By>;
-  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) as the transaction first moved the market's tokens and as it left the pool */
   downPriceBefore?: InputMaybe<Order_By>;
   downSwapTokens?: InputMaybe<Order_By>;
   /** totals over every swap on that side in the transaction */
@@ -1267,7 +1267,7 @@ export type Prediction_Stddev_Pop_Order_By = {
   downBalance?: InputMaybe<Order_By>;
   downDelta?: InputMaybe<Order_By>;
   downPriceAfter?: InputMaybe<Order_By>;
-  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) as the transaction first moved the market's tokens and as it left the pool */
   downPriceBefore?: InputMaybe<Order_By>;
   downSwapTokens?: InputMaybe<Order_By>;
   /** totals over every swap on that side in the transaction */
@@ -1296,7 +1296,7 @@ export type Prediction_Stddev_Samp_Order_By = {
   downBalance?: InputMaybe<Order_By>;
   downDelta?: InputMaybe<Order_By>;
   downPriceAfter?: InputMaybe<Order_By>;
-  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) as the transaction first moved the market's tokens and as it left the pool */
   downPriceBefore?: InputMaybe<Order_By>;
   downSwapTokens?: InputMaybe<Order_By>;
   /** totals over every swap on that side in the transaction */
@@ -1334,7 +1334,7 @@ export type Prediction_Stream_Cursor_Value_Input = {
   downBalance?: InputMaybe<Scalars['numeric']['input']>;
   downDelta?: InputMaybe<Scalars['numeric']['input']>;
   downPriceAfter?: InputMaybe<Scalars['numeric']['input']>;
-  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) as the transaction first moved the market's tokens and as it left the pool */
   downPriceBefore?: InputMaybe<Scalars['numeric']['input']>;
   downSwapTokens?: InputMaybe<Scalars['numeric']['input']>;
   /** totals over every swap on that side in the transaction */
@@ -1367,7 +1367,7 @@ export type Prediction_Sum_Order_By = {
   downBalance?: InputMaybe<Order_By>;
   downDelta?: InputMaybe<Order_By>;
   downPriceAfter?: InputMaybe<Order_By>;
-  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) as the transaction first moved the market's tokens and as it left the pool */
   downPriceBefore?: InputMaybe<Order_By>;
   downSwapTokens?: InputMaybe<Order_By>;
   /** totals over every swap on that side in the transaction */
@@ -1396,7 +1396,7 @@ export type Prediction_Var_Pop_Order_By = {
   downBalance?: InputMaybe<Order_By>;
   downDelta?: InputMaybe<Order_By>;
   downPriceAfter?: InputMaybe<Order_By>;
-  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) as the transaction first moved the market's tokens and as it left the pool */
   downPriceBefore?: InputMaybe<Order_By>;
   downSwapTokens?: InputMaybe<Order_By>;
   /** totals over every swap on that side in the transaction */
@@ -1425,7 +1425,7 @@ export type Prediction_Var_Samp_Order_By = {
   downBalance?: InputMaybe<Order_By>;
   downDelta?: InputMaybe<Order_By>;
   downPriceAfter?: InputMaybe<Order_By>;
-  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) as the transaction first moved the market's tokens and as it left the pool */
   downPriceBefore?: InputMaybe<Order_By>;
   downSwapTokens?: InputMaybe<Order_By>;
   /** totals over every swap on that side in the transaction */
@@ -1454,7 +1454,7 @@ export type Prediction_Variance_Order_By = {
   downBalance?: InputMaybe<Order_By>;
   downDelta?: InputMaybe<Order_By>;
   downPriceAfter?: InputMaybe<Order_By>;
-  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last */
+  /** actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) as the transaction first moved the market's tokens and as it left the pool */
   downPriceBefore?: InputMaybe<Order_By>;
   downSwapTokens?: InputMaybe<Order_By>;
   /** totals over every swap on that side in the transaction */

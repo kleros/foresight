@@ -183,7 +183,7 @@ type Prediction {
   downAvgPrice: BigInt
   upAvgPrice: BigInt
 
-  "actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) before this side's first swap and after its last"
+  "actual pool prices (underlying per whole token, 1e18-scaled, not sqrt) as the transaction first moved the market's tokens and as it left the pool"
   downPriceBefore: BigInt
   downPriceAfter: BigInt
   upPriceBefore: BigInt
