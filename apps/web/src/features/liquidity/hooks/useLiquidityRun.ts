@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { createViemTxGateway } from "@foresight/tx-orchestrator";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { getConnectorClient, sendTransaction } from "@wagmi/core";
 import type { Address } from "viem";
 import { useAccount } from "wagmi";
@@ -41,14 +41,19 @@ export interface LiquidityRun {
   isHeld: boolean;
 }
 
-/** One liquidity run at a time for the connected account on this session: seed, add, remove or merge. */
-export function useLiquidityRun(parentMarket: Address, closesAt: Date | null): LiquidityRun {
+/**
+ * One liquidity run at a time for the connected account on this session: seed, add, remove or merge.
+ * `alsoReread` is a query of the page's that a landed run changes, reread with the pools and positions.
+ */
+export function useLiquidityRun(parentMarket: Address, closesAt: Date | null, alsoReread?: QueryKey): LiquidityRun {
   const { address, chainId } = useAccount();
   const queryClient = useQueryClient();
   const account = useRef(address);
   account.current = address;
   const chain = useRef(chainId);
   chain.current = chainId;
+  const pageQuery = useRef(alsoReread);
+  pageQuery.current = alsoReread;
   const request = useRef<LiquidityRequest | undefined>(undefined);
   const closes = closesAt ? BigInt(closesAt.getTime()) / 1000n : NO_CLOSE;
 
@@ -102,6 +107,7 @@ export function useLiquidityRun(parentMarket: Address, closesAt: Date | null): L
     // a halted run may have landed sends before it stopped
     if (stage === "complete" || stage === "moved" || stage === "halted") {
       void queryClient.invalidateQueries({ queryKey: liquidityKeyPrefix });
+      if (pageQuery.current) void queryClient.invalidateQueries({ queryKey: pageQuery.current });
     }
   }, [stage, queryClient]);
 

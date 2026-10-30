@@ -17,7 +17,7 @@ import { snapEstimate } from "@/features/predict/utils/estimates";
 import { usePoolBalances, useSDaiUsdPrice } from "@/features/sessions/api/getPoolBalances";
 import { useSession } from "@/features/sessions/api/getSession";
 import { useSessionChart } from "@/features/sessions/api/getSessionChart";
-import { useSessionStats } from "@/features/sessions/api/getSessionStats";
+import { sessionStatsKey, useSessionStats } from "@/features/sessions/api/getSessionStats";
 import { useRenderAtClose } from "@/features/sessions/hooks/useRenderAtClose";
 import { latestEstimates } from "@/features/sessions/utils/latestEstimates";
 import { optionNoun, optionNounSingular } from "@/features/sessions/utils/optionNoun";
@@ -58,6 +58,8 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
     branches: session.data?.options.map(({ market, outcomeIndex, name }) => ({ market, outcomeIndex, name })) ?? [],
     closesAt: session.data?.closesAt ?? null,
     isReady: session.data?.setupComplete ?? false,
+    // the header's Liquidity reads pool balances keyed under the stats
+    alsoReread: sessionStatsKey(session.data?.id),
   });
 
   if (!isAddress(parentMarket, { strict: false }) || session.data === null) {

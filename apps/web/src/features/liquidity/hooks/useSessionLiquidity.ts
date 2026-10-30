@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, type QueryKey } from "@tanstack/react-query";
 import { isAddressEqual, type Address } from "viem";
 import { useAccount } from "wagmi";
 
@@ -201,12 +201,15 @@ export function useSessionLiquidity({
   branches,
   closesAt,
   isReady,
+  alsoReread,
 }: {
   parentMarket: Address;
   branches: LiquidityBranchName[];
   closesAt: Date | null;
   /** Every child market exists, so the pools can be read. */
   isReady: boolean;
+  /** A query of the page's that a landed run changes. */
+  alsoReread?: QueryKey;
 }) {
   const { address: owner } = useAccount();
   const ordered = [...branches].sort((a, b) => a.outcomeIndex - b.outcomeIndex);
@@ -217,7 +220,7 @@ export function useSessionLiquidity({
   const positions = useLiquidityPositions(pools.data, owner);
   const balances = useLiquidityBalances(pools.data?.session, owner);
   const chainTime = useChainTime();
-  const run = useLiquidityRun(parentMarket, closesAt);
+  const run = useLiquidityRun(parentMarket, closesAt, alsoReread);
 
   const shown = useMemo(() => {
     const data = pools.data;
