@@ -2,8 +2,8 @@
 
 import clsx from "clsx";
 
-import type { PredictionTrade, SessionOption, TradeOption } from "@/features/sessions/types";
-import { estimateAt, setsMinted, sideSwaps } from "@/features/sessions/utils/tradeDetail";
+import type { PredictionTrade, SessionOption, TradeOperation, TradeOptionDetail } from "@/features/sessions/types";
+import { estimateAt, swapPrice } from "@/features/sessions/utils/tradeDetail";
 
 import { ExternalLink } from "@/components/ui/ExternalLink";
 import { Modal } from "@/components/ui/Modal";
@@ -28,10 +28,21 @@ function Line({ label, children }: { label: string; children: string }) {
   );
 }
 
-function OptionBlock({ option, scale }: { option: TradeOption; scale: SessionOption | undefined }) {
+function OperationLine({ operation }: { operation: TradeOperation }) {
+  if (operation.kind !== "swap") {
+    return <Line label={operation.kind === "mint" ? "Mint" : "Merge"}>{`${tokens(operation.sets)} DOWN + UP`}</Line>;
+  }
+  const price = swapPrice(operation);
+  return (
+    <Line label={`${operation.bought ? "Buy" : "Sell"} ${operation.side}`}>
+      {`${tokens(operation.tokens)} at ${price === null ? "-" : tokens(price)} · ${tokens(operation.underlying)} underlying`}
+    </Line>
+  );
+}
+
+function OptionBlock({ option, scale }: { option: TradeOptionDetail; scale: SessionOption | undefined }) {
   const before = scale ? estimateAt(option, scale, "before") : null;
   const after = scale ? estimateAt(option, scale, "after") : null;
-  const minted = setsMinted(option);
   const estimate = (value: number | null) => (value === null ? "-" : formatEstimate(value, scale?.unit ?? null));
 
   return (
@@ -43,13 +54,8 @@ function OptionBlock({ option, scale }: { option: TradeOption; scale: SessionOpt
         </span>{" "}
       </div>
       <ul className="divide-y divide-(--fs-popup-line) border-t border-(--fs-popup-line) text-[13px] leading-[18px] tabular-nums">
-        {minted !== 0n ? (
-          <Line label={minted > 0n ? "Mint" : "Merge"}>{`${tokens(minted > 0n ? minted : -minted)} DOWN + UP`}</Line>
-        ) : null}
-        {sideSwaps(option).map((swap) => (
-          <Line key={swap.side} label={`${swap.bought ? "Buy" : "Sell"} ${swap.side}`}>
-            {`${tokens(swap.tokens)} at ${swap.avgPrice === null ? "-" : tokens(swap.avgPrice)} · ${tokens(swap.underlying)} underlying`}
-          </Line>
+        {option.operations.map((operation) => (
+          <OperationLine key={`${operation.kind}-${operation.logIndex}`} operation={operation} />
         ))}
         <Line label="Balance after">{`${tokens(option.downBalance)} DOWN · ${tokens(option.upBalance)} UP`}</Line>
       </ul>

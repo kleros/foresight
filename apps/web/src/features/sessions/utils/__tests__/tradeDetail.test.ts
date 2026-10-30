@@ -6,7 +6,7 @@ import { addresses } from "@/testing/fixtures";
 import type { OptionScale } from "@/types/optionScale";
 
 import type { TradeOption } from "../../types";
-import { estimateAt, optionCost, setsMinted, sideSwaps } from "../tradeDetail";
+import { estimateAt, optionCost, setsMinted, swapPrice, tradeOperations } from "../tradeDetail";
 
 const option = (overrides: Partial<TradeOption> = {}): TradeOption => ({
   childMarket: addresses.childMarkets[0]!,
@@ -140,38 +140,118 @@ describe("optionCost", () => {
   });
 });
 
-describe("sideSwaps", () => {
-  it("lists UP then DOWN, a buy where tokens arrived, amounts unsigned", () => {
-    const traded = option({
-      downSwapTokens: -parseEther("8"),
-      downSwapUnderlying: parseEther("3.2"),
-      downAvgPrice: parseEther("0.4"),
-      upSwapTokens: parseEther("6.5"),
-      upSwapUnderlying: -parseEther("1.95"),
-      upAvgPrice: parseEther("0.3"),
-    });
+/**
+ * Swaps are signed from the pool's side, as the indexer stores them: the pool paying outcome tokens out
+ * (a negative outcome amount) is the trade wallet buying.
+ */
+describe("tradeOperations", () => {
+  const e = parseEther;
 
-    expect(sideSwaps(traded)).toEqual([
-      {
-        side: "UP",
-        bought: true,
-        tokens: parseEther("6.5"),
-        underlying: parseEther("1.95"),
-        avgPrice: parseEther("0.3"),
-      },
-      {
-        side: "DOWN",
-        bought: false,
-        tokens: parseEther("8"),
-        underlying: parseEther("3.2"),
-        avgPrice: parseEther("0.4"),
-      },
+  it("lists each swap in log order, a buy where the pool paid tokens out, amounts unsigned", () => {
+    const operations = tradeOperations(
+      [
+        { logIndex: 20, side: "UP", outcomeAmount: -e("6.5"), underlyingAmount: e("1.95") },
+        { logIndex: 10, side: "DOWN", outcomeAmount: e("8"), underlyingAmount: -e("3.2") },
+      ],
+      [],
+    );
+
+    expect(operations).toEqual([
+      { kind: "swap", logIndex: 10, side: "DOWN", bought: false, tokens: e("8"), underlying: e("3.2") },
+      { kind: "swap", logIndex: 20, side: "UP", bought: true, tokens: e("6.5"), underlying: e("1.95") },
     ]);
   });
 
-  it("leaves out a side that did not swap", () => {
-    expect(sideSwaps(option({ upSwapTokens: parseEther("1") })).map((swap) => swap.side)).toEqual(["UP"]);
-    expect(sideSwaps(option())).toEqual([]);
+  it("lists two buys on one side as two swaps", () => {
+    const operations = tradeOperations(
+      [
+        { logIndex: 3, side: "UP", outcomeAmount: -e("2"), underlyingAmount: e("0.5") },
+        { logIndex: 7, side: "UP", outcomeAmount: -e("3"), underlyingAmount: e("0.9") },
+      ],
+      [],
+    );
+
+    expect(operations.map((operation) => operation.kind === "swap" && operation.tokens)).toEqual([e("2"), e("3")]);
+  });
+
+  it("lists a buy and a sell of the same UP, which net to no tokens, as both swaps", () => {
+    const operations = tradeOperations(
+      [
+        { logIndex: 3, side: "UP", outcomeAmount: -e("4"), underlyingAmount: e("1.2") },
+        { logIndex: 9, side: "UP", outcomeAmount: e("4"), underlyingAmount: -e("1.1") },
+      ],
+      [],
+    );
+
+    expect(operations).toEqual([
+      { kind: "swap", logIndex: 3, side: "UP", bought: true, tokens: e("4"), underlying: e("1.2") },
+      { kind: "swap", logIndex: 9, side: "UP", bought: false, tokens: e("4"), underlying: e("1.1") },
+    ]);
+  });
+
+  it("reads DOWN and UP the router handed over in one amount as a mint", () => {
+    const operations = tradeOperations(
+      [],
+      [
+        { logIndex: 6, side: "DOWN", amount: e("9.6") },
+        { logIndex: 7, side: "UP", amount: e("9.6") },
+      ],
+    );
+
+    expect(operations).toEqual([{ kind: "mint", logIndex: 6, sets: e("9.6") }]);
+  });
+
+  it("reads DOWN and UP the router took in one amount as a merge", () => {
+    const operations = tradeOperations(
+      [],
+      [
+        { logIndex: 12, side: "UP", amount: -e("4") },
+        { logIndex: 11, side: "DOWN", amount: -e("4") },
+      ],
+    );
+
+    expect(operations).toEqual([{ kind: "merge", logIndex: 11, sets: e("4") }]);
+  });
+
+  it("lists a mint and a merge of equal sets in one transaction as both, around the swap between them", () => {
+    const operations = tradeOperations(
+      [{ logIndex: 8, side: "DOWN", outcomeAmount: e("6"), underlyingAmount: -e("3.6") }],
+      [
+        { logIndex: 5, side: "DOWN", amount: e("4") },
+        { logIndex: 6, side: "UP", amount: e("4") },
+        { logIndex: 10, side: "DOWN", amount: -e("4") },
+        { logIndex: 11, side: "UP", amount: -e("4") },
+      ],
+    );
+
+    expect(operations.map((operation) => operation.kind)).toEqual(["mint", "swap", "merge"]);
+  });
+
+  it("reads no mint or merge from DOWN or UP moving without the other side in the same amount", () => {
+    const operations = tradeOperations(
+      [],
+      [
+        { logIndex: 1, side: "DOWN", amount: e("5") },
+        { logIndex: 2, side: "UP", amount: e("3") },
+        { logIndex: 3, side: "UP", amount: -e("2") },
+      ],
+    );
+
+    expect(operations).toEqual([]);
+  });
+
+  it("has nothing to list for a trade with no swaps and no router transfers", () => {
+    expect(tradeOperations([], [])).toEqual([]);
+  });
+});
+
+describe("swapPrice", () => {
+  it("prices a swap at the underlying per whole token, 1e18-scaled", () => {
+    expect(swapPrice({ tokens: parseEther("8"), underlying: parseEther("3.2") })).toBe(parseEther("0.4"));
+  });
+
+  it("has no price for a swap that moved no tokens", () => {
+    expect(swapPrice({ tokens: 0n, underlying: parseEther("1") })).toBeNull();
   });
 });
 

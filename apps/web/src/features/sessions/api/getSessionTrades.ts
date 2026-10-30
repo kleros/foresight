@@ -6,27 +6,63 @@ import { fetchGraphql } from "@/lib/graphql/batcher";
 import { graphql } from "@/lib/graphql/generated";
 import { STALE_TIME } from "@/lib/query";
 
-import type { SessionTrade } from "../types";
-import { FIRST_PAGE, PREDICTION_ROWS, TRADE_PAGE, toSessionTrades, type TradesCursor } from "../utils/toSessionTrades";
+import { gnosisRouterAddresses } from "@/config/contracts";
 
-const SESSION_TRADES = graphql(`
-  query SessionTrades(
-    $sessionId: String!
-    $predictionOffset: Int!
-    $swapOffset: Int!
-    $predictionLimit: Int!
-    $swapLimit: Int!
-  ) {
+import type { SessionTrade } from "../types";
+import {
+  FIRST_PAGE,
+  KEYS_READ,
+  pageKeys,
+  toSessionTrades,
+  type TradeKey,
+  type TradesCursor,
+} from "../utils/toSessionTrades";
+
+const SESSION_TRADE_KEYS = graphql(`
+  query SessionTradeKeys($sessionId: String!, $predictionOffset: Int!, $externalOffset: Int!, $limit: Int!) {
     Prediction(
       where: { childMarket: { session_id: { _eq: $sessionId } } }
-      order_by: [{ blockNumber: desc }, { transactionHash: desc }, { executor_id: asc }, { childMarket_id: asc }]
+      distinct_on: [blockNumber, transactionHash, executor_id]
+      order_by: [{ blockNumber: desc }, { transactionHash: desc }, { executor_id: asc }]
       offset: $predictionOffset
-      limit: $predictionLimit
+      limit: $limit
+    ) {
+      blockNumber
+      transactionHash
+      executor_id
+    }
+    Swap(
+      where: { childMarket: { session_id: { _eq: $sessionId } }, executor_id: { _is_null: true } }
+      distinct_on: [blockNumber, transactionHash]
+      order_by: [{ blockNumber: desc }, { transactionHash: desc }]
+      offset: $externalOffset
+      limit: $limit
+    ) {
+      blockNumber
+      transactionHash
+    }
+  }
+`);
+
+const SESSION_TRADE_ROWS = graphql(`
+  query SessionTradeRows(
+    $sessionId: String!
+    $predictionTxs: [String!]!
+    $externalTxs: [String!]!
+    $routers: [String!]!
+  ) {
+    Prediction(
+      where: { childMarket: { session_id: { _eq: $sessionId } }, transactionHash: { _in: $predictionTxs } }
+      order_by: [{ transactionHash: desc }, { executor_id: asc }, { childMarket_id: asc }]
     ) {
       transactionHash
       blockNumber
       timestamp
       childMarket_id
+      childMarket {
+        downToken
+        upToken
+      }
       executor_id
       executor {
         owner
@@ -46,41 +82,83 @@ const SESSION_TRADES = graphql(`
       upPriceBefore
       upPriceAfter
     }
-    Swap(
-      where: { childMarket: { session_id: { _eq: $sessionId } }, executor_id: { _is_null: true } }
-      order_by: [{ blockNumber: desc }, { logIndex: desc }]
-      offset: $swapOffset
-      limit: $swapLimit
+    predictionSwaps: Swap(
+      where: {
+        childMarket: { session_id: { _eq: $sessionId } }
+        transactionHash: { _in: $predictionTxs }
+        executor_id: { _is_null: false }
+      }
+      order_by: [{ logIndex: asc }]
     ) {
-      id
       transactionHash
-      blockNumber
-      timestamp
+      executor_id
       childMarket_id
-      sender
+      logIndex
       outcomeAmount
       underlyingAmount
       pool {
         outcomeIndex
       }
     }
+    externalSwaps: Swap(
+      where: {
+        childMarket: { session_id: { _eq: $sessionId } }
+        transactionHash: { _in: $externalTxs }
+        executor_id: { _is_null: true }
+      }
+      order_by: [{ logIndex: asc }]
+    ) {
+      transactionHash
+      blockNumber
+      timestamp
+      sender
+      childMarket_id
+      outcomeAmount
+      underlyingAmount
+      pool {
+        outcomeIndex
+      }
+    }
+    Transfer(where: { transactionHash: { _in: $predictionTxs }, counterparty: { _in: $routers } }) {
+      id
+      transactionHash
+      executor_id
+      token
+      amount
+    }
   }
 `);
 
 export const sessionTradesKey = (sessionId?: string) => ["session-trades", sessionId] as const;
 
+/** Mints and merges reach a trade wallet from Seer's router, lowercase as the indexer stores a counterparty. */
+export const routerCounterparties = (): string[] => gnosisRouterAddresses().map((router) => router.toLowerCase());
+
+const hashesOf = (page: TradeKey[], kind: TradeKey["kind"]) => [
+  ...new Set(page.filter((key) => key.kind === kind).map((key) => key.transactionHash)),
+];
+
 /** One page of the session's trades, newest first, and where the next page starts; null at the end. */
-export const fetchSessionTrades = async (sessionId: string, cursor: TradesCursor = FIRST_PAGE) =>
-  toSessionTrades(
-    await fetchGraphql(SESSION_TRADES, {
-      sessionId,
-      predictionOffset: cursor.predictions,
-      swapOffset: cursor.swaps,
-      predictionLimit: PREDICTION_ROWS,
-      swapLimit: TRADE_PAGE,
-    }),
-    cursor,
-  );
+export async function fetchSessionTrades(
+  sessionId: string,
+  cursor: TradesCursor = FIRST_PAGE,
+): Promise<{ trades: SessionTrade[]; next: TradesCursor | null }> {
+  const keys = await fetchGraphql(SESSION_TRADE_KEYS, {
+    sessionId,
+    predictionOffset: cursor.predictions,
+    externalOffset: cursor.externals,
+    limit: KEYS_READ,
+  });
+  const { page, next } = pageKeys(keys, cursor);
+  if (page.length === 0) return { trades: [], next };
+  const rows = await fetchGraphql(SESSION_TRADE_ROWS, {
+    sessionId,
+    predictionTxs: hashesOf(page, "prediction"),
+    externalTxs: hashesOf(page, "external"),
+    routers: routerCounterparties(),
+  });
+  return { trades: toSessionTrades(page, rows), next };
+}
 
 /** Pages are read by offset, so a trade landing between reads shifts the next page onto rows already shown. */
 const unique = (trades: SessionTrade[]) => {

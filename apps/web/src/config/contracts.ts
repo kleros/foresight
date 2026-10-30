@@ -37,6 +37,9 @@ export function gnosisRouterAddress(chainId: number = DEFAULT_CHAIN_ID): Address
   return GNOSIS_ROUTER_ADDRESSES[chainId] ?? null;
 }
 
+/** Seer's router on every chain it is deployed on. */
+export const gnosisRouterAddresses = (): Address[] => Object.values(GNOSIS_ROUTER_ADDRESSES);
+
 /** Same contracts on both; gnosis' manager spends real sDAI, the local one a mintable stand-in. */
 export const foresightCreditsAbi = localhost.foresightCreditsAbi;
 

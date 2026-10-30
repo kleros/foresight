@@ -72,4 +72,9 @@ describe("timeAgo", () => {
     expect(timeAgo(before(40 * 86_400), now)).toBe("last mo.");
     expect(timeAgo(before(800 * 86_400), now)).toBe("2 yr. ago");
   });
+
+  it("reads an instant later than now as now", () => {
+    expect(timeAgo(before(-5), now)).toBe("now");
+    expect(timeAgo(before(-2 * 86_400), now)).toBe("now");
+  });
 });

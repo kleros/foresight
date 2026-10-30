@@ -124,6 +124,16 @@ export interface TradeOption {
   upPriceAfter: bigint | null;
 }
 
+/** One step a prediction took on an option, in wei; `logIndex` orders the steps within the transaction. */
+export type TradeOperation =
+  | { kind: "mint" | "merge"; logIndex: number; sets: bigint }
+  | { kind: "swap"; logIndex: number; side: PoolSide; bought: boolean; tokens: bigint; underlying: bigint };
+
+/** An option's slice of a prediction, with each mint, merge and swap it was made of in the order they ran. */
+export interface TradeOptionDetail extends TradeOption {
+  operations: TradeOperation[];
+}
+
 /** One transaction by one trade wallet, across every option it touched. */
 export interface PredictionTrade {
   kind: "prediction";
@@ -133,27 +143,36 @@ export interface PredictionTrade {
   blockNumber: bigint;
   /** Unix seconds. */
   timestamp: number;
+  /** The trade wallet. */
+  executor: Address;
   /** The account that owns the trade wallet. */
   owner: Address;
-  options: TradeOption[];
+  options: TradeOptionDetail[];
   /** The options' `optionCost`, summed: underlying put in, negative where more came out. */
   cost: bigint;
 }
 
-/** A swap straight through a pool, outside any trade wallet. */
-export interface ExternalTrade {
-  kind: "external";
-  id: string;
-  transactionHash: string;
-  blockNumber: bigint;
-  timestamp: number;
-  /** The transaction's sender; null where the indexer did not record one. */
-  sender: Address | null;
+/** One swap of an external transaction; underlying paid or received, in wei. */
+export interface ExternalLeg {
   childMarket: Address;
   side: PoolSide;
   bought: boolean;
-  /** Underlying paid or received, in wei. */
   underlying: bigint;
+}
+
+/** A transaction that swapped straight through the session's pools, outside any trade wallet. */
+export interface ExternalTrade {
+  kind: "external";
+  /** The transaction hash. */
+  id: string;
+  transactionHash: string;
+  blockNumber: bigint;
+  /** Unix seconds. */
+  timestamp: number;
+  /** The transaction's sender; null where the indexer did not record one. */
+  sender: Address | null;
+  /** Its swaps through the session's pools, in log order. */
+  legs: ExternalLeg[];
 }
 
 export type SessionTrade = PredictionTrade | ExternalTrade;

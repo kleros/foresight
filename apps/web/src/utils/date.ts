@@ -78,9 +78,9 @@ const UNIT_SECONDS: [Intl.RelativeTimeFormatUnit, number][] = [
   ["minute", 60],
 ];
 
-/** How long ago an instant was, in its largest whole unit: `5 min. ago`, `yesterday`, `now`. */
+/** How long ago an instant was, in its largest whole unit: `5 min. ago`, `yesterday`, `now`; a later instant is `now`. */
 export function timeAgo(instant: Date, now = new Date()): string {
-  const seconds = Math.round((instant.getTime() - now.getTime()) / 1000);
+  const seconds = Math.min(0, Math.round((instant.getTime() - now.getTime()) / 1000));
   const [unit, size] = UNIT_SECONDS.find(([, size]) => Math.abs(seconds) >= size) ?? ["second", 1];
   return RELATIVE.format(Math.trunc(seconds / size), unit);
 }

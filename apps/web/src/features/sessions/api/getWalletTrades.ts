@@ -7,11 +7,11 @@ import { fetchGraphql } from "@/lib/graphql/batcher";
 import { graphql } from "@/lib/graphql/generated";
 import { STALE_TIME } from "@/lib/query";
 
-import { sessionTradesKey } from "./getSessionTrades";
+import { routerCounterparties, sessionTradesKey } from "./getSessionTrades";
 import { toPredictions } from "../utils/toSessionTrades";
 
 const WALLET_TRADES = graphql(`
-  query WalletTrades($sessionId: String!, $executor: String!, $tokens: [String!]!) {
+  query WalletTrades($sessionId: String!, $executor: String!, $tokens: [String!]!, $routers: [String!]!) {
     Prediction(
       where: { childMarket: { session_id: { _eq: $sessionId } }, executor_id: { _eq: $executor } }
       order_by: [{ blockNumber: desc }, { transactionHash: desc }, { executor_id: asc }, { childMarket_id: asc }]
@@ -20,6 +20,10 @@ const WALLET_TRADES = graphql(`
       blockNumber
       timestamp
       childMarket_id
+      childMarket {
+        downToken
+        upToken
+      }
       executor_id
       executor {
         owner
@@ -38,6 +42,27 @@ const WALLET_TRADES = graphql(`
       downPriceAfter
       upPriceBefore
       upPriceAfter
+    }
+    Swap(
+      where: { childMarket: { session_id: { _eq: $sessionId } }, executor_id: { _eq: $executor } }
+      order_by: [{ logIndex: asc }]
+    ) {
+      transactionHash
+      executor_id
+      childMarket_id
+      logIndex
+      outcomeAmount
+      underlyingAmount
+      pool {
+        outcomeIndex
+      }
+    }
+    Transfer(where: { executor_id: { _eq: $executor }, token: { _in: $tokens }, counterparty: { _in: $routers } }) {
+      id
+      transactionHash
+      executor_id
+      token
+      amount
     }
     Position(where: { executor_id: { _eq: $executor }, token: { _in: $tokens } }) {
       token
@@ -61,9 +86,10 @@ export function useWalletTrades(sessionId: string | undefined, executor: Address
               sessionId,
               executor: executor.toLowerCase(),
               tokens: tokens.map((token) => token.toLowerCase()),
+              routers: routerCounterparties(),
             });
             return {
-              trades: toPredictions(result.Prediction).map((group) => group.trade),
+              trades: toPredictions(result.Prediction, result.Swap, result.Transfer),
               balances: Object.fromEntries(
                 result.Position.map((row) => [row.token.toLowerCase(), BigInt(row.balance)]),
               ) as Record<string, bigint>,

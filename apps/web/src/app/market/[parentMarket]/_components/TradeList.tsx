@@ -63,6 +63,8 @@ export function TradeList({ session, trades }: { session: SessionDetail; trades:
 
   const row = (trade: SessionTrade): ReactNode => {
     if (trade.kind === "external") {
+      const legs = trade.legs.map((leg) => `${nameOf(leg.childMarket)} · ${leg.side} ${leg.bought ? "buy" : "sell"}`);
+      const [first, ...rest] = legs;
       return (
         <div className={ROW}>
           <When timestamp={trade.timestamp} />
@@ -70,10 +72,13 @@ export function TradeList({ session, trades }: { session: SessionDetail; trades:
             <span className="truncate">{trade.sender ? shortenAddress(trade.sender) : "-"}</span>
             <span className="text-fs-text-secondary border-fs-border rounded-full border px-1.5 text-xs">External</span>
           </span>
-          <span className="min-w-0 truncate max-md:col-start-2">
-            {nameOf(trade.childMarket)} · {trade.side} {trade.bought ? "buy" : "sell"}
+          <span className="flex min-w-0 gap-1 max-md:col-start-2" title={legs.join(", ")}>
+            <span className="truncate">{first}</span>
+            {rest.length > 0 ? <span className="text-fs-text-secondary shrink-0">+{rest.length}</span> : null}
           </span>
-          <span className="tabular-nums max-md:col-start-2 md:text-right">{size(trade.underlying)}</span>
+          <span className="tabular-nums max-md:col-start-2 md:text-right">
+            {size(trade.legs.reduce((sum, leg) => sum + leg.underlying, 0n))}
+          </span>
         </div>
       );
     }
