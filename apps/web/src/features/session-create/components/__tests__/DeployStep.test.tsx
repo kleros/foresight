@@ -150,6 +150,7 @@ describe("DeployStep, phased session", () => {
     renderStep(TWO_BATCHES, { progress: done });
 
     expect(screen.getByText("Deployed")).toBeInTheDocument();
+    expect(screen.getByText(/^Resolution opens /)).toBeInTheDocument();
     expect(screen.getByText("Needs liquidity to be tradable")).toBeInTheDocument();
     expect(screen.getByText(`${TWO_BATCHES + 1} of ${TWO_BATCHES + 1} created`)).toBeInTheDocument();
   });
@@ -172,6 +173,24 @@ describe("DeployStep, phased session", () => {
 
     expect(details).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("Copy JSON")).toBeInTheDocument();
+  });
+
+  it("names the decision date in the deployment JSON as when resolution opens", async () => {
+    seedDraft(TWO_BATCHES);
+    const user = userEvent.setup();
+    const done = progressOf(TWO_BATCHES, {
+      stage: "complete",
+      parent: { state: "success" },
+      children: succeeded(TWO_BATCHES),
+    });
+    renderStep(TWO_BATCHES, { progress: done });
+
+    await user.click(screen.getByRole("button", { name: /Deployment details/ }));
+
+    const parent = (JSON.parse(screen.getByText(/"parent"/).textContent ?? "") as { parent: Record<string, unknown> })
+      .parent;
+    expect(parent).toHaveProperty("resolutionOpens");
+    expect(parent).not.toHaveProperty("tradingUntil");
   });
 });
 

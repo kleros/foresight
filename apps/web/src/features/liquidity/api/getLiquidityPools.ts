@@ -159,7 +159,8 @@ export async function fetchLiquidityPools(
 export const sessionHasLiquidity = (pools: SessionPools) =>
   pools.branches.some(({ up, down }) => up.status === "live" || down.status === "live");
 
-export function useLiquidityPools(markets: SessionMarkets | undefined) {
+/** @param poll read the pools again on the live tier while the page is visible, for liquidity that moves elsewhere. */
+export function useLiquidityPools(markets: SessionMarkets | undefined, { poll = false }: { poll?: boolean } = {}) {
   return useQuery({
     queryKey: [
       ...liquidityKeyPrefix,
@@ -170,5 +171,6 @@ export function useLiquidityPools(markets: SessionMarkets | undefined) {
     ],
     queryFn: markets ? () => fetchLiquidityPools(publicClient, { ...markets, chainId: DEFAULT_CHAIN_ID }) : skipToken,
     staleTime: STALE_TIME.live,
+    refetchInterval: poll ? STALE_TIME.live : false,
   });
 }

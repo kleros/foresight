@@ -47,3 +47,11 @@ describe("Outcome rows on a blank draft", () => {
     expect(rows().map(flagged)).toEqual([true, true]);
   });
 });
+
+describe("The decision date field", () => {
+  it("is labelled as when resolution opens", () => {
+    renderStep();
+
+    expect(screen.getByText("Resolution opens (UTC)")).toBeInTheDocument();
+  });
+});

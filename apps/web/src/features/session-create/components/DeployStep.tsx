@@ -169,7 +169,7 @@ export function DeployStep({
         category: draft.category,
         language: draft.language,
         minBond: draft.minBond,
-        tradingUntil: decisionHuman,
+        resolutionOpens: decisionHuman,
         hash: progress.parent.hash,
       },
       children: draft.outcomes.map((o, i) => ({

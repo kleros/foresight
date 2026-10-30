@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { DocumentNode, OperationDefinitionNode } from "graphql";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -10,9 +11,12 @@ import { useEstimateStore } from "@/features/predict/stores/estimateStore";
 
 import { fetchGraphql } from "@/lib/graphql/batcher";
 
+import { LIQUIDITY_CLOSED_REASON } from "@/config/liquidity";
+
 import {
   addControls,
   createWorld,
+  liquidityDialog,
   PAST_CLOSE,
   renderMarketPage,
   sessionLoaded,
@@ -42,6 +46,11 @@ vi.mock("@/features/sessions/api/verifySession", () => ({
   verifySession: async (_client: unknown, _chain: number, row: unknown) => row,
 }));
 vi.mock("@/lib/graphql/batcher", () => ({ fetchGraphql: vi.fn() }));
+/* The live tier shortened, so a read the page repeats on it lands within a test. */
+vi.mock("@/lib/query", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/query")>();
+  return { ...actual, STALE_TIME: { ...actual.STALE_TIME, live: 200 } };
+});
 vi.mock("@/config/ipfs", () => ({ IPFS_GATEWAY: "https://cdn.example.link/ipfs" }));
 vi.mock("@/features/trade-executor/components/TradeWallet/TradeWallet", () => ({ TradeWallet: () => null }));
 vi.mock("@/app/market/[parentMarket]/_components/useOptionPositions", () => ({ useOptionPositions: () => ({}) }));
@@ -92,18 +101,18 @@ function drained(): World {
   return world;
 }
 
-/** The session row past its resolution date, and a chart whose every UP pool last traded at half. */
-function show(world: World) {
+/** The session row, past its resolution date unless told otherwise, and a chart whose every UP pool last traded at half. */
+function show(world: World, openingTime = PAST_CLOSE, row: Record<string, unknown> = {}) {
   current.world = world;
   fetchMock.mockImplementation((async (document: DocumentNode) => {
-    if (queryName(document) === "SessionDetail") return { Session: [sessionRow(world, PAST_CLOSE)] };
+    if (queryName(document) === "SessionDetail") return { Session: [{ ...sessionRow(world, openingTime), ...row }] };
     if (queryName(document) === "SessionChart") {
       return {
         Pool: world.branches.map((branch, index) => ({
           id: `0x${String(index + 1).padStart(40, "0")}`,
           childMarket_id: branch.childMarket.toLowerCase(),
           underlyingPerOutcome: HALF,
-          updatedAt: PAST_CLOSE,
+          updatedAt: openingTime,
           swaps: [],
         })),
       };
@@ -155,5 +164,62 @@ describe("the market page past the resolution date", () => {
     expect(screen.queryByText("Countdown:")).toBeNull();
     expect(addControls()).toEqual([]);
     expect(screen.getByTestId("chart-end")).toHaveTextContent(PAST_CLOSE);
+  });
+
+  it("closes the session once its pools are drained from elsewhere, without a reload", async () => {
+    const world = liquid();
+    await show(world);
+    await waitFor(() => expect(screen.getByText("Trading")).toBeInTheDocument(), { timeout: 5000 });
+
+    const [first] = world.branches as [World["branches"][0]];
+    world.setPool(first.upToken, first.outcome, { sqrtPriceX96: Q96, liquidity: 0n, tickSpacing: 60 });
+
+    await waitFor(() => expect(screen.getByText("Closed")).toBeInTheDocument(), { timeout: 5000 });
+  });
+
+  it("opens the session again once a pool is filled from elsewhere, without a reload", async () => {
+    const world = drained();
+    await show(world);
+    await waitFor(() => expect(screen.getByText("Closed")).toBeInTheDocument(), { timeout: 5000 });
+
+    const [first] = world.branches as [World["branches"][0]];
+    world.setPool(first.upToken, first.outcome, { sqrtPriceX96: Q96, liquidity: 10n * WAD, tickSpacing: 60 });
+
+    await waitFor(() => expect(screen.getByText("Trading")).toBeInTheDocument(), { timeout: 5000 });
+  });
+
+  it("closes a page left open across the resolution date once its pools are drained from elsewhere", async () => {
+    const world = liquid();
+    const date = Math.floor(Date.now() / 1000) + 2;
+    await show(world, String(date));
+    await waitFor(() => expect(screen.getByText("Trading")).toBeInTheDocument(), { timeout: 5000 });
+    await waitFor(() => expect(Date.now()).toBeGreaterThan(date * 1000), { timeout: 5000 });
+
+    const [first] = world.branches as [World["branches"][0]];
+    world.setPool(first.upToken, first.outcome, { sqrtPriceX96: Q96, liquidity: 0n, tickSpacing: 60 });
+
+    await waitFor(() => expect(screen.getByText("Closed")).toBeInTheDocument(), { timeout: 8000 });
+  });
+
+  it("refuses liquidity in a popup left open across the resolution date while the pools still trade", async () => {
+    const world = liquid();
+    await show(world, String(Math.floor(Date.now() / 1000) + 3));
+    await waitFor(() => expect(addControls()).toHaveLength(1), { timeout: 5000 });
+
+    await userEvent.click(addControls()[0]!);
+    const dialog = await liquidityDialog();
+
+    await waitFor(() => expect(within(dialog).getByText(LIQUIDITY_CLOSED_REASON)).toBeInTheDocument(), {
+      timeout: 8000,
+    });
+    expect(screen.getByText("Trading")).toBeInTheDocument();
+  });
+
+  it("offers no Add liquidity on a session whose setup never completed, its chart ending at the date", async () => {
+    await show(liquid(), PAST_CLOSE, { completedAt: "0" });
+
+    await waitFor(() => expect(screen.getByTestId("chart-end")).toHaveTextContent(PAST_CLOSE), { timeout: 5000 });
+    expect(addControls()).toEqual([]);
+    expect(screen.queryByText("Trading has closed.")).toBeNull();
   });
 });
