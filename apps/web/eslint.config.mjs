@@ -88,6 +88,14 @@ export default [
     },
   },
   {
+    // Fork tests drive the assembled app against a live chain and indexer, so they
+    // compose features the way a route does.
+    files: ["src/features/*/flow/__tests__/*.fork*.ts"],
+    rules: {
+      "import-x/no-restricted-paths": "off",
+    },
+  },
+  {
     // Playwright fixtures take a `use` callback, which the React plugin reads as
     // React's `use` hook and rejects for being called outside a component.
     files: ["e2e/**/*.ts"],

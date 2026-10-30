@@ -207,6 +207,43 @@ describe("prediction netting", () => {
     t.expect(trade.underlyingDelta).toBe(-70n);
   });
 
+  it("writes a prediction row for each executor when one sends the other a market token", async (t) => {
+    const indexer = createTestIndexer();
+    await seedMarket(indexer, MARKET);
+    await indexer.Position.set({
+      id: `${EXECUTOR}-${UP}`,
+      executor_id: EXECUTOR,
+      token: UP,
+      balance: 40n,
+      updatedAt: 0n,
+    });
+
+    await indexEvents(indexer, [
+      executorDeployed(OWNER, EXECUTOR),
+      executorDeployed(OTHER_OWNER, OTHER_EXECUTOR),
+      transfer(UP, EXECUTOR, OTHER_EXECUTOR, 40n),
+    ]);
+
+    const rows = await indexer.Prediction.getAll();
+    t.expect(rows).toHaveLength(2);
+    t.expect(rows.find((row) => row.executor_id === EXECUTOR)).toMatchObject({
+      upDelta: -40n,
+      upBalance: 0n,
+      downDelta: 0n,
+      underlyingDelta: 0n,
+      upSwapTokens: 0n,
+      upSwapUnderlying: 0n,
+    });
+    t.expect(rows.find((row) => row.executor_id === OTHER_EXECUTOR)).toMatchObject({
+      upDelta: 40n,
+      upBalance: 40n,
+      downDelta: 0n,
+      underlyingDelta: 0n,
+      upSwapTokens: 0n,
+      upSwapUnderlying: 0n,
+    });
+  });
+
   it("records a bare underlying move as balance and history, never a prediction", async (t) => {
     const indexer = createTestIndexer();
     await seedMarket(indexer, MARKET);

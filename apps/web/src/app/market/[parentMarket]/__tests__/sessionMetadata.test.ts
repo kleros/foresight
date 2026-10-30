@@ -93,7 +93,7 @@ describe("generateMetadata for an indexed session", () => {
     const metadata = await metadataFor();
 
     expect(metadata.title).toEqual({ absolute: "Which grant raises GDP most? | Foresight" });
-    expect(metadata.openGraph?.images).toEqual(["/futarchy_kleros.png"]);
+    expect(metadata.openGraph?.images).toEqual(["/foresight-og.png"]);
   });
 
   it("cuts a long description to a snippet", async () => {

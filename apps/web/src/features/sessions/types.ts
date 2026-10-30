@@ -75,12 +75,110 @@ export interface SessionChartSeries {
 /** One series per option; an option whose pool never priced has no points. */
 export type SessionChartData = SessionChartSeries[];
 
+export type PoolSide = "UP" | "DOWN";
+
+/** One option's UP or DOWN pool, as the indexer serves it; addresses lowercase. */
+export interface SessionPool {
+  id: Address;
+  market: Address;
+  side: PoolSide;
+  outcomeToken: Address;
+  underlyingToken: Address;
+  /** Underlying per outcome token, 1e18-scaled; null until the pool prices. */
+  underlyingPerOutcome: bigint | null;
+  /** Lifetime amount swapped either way, in wei of each leg. */
+  volumeUnderlying: bigint;
+  volumeOutcome: bigint;
+}
+
 export interface SessionStats {
   /** Executors that have predicted in this session. */
   traders: number;
   /** Lifetime amount swapped through the session's pools, in underlying wei. */
   volumeUnderlying: bigint;
+  /** The same swaps' outcome-token leg, in outcome-token wei. */
+  volumeOutcome: bigint;
+  pools: SessionPool[];
 }
+
+/** One option's slice of a prediction, as the indexer's `Prediction` row holds it; amounts in wei, prices 1e18-scaled. */
+export interface TradeOption {
+  childMarket: Address;
+  /** Signed net movements over the transaction, positive into the trade wallet. */
+  downDelta: bigint;
+  upDelta: bigint;
+  /** Balances once the transaction settled. */
+  downBalance: bigint;
+  upBalance: bigint;
+  /** Totals over the side's swaps, signed from the trade wallet's side. */
+  downSwapUnderlying: bigint;
+  downSwapTokens: bigint;
+  upSwapUnderlying: bigint;
+  upSwapTokens: bigint;
+  downAvgPrice: bigint | null;
+  upAvgPrice: bigint | null;
+  /** Pool prices before the side's first swap and after its last; null where the side did not swap. */
+  downPriceBefore: bigint | null;
+  downPriceAfter: bigint | null;
+  upPriceBefore: bigint | null;
+  upPriceAfter: bigint | null;
+}
+
+/** One step a prediction took on an option, in wei; `logIndex` orders the steps within the transaction. */
+export type TradeOperation =
+  | { kind: "mint" | "merge"; logIndex: number; sets: bigint }
+  | { kind: "swap"; logIndex: number; side: PoolSide; bought: boolean; tokens: bigint; underlying: bigint };
+
+/** An option's slice of a prediction, with each mint, merge and swap it was made of in the order they ran. */
+export interface TradeOptionDetail extends TradeOption {
+  operations: TradeOperation[];
+}
+
+/** One transaction by one trade wallet, across every option it touched. */
+export interface PredictionTrade {
+  kind: "prediction";
+  /** `transactionHash-executor` */
+  id: string;
+  transactionHash: string;
+  blockNumber: bigint;
+  /** Unix seconds. */
+  timestamp: number;
+  /** The trade wallet. */
+  executor: Address;
+  /** The account that owns the trade wallet. */
+  owner: Address;
+  options: TradeOptionDetail[];
+  /** The options' `optionCost`, summed: underlying put in, negative where more came out. */
+  cost: bigint;
+}
+
+/** One swap of an external transaction; underlying paid or received, in wei. */
+export interface ExternalLeg {
+  childMarket: Address;
+  side: PoolSide;
+  bought: boolean;
+  underlying: bigint;
+}
+
+/** A transaction that swapped straight through the session's pools, outside any trade wallet. */
+export interface ExternalTrade {
+  kind: "external";
+  /** The transaction hash. */
+  id: string;
+  transactionHash: string;
+  blockNumber: bigint;
+  /** Unix seconds. */
+  timestamp: number;
+  /** The transaction's sender; null where the indexer did not record one. */
+  sender: Address | null;
+  /** Its swaps through the session's pools, in log order. */
+  legs: ExternalLeg[];
+}
+
+export type SessionTrade = PredictionTrade | ExternalTrade;
+
+/** A pool's own holdings, keyed by lowercase pool address. */
+export type PoolBalances = Record<string, { outcome: bigint; underlying: bigint }>;
 
 export interface SessionSummary extends SessionCore {
   branchCount: number;

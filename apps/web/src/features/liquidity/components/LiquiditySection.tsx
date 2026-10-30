@@ -20,10 +20,11 @@ function summary(positions: number, canMerge: boolean, unread: boolean): string 
 }
 
 /**
- * The session's liquidity, at the bottom of its page: what the wallet holds in a line, Add liquidity, and
- * Your positions, which opens the popup with each position's Remove and the merge.
+ * The session's liquidity, at the bottom of its page: what the wallet holds in a line, Add liquidity until
+ * the close, and Your positions, which opens the popup with each position's Remove and the merge.
  */
 export function LiquiditySection({
+  closed = false,
   reason,
   onAdd,
   names,
@@ -33,6 +34,7 @@ export function LiquiditySection({
   merge,
   run,
 }: {
+  closed?: boolean;
   reason?: string;
   onAdd: () => void;
   names: string[];
@@ -76,7 +78,7 @@ export function LiquiditySection({
               onPress={() => setManaging(true)}
             />
           ) : null}
-          <AddLiquidityButton small reason={reason} onPress={onAdd} />
+          {closed ? null : <AddLiquidityButton small reason={reason} onPress={onAdd} />}
         </div>
       </div>
 

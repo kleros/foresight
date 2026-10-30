@@ -187,6 +187,31 @@ describe("prediction flows", () => {
     t.expect(row.upAvgPrice).toBeUndefined();
   });
 
+  it("counts a market token arriving from the owner's wallet with no swap or underlying", async (t) => {
+    const indexer = createTestIndexer();
+    await seedMarket(indexer, MARKET);
+    await indexer.Position.set({
+      id: `${EXECUTOR}-${UP}`,
+      executor_id: EXECUTOR,
+      token: UP,
+      balance: 100n,
+      updatedAt: 0n,
+    });
+
+    await indexEvents(indexer, [executorDeployed(OWNER, EXECUTOR), transfer(UP, OWNER, EXECUTOR, 20n)]);
+
+    const row = await onlyPrediction(indexer);
+    t.expect([row.upDelta, row.downDelta, row.underlyingDelta]).toEqual([20n, 0n, 0n]);
+    t.expect([row.upSwapTokens, row.upSwapUnderlying, row.downSwapTokens, row.downSwapUnderlying]).toEqual([
+      0n,
+      0n,
+      0n,
+      0n,
+    ]);
+    t.expect(row.upBalance).toBe(120n);
+    t.expect(row.upAvgPrice).toBeUndefined();
+  });
+
   it("gives each transaction of a chunked predict its own row", async (t) => {
     const indexer = createTestIndexer();
     await seedMarket(indexer, MARKET);
@@ -266,5 +291,69 @@ describe("prediction flows", () => {
     // each row carries only its own pool's prices
     t.expect([first!.upPriceAfter, first!.downPriceAfter]).toEqual([WAD / 4n, undefined]);
     t.expect([second!.upPriceAfter, second!.downPriceAfter]).toEqual([undefined, (4n * WAD) / 9n]);
+  });
+});
+
+/** A child market's INVALID token is not a registered Token, so it moves only the executor's Position. */
+describe("a child market's INVALID position", () => {
+  const INVALID = "0x0000000000000000000000000000000000000119" as const;
+
+  it("keeps the INVALID a split delivers in the executor's Position, off the prediction row", async (t) => {
+    const indexer = createTestIndexer();
+    await seedMarket(indexer, MARKET);
+
+    await indexEvents(indexer, [
+      executorDeployed(OWNER, EXECUTOR),
+      transfer(UNDERLYING, EXECUTOR, ROUTER, 40n),
+      transfer(DOWN, ROUTER, EXECUTOR, 40n),
+      transfer(UP, ROUTER, EXECUTOR, 40n),
+      transfer(INVALID, ROUTER, EXECUTOR, 40n),
+    ]);
+
+    const row = await onlyPrediction(indexer);
+    t.expect([row.upDelta, row.downDelta, row.underlyingDelta]).toEqual([40n, 40n, -40n]);
+    t.expect((await indexer.Position.getOrThrow(`${EXECUTOR}-${INVALID}`)).balance).toBe(40n);
+  });
+
+  it("takes the INVALID a merge burns off the executor's Position", async (t) => {
+    const indexer = createTestIndexer();
+    await seedMarket(indexer, MARKET);
+    for (const token of [UP, DOWN, INVALID]) {
+      await indexer.Position.set({
+        id: `${EXECUTOR}-${token}`,
+        executor_id: EXECUTOR,
+        token,
+        balance: 40n,
+        updatedAt: 0n,
+      });
+    }
+
+    await indexEvents(indexer, [
+      executorDeployed(OWNER, EXECUTOR),
+      transfer(DOWN, EXECUTOR, ROUTER, 15n),
+      transfer(UP, EXECUTOR, ROUTER, 15n),
+      transfer(INVALID, EXECUTOR, ROUTER, 15n),
+      transfer(UNDERLYING, ROUTER, EXECUTOR, 15n),
+    ]);
+
+    const row = await onlyPrediction(indexer);
+    t.expect([row.upDelta, row.downDelta, row.underlyingDelta]).toEqual([-15n, -15n, 15n]);
+    t.expect((await indexer.Position.getOrThrow(`${EXECUTOR}-${INVALID}`)).balance).toBe(25n);
+  });
+
+  it("writes a split's row with no INVALID behind it for UP and DOWN arriving from the owner's wallet", async (t) => {
+    const indexer = createTestIndexer();
+    await seedMarket(indexer, MARKET);
+
+    await indexEvents(indexer, [
+      executorDeployed(OWNER, EXECUTOR),
+      transfer(DOWN, OWNER, EXECUTOR, 20n),
+      transfer(UP, OWNER, EXECUTOR, 20n),
+    ]);
+
+    const row = await onlyPrediction(indexer);
+    t.expect([row.upDelta, row.downDelta, row.underlyingDelta]).toEqual([20n, 20n, 0n]);
+    t.expect([row.upSwapTokens, row.downSwapTokens]).toEqual([0n, 0n]);
+    t.expect(await indexer.Position.get(`${EXECUTOR}-${INVALID}`)).toBeUndefined();
   });
 });

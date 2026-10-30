@@ -37,6 +37,9 @@ export function gnosisRouterAddress(chainId: number = DEFAULT_CHAIN_ID): Address
   return GNOSIS_ROUTER_ADDRESSES[chainId] ?? null;
 }
 
+/** Seer's router on every chain it is deployed on. */
+export const gnosisRouterAddresses = (): Address[] => Object.values(GNOSIS_ROUTER_ADDRESSES);
+
 /** Same contracts on both; gnosis' manager spends real sDAI, the local one a mintable stand-in. */
 export const foresightCreditsAbi = localhost.foresightCreditsAbi;
 
@@ -101,6 +104,12 @@ const S_DAI_ADDRESSES: Record<number, Address> = { ...gnosis.savingsXDaiAddress 
 const S_DAI_ADAPTER_ADDRESSES: Record<number, Address> = { ...gnosis.savingsXDaiAdapterAddress };
 
 export type SDaiDepositRoute = { sDai: Address; sDaiAdapter: Address };
+
+/** Whether `collateral` is the chain's sDAI, adapter or none. */
+export function isSDai(collateral: Address, chainId: number = DEFAULT_CHAIN_ID): boolean {
+  const sDai = S_DAI_ADDRESSES[chainId];
+  return sDai !== undefined && isAddressEqual(sDai, collateral);
+}
 
 /**
  * Gnosis' savings adapter takes xDAI and mints sDAI to whichever address is named, so

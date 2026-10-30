@@ -44,6 +44,9 @@ yarn lint           # eslint, zero warnings tolerated
 yarn check-types    # tsc --noEmit
 yarn codegen        # types for the indexer queries, needs a running indexer
 yarn test:e2e       # playwright
+
+node scripts/generate-icons.mjs     # src/app icons from src/assets/logo/foresight-mark.svg
+node scripts/capture-og-image.mjs   # public/foresight-og.png from the homepage of a running app
 ```
 
 ## Indexer queries

@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { LIQUIDITY_CLOSED_REASON } from "@/config/liquidity";
 import { paths } from "@/config/paths";
 
 import { draftAssessment } from "../../__tests__/support/drafts";
@@ -37,10 +38,11 @@ const deployed = (parentMarket: string): SessionDeployProgress => ({
   parentMarket,
 });
 
-function renderDeployed(parentMarket: string) {
+function renderDeployed(parentMarket: string, decisionDate = "") {
   const store = () => useDraftStore.getState();
   store().resetDraft();
   while (store().draft.outcomes.length < OUTCOMES) store().addOutcome();
+  store().setDraftField("decisionDate", decisionDate);
   return render(
     <DeployStep
       assessment={draftAssessment()}
@@ -76,5 +78,15 @@ describe("DeployStep's Seed liquidity", () => {
     const href = new URL(seedLink().getAttribute("href") ?? "", "http://localhost");
     expect(href.pathname.toLowerCase()).toBe(paths.market.getHref(PARENT_MARKET).toLowerCase());
     expect(href.search.length + href.hash.length).toBeGreaterThan(0);
+  });
+
+  it("is a disabled button carrying the closed reason once the session's close has passed", () => {
+    renderDeployed(PARENT_MARKET, "2020-01-01");
+
+    const seed = screen.getByRole("button", { name: "Seed liquidity" });
+    expect(seed).toBeDisabled();
+    expect(seed).toHaveAccessibleDescription(LIQUIDITY_CLOSED_REASON);
+    expect(screen.getByText(LIQUIDITY_CLOSED_REASON)).toBeVisible();
+    expect(screen.queryByRole("link", { name: "Seed liquidity" })).toBeNull();
   });
 });

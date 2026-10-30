@@ -15,6 +15,16 @@ describe("collateralVolume", () => {
     expect(collateralVolume(session, parseEther("92000.5"))).toBe(46000.25);
   });
 
+  it("counts an outcome token as one third of the collateral where the decision has three outcomes", () => {
+    const three = toSessionDetail(
+      { ...sessionDetailColumns, outcomeCount: "3", children: [sessionChildRow()] },
+      GATEWAY,
+    );
+
+    // 92001 summed over 3 outcomes.
+    expect(collateralVolume(three, parseEther("92001"))).toBe(30667);
+  });
+
   it("falls back to 18 decimals where the collateral read failed", () => {
     const blind = toSessionDetail(
       { ...sessionDetailColumns, collateralDecimals: null, children: [sessionChildRow()] },

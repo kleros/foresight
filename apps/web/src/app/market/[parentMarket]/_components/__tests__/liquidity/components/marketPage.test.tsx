@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { createPublicClient, custom, RpcRequestError } from "viem";
+import { gnosis } from "viem/chains";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { owner, sortPair } from "@/features/liquidity/api/__tests__/support/chain";
@@ -10,6 +12,9 @@ import { fullRange } from "@/features/liquidity/flow/__tests__/support/session";
 import { planMerge } from "@/features/liquidity/flow/plan";
 
 import { fetchGraphql } from "@/lib/graphql/batcher";
+
+import { LIQUIDITY_CLOSED_REASON } from "@/config/liquidity";
+import { ADD_LIQUIDITY_PARAM } from "@/config/paths";
 
 import {
   addControls,
@@ -89,6 +94,15 @@ function seeded(): World {
   const [b0, b1] = sortPair(second.downToken, second.outcome);
   world.holdPosition(owner, { tokenId: 7n, token0: a0, token1: a1, tickLower, tickUpper, liquidity: WAD });
   world.holdPosition(owner, { tokenId: 9n, token0: b0, token1: b1, tickLower, tickUpper, liquidity: 2n * WAD });
+  return world;
+}
+
+/** Branch 0's UP pool is initialized empty and the wallet holds a position in it above the pool's tick. */
+function emptyPoolWithPosition(): World {
+  const world = unseeded();
+  const [first] = world.branches as [World["branches"][0]];
+  const [token0, token1] = sortPair(first.upToken, first.outcome);
+  world.holdPosition(owner, { tokenId: 11n, token0, token1, tickLower: 600, tickUpper: 1_200, liquidity: WAD });
   return world;
 }
 
@@ -298,24 +312,39 @@ describe("the market page of a session with liquidity", () => {
 });
 
 describe("the market page after the session's close", () => {
-  it("disables every Add liquidity control with the reason, banner and section alike", async () => {
-    await show(unseeded(), PAST_CLOSE);
+  it("shows no banner and no Add liquidity on a closed session with no liquidity, and keeps its position's Remove", async () => {
+    await show(emptyPoolWithPosition(), PAST_CLOSE);
 
-    await waitFor(() => expect(addControls()).toHaveLength(2), { timeout: 5000 });
-    for (const control of addControls()) {
-      expect(disabled(control)).toBe(true);
-      expect(control).toHaveAccessibleDescription(/clos/i);
-    }
+    // the position is counted once the pools are read, so the banner would be up by now
+    await waitFor(() => expect(summary()).toHaveTextContent(/^1 position\b/), { timeout: 5000 });
+    expect(screen.queryByText("No liquidity yet")).toBeNull();
+    expect(addControls()).toEqual([]);
+    expect(screen.queryByText(LIQUIDITY_CLOSED_REASON)).toBeNull();
+
+    const dialog = await openPositions();
+    const remove = await within(dialog).findByRole("button", { name: removeButton(`${BRANCH_NAMES[0]} UP pool`) });
+    expect(disabled(remove)).toBe(false);
   });
 
-  it("keeps Remove and Merge while Add is disabled", async () => {
+  it("opens no liquidity popup from the add-liquidity link once the session has closed", async () => {
+    window.history.replaceState(null, "", `/?${ADD_LIQUIDITY_PARAM}`);
+
+    await show(emptyPoolWithPosition(), PAST_CLOSE);
+
+    // the link's popup waits for the pools, which are read before the position is counted
+    await waitFor(() => expect(summary()).toHaveTextContent(/^1 position\b/), { timeout: 5000 });
+    expect(screen.queryByRole("dialog", { name: /liquidity/i })).toBeNull();
+  });
+
+  it("shows no Add liquidity and no closed reason in the section, and keeps Remove and Merge", async () => {
     const world = seeded();
     holdCompleteSets(world);
 
     await show(world, PAST_CLOSE);
-    const [add] = addControls() as [HTMLElement];
-    expect(disabled(add)).toBe(true);
-    expect(add).toHaveAccessibleDescription(/clos/i);
+    await waitFor(() => expect(summary()).toHaveTextContent(/^2 positions\b/), { timeout: 5000 });
+    expect(addControls()).toEqual([]);
+    expect(screen.queryByText(LIQUIDITY_CLOSED_REASON)).toBeNull();
+    expect(screen.getByRole("heading", { name: "Liquidity" })).toBeInTheDocument();
 
     const dialog = await openPositions();
 
@@ -323,5 +352,72 @@ describe("the market page after the session's close", () => {
     await waitFor(() => expect(removeButtons(dialog)).toHaveLength(2), { timeout: 5000 });
     expect(disabled(merge)).toBe(false);
     for (const remove of removeButtons(dialog)) expect(disabled(remove)).toBe(false);
+  });
+});
+
+describe("Add liquidity while the session is open", () => {
+  it("opens the liquidity popup from the section's button", async () => {
+    await show(unseeded(), TRADING_CLOSE);
+    await waitFor(() => expect(addControls()).toHaveLength(2), { timeout: 5000 });
+
+    await userEvent.click(addControls()[1]!);
+
+    expect(await liquidityDialog()).toBeInTheDocument();
+  });
+
+  it("disables the section's button with its reason while the session is being set up", async () => {
+    const world = unseeded();
+    current.world = world;
+    const answer = graphqlFor(world, TRADING_CLOSE);
+    fetchMock.mockImplementation((async (document: never) => {
+      const result = (await answer(document)) as { Session?: Record<string, unknown>[] };
+      return result.Session ? { Session: result.Session.map((row) => ({ ...row, completedAt: "0" })) } : result;
+    }) as never);
+    renderMarketPage(world);
+    await sessionLoaded();
+
+    const reason = "The session is still being set up.";
+    await waitFor(() => expect(addControls()).toHaveLength(1), { timeout: 5000 });
+    const [add] = addControls() as [HTMLElement];
+    expect(disabled(add)).toBe(true);
+    expect(add).toHaveAccessibleDescription(reason);
+    expect(screen.getByText(reason)).toBeVisible();
+  });
+
+  it("disables the section's button with its reason when the pools cannot be read", async () => {
+    const world = unseeded();
+    const refusing = createPublicClient({
+      chain: gnosis,
+      transport: custom({
+        async request(args: { method: string; params?: unknown }) {
+          if (args.method === "eth_call") {
+            throw new RpcRequestError({ body: args, error: { code: -32000, message: "node down" }, url: "fake" });
+          }
+          return world.client.request(args as never);
+        },
+      }),
+      batch: { multicall: true },
+    });
+    current.world = { ...world, client: refusing };
+    fetchMock.mockImplementation(graphqlFor(world, TRADING_CLOSE) as never);
+    renderMarketPage(world);
+    await sessionLoaded();
+
+    const reason = "Could not read the pools. Reload in a moment.";
+    await waitFor(() => expect(screen.getByText(reason)).toBeVisible(), { timeout: 5000 });
+    const [add] = addControls() as [HTMLElement];
+    expect(disabled(add)).toBe(true);
+    expect(add).toHaveAccessibleDescription(reason);
+  });
+
+  it("draws both Add liquidity buttons plain, not in the primary gradient fill", async () => {
+    await show(unseeded(), TRADING_CLOSE);
+    await waitFor(() => expect(addControls()).toHaveLength(2), { timeout: 5000 });
+
+    for (const control of addControls()) {
+      expect(control.className).not.toMatch(/\bbg-klerosUIComponentsPrimaryBlue\b/);
+      expect(control.className).not.toMatch(/\bbg-klerosUIComponentsSecondaryPurple\b/);
+      expect(control.className).not.toMatch(/fs-cta|predict-cta|gradient/);
+    }
   });
 });

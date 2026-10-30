@@ -30,6 +30,10 @@ contracts:
     events:
       - event: Initialize(uint160 price, int24 tick)
       - event: Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 price, uint128 liquidity, int24 tick)
+        field_selection:
+          transaction_fields:
+            - hash
+            - from
 
 ## `yarn update <network>` writes config.<network>.yaml with only that chain.
 ## Only the local chain sets `rpc`: gnosis events come from HyperSync.

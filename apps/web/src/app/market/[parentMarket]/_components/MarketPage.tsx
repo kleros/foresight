@@ -14,9 +14,10 @@ import { EstimateActions } from "@/features/predict/components/EstimateActions";
 import { EstimateCsvDialog } from "@/features/predict/components/EstimateCsvDialog";
 import { useEstimateHydration } from "@/features/predict/hooks/useEstimateHydration";
 import { snapEstimate } from "@/features/predict/utils/estimates";
+import { usePoolBalances, useSDaiUsdPrice } from "@/features/sessions/api/getPoolBalances";
 import { useSession } from "@/features/sessions/api/getSession";
 import { useSessionChart } from "@/features/sessions/api/getSessionChart";
-import { useSessionStats } from "@/features/sessions/api/getSessionStats";
+import { sessionStatsKey, useSessionStats } from "@/features/sessions/api/getSessionStats";
 import { useRenderAtClose } from "@/features/sessions/hooks/useRenderAtClose";
 import { latestEstimates } from "@/features/sessions/utils/latestEstimates";
 import { optionNoun, optionNounSingular } from "@/features/sessions/utils/optionNoun";
@@ -25,7 +26,6 @@ import { TradeWallet } from "@/features/trade-executor/components/TradeWallet/Tr
 
 import { PageMessage } from "@/components/layout/PageMessage";
 
-import { LIQUIDITY_CLOSED_REASON } from "@/config/liquidity";
 import { ADD_LIQUIDITY_PARAM } from "@/config/paths";
 
 import { AdvancedSection } from "./AdvancedSection";
@@ -34,6 +34,7 @@ import { ParticipateSection } from "./ParticipateSection";
 import { PredictCard } from "./PredictCard";
 import { SessionHeader } from "./SessionHeader";
 import { toWalletMarket } from "./toWalletMarket";
+import { TradeHistory } from "./TradeHistory";
 import { useOptionPositions } from "./useOptionPositions";
 
 const SessionChart = dynamic(() => import("@/features/sessions/components/SessionChart").then((m) => m.SessionChart), {
@@ -44,17 +45,24 @@ const SessionChart = dynamic(() => import("@/features/sessions/components/Sessio
 export function MarketPage({ parentMarket }: { parentMarket: string }) {
   const session = useSession(parentMarket);
   const stats = useSessionStats(session.data?.id);
+  const poolBalances = usePoolBalances(session.data?.id, stats.data?.pools);
+  const usdPrice = useSDaiUsdPrice(session.data?.collateralToken);
   const chart = useSessionChart(session.data ?? undefined);
   const positions = useOptionPositions(session.data ?? undefined);
   useRenderAtClose(session.data?.closesAt);
   useEstimateHydration();
   const searchParams = useSearchParams();
-  const [isAddingLiquidity, setAddingLiquidity] = useState(() => searchParams?.has(ADD_LIQUIDITY_PARAM) ?? false);
+  // "link": the add-liquidity link asked for the popup, which waits until the session's status is known
+  const [isAddingLiquidity, setAddingLiquidity] = useState<boolean | "link">(() =>
+    searchParams?.has(ADD_LIQUIDITY_PARAM) ? "link" : false,
+  );
   const liquidity = useSessionLiquidity({
     parentMarket: parentMarket as `0x${string}`,
     branches: session.data?.options.map(({ market, outcomeIndex, name }) => ({ market, outcomeIndex, name })) ?? [],
     closesAt: session.data?.closesAt ?? null,
     isReady: session.data?.setupComplete ?? false,
+    // the header's Liquidity reads pool balances keyed under the stats
+    alsoReread: sessionStatsKey(session.data?.id),
   });
 
   if (!isAddress(parentMarket, { strict: false }) || session.data === null) {
@@ -82,16 +90,14 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
 
   const detail = session.data;
   const status = sessionStatus(detail, new Date());
+  if (isAddingLiquidity === "link") setAddingLiquidity(status !== "closed");
   const noun = optionNoun(detail.itemNamePlural);
   const walletMarket = toWalletMarket(detail);
-  const addLiquidityReason =
-    status === "closed"
-      ? LIQUIDITY_CLOSED_REASON
-      : !detail.setupComplete
-        ? "The session is still being set up."
-        : liquidity.pools.isError
-          ? "Could not read the pools. Reload in a moment."
-          : undefined;
+  const addLiquidityReason = !detail.setupComplete
+    ? "The session is still being set up."
+    : liquidity.pools.isError
+      ? "Could not read the pools. Reload in a moment."
+      : undefined;
   // the pool's number is an unbounded float; held on each option's grid so "at the market" is exact
   const latest = chart.data ? latestEstimates(chart.data) : {};
   const marketEstimates = Object.fromEntries(
@@ -103,8 +109,16 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
 
   return (
     <PageColumn>
-      <SessionHeader session={detail} status={status} stats={stats.data} statsPending={stats.isPending} />
-      {liquidity.hasLiquidity === false ? (
+      <SessionHeader
+        session={detail}
+        status={status}
+        stats={stats.data}
+        statsPending={stats.isPending}
+        poolBalances={poolBalances.data}
+        poolBalancesPending={poolBalances.isPending}
+        usdPrice={usdPrice.data}
+      />
+      {liquidity.hasLiquidity === false && status !== "closed" ? (
         <LiquidityBanner reason={addLiquidityReason} onAdd={() => setAddingLiquidity(true)} />
       ) : null}
       {chart.isPending ? (
@@ -155,9 +169,11 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
           marketEstimates={marketEstimates}
           isMarketUnknown={chart.data === undefined}
         />
+        <TradeHistory session={detail} />
         {walletMarket ? <TradeWallet market={walletMarket} noun={optionNounSingular(detail.itemName)} /> : null}
         <AdvancedSection parentMarket={detail.parentMarket} />
         <LiquiditySection
+          closed={status === "closed"}
           reason={addLiquidityReason}
           onAdd={() => setAddingLiquidity(true)}
           names={liquidity.names}
@@ -170,7 +186,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
       </section>
       <LiquidityDialog
         // opens once the pools are read, which it plans against
-        isOpen={isAddingLiquidity && liquidity.pools.data !== undefined}
+        isOpen={isAddingLiquidity === true && liquidity.pools.data !== undefined}
         onClose={() => setAddingLiquidity(false)}
         names={liquidity.names}
         pools={liquidity.pools.data}

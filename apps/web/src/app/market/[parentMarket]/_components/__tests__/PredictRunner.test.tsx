@@ -356,9 +356,13 @@ describe("PredictRunner, refreshing the chart, estimates, Traders and Volume aft
           {
             id: POOL,
             childMarket_id: POOL,
+            outcomeToken: addresses.upToken,
+            underlyingToken: addresses.underlyingToken,
+            outcomeIndex: 1,
             underlyingPerOutcome: traded ? "624000000000000000" : "500000000000000000",
             updatedAt: traded ? "1700000100" : "1700000000",
             volumeUnderlying: traded ? "1000000000000000000" : "0",
+            volumeOutcome: traded ? "1600000000000000000" : "0",
             swaps,
           },
         ],
@@ -372,7 +376,12 @@ describe("PredictRunner, refreshing the chart, estimates, Traders and Volume aft
     queryClient.setQueryDefaults(sessionChartKey(sessionId), { gcTime: Infinity });
     queryClient.setQueryDefaults(sessionStatsKey(sessionId), { gcTime: Infinity });
     queryClient.setQueryData(sessionChartKey(sessionId), []);
-    queryClient.setQueryData(sessionStatsKey(sessionId), { traders: 0, volumeUnderlying: 0n });
+    queryClient.setQueryData(sessionStatsKey(sessionId), {
+      traders: 0,
+      volumeUnderlying: 0n,
+      volumeOutcome: 0n,
+      pools: [],
+    });
   }
 
   const isInvalidated = (queryClient: QueryClient, key: readonly unknown[]) =>

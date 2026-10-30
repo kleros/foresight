@@ -110,3 +110,43 @@ describe("useLiquidityRun rereads the session's pools and positions", () => {
     expect(rereads()).toBe(0);
   });
 });
+
+describe("useLiquidityRun rereads the page query it is handed", () => {
+  /** The page's own query, and one keyed under it, both holding data before the run. */
+  const PAGE_KEY = ["session-stats", "0xsession"] as const;
+  const UNDER_PAGE_KEY = [...PAGE_KEY, "pool-balances"] as const;
+
+  function renderWithPageQuery() {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(PAGE_KEY, "stats");
+    queryClient.setQueryData(UNDER_PAGE_KEY, "balances");
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useLiquidityRun(PARENT, null, PAGE_KEY), { wrapper });
+    const stale = () => [PAGE_KEY, UNDER_PAGE_KEY].map((key) => queryClient.getQueryState(key)?.isInvalidated);
+    return { result, stale };
+  }
+
+  it.each(["complete", "moved", "halted"] as const)(
+    "marks it and what is keyed under it stale once a run stops as %s",
+    async (stage) => {
+      const { result, stale } = renderWithPageQuery();
+      await waitFor(() => expect(result.current.progress?.stage).toBe("idle"));
+      act(() => driver.moveTo("signing"));
+
+      act(() => driver.moveTo(stage));
+
+      expect(stale()).toEqual([true, true]);
+    },
+  );
+
+  it("leaves it fresh while a run is signing", async () => {
+    const { result, stale } = renderWithPageQuery();
+    await waitFor(() => expect(result.current.progress?.stage).toBe("idle"));
+
+    act(() => driver.moveTo("signing"));
+
+    expect(stale()).toEqual([false, false]);
+  });
+});

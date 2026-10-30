@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { fileStamp, formatLocalInstant, formatUtcInstant, utcInstant } from "../date";
+import { fileStamp, formatLocalInstant, formatUtcInstant, timeAgo, utcInstant } from "../date";
 
 describe("utcInstant", () => {
   it("composes an ISO day and HH:mm into a UTC date", () => {
@@ -56,5 +56,25 @@ describe("formatLocalInstant", () => {
 describe("fileStamp", () => {
   it("writes the local date and time with only filename-safe characters", () => {
     expect(fileStamp(new Date(2026, 8, 5, 9, 7))).toBe("2026-09-05_09-07");
+  });
+});
+
+describe("timeAgo", () => {
+  const now = new Date("2026-10-30T12:00:00Z");
+  const before = (seconds: number) => new Date(now.getTime() - seconds * 1000);
+
+  it("names the largest whole unit that has passed", () => {
+    expect(timeAgo(before(0), now)).toBe("now");
+    expect(timeAgo(before(45), now)).toBe("45 sec. ago");
+    expect(timeAgo(before(5 * 60 + 59), now)).toBe("5 min. ago");
+    expect(timeAgo(before(3 * 3_600), now)).toBe("3 hr. ago");
+    expect(timeAgo(before(86_400), now)).toBe("yesterday");
+    expect(timeAgo(before(40 * 86_400), now)).toBe("last mo.");
+    expect(timeAgo(before(800 * 86_400), now)).toBe("2 yr. ago");
+  });
+
+  it("reads an instant later than now as now", () => {
+    expect(timeAgo(before(-5), now)).toBe("now");
+    expect(timeAgo(before(-2 * 86_400), now)).toBe("now");
   });
 });
