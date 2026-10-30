@@ -38,20 +38,17 @@ const e = parseEther;
 const GERWIG = addresses.childMarkets[0]!.toLowerCase() as Address;
 const VILLENEUVE = addresses.childMarkets[1]!.toLowerCase() as Address;
 
+/** The session's collateral and two options; each session below sets its own outcome count. */
+const SESSION_ROW = {
+  collateralDecimals: 18,
+  collateralSymbol: "sDAI",
+  children: [
+    sessionChildRow({ id: GERWIG, displayName: "Greta Gerwig" }),
+    sessionChildRow({ id: VILLENEUVE, parentOutcomeIndex: "0", displayName: "Denis Villeneuve" }),
+  ],
+};
 /** One outcome, so an amount of underlying reads as the same amount of collateral. */
-const session = toSessionDetail(
-  {
-    ...sessionDetailColumns,
-    outcomeCount: "1",
-    collateralDecimals: 18,
-    collateralSymbol: "sDAI",
-    children: [
-      sessionChildRow({ id: GERWIG, displayName: "Greta Gerwig" }),
-      sessionChildRow({ id: VILLENEUVE, parentOutcomeIndex: "0", displayName: "Denis Villeneuve" }),
-    ],
-  },
-  GATEWAY,
-);
+const session = toSessionDetail({ ...sessionDetailColumns, ...SESSION_ROW, outcomeCount: "1" }, GATEWAY);
 
 const TRADER = "0x777777777777777777777777777777777777a001" as Address;
 const OTHER = "0x777777777777777777777777777777777777a002" as Address;
@@ -186,6 +183,25 @@ describe("TradeList rows", () => {
     const prediction = screen.getByRole("button");
     expect(prediction.textContent).toContain("~3.1 sDAI");
     expect(prediction.textContent).not.toMatch(/~-/);
+  });
+
+  it("sizes a prediction in collateral at its underlying over the decision's outcome count", () => {
+    // 10 underlying in a four-outcome decision is 2.5 collateral
+    const fourOutcomes = toSessionDetail({ ...sessionDetailColumns, ...SESSION_ROW, outcomeCount: "4" }, GATEWAY);
+
+    render(<TradeList session={fourOutcomes} trades={[prediction({ cost: e("10"), options: [option(GERWIG)] })]} />);
+
+    expect(screen.getByRole("button").textContent).toContain("~2.5 sDAI");
+  });
+
+  it("sizes an external swap in collateral at its underlying over the decision's outcome count", () => {
+    // 6 underlying in a four-outcome decision is 1.5 collateral
+    const fourOutcomes = toSessionDetail({ ...sessionDetailColumns, ...SESSION_ROW, outcomeCount: "4" }, GATEWAY);
+    const outside = external({ legs: [{ childMarket: GERWIG, side: "UP", bought: true, underlying: e("6") }] });
+
+    render(<TradeList session={fourOutcomes} trades={[outside]} />);
+
+    expect(screen.getByRole("listitem").textContent).toContain("~1.5 sDAI");
   });
 
   it("shows the first option a prediction traded and +1 for the second", () => {

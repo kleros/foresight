@@ -215,6 +215,31 @@ describe("fetchSessionTrades, read page after page", () => {
     );
   });
 
+  it("starts each page where the page before it ended, three pages in", async () => {
+    const count = TRADE_PAGE * 2 + 5;
+    serve(
+      sessionTables([], {
+        Executor: [executorRow(TRADERS[0]!)],
+        Prediction: Array.from({ length: count }, (_, index) =>
+          predictionRow({
+            tx: txHash(index + 1),
+            executor: TRADERS[0]!,
+            option: GERWIG,
+            timestamp: count - index,
+            columns: upSwapColumns(-100),
+          }),
+        ),
+      }),
+    );
+
+    const pages = await readEveryPage();
+
+    expect(pages.map((page) => page.length)).toEqual([TRADE_PAGE, TRADE_PAGE, 5]);
+    expect(pages.flat().map((trade) => trade.transactionHash)).toEqual(
+      Array.from({ length: count }, (_, index) => txHash(index + 1)),
+    );
+  });
+
   it("shows a prediction across more options than two pages of trades as one trade with every option", async () => {
     const options = [GERWIG, VILLENEUVE, ...extraOptions(TRADE_PAGE * 2 + 3)];
     serve(
@@ -239,6 +264,109 @@ describe("fetchSessionTrades, read page after page", () => {
     expect(pages[0]).toHaveLength(1);
     expect(only!.options).toHaveLength(options.length);
     expect(only!.cost).toBe(BigInt(wei("1")) * BigInt(options.length));
+  });
+
+  it("reads the trades 20 to a page", async () => {
+    serve(
+      sessionTables([], {
+        Executor: [executorRow(TRADERS[0]!)],
+        Prediction: Array.from({ length: 25 }, (_, index) =>
+          predictionRow({
+            tx: txHash(index + 1),
+            executor: TRADERS[0]!,
+            option: GERWIG,
+            timestamp: 25 - index,
+            columns: upSwapColumns(-100),
+          }),
+        ),
+      }),
+    );
+
+    const first = await fetchSessionTrades(SESSION_ID);
+
+    // the issue's page size, a requirement rather than whatever TRADE_PAGE holds
+    expect(first.trades).toHaveLength(20);
+    expect(first.next).not.toBeNull();
+  });
+
+  it("lists a prediction before an external transaction in the same block", async () => {
+    serve(
+      sessionTables([], {
+        Executor: [executorRow(TRADERS[0]!)],
+        Prediction: [
+          predictionRow({
+            tx: txHash(2),
+            executor: TRADERS[0]!,
+            option: GERWIG,
+            timestamp: 5,
+            columns: upSwapColumns(-100),
+          }),
+        ],
+        Swap: [
+          swapRow({
+            tx: txHash(1),
+            logIndex: 0,
+            option: VILLENEUVE,
+            side: "UP",
+            executor: null,
+            sender: OUTSIDER,
+            timestamp: 5,
+            outcomeAmount: `-${wei("1")}`,
+            underlyingAmount: wei("0.3"),
+            priceBefore: "0.3",
+            priceAfter: "0.31",
+          }),
+        ],
+      }),
+    );
+
+    const { trades } = await fetchSessionTrades(SESSION_ID);
+
+    expect(trades.map((trade) => [trade.kind, trade.transactionHash])).toEqual([
+      ["prediction", txHash(2)],
+      ["external", txHash(1)],
+    ]);
+  });
+
+  it("shows two trade wallets' predictions in one transaction once each when a page ends between them", async () => {
+    const [first, second, everyoneElse] = [TRADERS[0]!, TRADERS[1]!, TRADERS[2]!];
+    const shared = txHash(50);
+    const oneOption = (tx: string, executor: string, block: number) =>
+      predictionRow({ tx, executor, option: GERWIG, timestamp: block, columns: upSwapColumns(-100) });
+    serve(
+      sessionTables([], {
+        Executor: TRADERS.map(executorRow),
+        Prediction: [
+          // a page less one of newer trades, so the shared transaction's first wallet ends the page
+          ...Array.from({ length: TRADE_PAGE - 1 }, (_, index) =>
+            oneOption(txHash(index + 1), everyoneElse, 100 - index),
+          ),
+          predictionRow({ tx: shared, executor: first, option: GERWIG, timestamp: 50, columns: upSwapColumns(-125) }),
+          predictionRow({
+            tx: shared,
+            executor: second,
+            option: VILLENEUVE,
+            timestamp: 50,
+            columns: upSwapColumns(-250),
+          }),
+          oneOption(txHash(51), everyoneElse, 10),
+          oneOption(txHash(52), everyoneElse, 9),
+        ],
+      }),
+    );
+
+    const pages = await readEveryPage();
+
+    expect(pages.map((page) => page.length)).toEqual([TRADE_PAGE, 3]);
+    expect(pages[0]!.at(-1)).toMatchObject({ transactionHash: shared, executor: first });
+    expect(pages[1]![0]).toMatchObject({ transactionHash: shared, executor: second });
+    const inShared = predictionsOf(pages.flat()).filter((trade) => trade.transactionHash === shared);
+    expect(
+      inShared.map(({ executor, options, cost }) => [executor, options.map((each) => each.childMarket), cost]),
+    ).toEqual([
+      [first, [GERWIG.id.toLowerCase()], BigInt(wei("1.25"))],
+      [second, [VILLENEUVE.id.toLowerCase()], BigInt(wei("2.5"))],
+    ]);
   });
 
   it("offers no next page when the trades end on a page's last trade", async () => {
@@ -370,6 +498,31 @@ describe("fetchSessionTrades, a prediction's steps", () => {
       { kind: "mint", logIndex: 2, sets: BigInt(wei("5")) },
       { kind: "merge", logIndex: 7, sets: BigInt(wei("2")) },
     ]);
+  });
+
+  it("reads each option's mint from its own DOWN and UP when two options minted as many sets", async () => {
+    serve(
+      sessionTables([], {
+        Executor: [executorRow(trader)],
+        Prediction: [GERWIG, VILLENEUVE].map((option) => predictionRow({ tx, executor: trader, option, timestamp: 3 })),
+        Transfer: [
+          transfer(1, VILLENEUVE.underlyingToken, `-${wei("5")}`, ROUTER),
+          transfer(2, VILLENEUVE.downToken, wei("5"), ROUTER),
+          transfer(3, VILLENEUVE.upToken, wei("5"), ROUTER),
+          transfer(5, GERWIG.underlyingToken, `-${wei("5")}`, ROUTER),
+          transfer(6, GERWIG.downToken, wei("5"), ROUTER),
+          transfer(7, GERWIG.upToken, wei("5"), ROUTER),
+        ],
+      }),
+    );
+
+    const { trades } = await fetchSessionTrades(SESSION_ID);
+
+    const operations = predictionsOf(trades)[0]!.options.map((option) => [option.childMarket, option.operations]);
+    expect(Object.fromEntries(operations)).toEqual({
+      [GERWIG.id.toLowerCase()]: [{ kind: "mint", logIndex: 6, sets: BigInt(wei("5")) }],
+      [VILLENEUVE.id.toLowerCase()]: [{ kind: "mint", logIndex: 2, sets: BigInt(wei("5")) }],
+    });
   });
 
   it("reads no mint from DOWN and UP sent in by any other address", async () => {
