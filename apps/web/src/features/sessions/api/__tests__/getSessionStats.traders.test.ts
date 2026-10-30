@@ -118,6 +118,35 @@ describe("the session's trader count", () => {
     expect((await fetchSessionStats(SESSION_ID)).traders).toBe(3);
   });
 
+  it("credits a swap that has a sender to that sender, not to its executor's owner", async () => {
+    // C's executor swapped in a transaction B sent; C never predicted here. The trader set is {A, B, D}.
+    serve([swap(25, { executor: EXECUTOR_C, sender: OWNER_B })], {
+      Prediction: tables().Prediction.filter((row) => row.executor_id !== EXECUTOR_C),
+    });
+
+    expect((await fetchSessionStats(SESSION_ID)).traders).toBe(3);
+  });
+
+  it("counts every predictor, direct sender and senderless executor owner without a row cap", async () => {
+    // Eight distinct owners in each of the three sources: 24.
+    const PER_SOURCE = 8;
+    const owner = (source: number, i: number) => address(`${source}${i}0`);
+    const executorOf = (source: number, i: number) => address(`${source}${i}e`);
+    const executors = [1, 3].flatMap((source) =>
+      Array.from({ length: PER_SOURCE }, (_, i) => executor(executorOf(source, i), owner(source, i))),
+    );
+    const predictions = Array.from({ length: PER_SOURCE }, (_, i) =>
+      predictionRow({ tx: txHash(100 + i), executor: executorOf(1, i), option: OPTIONS.gerwig, timestamp: 1 + i }),
+    );
+    const swaps = Array.from({ length: PER_SOURCE }, (_, i) => [
+      swap(200 + i, { executor: null, sender: owner(2, i) }),
+      swap(300 + i, { executor: executorOf(3, i), sender: null }),
+    ]).flat();
+    serve(swaps, { Executor: executors, Prediction: predictions });
+
+    expect((await fetchSessionStats(SESSION_ID)).traders).toBe(3 * PER_SOURCE);
+  });
+
   it("counts the union of foresight traders and direct swappers, and nobody from another session", async () => {
     // Predictors A, C, D; direct-only B; the outsider predicted and swapped in another session only.
     // The trader set is {A, B, C, D}: 4.
