@@ -11,7 +11,7 @@ import { formatEstimate } from "@/utils/formatEstimate";
 import type { SessionChartData } from "../types";
 import { SessionChartLegend } from "./SessionChartLegend";
 import { shortenName, withAlpha } from "../utils/chartDisplay";
-import { buildChartSeries } from "../utils/chartSeries";
+import { buildChartSeries, chartEndTime } from "../utils/chartSeries";
 
 interface ISessionChart {
   data: SessionChartData;
@@ -103,9 +103,7 @@ export const SessionChart: React.FC<ISessionChart> = ({ data, startTime, endTime
   const series = useMemo(() => {
     if (!data.length) return [];
 
-    const latestTimestamp = Math.min(Date.now() / 1000, endTime ?? Number.POSITIVE_INFINITY);
-
-    return buildChartSeries(data, startTime, latestTimestamp);
+    return buildChartSeries(data, startTime, chartEndTime(data, endTime, Date.now() / 1000));
   }, [data, startTime, endTime]);
 
   useEffect(() => {
