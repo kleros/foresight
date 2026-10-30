@@ -23,8 +23,6 @@ import type { PredictDriver, PredictProgress } from "../run/types";
 
 export interface PredictRunInput {
   sessionId: string;
-  /** When the session stops trading, in unix seconds; null for a session with no close. */
-  closesAt: number | null;
   parentMarket: Address;
   collateral: Address;
   /** Seer's router on this chain; without one there is nothing to split or merge with. */
@@ -99,12 +97,11 @@ export function usePredictRun(input: PredictRunInput | null): {
             blockTag,
           }),
       }),
-      quoter: createLensQuoter(publicClient, DEFAULT_CHAIN_ID as 100, undefined, input.closesAt),
-      creditsQuoter: createLensExactInputQuoter(publicClient, DEFAULT_CHAIN_ID as 100, undefined, input.closesAt),
+      quoter: createLensQuoter(publicClient, DEFAULT_CHAIN_ID as 100),
+      creditsQuoter: createLensExactInputQuoter(publicClient, DEFAULT_CHAIN_ID as 100),
       store,
       flowId,
       ownership: tabOwnership(),
-      closesAt: input.closesAt,
       ctx: (): PredictCtx => {
         const now = latest.current;
         if (!now) throw new Error("This session is no longer open for predictions.");

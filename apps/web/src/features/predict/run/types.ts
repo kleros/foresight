@@ -15,7 +15,6 @@ import type { HeldTo, MovedPlans, PredictSnapshot } from "../flow/types";
  * client refused a send before the wallet was asked because the wallet was not connected or on another network.
  * `elsewhere`: another open tab is driving the saved run.
  * `prompt-open`: this tab holds the saved run for a wallet prompt that an earlier popup opened and nobody has answered.
- * `closed`: the session's close time has passed on the chain's clock, so nothing more is signed.
  * `unlisted`: a transaction departs from the chain's allow-list, the owner rule or the native-value rule, so it was not sent.
  * `storage`: the send could not be saved before the wallet prompt, so no prompt was opened.
  * `held`: a send that errored is held while its nonce reads unused, for ten minutes; nothing is signed for it meanwhile.
@@ -37,7 +36,6 @@ export type PredictFailureReason =
   | "wrong-chain"
   | "elsewhere"
   | "prompt-open"
-  | "closed"
   | "unlisted"
   | "storage"
   | "held"

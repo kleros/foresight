@@ -68,9 +68,6 @@ export type OptionTokens = Omit<PredictOption, "targetPriceWad">;
 /** The trade wallet, or the wallet's credits, hold less than the prediction was shown to draw on. */
 class TradeWalletShortError extends Error {}
 
-/** The chain's clock has passed the session's close. */
-class SessionClosedError extends Error {}
-
 /** How long, and how often, the chain is read for a send whose answer was lost before the run halts. */
 const UNANSWERED_SEND = { waitMs: 120_000, pollMs: 2_000 };
 
@@ -215,8 +212,6 @@ export function createPredictRun(args: {
   unansweredSend?: { waitMs: number; pollMs: number };
   /** Which tab drives the stored run; without it this driver takes it as its own. */
   ownership?: RunOwnership;
-  /** When the session stops trading, in unix seconds; nothing is signed once the chain's clock reaches it. */
-  closesAt?: number | null;
   /** Every option of the session, which a stored run's options must match before it is restored. */
   sessionOptions?: () => readonly OptionTokens[];
 }): PredictDriver {
@@ -236,7 +231,6 @@ export function createPredictRun(args: {
     | "funds"
     | "credits"
     | "pending"
-    | "closed"
     | "unlisted"
     | "storage"
     | "held"
@@ -366,8 +360,6 @@ export function createPredictRun(args: {
 
       const owner = run.ctx.owner;
       const [nonce, fromBlock] = await Promise.all([args.reader.nextNonce(owner), args.reader.latestBlock()]);
-      // the build's reads and quotes can outlast the close; this is the last check before the wallet opens
-      await assertOpen();
       const send: UnansweredSend = { owner, nonce, fromBlock, tx, heldAt: now() };
       // held before the wallet opens: a prompt approved after the tab closed has no hash stored to find it by
       try {
@@ -411,29 +403,10 @@ export function createPredictRun(args: {
     },
   };
 
-  /** Throws once the chain's clock has reached the session's close. */
-  async function assertOpen() {
-    if (args.closesAt == null) return;
-    if ((await args.reader.latestTimestamp()) >= BigInt(args.closesAt)) throw new SessionClosedError();
-  }
-
-  const sessionClosed = () =>
-    assertOpen().then(
-      () => false,
-      (error: unknown) => {
-        if (error instanceof SessionClosedError) return true;
-        throw error;
-      },
-    );
-
-  /** Each step first reads how its errored send ended, and is built only while the session is open. */
+  /** Each step first reads how its errored send ended. */
   function guardedSteps(steps: TxStep<PredictSnapshot, PredictCtx>[]): TxStep<PredictSnapshot, PredictCtx>[] {
     return steps.map((step) => ({
       ...step,
-      build: async (ctx, snap) => {
-        await assertOpen();
-        return step.build(ctx, snap);
-      },
       canSkip: async (ctx, snap) => {
         const answered = signAgainFor === step.id;
         if (answered) signAgainFor = undefined;
@@ -476,10 +449,6 @@ export function createPredictRun(args: {
       if (error instanceof StorageWriteError) {
         buildFailure = "storage";
         return "rpc";
-      }
-      if (error instanceof SessionClosedError) {
-        buildFailure = "closed";
-        return "unknown";
       }
       if (error instanceof UnlistedTxError) {
         buildFailure = "unlisted";
@@ -666,7 +635,6 @@ export function createPredictRun(args: {
         else if (error instanceof CreditsUnavailableError) report("credits");
         else if (error instanceof TxPendingError) report("pending", action);
         else if (error instanceof TradeWalletShortError) report("balance");
-        else if (error instanceof SessionClosedError) report("closed");
         else if (error instanceof UnlistedTxError) report("unlisted");
         else if (error instanceof PredictConfigError) report("unknown");
         else report(classifyTxError(error), action);
@@ -875,11 +843,6 @@ export function createPredictRun(args: {
       reconciling = false;
     });
     if (found.outcome === "reverted" || found.outcome === "cancelled") return;
-    // Past the close nothing can be signed, so a held send is settled by running the steps, whose builds stop the run.
-    if (hasUnanswered(orchestrator.getRun()?.snapshot) && (await sessionClosed())) {
-      await orchestrator.resume();
-      return;
-    }
     // A transfer signed as the tab died left no hash, and its own transaction shows only once it mines.
     if (found.outcome === "unknown" && (found.stepId === STEP_ID.deposit || found.stepId === STEP_ID.addCredits)) {
       const transfer = steps.find((step) => step.id === found.stepId);
@@ -940,7 +903,6 @@ export function createPredictRun(args: {
       notify();
 
       const checked = await (async () => {
-        await assertOpen();
         const optionsPerBatch = size ?? (await sizeBatches(ctx, requested, deps, await args.reader.blockGasLimit()));
         const sized = { ...requested, optionsPerBatch };
         const steps = guardedSteps(planPredict(sized, deps));
