@@ -130,6 +130,53 @@ describe("INVALID held against the sets the predictions minted", () => {
     expect(result).toMatchObject({ available: false });
   });
 
+  it("is unavailable when UP and DOWN arrive by plain transfer in the transaction that mints", () => {
+    // mint 10 and receive 2 of each: the row nets 12 UP and 12 DOWN, read as a mint of 12; 10 INVALID held
+    const result = optionPnl({
+      predictions: history([{ upDelta: e("12"), downDelta: e("12") }]),
+      held: { up: e("12"), down: e("12"), invalid: e("10") },
+      spot,
+    });
+
+    expect(result).toMatchObject({ available: false });
+  });
+
+  it("is unavailable when UP and DOWN leave by plain transfer in the transaction that merges", () => {
+    // mint 10, then merge 4 and send 2 of each away: that row nets -6 of each, read as a merge of 6; 6 INVALID held
+    const result = optionPnl({
+      predictions: history([
+        { upDelta: e("10"), downDelta: e("10") },
+        { upDelta: -e("6"), downDelta: -e("6") },
+      ]),
+      held: { up: e("4"), down: e("4"), invalid: e("6") },
+      spot,
+    });
+
+    expect(result).toMatchObject({ available: false });
+  });
+
+  it("is unavailable when a mint's UP and DOWN all leave by plain transfer in the same transaction", () => {
+    // mint 10 and send the 10 UP and 10 DOWN away: the row nets nothing; the 10 INVALID stays
+    const result = optionPnl({
+      predictions: history([{ upDelta: 0n, downDelta: 0n }]),
+      held: { up: 0n, down: 0n, invalid: e("10") },
+      spot,
+    });
+
+    expect(result).toMatchObject({ available: false });
+  });
+
+  it("is unavailable when UP and DOWN arrive by plain transfer in the transaction that mints and sells DOWN", () => {
+    // mint 10, sell the 10 DOWN for 6.5 and receive 2 of each: the row nets 12 UP and 2 DOWN; 10 INVALID held
+    const result = optionPnl({
+      predictions: history([{ ...mintAndSellDown, upDelta: e("12"), downDelta: e("2") }]),
+      held: { up: e("12"), down: e("2"), invalid: e("10") },
+      spot,
+    });
+
+    expect(result).toMatchObject({ available: false });
+  });
+
   it("is unavailable when a mint's UP leaves by plain transfer in the same transaction", () => {
     // mint 10, send 4 UP away: the row nets 6 UP and 10 DOWN, read as a mint of 6
     const result = optionPnl({

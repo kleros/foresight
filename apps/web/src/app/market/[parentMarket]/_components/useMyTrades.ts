@@ -44,18 +44,19 @@ export function useMyTrades(session: SessionDetail): MyTrades {
   if (executor.isPending) return { status: "loading" };
   if (!wallet) return { status: executor.isError ? "error" : "empty" };
   if (trades.isPending || stats.isPending) return { status: "loading" };
-  if (trades.isError || stats.isError) return { status: "error" };
+  // a query keeps its last data through a failed refetch, so only a read that never answered is an error
+  const read = trades.data;
+  const pools = stats.data?.pools;
+  if (!read || !pools) return { status: "error" };
 
-  const { balances } = trades.data;
+  const { balances } = read;
   const spotOf = (option: SessionOption, side: "UP" | "DOWN") =>
-    stats.data.pools.find((pool) => pool.market === option.market.toLowerCase() && pool.side === side)
-      ?.underlyingPerOutcome ?? null;
+    pools.find((pool) => pool.market === option.market.toLowerCase() && pool.side === side)?.underlyingPerOutcome ??
+    null;
 
   const positions = session.options.flatMap((option): PositionPnl[] => {
     const market = option.market.toLowerCase();
-    const predictions = trades.data.trades.flatMap((trade) =>
-      trade.options.filter((each) => each.childMarket === market),
-    );
+    const predictions = read.trades.flatMap((trade) => trade.options.filter((each) => each.childMarket === market));
     const held = { up: balances[lower(option.upToken)] ?? 0n, down: balances[lower(option.downToken)] ?? 0n };
     if (predictions.length === 0 && held.up === 0n && held.down === 0n) return [];
     const invalid = balances[lower(option.invalidToken)] ?? 0n;
@@ -71,10 +72,10 @@ export function useMyTrades(session: SessionDetail): MyTrades {
     ];
   });
 
-  if (trades.data.trades.length === 0 && positions.length === 0) return { status: "empty" };
+  if (read.trades.length === 0 && positions.length === 0) return { status: "empty" };
   return {
     status: "ready",
-    trades: trades.data.trades,
+    trades: read.trades,
     positions,
     total: sessionPnl(positions.map((position) => position.pnl)),
   };

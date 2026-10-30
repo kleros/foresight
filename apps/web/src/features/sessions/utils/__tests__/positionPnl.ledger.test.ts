@@ -191,4 +191,39 @@ describe("expected P&L against a ledger of the wallet's underlying (A3, A4)", ()
       { seed: SEED },
     );
   });
+
+  it("is unavailable once UP and DOWN move by plain transfer, in or out, in a transaction that also trades", () => {
+    fc.assert(
+      fc.property(
+        fc.array(transaction, { minLength: 1, maxLength: 6 }),
+        grid(10n ** 12n).filter((each) => each > 0n),
+        fc.boolean(),
+        price,
+        price,
+        (transactions, size, out, up, down) => {
+          const { rows, ledger } = simulate(transactions);
+          const moved = out ? -min(size, ledger.up, ledger.down) : size;
+          fc.pre(moved !== 0n);
+          // the transfer lands in the last transaction's row, beside its credit, mint, swaps and merge
+          const last = rows.at(-1)!;
+          const netted: TradeOption = {
+            ...last,
+            upDelta: last.upDelta + moved,
+            downDelta: last.downDelta + moved,
+            upBalance: last.upBalance + moved,
+            downBalance: last.downBalance + moved,
+          };
+
+          const result = optionPnl({
+            predictions: [...rows.slice(0, -1), netted],
+            held: { up: ledger.up + moved, down: ledger.down + moved, invalid: ledger.invalid },
+            spot: { up, down },
+          });
+
+          expect(result).toMatchObject({ available: false });
+        },
+      ),
+      { seed: SEED },
+    );
+  });
 });
