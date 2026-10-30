@@ -112,10 +112,10 @@ export function assessDraft(draft: SessionDraft, now: Date): DraftAssessment {
   const bond = scaleToWei(draft.minBond);
   if (bond === null || bond <= 0n) add(1, "The minimum bond must be above zero.");
   const decision = decisionInstant(draft);
-  if (!decision) add(1, "Trading has no closing time.");
-  else if (decision.getTime() <= now.getTime()) add(1, "Trading would close in the past.");
+  if (!decision) add(1, "Resolution has no opening time.");
+  else if (decision.getTime() <= now.getTime()) add(1, "Resolution would open in the past.");
   else if (runsLong(decision, now)) {
-    warn(1, `Trading ${LONG_RUN_NOTE}. Traders' money is tied up until it closes.`);
+    warn(1, `The session ${LONG_RUN_NOTE}. Traders' money is tied up until it resolves.`);
   }
 
   // Step 2: branch markets

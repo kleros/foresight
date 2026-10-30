@@ -128,7 +128,7 @@ export function SessionPreview({
           </div>
           <div className="border-fs-border mt-4 flex items-baseline gap-2.5 border-t pt-3.5">
             <span className="bg-fs-accent h-1.75 w-1.75 flex-none rounded-xs" aria-hidden />
-            <span className="text-fs-text-primary text-xs font-semibold">Trading closes</span>
+            <span className="text-fs-text-primary text-xs font-semibold">Resolution opens</span>
             <span className="type-caption text-fs-text-secondary whitespace-nowrap">{decisionHuman}</span>
           </div>
         </div>
@@ -183,7 +183,7 @@ export function SessionPreview({
                   <span className="text-fs-text-primary text-xs font-semibold">{itemCount}</span>
                 </div>
                 <div className="type-caption text-fs-text-secondary border-fs-border flex justify-between gap-3 border-t pt-2.5">
-                  <span>Trading until {decisionHuman}</span>
+                  <span>Resolution opens {decisionHuman}</span>
                   <span className="whitespace-nowrap">
                     {parseNumber(draft.lower).toLocaleString()} - {parseNumber(draft.upper).toLocaleString()}
                   </span>

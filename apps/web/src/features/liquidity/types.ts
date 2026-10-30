@@ -210,7 +210,7 @@ export type LiquidityFailureReason =
   | "unknown"
   /** A transaction departs from flow/allowed.ts or the owner rule, so it was not sent. */
   | "unlisted"
-  /** A seed or add at or after the session's close by chain time. */
+  /** A seed or add at or after the session's resolution date by chain time. */
   | "closed"
   /** The run belongs to another account than the connected one, or none is connected. */
   | "wrong-wallet"

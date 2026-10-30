@@ -191,8 +191,8 @@ export function ParentMarketStep({
 
         <div>
           <FieldLabel>
-            <span className="type-label text-fs-text-secondary">Trading until{zone ? ` (${zone})` : ""}</span>
-            <InfoTip text="The moment trading closes. After it the choice is public and there is nothing left to predict, so setting this is really choosing how long the market runs. Every branch uses the same moment unless you give one its own." />
+            <span className="type-label text-fs-text-secondary">Resolution opens{zone ? ` (${zone})` : ""}</span>
+            <InfoTip text="The moment the Reality question opens for answers. After it the choice is public and no liquidity can be added; the pools keep trading while they hold liquidity. Every branch uses the same moment unless you give one its own." />
           </FieldLabel>
           <div className="w-55">
             <Datepicker
@@ -215,7 +215,7 @@ export function ParentMarketStep({
           ) : null}
           {longRunning ? (
             <div className="type-caption text-fs-tone-warning pt-2 text-pretty">
-              This session {LONG_RUN_NOTE}. Traders&apos; money is tied up until it closes.
+              This session {LONG_RUN_NOTE}. Traders&apos; money is tied up until it resolves.
             </div>
           ) : null}
         </div>

@@ -178,7 +178,7 @@ export function createLiquidityRun(args: {
   chainId: () => number;
   /** What the popup reviewed, read when start() is pressed. */
   request: () => LiquidityRequest;
-  /** The session's close, in chain seconds. */
+  /** The session's resolution date, in chain seconds. */
   closesAt: bigint;
   now?: () => number;
   /** How often a sent batch's status is asked, in ms. */

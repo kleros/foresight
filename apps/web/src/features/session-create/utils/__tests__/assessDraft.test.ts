@@ -163,12 +163,12 @@ describe("assessDraft, step 1, decision market", () => {
   });
 
   it("requires the decision moment to be in the future", () => {
-    expect(texts(validDraft({ decisionDate: "2026-08-01" }))).toContainEqual("Trading would close in the past.");
+    expect(texts(validDraft({ decisionDate: "2026-08-01" }))).toContainEqual("Resolution would open in the past.");
   });
 
-  it("asks for a closing time when the draft has none, rather than calling it past", () => {
-    expect(texts(validDraft({ decisionDate: "" }))).toContainEqual("Trading has no closing time.");
-    expect(texts(validDraft({ decisionDate: "" }))).not.toContainEqual("Trading would close in the past.");
+  it("asks for a resolution date when the draft has none, rather than calling it past", () => {
+    expect(texts(validDraft({ decisionDate: "" }))).toContainEqual("Resolution has no opening time.");
+    expect(texts(validDraft({ decisionDate: "" }))).not.toContainEqual("Resolution would open in the past.");
   });
 
   // The drafts close at 12:00, NOW is 10:00, so LONG_RUN_DAYS out lands two hours into 2026-09-03.
