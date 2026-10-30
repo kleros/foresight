@@ -17,6 +17,7 @@ import type { PoolBalances, SessionDetail, SessionStats, SessionStatus } from "@
 import { bannerStyle } from "@/features/sessions/utils/bannerStyle";
 import { sessionMetrics } from "@/features/sessions/utils/sessionMetrics";
 import { statusChip } from "@/features/sessions/utils/statusChip";
+import { resolutionOpened } from "@/features/sessions/utils/toSessionDetail";
 
 import { ExternalLink } from "@/components/ui/ExternalLink";
 import { ForesightIcon } from "@/components/ui/ForesightIcon";
@@ -83,11 +84,11 @@ export function SessionHeader({
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
         {session.closesAt ? (
-          <SessionStat Icon={ChartIcon} label="Trading until">
+          <SessionStat Icon={ChartIcon} label="Resolution opens">
             {formatUtcInstant(session.closesAt)}
           </SessionStat>
         ) : null}
-        {session.closesAt && status === "trading" ? (
+        {session.closesAt && !resolutionOpened(session.closesAt, new Date()) ? (
           <SessionStat Icon={CountdownIcon} label="Countdown">
             {timeLeftUntil(session.closesAt.toISOString())}
           </SessionStat>

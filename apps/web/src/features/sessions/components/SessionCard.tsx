@@ -13,6 +13,7 @@ import { paths } from "@/config/paths";
 import type { SessionSummary } from "../types";
 import { SessionStat } from "./SessionStat";
 import { bannerStyle } from "../utils/bannerStyle";
+import { resolutionOpened } from "../utils/toSessionDetail";
 
 export function SessionCard({ session }: { session: SessionSummary }) {
   const { closesAt } = session;
@@ -40,12 +41,14 @@ export function SessionCard({ session }: { session: SessionSummary }) {
 
             {closesAt ? (
               <div className="fs-session-card__reveal mt-2 flex shrink-0 flex-col gap-2">
-                <SessionStat Icon={TradingIcon} label="Trading until">
+                <SessionStat Icon={TradingIcon} label="Resolution opens">
                   {formatUtcInstant(closesAt)}
                 </SessionStat>
-                <SessionStat Icon={CountdownIcon} label="Countdown">
-                  {timeLeftUntil(closesAt.toISOString())}
-                </SessionStat>
+                {resolutionOpened(closesAt, new Date()) ? null : (
+                  <SessionStat Icon={CountdownIcon} label="Countdown">
+                    {timeLeftUntil(closesAt.toISOString())}
+                  </SessionStat>
+                )}
               </div>
             ) : null}
           </div>

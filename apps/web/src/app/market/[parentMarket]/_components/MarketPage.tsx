@@ -21,7 +21,7 @@ import { sessionStatsKey, useSessionStats } from "@/features/sessions/api/getSes
 import { useRenderAtClose } from "@/features/sessions/hooks/useRenderAtClose";
 import { latestEstimates } from "@/features/sessions/utils/latestEstimates";
 import { optionNoun, optionNounSingular } from "@/features/sessions/utils/optionNoun";
-import { sessionStatus } from "@/features/sessions/utils/toSessionDetail";
+import { resolutionOpened, sessionStatus } from "@/features/sessions/utils/toSessionDetail";
 import { TradeWallet } from "@/features/trade-executor/components/TradeWallet/TradeWallet";
 
 import { PageMessage } from "@/components/layout/PageMessage";
@@ -52,7 +52,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
   useRenderAtClose(session.data?.closesAt);
   useEstimateHydration();
   const searchParams = useSearchParams();
-  // "link": the add-liquidity link asked for the popup, which waits until the session's status is known
+  // "link": the add-liquidity link asked for the popup, which waits until the session's resolution date is read
   const [isAddingLiquidity, setAddingLiquidity] = useState<boolean | "link">(() =>
     searchParams?.has(ADD_LIQUIDITY_PARAM) ? "link" : false,
   );
@@ -89,8 +89,11 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
   }
 
   const detail = session.data;
-  const status = sessionStatus(detail, new Date());
-  if (isAddingLiquidity === "link") setAddingLiquidity(status !== "closed");
+  const now = new Date();
+  const status = sessionStatus(detail, now, liquidity.hasLiquidity);
+  // trading can outlast the resolution date; adding liquidity cannot (L7)
+  const addsClosed = resolutionOpened(detail.closesAt, now);
+  if (isAddingLiquidity === "link") setAddingLiquidity(!addsClosed);
   const noun = optionNoun(detail.itemNamePlural);
   const walletMarket = toWalletMarket(detail);
   const addLiquidityReason = !detail.setupComplete
@@ -118,7 +121,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
         poolBalancesPending={poolBalances.isPending}
         usdPrice={usdPrice.data}
       />
-      {liquidity.hasLiquidity === false && status !== "closed" ? (
+      {liquidity.hasLiquidity === false && !addsClosed ? (
         <LiquidityBanner reason={addLiquidityReason} onAdd={() => setAddingLiquidity(true)} />
       ) : null}
       {chart.isPending ? (
@@ -129,7 +132,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
         <SessionChart
           data={chart.data}
           startTime={Math.floor(detail.openedAt.getTime() / 1000)}
-          endTime={detail.closesAt ? Math.floor(detail.closesAt.getTime() / 1000) : null}
+          endTime={status !== "trading" && detail.closesAt ? Math.floor(detail.closesAt.getTime() / 1000) : null}
           noun={noun}
         />
       ) : null}
@@ -173,7 +176,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
         {walletMarket ? <TradeWallet market={walletMarket} noun={optionNounSingular(detail.itemName)} /> : null}
         <AdvancedSection parentMarket={detail.parentMarket} />
         <LiquiditySection
-          closed={status === "closed"}
+          closed={addsClosed}
           reason={addLiquidityReason}
           onAdd={() => setAddingLiquidity(true)}
           names={liquidity.names}
@@ -193,7 +196,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
         owner={liquidity.owner}
         balances={liquidity.balances}
         chainTime={liquidity.chainTime}
-        closed={status === "closed"}
+        closed={addsClosed}
         run={liquidity.run}
       />
     </PageColumn>

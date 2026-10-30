@@ -8,6 +8,8 @@ import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils
 import { type SessionDetailRow, toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
 import { toSessionStats } from "@/features/sessions/utils/toSessionStats";
 
+import { formatUtcInstant } from "@/utils/date";
+
 import { addresses, GATEWAY } from "@/testing/fixtures";
 
 import { SessionHeader } from "../SessionHeader";
@@ -307,20 +309,36 @@ describe("SessionHeader", () => {
     expect(skeletons[0]!.parentElement).toHaveTextContent("Liquidity:");
   });
 
-  it("omits the trading period while the closing time is unknown", () => {
+  it("omits the resolution date and countdown while the date is unknown", () => {
     renderHeader({ overrides: { openingTime: null } });
 
-    expect(screen.queryByText("Trading until:")).toBeNull();
+    expect(screen.queryByText("Resolution opens:")).toBeNull();
     expect(screen.queryByText("Countdown:")).toBeNull();
   });
 
-  it("keeps the countdown for sessions still trading", () => {
-    renderHeader({ status: "trading" });
+  it("labels the Reality question's opening time as when resolution opens", () => {
+    renderHeader({ overrides: { openingTime: "4102444800" } });
+
+    expect(screen.getByText("Resolution opens:").parentElement).toHaveTextContent(
+      formatUtcInstant(new Date(4102444800 * 1000)),
+    );
+    expect(screen.queryByText("Trading until:")).toBeNull();
+  });
+
+  it("counts down to the resolution date before it", () => {
+    renderHeader({ overrides: { openingTime: "4102444800" }, status: "trading" });
 
     expect(screen.getByText("Countdown:")).toBeInTheDocument();
   });
 
-  it("drops the countdown once trading closed", () => {
+  it("drops the countdown for a session trading past its resolution date", () => {
+    renderHeader({ status: "trading" });
+
+    expect(screen.getByText("Trading")).toBeInTheDocument();
+    expect(screen.queryByText("Countdown:")).toBeNull();
+  });
+
+  it("drops the countdown once the session has closed", () => {
     renderHeader({ status: "closed" });
 
     expect(screen.queryByText("Countdown:")).toBeNull();

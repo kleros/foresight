@@ -18,8 +18,8 @@ export const chartTimestamps = (firstTimestamp: number, lastTimestamp: number): 
   return timestamps;
 };
 
-// Pools keep trading past closesAt (the Reality question's opening time), so the line runs to the
-// later of the close and the last point; with no close it runs to now.
+// A session's last trade can come after its resolution date, so the line runs to the later of the two;
+// with no `closesAt`, as for a session still trading, it runs to now.
 export function chartEndTime(data: SessionChartData, closesAt: number | null, now: number): number {
   const lastPoint = Math.max(0, ...data.map(({ points }) => points.at(-1)?.timestamp ?? 0));
   return Math.min(now, Math.max(closesAt ?? Number.POSITIVE_INFINITY, lastPoint));
