@@ -52,7 +52,10 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
   useRenderAtClose(session.data?.closesAt);
   useEstimateHydration();
   const searchParams = useSearchParams();
-  const [isAddingLiquidity, setAddingLiquidity] = useState(() => searchParams?.has(ADD_LIQUIDITY_PARAM) ?? false);
+  // "link": the add-liquidity link asked for the popup, which waits until the session's status is known
+  const [isAddingLiquidity, setAddingLiquidity] = useState<boolean | "link">(() =>
+    searchParams?.has(ADD_LIQUIDITY_PARAM) ? "link" : false,
+  );
   const liquidity = useSessionLiquidity({
     parentMarket: parentMarket as `0x${string}`,
     branches: session.data?.options.map(({ market, outcomeIndex, name }) => ({ market, outcomeIndex, name })) ?? [],
@@ -87,6 +90,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
 
   const detail = session.data;
   const status = sessionStatus(detail, new Date());
+  if (isAddingLiquidity === "link") setAddingLiquidity(status !== "closed");
   const noun = optionNoun(detail.itemNamePlural);
   const walletMarket = toWalletMarket(detail);
   const addLiquidityReason = !detail.setupComplete
@@ -182,7 +186,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
       </section>
       <LiquidityDialog
         // opens once the pools are read, which it plans against
-        isOpen={isAddingLiquidity && liquidity.pools.data !== undefined}
+        isOpen={isAddingLiquidity === true && liquidity.pools.data !== undefined}
         onClose={() => setAddingLiquidity(false)}
         names={liquidity.names}
         pools={liquidity.pools.data}

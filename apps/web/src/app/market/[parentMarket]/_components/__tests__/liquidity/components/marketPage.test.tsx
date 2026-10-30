@@ -14,6 +14,7 @@ import { planMerge } from "@/features/liquidity/flow/plan";
 import { fetchGraphql } from "@/lib/graphql/batcher";
 
 import { LIQUIDITY_CLOSED_REASON } from "@/config/liquidity";
+import { ADD_LIQUIDITY_PARAM } from "@/config/paths";
 
 import {
   addControls,
@@ -323,6 +324,16 @@ describe("the market page after the session's close", () => {
     const dialog = await openPositions();
     const remove = await within(dialog).findByRole("button", { name: removeButton(`${BRANCH_NAMES[0]} UP pool`) });
     expect(disabled(remove)).toBe(false);
+  });
+
+  it("opens no liquidity popup from the add-liquidity link once the session has closed", async () => {
+    window.history.replaceState(null, "", `/?${ADD_LIQUIDITY_PARAM}`);
+
+    await show(emptyPoolWithPosition(), PAST_CLOSE);
+
+    // the link's popup waits for the pools, which are read before the position is counted
+    await waitFor(() => expect(summary()).toHaveTextContent(/^1 position\b/), { timeout: 5000 });
+    expect(screen.queryByRole("dialog", { name: /liquidity/i })).toBeNull();
   });
 
   it("shows no Add liquidity and no closed reason in the section, and keeps Remove and Merge", async () => {
