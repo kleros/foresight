@@ -186,6 +186,26 @@ describe("TradeList rows", () => {
     expect(screen.getByRole("button").textContent).toContain("~-3.1 sDAI");
   });
 
+  it("sizes a prediction that took out less than 0.005 more than it put in as 0, not -0", () => {
+    // 10 UP sold for 0.004 in a one-outcome decision: cost -0.004
+    const trades = toPredictions(
+      [
+        row("0x01", {
+          upDelta: `-${wei("10")}`,
+          upSwapTokens: `-${wei("10")}`,
+          upSwapUnderlying: wei("0.004"),
+          upAvgPrice: wei("0.0004"),
+        }),
+      ],
+      [],
+      [],
+    );
+
+    render(<TradeList session={session} trades={trades} />);
+
+    expect(screen.getByRole("button").textContent).toContain("~0 sDAI");
+  });
+
   it("shows the first option a prediction traded and +1 for the second", () => {
     render(<TradeList session={session} trades={[prediction({ options: [option(GERWIG), option(VILLENEUVE)] })]} />);
 

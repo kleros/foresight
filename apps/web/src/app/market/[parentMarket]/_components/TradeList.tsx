@@ -56,10 +56,11 @@ export function TradeList({ session, trades }: { session: SessionDetail; trades:
 
   const nameOf = (market: string) =>
     session.options.find((option) => option.market.toLowerCase() === market)?.name ?? shortenAddress(market);
-  // signed: a prediction whose sells returned more underlying than it put in reads negative
+  // signed: a prediction whose sells returned more underlying than it put in reads negative; under 0.005 shows 0, not -0
   const size = (underlying: bigint) => {
     const amount = collateralVolume(session, underlying < 0n ? -underlying : underlying);
-    return approxCollateral(amount !== null && underlying < 0n ? -amount : amount, session.collateralSymbol);
+    const isNegative = amount !== null && underlying < 0n && amount >= 0.005;
+    return approxCollateral(isNegative ? -amount : amount, session.collateralSymbol);
   };
   const traderOf = (trade: PredictionTrade) =>
     address && trade.owner === address.toLowerCase() ? "You" : shortenAddress(trade.owner);
