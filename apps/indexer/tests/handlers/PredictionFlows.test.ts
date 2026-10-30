@@ -187,6 +187,31 @@ describe("prediction flows", () => {
     t.expect(row.upAvgPrice).toBeUndefined();
   });
 
+  it("counts a market token arriving from the owner's wallet with no swap or underlying", async (t) => {
+    const indexer = createTestIndexer();
+    await seedMarket(indexer, MARKET);
+    await indexer.Position.set({
+      id: `${EXECUTOR}-${UP}`,
+      executor_id: EXECUTOR,
+      token: UP,
+      balance: 100n,
+      updatedAt: 0n,
+    });
+
+    await indexEvents(indexer, [executorDeployed(OWNER, EXECUTOR), transfer(UP, OWNER, EXECUTOR, 20n)]);
+
+    const row = await onlyPrediction(indexer);
+    t.expect([row.upDelta, row.downDelta, row.underlyingDelta]).toEqual([20n, 0n, 0n]);
+    t.expect([row.upSwapTokens, row.upSwapUnderlying, row.downSwapTokens, row.downSwapUnderlying]).toEqual([
+      0n,
+      0n,
+      0n,
+      0n,
+    ]);
+    t.expect(row.upBalance).toBe(120n);
+    t.expect(row.upAvgPrice).toBeUndefined();
+  });
+
   it("gives each transaction of a chunked predict its own row", async (t) => {
     const indexer = createTestIndexer();
     await seedMarket(indexer, MARKET);

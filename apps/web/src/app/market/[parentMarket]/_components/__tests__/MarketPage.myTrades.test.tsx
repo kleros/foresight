@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { DocumentNode, OperationDefinitionNode } from "graphql";
 import type { Address } from "viem";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -17,6 +18,7 @@ import {
   executorRow,
   indexerAnswers,
   predictionRow,
+  sessionDetailAnswer,
   traderAddress,
   txHash,
   wei,
@@ -46,6 +48,7 @@ import { MarketPage } from "../MarketPage";
 const state = vi.hoisted(() => ({
   account: undefined as { address: `0x${string}`; chainId: number } | undefined,
   tradeWallet: null as `0x${string}` | null,
+  executor: "ready" as "ready" | "pending" | "error",
   tables: undefined as { Position?: Record<string, unknown>[] } | undefined,
 }));
 
@@ -69,9 +72,16 @@ vi.mock("wagmi", async (importOriginal) => ({
 vi.mock("@/features/trade-executor/api/getExecutor", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/trade-executor/api/getExecutor")>()),
   useExecutor: () =>
-    state.account
-      ? { data: { predicted: state.tradeWallet, deployed: state.tradeWallet }, isPending: false, isSuccess: true }
-      : { data: undefined, isPending: true, isSuccess: false },
+    !state.account || state.executor === "pending"
+      ? { data: undefined, isPending: true, isError: false, isSuccess: false }
+      : state.executor === "error"
+        ? { data: undefined, isPending: false, isError: true, isSuccess: false }
+        : {
+            data: { predicted: state.tradeWallet, deployed: state.tradeWallet },
+            isPending: false,
+            isError: false,
+            isSuccess: true,
+          },
 }));
 /* On-chain balances answer from the same Position rows the fake indexer serves. */
 vi.mock("@/lib/trade-executor/balances", async (importOriginal) => ({
@@ -184,17 +194,34 @@ function traded(): Tables {
   };
 }
 
-function renderPage(tables: Tables) {
+const operationName = (document: DocumentNode) =>
+  document.definitions.find((d): d is OperationDefinitionNode => d.kind === "OperationDefinition")?.name?.value;
+
+/**
+ * `outcomeCount` replaces the session's; the query named `failing` rejects, and the one named `hanging`
+ * never answers.
+ */
+function renderPage(tables: Tables, options: { outcomeCount?: string; failing?: string; hanging?: string } = {}) {
   const fake = createFakeIndexer(tables);
   state.tables = tables;
-  fetchMock.mockImplementation(indexerAnswers(fake) as typeof fetchGraphql);
+  const answers = indexerAnswers(fake);
+  fetchMock.mockImplementation((async (document: DocumentNode, variables?: Record<string, unknown>) => {
+    const name = operationName(document);
+    if (name === options.failing) throw new Error("The indexer answered 503");
+    if (name === options.hanging) return new Promise(() => {});
+    if (name === "SessionDetail" && options.outcomeCount) {
+      return { Session: [{ ...sessionDetailAnswer.Session[0], outcomeCount: options.outcomeCount }] };
+    }
+    return answers(document, variables);
+  }) as typeof fetchGraphql);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
+  const tree = () => (
     <QueryClientProvider client={client}>
       <MarketPage parentMarket={addresses.parentMarket} />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
-  return { client, fake };
+  const view = render(tree());
+  return { client, fake, rerender: () => view.rerender(tree()) };
 }
 
 const connect = (tradeWallet: string | null = MY_WALLET) => {
@@ -210,10 +237,22 @@ async function openMyTrades(): Promise<HTMLElement> {
 
 const textOf = (element: HTMLElement) => element.textContent ?? "";
 
+const SYMBOL = sessionDetailAnswer.Session[0]!.collateralSymbol;
+
+/** The summary's total line: its label and the session's expected P&L. */
+const totalOf = (panel: HTMLElement) => within(panel).getByText("Expected P&L").parentElement!;
+
+/** The summary's row for one option. */
+const positionRow = (panel: HTMLElement, option: Option) => {
+  const summary = within(panel).getByText("Expected P&L").closest("section")!;
+  return within(summary).getByText(option.name).closest("li")!;
+};
+
 beforeEach(() => {
   fetchMock.mockReset();
   state.account = undefined;
   state.tradeWallet = null;
+  state.executor = "ready";
   state.tables = undefined;
 });
 
@@ -245,6 +284,8 @@ describe("My trades without a wallet or without trades (A1)", () => {
     await waitFor(() => expect(textOf(panel).trim()).not.toBe(""));
     expect(textOf(panel)).not.toMatch(/Connect a wallet/i);
     for (const size of THEIR_SIZES) expect(textOf(panel)).not.toMatch(amountPattern(size));
+    expect(textOf(panel)).toMatch(/You have not traded in this market yet/);
+    expect(textOf(panel)).not.toMatch(/Could not load|Expected P&L/);
   });
 
   it("shows an empty state for a connected account that has no trade wallet yet", async () => {
@@ -261,6 +302,49 @@ describe("My trades without a wallet or without trades (A1)", () => {
     await waitFor(() => expect(textOf(panel).trim()).not.toBe(""));
     expect(textOf(panel)).not.toMatch(/Connect a wallet/i);
     for (const size of THEIR_SIZES) expect(textOf(panel)).not.toMatch(amountPattern(size));
+    expect(textOf(panel)).toMatch(/You have not traded in this market yet/);
+    expect(textOf(panel)).not.toMatch(/Could not load|Expected P&L/);
+  });
+});
+
+describe("My trades while loading or after a failed read", () => {
+  it("shows the loading skeleton while the trade wallet's predictions are on their way", async () => {
+    connect();
+    renderPage(traded(), { hanging: "WalletTrades" });
+
+    const panel = await openMyTrades();
+
+    await waitFor(() => expect(panel.querySelector('[aria-busy="true"]')).not.toBeNull());
+    expect(textOf(panel).trim()).toBe("");
+  });
+
+  it("says the trades could not load when the trade wallet's predictions fail to load", async () => {
+    connect();
+    renderPage(traded(), { failing: "WalletTrades" });
+
+    const panel = await openMyTrades();
+
+    await within(panel).findByText(/Could not load your trades/);
+  });
+
+  it("says the trades could not load, not that P&L is unavailable, when the pool prices fail to load", async () => {
+    connect();
+    renderPage(traded(), { failing: "SessionStats" });
+
+    const panel = await openMyTrades();
+
+    await within(panel).findByText(/Could not load your trades/);
+    expect(textOf(panel)).not.toMatch(/P&L unavailable/);
+  });
+
+  it("says the trades could not load when the account's trade wallet cannot be looked up", async () => {
+    connect();
+    state.executor = "error";
+    renderPage(traded());
+
+    const panel = await openMyTrades();
+
+    await within(panel).findByText(/Could not load your trades/);
   });
 });
 
@@ -292,6 +376,41 @@ describe("My trades lists only the connected wallet's predictions (A2)", () => {
 
     const dialog = await screen.findByRole("dialog");
     expect(textOf(dialog)).toContain(VILLENEUVE.name);
+  });
+});
+
+describe("My trades in this session only (A2)", () => {
+  it("leaves out my trade wallet's predictions in the sessions either side of this one", async () => {
+    connect();
+    const tables = traded();
+    const elsewhere = [
+      { session: String(Number(SESSION_ID) - 1), market: "0x0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d", paid: "8.88" },
+      { session: String(Number(SESSION_ID) + 1), market: "0x0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e", paid: "3.33" },
+    ];
+    tables.ChildMarket = [
+      ...tables.ChildMarket!,
+      ...elsewhere.map((each) => ({ ...tables.ChildMarket![0]!, id: each.market, session_id: each.session })),
+    ];
+    tables.Prediction = [
+      ...tables.Prediction!,
+      ...elsewhere.map((each, index) =>
+        buy({
+          tx: 7 + index,
+          wallet: MY_WALLET,
+          option: { ...GERWIG, id: each.market },
+          side: "UP",
+          tokens: "10",
+          paid: each.paid,
+          at: NOW - 30,
+        }),
+      ),
+    ];
+    renderPage(tables);
+
+    const panel = await openMyTrades();
+
+    await waitFor(() => expect(textOf(panel)).toMatch(amountPattern("2.63")));
+    for (const each of elsewhere) expect(textOf(panel)).not.toMatch(amountPattern(each.paid));
   });
 });
 
@@ -345,10 +464,179 @@ describe("My trades position summary", () => {
     expect(textOf(panel)).not.toMatch(amountPattern("45.63"));
   });
 
+  it("signs each option's expected P&L and the total, with each one's share of what was paid", async () => {
+    connect();
+    renderPage(traded());
+
+    const panel = await openMyTrades();
+
+    // Gerwig +0.37 on 2.63 paid: 3700 / 2.63 = 1406.8, floored to 14.06%
+    await waitFor(() => expect(textOf(positionRow(panel, GERWIG))).toContain(`~+0.37 ${SYMBOL} (+14.06%)`));
+    // Villeneuve +1.22 on 5.78: 21.1%; the total +1.59 on 8.41: 18.9%
+    expect(textOf(positionRow(panel, VILLENEUVE))).toContain(`~+1.22 ${SYMBOL} (+21.1%)`);
+    expect(textOf(totalOf(panel))).toContain(`~+1.59 ${SYMBOL} (+18.9%)`);
+  });
+
+  it("shows a loss with a minus sign and its share of what was paid", async () => {
+    connect();
+    renderPage({
+      ...baseTables(),
+      Executor: wallets(),
+      Prediction: [buy({ ...MY_GERWIG, paid: "4" })],
+      Position: [position(MY_WALLET, GERWIG.upToken, "10")],
+    });
+
+    const panel = await openMyTrades();
+
+    // 10 UP at 0.3 is worth 3 against 4 paid: -1, 25% of the cost
+    await waitFor(() => expect(textOf(positionRow(panel, GERWIG))).toContain(`~-1 ${SYMBOL} (-25%)`));
+  });
+
+  it("converts the expected P&L to collateral at 1/N of the underlying for a decision of N outcomes", async () => {
+    connect();
+    renderPage(traded(), { outcomeCount: "2" });
+
+    const panel = await openMyTrades();
+
+    // Villeneuve's +1.22 underlying is 0.61 collateral over two outcomes; its share of the cost is unchanged
+    await waitFor(() => expect(textOf(positionRow(panel, VILLENEUVE))).toContain(`~+0.61 ${SYMBOL} (+21.1%)`));
+  });
+
+  it("shows each held side's tokens, average entry and current price", async () => {
+    connect();
+    renderPage(traded());
+
+    const panel = await openMyTrades();
+
+    // Gerwig 10 UP bought for 2.63, the UP pool at 0.3; Villeneuve 10 DOWN for 5.78, the DOWN pool at 0.7
+    await waitFor(() => expect(textOf(positionRow(panel, GERWIG))).toContain("10 UP · avg entry 0.263 · now 0.3"));
+    expect(textOf(positionRow(panel, VILLENEUVE))).toContain("10 DOWN · avg entry 0.578 · now 0.7");
+  });
+
+  it("keeps a fully exited option's P&L, with no share of a cost its sells more than repaid", async () => {
+    connect();
+    renderPage({
+      ...baseTables(),
+      Executor: wallets(),
+      Prediction: [
+        buy({ ...MY_GERWIG, paid: "2.6", at: NOW - 60 }),
+        // all 10 UP sold for 3.1
+        predictionRow({
+          tx: txHash(5),
+          executor: MY_WALLET,
+          option: GERWIG,
+          timestamp: NOW,
+          columns: {
+            underlyingDelta: wei("3.1"),
+            upDelta: `-${wei("10")}`,
+            upBalance: "0",
+            upSwapUnderlying: wei("3.1"),
+            upSwapTokens: `-${wei("10")}`,
+            upAvgPrice: wei("0.31"),
+          },
+        }),
+      ],
+      Position: [position(MY_WALLET, GERWIG.upToken, "0")],
+    });
+
+    const panel = await openMyTrades();
+
+    // 2.6 paid, 3.1 returned, nothing held: +0.5 against a cost of -0.5
+    await waitFor(() => expect(textOf(positionRow(panel, GERWIG))).toContain(`~+0.5 ${SYMBOL}`));
+    expect(textOf(positionRow(panel, GERWIG))).toContain("0 UP · avg entry 0.26 · now 0.3");
+    expect(textOf(positionRow(panel, GERWIG))).not.toContain("%");
+  });
+
+  it("says the total is unavailable when no option's P&L is available", async () => {
+    connect();
+    const tables = traded();
+    tables.Pool = tables.Pool!.map((pool) => ({ ...pool, underlyingPerOutcome: null }));
+    renderPage(tables);
+
+    const panel = await openMyTrades();
+
+    await waitFor(() => expect(textOf(totalOf(panel))).toMatch(/P&L unavailable/));
+    expect(textOf(totalOf(panel))).not.toContain(SYMBOL);
+  });
+
+  it("marks an option P&L unavailable once tokens arrive by plain transfer, in the row the indexer writes (A5)", async () => {
+    connect();
+    const tables = traded();
+    // 2 Gerwig UP transferred in: the tokens moved, with no swap and no underlying
+    tables.Prediction = [
+      ...tables.Prediction!,
+      predictionRow({
+        tx: txHash(5),
+        executor: MY_WALLET,
+        option: GERWIG,
+        timestamp: NOW - 30,
+        columns: { upDelta: wei("2"), upBalance: wei("12") },
+      }),
+    ];
+    tables.Position = [
+      position(MY_WALLET, GERWIG.upToken, "12"),
+      position(MY_WALLET, VILLENEUVE.downToken, "10"),
+      ...theirPositions(),
+    ];
+    renderPage(tables);
+
+    const panel = await openMyTrades();
+
+    await waitFor(() => expect(textOf(positionRow(panel, GERWIG))).toMatch(/P&L unavailable/));
+    expect(textOf(panel)).toMatch(/Excludes 1 option/);
+    expect(textOf(totalOf(panel))).toMatch(amountPattern("1.22"));
+    // 12 UP at 0.3 against 2.63 paid
+    expect(textOf(panel)).not.toMatch(amountPattern("0.97"));
+  });
+
+  it("marks an option P&L unavailable once tokens leave for the owner's wallet, in the row the indexer writes (A5)", async () => {
+    connect();
+    const tables = traded();
+    // 4 Gerwig UP withdrawn: the tokens moved, with no swap and no underlying
+    tables.Prediction = [
+      ...tables.Prediction!,
+      predictionRow({
+        tx: txHash(6),
+        executor: MY_WALLET,
+        option: GERWIG,
+        timestamp: NOW - 30,
+        columns: { upDelta: `-${wei("4")}`, upBalance: wei("6") },
+      }),
+    ];
+    tables.Position = [
+      position(MY_WALLET, GERWIG.upToken, "6"),
+      position(MY_WALLET, VILLENEUVE.downToken, "10"),
+      ...theirPositions(),
+    ];
+    renderPage(tables);
+
+    const panel = await openMyTrades();
+
+    await waitFor(() => expect(textOf(positionRow(panel, GERWIG))).toMatch(/P&L unavailable/));
+    expect(textOf(panel)).toMatch(/Excludes 1 option/);
+    expect(textOf(totalOf(panel))).toMatch(amountPattern("1.22"));
+    // 6 UP at 0.3 against 2.63 paid
+    expect(textOf(panel)).not.toMatch(amountPattern("0.83"));
+  });
+
+  it("lists an option the wallet holds with no prediction in it as P&L unavailable (A5)", async () => {
+    connect();
+    const tables = traded();
+    // the indexer writes a Prediction for every token it moves, so a balance with none is a gap in its rows
+    tables.Prediction = [buy(MY_GERWIG), ...THEIR_TRADES.map(buy)];
+    renderPage(tables);
+
+    const panel = await openMyTrades();
+
+    await waitFor(() => expect(textOf(positionRow(panel, VILLENEUVE))).toMatch(/P&L unavailable/));
+    expect(textOf(panel)).toMatch(/Excludes 1 option/);
+    expect(textOf(totalOf(panel))).toMatch(amountPattern("0.37"));
+  });
+
   it("marks an option holding transferred-in tokens P&L unavailable and says the total excludes it (A5)", async () => {
     connect();
     const tables = traded();
-    // the predictions net 10 Gerwig UP; 2 more arrived by plain transfer
+    // the balance holds 2 Gerwig UP more than the predictions net
     tables.Position = [
       position(MY_WALLET, GERWIG.upToken, "12"),
       position(MY_WALLET, VILLENEUVE.downToken, "10"),
@@ -382,6 +670,53 @@ describe("My trades position summary", () => {
     // the total were Villeneuve's 10 DOWN valued at 0: 0.37 - 5.78
     expect(textOf(panel)).not.toMatch(amountPattern("5.41"));
     expect(textOf(panel)).not.toMatch(amountPattern("1.59"));
+  });
+});
+
+describe("My trades as the account or tab changes", () => {
+  it("asks for a wallet again and closes the open popup once the account disconnects", async () => {
+    connect();
+    const { rerender } = renderPage(traded());
+    const panel = await openMyTrades();
+    const sized = await within(panel).findAllByText(amountPattern("5.78"));
+    await userEvent.click(sized.map((element) => element.closest("button")).find((button) => button !== null)!);
+    await screen.findByRole("dialog");
+
+    state.account = undefined;
+    rerender();
+
+    await within(screen.getByRole("tabpanel")).findByText(/Connect a wallet to see your trades/);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("shows the other account's trades once the connected account switches", async () => {
+    connect();
+    const { rerender } = renderPage(traded());
+    const panel = await openMyTrades();
+    await waitFor(() => expect(textOf(panel)).toMatch(amountPattern("2.63")));
+
+    state.account = { address: THEM as Address, chainId: DEFAULT_CHAIN_ID };
+    state.tradeWallet = THEIR_WALLET as Address;
+    rerender();
+
+    await waitFor(() => {
+      for (const size of THEIR_SIZES) expect(textOf(screen.getByRole("tabpanel"))).toMatch(amountPattern(size));
+    });
+    for (const size of ["2.63", "5.78"]) expect(textOf(screen.getByRole("tabpanel"))).not.toMatch(amountPattern(size));
+  });
+
+  it("lists every wallet's trades again once All trades is chosen after My trades", async () => {
+    connect();
+    renderPage(traded());
+    await openMyTrades();
+
+    await userEvent.click(screen.getByRole("tab", { name: /all trades/i }));
+
+    await waitFor(() => {
+      for (const size of ["2.63", "5.78", ...THEIR_SIZES]) {
+        expect(textOf(screen.getByRole("tabpanel"))).toMatch(amountPattern(size));
+      }
+    });
   });
 });
 

@@ -1,5 +1,5 @@
 import type { TradeOption } from "../types";
-import { optionCost } from "./tradeDetail";
+import { optionCost, setsMinted } from "./tradeDetail";
 
 const ONE = 10n ** 18n;
 
@@ -13,8 +13,8 @@ export type OptionPnl = { available: true; cost: bigint; value: bigint; pnl: big
 
 /**
  * Cost is the predictions' `optionCost`, summed; value marks the held tokens at the pools' spot prices
- * (`underlyingPerOutcome`, 1e18-scaled). Unavailable when the holdings differ from what the predictions net,
- * or a held side's pool has no price.
+ * (`underlyingPerOutcome`, 1e18-scaled). Unavailable when the holdings differ from what the predictions' sets
+ * and swaps moved (a plain transfer or a redemption moves tokens with neither), or a held side's pool has no price.
  */
 export function optionPnl({
   predictions,
@@ -25,9 +25,9 @@ export function optionPnl({
   held: Sides<bigint>;
   spot: Sides<bigint | null>;
 }): OptionPnl {
-  const netUp = predictions.reduce((sum, each) => sum + each.upDelta, 0n);
-  const netDown = predictions.reduce((sum, each) => sum + each.downDelta, 0n);
-  if (held.up !== netUp || held.down !== netDown) return { available: false };
+  const tradedUp = predictions.reduce((sum, each) => sum + setsMinted(each) + each.upSwapTokens, 0n);
+  const tradedDown = predictions.reduce((sum, each) => sum + setsMinted(each) + each.downSwapTokens, 0n);
+  if (held.up !== tradedUp || held.down !== tradedDown) return { available: false };
   if ((held.up !== 0n && spot.up === null) || (held.down !== 0n && spot.down === null)) return { available: false };
 
   const cost = predictions.reduce((sum, each) => sum + optionCost(each), 0n);

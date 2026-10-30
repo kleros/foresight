@@ -358,6 +358,91 @@ describe("tokens no prediction accounts for (A5)", () => {
   });
 });
 
+describe("tokens a plain transfer moved, in the row the indexer writes for it (A5)", () => {
+  const spot = { up: e("0.3"), down: e("0.7") };
+  /** A transfer's row: the tokens moved, with no swap and no underlying. */
+  const transferred = (side: "up" | "down", amount: bigint): Move => ({
+    upDelta: side === "up" ? amount : 0n,
+    downDelta: side === "down" ? amount : 0n,
+    upSwapTokens: 0n,
+    upSwapUnderlying: 0n,
+    downSwapTokens: 0n,
+    downSwapUnderlying: 0n,
+  });
+
+  it("is unavailable when UP arrives by plain transfer, though the holdings equal what the rows net", () => {
+    // 6 UP from the trades, 2 more transferred in: held 8, the rows net 8
+    const result = optionPnl({
+      predictions: history([mintAndSellDown, sellFourUp, transferred("up", e("2"))]),
+      held: { up: e("8"), down: 0n },
+      spot,
+    });
+
+    expect(result).toMatchObject({ available: false });
+  });
+
+  it("is unavailable when UP leaves for the owner's wallet by plain transfer", () => {
+    // 10 UP from the mint, 4 withdrawn: held 6, the rows net 6
+    const result = optionPnl({
+      predictions: history([mintAndSellDown, transferred("up", -e("4"))]),
+      held: { up: e("6"), down: 0n },
+      spot,
+    });
+
+    expect(result).toMatchObject({ available: false });
+  });
+
+  it("is unavailable for any transfer in or out, on either side, after trades the swaps account for", () => {
+    // the trades leave 6 UP and no DOWN, so no more than 6 UP can leave
+    const transfer = fc.oneof(
+      fc.tuple(fc.constant("up" as const), fc.bigInt({ min: -e("6"), max: 10n ** 24n })),
+      fc.tuple(fc.constant("down" as const), fc.bigInt({ min: 1n, max: 10n ** 24n })),
+    );
+    fc.assert(
+      fc.property(
+        transfer.filter(([, amount]) => amount !== 0n),
+        ([side, amount]) => {
+          const moves = [mintAndSellDown, sellFourUp, transferred(side, amount)];
+          const held = {
+            up: moves.reduce((sum, each) => sum + (each.upDelta ?? 0n), 0n),
+            down: moves.reduce((sum, each) => sum + (each.downDelta ?? 0n), 0n),
+          };
+
+          expect(optionPnl({ predictions: history(moves), held, spot })).toMatchObject({ available: false });
+        },
+      ),
+      { seed: 20_261_030 },
+    );
+  });
+
+  it("stays at the trades' P&L when transferred-in UP has left again", () => {
+    // as in A3: cost 2.1, 6 UP at 0.3 worth 1.8, P&L -0.3
+    const result = optionPnl({
+      predictions: history([mintAndSellDown, transferred("up", e("2")), sellFourUp, transferred("up", -e("2"))]),
+      held: { up: e("6"), down: 0n },
+      spot,
+    });
+
+    expect(result).toMatchObject({ available: true, cost: e("2.1"), value: e("1.8"), pnl: -e("0.3") });
+  });
+});
+
+describe("a redemption after resolution", () => {
+  it("leaves the option P&L unavailable, the redeemed UP leaving with no swap or merge", () => {
+    // 10 UP from the mint, all 10 redeemed
+    const result = optionPnl({
+      predictions: history([
+        mintAndSellDown,
+        { upDelta: -e("10"), upSwapTokens: 0n, upSwapUnderlying: 0n, downSwapTokens: 0n, downSwapUnderlying: 0n },
+      ]),
+      held: { up: 0n, down: 0n },
+      spot: { up: e("1"), down: 0n },
+    });
+
+    expect(result).toMatchObject({ available: false });
+  });
+});
+
 describe("a pool not priced yet (A6)", () => {
   it("is unavailable rather than valuing held UP at 0 when the UP pool has no price", () => {
     const result = optionPnl({

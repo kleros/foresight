@@ -44,11 +44,11 @@ export function useMyTrades(session: SessionDetail): MyTrades {
   if (executor.isPending) return { status: "loading" };
   if (!wallet) return { status: executor.isError ? "error" : "empty" };
   if (trades.isPending || stats.isPending) return { status: "loading" };
-  if (trades.isError) return { status: "error" };
+  if (trades.isError || stats.isError) return { status: "error" };
 
   const { balances } = trades.data;
   const spotOf = (option: SessionOption, side: "UP" | "DOWN") =>
-    stats.data?.pools.find((pool) => pool.market === option.market.toLowerCase() && pool.side === side)
+    stats.data.pools.find((pool) => pool.market === option.market.toLowerCase() && pool.side === side)
       ?.underlyingPerOutcome ?? null;
 
   const positions = session.options.flatMap((option): PositionPnl[] => {
