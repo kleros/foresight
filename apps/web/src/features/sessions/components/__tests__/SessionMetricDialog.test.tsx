@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { parseEther } from "viem";
+import { parseEther, parseUnits } from "viem";
 import { describe, expect, it, vi } from "vitest";
 
 import { addresses } from "@/testing/fixtures";
@@ -22,7 +22,15 @@ function open() {
   render(
     <>
       <button type="button">Volume</button>
-      <SessionMetricDialog kind="volume" onClose={onClose} metrics={metrics} symbol="sDAI" usdPrice={undefined} />
+      <SessionMetricDialog
+        kind="volume"
+        onClose={onClose}
+        opener={null}
+        metrics={metrics}
+        symbol="sDAI"
+        decimals={18}
+        usdPrice={undefined}
+      />
     </>,
   );
   return onClose;
@@ -60,7 +68,15 @@ describe("SessionMetricDialog", () => {
     rerender(
       <>
         <button type="button">Volume</button>
-        <SessionMetricDialog kind="volume" onClose={onClose} metrics={metrics} symbol="sDAI" usdPrice={undefined} />
+        <SessionMetricDialog
+          kind="volume"
+          onClose={onClose}
+          opener={screen.getByRole("button", { name: "Volume" })}
+          metrics={metrics}
+          symbol="sDAI"
+          decimals={18}
+          usdPrice={undefined}
+        />
       </>,
     );
 
@@ -68,6 +84,41 @@ describe("SessionMetricDialog", () => {
 
     expect(screen.getByRole("button", { name: "Volume" })).toHaveFocus();
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("closes on Escape after focus has moved out of it", async () => {
+    const onClose = open();
+    screen.getByRole("button", { name: "Volume" }).focus();
+
+    await userEvent.keyboard("{Escape}");
+
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("leaves focus where it was moved when Escape closes it from outside", async () => {
+    const onClose = vi.fn();
+    const { rerender } = render(<button type="button">Volume</button>);
+    const opener = screen.getByRole("button", { name: "Volume" });
+    rerender(
+      <>
+        <button type="button">Volume</button>
+        <button type="button">Elsewhere</button>
+        <SessionMetricDialog
+          kind="volume"
+          onClose={onClose}
+          opener={opener}
+          metrics={metrics}
+          symbol="sDAI"
+          decimals={18}
+          usdPrice={undefined}
+        />
+      </>,
+    );
+    screen.getByRole("button", { name: "Elsewhere" }).focus();
+
+    await userEvent.keyboard("{Escape}");
+
+    expect(screen.getByRole("button", { name: "Elsewhere" })).toHaveFocus();
   });
 
   it("says no pool yet for an option without pools", () => {
@@ -116,7 +167,15 @@ describe("SessionMetricDialog", () => {
 
   const show = (kind: "volume" | "notional" | "liquidity") =>
     render(
-      <SessionMetricDialog kind={kind} onClose={vi.fn()} metrics={breakdown} symbol="sDAI" usdPrice={undefined} />,
+      <SessionMetricDialog
+        kind={kind}
+        onClose={vi.fn()}
+        opener={null}
+        metrics={breakdown}
+        symbol="sDAI"
+        decimals={18}
+        usdPrice={undefined}
+      />,
     );
   const block = (name: string) => screen.getByText(name).closest("section")!;
   const line = (option: string, side: string) =>
@@ -160,5 +219,44 @@ describe("SessionMetricDialog", () => {
 
     expect(line("Option A", "DOWN")).toHaveTextContent(/not priced yet/);
     expect(line("Option A", "UP")).not.toHaveTextContent(/not priced yet/);
+  });
+
+  it("reads a pool's holdings in the collateral's decimals", () => {
+    // a 6-decimal collateral, whose outcome and underlying tokens share its decimals
+    const sixDecimals: SessionMetrics = {
+      ...breakdown,
+      options: [
+        {
+          ...breakdown.options[0]!,
+          pools: [
+            {
+              side: "UP",
+              volume: 1.5,
+              notional: 2.5,
+              liquidity: { outcome: parseUnits("40", 6), underlying: parseUnits("12.5", 6), priced: true, value: 7.25 },
+            },
+          ],
+        },
+      ],
+    };
+    render(
+      <SessionMetricDialog
+        kind="liquidity"
+        onClose={vi.fn()}
+        opener={null}
+        metrics={sixDecimals}
+        symbol="USDC"
+        decimals={6}
+        usdPrice={undefined}
+      />,
+    );
+
+    expect(line("Option A", "UP")).toHaveTextContent("40 UP / 12.5 underlying");
+  });
+
+  it("gives no USD figure while the collateral has no USD price, as when its read failed", () => {
+    show("volume");
+
+    expect(screen.getByRole("dialog", { name: "Volume" }).textContent).not.toMatch(/\$/);
   });
 });

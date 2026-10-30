@@ -54,15 +54,18 @@ export function SessionHeader({
   // a gateway that cannot serve an image leaves the gradient and no icon, not a broken image
   const [heroFailed, setHeroFailed] = useState(false);
   const [iconFailed, setIconFailed] = useState(false);
-  const [openMetric, setOpenMetric] = useState<MetricKind | null>(null);
+  const [openMetric, setOpenMetric] = useState<{ kind: MetricKind; opener: HTMLElement } | null>(null);
   const closeMetric = useCallback(() => setOpenMetric(null), []);
   const metrics = stats ? sessionMetrics(session, stats, poolBalances) : null;
+  const toggleMetric = (kind: MetricKind, opener: HTMLElement) =>
+    setOpenMetric((open) => (open?.kind === kind ? null : { kind, opener }));
   const metricStat = (kind: MetricKind, Icon: typeof VolumeIcon, pending: boolean) => (
     <SessionStat
       Icon={Icon}
       label={METRIC_TITLES[kind]}
       pending={pending}
-      onOpen={metrics?.[kind] != null ? () => setOpenMetric(kind) : undefined}
+      onOpen={metrics?.[kind] != null ? (button) => toggleMetric(kind, button) : undefined}
+      expanded={openMetric?.kind === kind}
     >
       {approxCollateral(metrics?.[kind] ?? null, session.collateralSymbol)}
     </SessionStat>
@@ -93,10 +96,12 @@ export function SessionHeader({
       </div>
       {openMetric && metrics ? (
         <SessionMetricDialog
-          kind={openMetric}
+          kind={openMetric.kind}
           onClose={closeMetric}
+          opener={openMetric.opener}
           metrics={metrics}
           symbol={session.collateralSymbol}
+          decimals={session.collateralDecimals ?? 18}
           usdPrice={usdPrice}
         />
       ) : null}

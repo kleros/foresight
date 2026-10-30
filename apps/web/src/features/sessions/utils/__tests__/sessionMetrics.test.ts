@@ -11,17 +11,13 @@ import { sessionChildRow, sessionDetailColumns } from "./fixtures";
 
 const [MARKET_A, MARKET_B] = [addresses.childMarkets[0]!, addresses.childMarkets[1]!];
 
+const children = [
+  sessionChildRow({ id: MARKET_A, parentOutcomeIndex: "0", displayName: "Option A" }),
+  sessionChildRow({ id: MARKET_B, parentOutcomeIndex: "1", displayName: "Option B" }),
+];
+
 // two options, outcomeCount 2: one underlying is half a unit of collateral
-const session = toSessionDetail(
-  {
-    ...sessionDetailColumns,
-    children: [
-      sessionChildRow({ id: MARKET_A, parentOutcomeIndex: "0", displayName: "Option A" }),
-      sessionChildRow({ id: MARKET_B, parentOutcomeIndex: "1", displayName: "Option B" }),
-    ],
-  },
-  GATEWAY,
-);
+const session = toSessionDetail({ ...sessionDetailColumns, outcomeCount: "2", children }, GATEWAY);
 
 let next = 0;
 function pool(
@@ -77,6 +73,22 @@ describe("sessionMetrics, notional volume", () => {
       ["UP", 15],
       ["DOWN", 6],
     ]);
+  });
+
+  it("counts a token as one third of the collateral where the decision has three outcomes", () => {
+    const three = toSessionDetail({ ...sessionDetailColumns, outcomeCount: "3", children }, GATEWAY);
+    const pools = [
+      pool(MARKET_A, "UP", { volume: "6", notional: "30" }),
+      pool(MARKET_A, "DOWN", { volume: "3", notional: "12" }),
+      pool(MARKET_B, "UP", { volume: "9", notional: "9" }),
+    ];
+
+    const metrics = sessionMetrics(three, statsOf(pools), undefined)!;
+
+    // (30 + 12 + 9) / 3 outcomes
+    expect(metrics.notional).toBe(17);
+    // (6 + 3 + 9) / 3
+    expect(metrics.volume).toBe(6);
   });
 });
 

@@ -102,6 +102,12 @@ const S_DAI_ADAPTER_ADDRESSES: Record<number, Address> = { ...gnosis.savingsXDai
 
 export type SDaiDepositRoute = { sDai: Address; sDaiAdapter: Address };
 
+/** Whether `collateral` is the chain's sDAI, adapter or none. */
+export function isSDai(collateral: Address, chainId: number = DEFAULT_CHAIN_ID): boolean {
+  const sDai = S_DAI_ADDRESSES[chainId];
+  return sDai !== undefined && isAddressEqual(sDai, collateral);
+}
+
 /**
  * Gnosis' savings adapter takes xDAI and mints sDAI to whichever address is named, so
  * native currency can fund a market only where sDAI is its collateral.

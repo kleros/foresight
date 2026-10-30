@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { parseEther } from "viem";
 import { describe, expect, it } from "vitest";
 
@@ -154,6 +155,35 @@ describe("SessionHeader", () => {
 
     expect(screen.queryByText("-")).toBeNull();
     expect(container.querySelectorAll(".fs-skeleton")).toHaveLength(4);
+  });
+
+  it("shows a dash on Liquidity alone, with nothing to open, where the pool balances could not be read", () => {
+    renderHeader();
+
+    expect(screen.getByText("Liquidity:").parentElement).toHaveTextContent(/^Liquidity:\s*-$/);
+    expect(screen.queryByRole("button", { name: /^Liquidity/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /^Volume/ })).toBeInTheDocument();
+  });
+
+  it("closes a stat's popup when the stat is pressed again", async () => {
+    renderHeader();
+    await userEvent.click(screen.getByRole("button", { name: /^Volume/ }));
+    expect(screen.getByRole("dialog", { name: "Volume" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /^Volume/ }));
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("hands focus back to the stat on Escape where pressing it did not focus it", async () => {
+    renderHeader();
+    // a click that moves no focus, as Safari's on a button
+    fireEvent.click(screen.getByRole("button", { name: /^Volume/ }));
+    expect(screen.getByRole("dialog", { name: "Volume" })).toHaveFocus();
+
+    await userEvent.keyboard("{Escape}");
+
+    expect(screen.getByRole("button", { name: /^Volume/ })).toHaveFocus();
   });
 
   it("holds a skeleton on Liquidity alone while the pool balances load", () => {

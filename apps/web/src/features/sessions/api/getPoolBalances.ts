@@ -6,7 +6,7 @@ import { erc20Abi, formatEther, parseAbi, parseEther, type Address, type PublicC
 import { STALE_TIME } from "@/lib/query";
 import { publicClient } from "@/lib/web3/public-client";
 
-import { sDaiDepositRoute } from "@/config/contracts";
+import { isSDai } from "@/config/contracts";
 
 import type { PoolBalances, SessionPool } from "../types";
 import { sessionStatsKey } from "./getSessionStats";
@@ -44,11 +44,10 @@ const VAULT_ABI = parseAbi(["function previewRedeem(uint256 shares) view returns
 
 /** xDAI, taken as USD, that one sDAI redeems for; nothing unless `collateral` is sDAI. */
 export function useSDaiUsdPrice(collateral: Address | null | undefined) {
-  const isSDai = collateral ? sDaiDepositRoute(collateral) !== null : false;
   return useQuery({
     queryKey: ["sdai-usd-price", collateral?.toLowerCase()],
     queryFn:
-      collateral && isSDai
+      collateral && isSDai(collateral)
         ? async () =>
             Number(
               formatEther(

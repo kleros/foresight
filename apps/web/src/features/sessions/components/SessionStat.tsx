@@ -2,18 +2,21 @@ import type { ComponentType, ReactNode, SVGProps } from "react";
 
 import clsx from "clsx";
 
-/** A header figure; with `onOpen` the whole stat is a button that opens its breakdown. */
+/** A header figure; with `onOpen` the whole stat is a button that opens its breakdown, handed the button. */
 export function SessionStat({
   Icon,
   label,
   pending,
   onOpen,
+  expanded,
   children,
 }: {
   Icon: ComponentType<SVGProps<SVGElement>>;
   label: string;
   pending?: boolean;
-  onOpen?: () => void;
+  onOpen?: (button: HTMLButtonElement) => void;
+  /** Whether the breakdown it opens is showing. */
+  expanded?: boolean;
   children: ReactNode;
 }) {
   const opens = onOpen !== undefined && !pending;
@@ -40,7 +43,8 @@ export function SessionStat({
     <button
       type="button"
       aria-haspopup="dialog"
-      onClick={onOpen}
+      aria-expanded={expanded ?? false}
+      onClick={(event) => onOpen(event.currentTarget)}
       className="flex cursor-pointer flex-wrap items-center gap-2 text-left"
     >
       {content}
