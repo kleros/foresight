@@ -39,8 +39,8 @@ import { MarketPage } from "../../MarketPage";
  *       and a line saying how many positions the wallet holds; where it holds any, or complete sets to merge,
  *       a "Your positions" button opens a dialog of that name with one "Remove" per position and a "Merge"
  *       button with what merging returns. The section lists no position itself.
- *     - after the session's close: every "Add liquidity" / "Seed liquidity" control disabled, its reason as
- *       its accessible description; "Remove" and "Merge" stay enabled
+ *     - after the session's close: no banner, no "Add liquidity" control and no closed reason on the page;
+ *       "Your positions", "Remove" and "Merge" stay enabled
  *     - "Add liquidity" opens a dialog named /liquidity/i: a "Total" amount in sDAI or xDAI, per branch a
  *       field named /depth/i (defaults to the total, editable down) and one named /price/i (UP's price,
  *       0.5 by default; disabled or read-only with a note saying it is locked where the pool holds liquidity),
