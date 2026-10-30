@@ -8,8 +8,8 @@ export const siteUrl = new URL(env.SITE_URL ?? "https://foresight.kleros.io");
 export const siteTitle = "Foresight | Kleros";
 export const siteDescription = "Prediction markets for distilled human judgement";
 
-/** Lives in `public/`; 3836x1902. */
-export const defaultOgImage = "/futarchy_kleros.png";
+/** Lives in `public/`; 1200x630, made by `scripts/capture-og-image.mjs`. */
+export const defaultOgImage = "/foresight-og.png";
 
 const twitterCreator = { creator: "@kleros_io", creatorId: "1467726470533754880" } as const;
 
