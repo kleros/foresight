@@ -534,6 +534,144 @@ describe("fetchSessionTrades, a prediction's steps", () => {
 
     expect(await operationsOf()).toEqual([]);
   });
+
+  describe("two trade wallets on one option in one transaction", () => {
+    const [first, second] = [TRADERS[0]!, TRADERS[1]!];
+    const bothTraded = (tables: Pick<Tables, "Swap" | "Transfer">): Tables =>
+      sessionTables([], {
+        Executor: [executorRow(first), executorRow(second)],
+        Prediction: [first, second].map((executor) => predictionRow({ tx, executor, option: GERWIG, timestamp: 3 })),
+        ...tables,
+      });
+
+    async function operationsByWallet() {
+      const { trades } = await fetchSessionTrades(SESSION_ID);
+      return predictionsOf(trades).map((trade) => [trade.executor, trade.options[0]!.operations]);
+    }
+
+    it("reads each wallet's mint from the DOWN and UP the router handed that wallet", async () => {
+      const handed = (logIndex: number, executor: string, token: string, amount: string) =>
+        transferRow({ tx, logIndex, executor, token, amount, counterparty: ROUTER, timestamp: 3 });
+      serve(
+        bothTraded({
+          Transfer: [
+            handed(2, first, GERWIG.downToken, wei("5")),
+            handed(3, first, GERWIG.upToken, wei("5")),
+            handed(6, second, GERWIG.downToken, wei("3")),
+            handed(7, second, GERWIG.upToken, wei("3")),
+          ],
+        }),
+      );
+
+      expect(await operationsByWallet()).toEqual([
+        [first, [{ kind: "mint", logIndex: 2, sets: BigInt(wei("5")) }]],
+        [second, [{ kind: "mint", logIndex: 6, sets: BigInt(wei("3")) }]],
+      ]);
+    });
+
+    it("lists each wallet's own swaps", async () => {
+      const swapBy = (executor: string, logIndex: number, outcomeAmount: string, underlyingAmount: string) =>
+        swapRow({
+          tx,
+          logIndex,
+          option: GERWIG,
+          side: "UP",
+          executor,
+          sender: executor,
+          timestamp: 3,
+          outcomeAmount,
+          underlyingAmount,
+          priceBefore: "0.3",
+          priceAfter: "0.31",
+        });
+      serve(
+        bothTraded({
+          Swap: [swapBy(first, 4, `-${wei("4")}`, wei("1.2")), swapBy(second, 9, wei("2"), `-${wei("0.6")}`)],
+        }),
+      );
+
+      expect(await operationsByWallet()).toEqual([
+        [
+          first,
+          [
+            {
+              kind: "swap",
+              logIndex: 4,
+              side: "UP",
+              bought: true,
+              tokens: BigInt(wei("4")),
+              underlying: BigInt(wei("1.2")),
+            },
+          ],
+        ],
+        [
+          second,
+          [
+            {
+              kind: "swap",
+              logIndex: 9,
+              side: "UP",
+              bought: false,
+              tokens: BigInt(wei("2")),
+              underlying: BigInt(wei("0.6")),
+            },
+          ],
+        ],
+      ]);
+    });
+  });
+
+  describe("one trade wallet on one option in two transactions", () => {
+    const later = txHash(2);
+    const twice = (tables: Pick<Tables, "Swap" | "Transfer">): Tables =>
+      sessionTables([], {
+        Executor: [executorRow(trader)],
+        Prediction: [
+          predictionRow({ tx: later, executor: trader, option: GERWIG, timestamp: 4 }),
+          predictionRow({ tx, executor: trader, option: GERWIG, timestamp: 3 }),
+        ],
+        ...tables,
+      });
+
+    async function operationsByTransaction() {
+      const { trades } = await fetchSessionTrades(SESSION_ID);
+      return predictionsOf(trades).map((trade) => [trade.transactionHash, trade.options[0]!.operations]);
+    }
+
+    it("reads the wallet's mint only in the transaction the router handed it over in", async () => {
+      serve(
+        twice({
+          Transfer: [transfer(2, GERWIG.downToken, wei("5"), ROUTER), transfer(3, GERWIG.upToken, wei("5"), ROUTER)],
+        }),
+      );
+
+      expect(await operationsByTransaction()).toEqual([
+        [later, []],
+        [tx, [{ kind: "mint", logIndex: 2, sets: BigInt(wei("5")) }]],
+      ]);
+    });
+
+    it("lists the wallet's swap only in the transaction it ran in", async () => {
+      serve(twice({ Swap: [ownSwap(4, `-${wei("4")}`, wei("1.2"))] }));
+
+      expect(await operationsByTransaction()).toEqual([
+        [later, []],
+        [
+          tx,
+          [
+            {
+              kind: "swap",
+              logIndex: 4,
+              side: "UP",
+              bought: true,
+              tokens: BigInt(wei("4")),
+              underlying: BigInt(wei("1.2")),
+            },
+          ],
+        ],
+      ]);
+    });
+  });
 });
 
 describe("useSessionTrades, pages read while trades land", () => {
