@@ -45,7 +45,7 @@ function toOption(row: PredictionRow): TradeOption {
 }
 
 /** Rows arrive ordered by transaction then trade wallet, so each prediction's rows are adjacent. */
-function toPredictions(rows: PredictionRow[]): { trade: PredictionTrade; rows: number }[] {
+export function toPredictions(rows: PredictionRow[]): { trade: PredictionTrade; rows: number }[] {
   const groups: { trade: PredictionTrade; rows: number }[] = [];
   for (const row of rows) {
     const id = `${row.transactionHash}-${row.executor_id}`.toLowerCase();
