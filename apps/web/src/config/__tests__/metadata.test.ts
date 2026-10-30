@@ -4,6 +4,8 @@ import path from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
+import { decodePng, pngSize } from "@/test/png";
+
 import { defaultOgImage } from "../metadata";
 
 // config/env validates the whole environment at import; only SITE_URL is read here.
@@ -11,12 +13,6 @@ vi.mock("../env", () => ({ env: {} }));
 
 const webRoot = path.resolve(import.meta.dirname, "../../..");
 const appDir = path.join(webRoot, "src/app");
-
-/** Width and height from a PNG's IHDR chunk, big-endian at bytes 16 and 20. */
-function pngSize(bytes: Buffer) {
-  expect(bytes.subarray(1, 4).toString("ascii")).toBe("PNG");
-  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
-}
 
 function gitBlobHash(bytes: Buffer) {
   return createHash("sha1").update(`blob ${bytes.length}\0`).update(bytes).digest("hex");
@@ -72,5 +68,106 @@ describe("app icons", () => {
 
     expect(ico.readUInt16LE(2)).toBe(1);
     expect(sizes).toEqual([16, 32, 48]);
+  });
+});
+
+const MARK_SVG = readFileSync(path.join(webRoot, "src/assets/logo/foresight-mark.svg"), "utf8");
+const WHITE = [255, 255, 255] as const;
+/** Per-channel distance under which a pixel counts as a given colour; covers anti-aliasing. */
+const COLOUR_TOLERANCE = 24;
+
+/** The mark's fill colours other than white, as RGB. */
+const MARK_COLOURS = [...MARK_SVG.matchAll(/fill="#([0-9a-fA-F]{6})"/g)].map(([, hex = ""]) =>
+  [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16)),
+);
+
+/** Extent of every point the mark's paths name, in viewBox units. */
+function markExtent(svg: string) {
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (const [, d = ""] of svg.matchAll(/<path d="([^"]+)"/g)) {
+    for (const [, command = "", operands = ""] of d.matchAll(/([A-Za-z])([^A-Za-z]*)/g)) {
+      const numbers = (operands.match(/-?\d*\.?\d+/g) ?? []).map(Number);
+      if (command === "V") ys.push(...numbers);
+      else if (command === "H") xs.push(...numbers);
+      else if ("MLC".includes(command)) numbers.forEach((n, i) => (i % 2 ? ys : xs).push(n));
+      else if (command !== "Z") throw new Error(`path command ${command} is not handled`);
+    }
+  }
+  return { left: Math.min(...xs), right: Math.max(...xs), top: Math.min(...ys), bottom: Math.max(...ys) };
+}
+
+function isColour(rgba: Uint8Array, at: number, colour: readonly number[]) {
+  return colour.every((channel, i) => Math.abs((rgba[at + i] ?? 0) - channel) <= COLOUR_TOLERANCE);
+}
+
+/** Pixels that are at least half opaque and not white: the artwork, without background or arrow. */
+function artwork(png: Uint8Array) {
+  const { width, height, rgba } = decodePng(png);
+  let ink = 0;
+  let onMark = 0;
+  const box = { left: width, right: -1, top: height, bottom: -1 };
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const at = (y * width + x) * 4;
+      if ((rgba[at + 3] ?? 0) < 128 || isColour(rgba, at, WHITE)) continue;
+      ink++;
+      if (MARK_COLOURS.some((colour) => isColour(rgba, at, colour))) onMark++;
+      box.left = Math.min(box.left, x);
+      box.right = Math.max(box.right, x + 1);
+      box.top = Math.min(box.top, y);
+      box.bottom = Math.max(box.bottom, y + 1);
+    }
+  }
+  return { width, height, coverage: ink / (width * height), onMark: onMark / ink, box };
+}
+
+/** Each entry's image bytes; the 16-byte directory entries hold length at 8 and offset at 12. */
+function icoImages(ico: Buffer) {
+  return Array.from({ length: ico.readUInt16LE(4) }, (_, i) => {
+    const entry = 6 + i * 16;
+    const offset = ico.readUInt32LE(entry + 12);
+    return ico.subarray(offset, offset + ico.readUInt32LE(entry + 8));
+  });
+}
+
+const rasterIcons = [
+  ["icon1.png", readFileSync(path.join(appDir, "icon1.png"))],
+  ["apple-icon.png", readFileSync(path.join(appDir, "apple-icon.png"))],
+  ...icoImages(readFileSync(path.join(appDir, "favicon.ico"))).map(
+    (png, i) => [`favicon.ico image ${i}`, png] as const,
+  ),
+] as const;
+
+describe("raster app icons, against foresight-mark.svg", () => {
+  const mark = markExtent(MARK_SVG);
+
+  it.each(rasterIcons)("%s is painted in the mark's colours", (_, png) => {
+    expect(artwork(png).onMark).toBeGreaterThan(0.8);
+  });
+
+  it.each(rasterIcons)("%s is not blank", (_, png) => {
+    expect(artwork(png).coverage).toBeGreaterThan(0.2);
+  });
+
+  it.each(rasterIcons)("%s has the mark's proportions", (_, png) => {
+    const { box } = artwork(png);
+    const height = box.bottom - box.top;
+    const markAspect = (mark.right - mark.left) / (mark.bottom - mark.top);
+
+    // A pixel of rounding at each edge.
+    expect(Math.abs((box.right - box.left) / height - markAspect)).toBeLessThanOrEqual(2 / height);
+  });
+
+  it.each(rasterIcons)("%s centres the mark", (_, png) => {
+    const { width, height, box } = artwork(png);
+    const [, viewWidth = NaN, viewHeight = NaN] = (MARK_SVG.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/) ?? []).map(Number);
+
+    expect(Math.abs((box.left + box.right) / 2 / width - (mark.left + mark.right) / 2 / viewWidth)).toBeLessThanOrEqual(
+      1 / width,
+    );
+    expect(
+      Math.abs((box.top + box.bottom) / 2 / height - (mark.top + mark.bottom) / 2 / viewHeight),
+    ).toBeLessThanOrEqual(1 / height);
   });
 });
