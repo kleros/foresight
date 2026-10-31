@@ -18,7 +18,7 @@ export interface SessionCore {
   /** Gateway URL, or null where there is no image or the uri was refused. */
   iconUri: string | null;
   heroUri: string | null;
-  /** When trading stops */
+  /** The Reality question's opening time, when answers can be submitted. */
   closesAt: Date | null;
 }
 

@@ -488,7 +488,7 @@ export type Pool = {
   childMarket_id: Scalars['String']['output'];
   /** pool address */
   id: Scalars['String']['output'];
-  /** the concentrated-liquidity L the last swap reported */
+  /** the in-range concentrated liquidity L, as the pool's liquidity() reads it: set by each swap, moved by mints and burns around the pool's tick */
   liquidity: Scalars['numeric']['output'];
   /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
   outcomeIndex: Scalars['Int']['output'];
@@ -536,7 +536,7 @@ export type Pool_Aggregate_Order_By = {
 
 /** order by avg() on columns of table "Pool" */
 export type Pool_Avg_Order_By = {
-  /** the concentrated-liquidity L the last swap reported */
+  /** the in-range concentrated liquidity L, as the pool's liquidity() reads it: set by each swap, moved by mints and burns around the pool's tick */
   liquidity?: InputMaybe<Order_By>;
   /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
   outcomeIndex?: InputMaybe<Order_By>;
@@ -578,7 +578,7 @@ export type Pool_Max_Order_By = {
   childMarket_id?: InputMaybe<Order_By>;
   /** pool address */
   id?: InputMaybe<Order_By>;
-  /** the concentrated-liquidity L the last swap reported */
+  /** the in-range concentrated liquidity L, as the pool's liquidity() reads it: set by each swap, moved by mints and burns around the pool's tick */
   liquidity?: InputMaybe<Order_By>;
   /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
   outcomeIndex?: InputMaybe<Order_By>;
@@ -600,7 +600,7 @@ export type Pool_Min_Order_By = {
   childMarket_id?: InputMaybe<Order_By>;
   /** pool address */
   id?: InputMaybe<Order_By>;
-  /** the concentrated-liquidity L the last swap reported */
+  /** the in-range concentrated liquidity L, as the pool's liquidity() reads it: set by each swap, moved by mints and burns around the pool's tick */
   liquidity?: InputMaybe<Order_By>;
   /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
   outcomeIndex?: InputMaybe<Order_By>;
@@ -668,7 +668,7 @@ export enum Pool_Select_Column {
 
 /** order by stddev() on columns of table "Pool" */
 export type Pool_Stddev_Order_By = {
-  /** the concentrated-liquidity L the last swap reported */
+  /** the in-range concentrated liquidity L, as the pool's liquidity() reads it: set by each swap, moved by mints and burns around the pool's tick */
   liquidity?: InputMaybe<Order_By>;
   /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
   outcomeIndex?: InputMaybe<Order_By>;
@@ -685,7 +685,7 @@ export type Pool_Stddev_Order_By = {
 
 /** order by stddev_pop() on columns of table "Pool" */
 export type Pool_Stddev_Pop_Order_By = {
-  /** the concentrated-liquidity L the last swap reported */
+  /** the in-range concentrated liquidity L, as the pool's liquidity() reads it: set by each swap, moved by mints and burns around the pool's tick */
   liquidity?: InputMaybe<Order_By>;
   /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
   outcomeIndex?: InputMaybe<Order_By>;
@@ -702,7 +702,7 @@ export type Pool_Stddev_Pop_Order_By = {
 
 /** order by stddev_samp() on columns of table "Pool" */
 export type Pool_Stddev_Samp_Order_By = {
-  /** the concentrated-liquidity L the last swap reported */
+  /** the in-range concentrated liquidity L, as the pool's liquidity() reads it: set by each swap, moved by mints and burns around the pool's tick */
   liquidity?: InputMaybe<Order_By>;
   /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
   outcomeIndex?: InputMaybe<Order_By>;
@@ -730,7 +730,7 @@ export type Pool_Stream_Cursor_Value_Input = {
   childMarket_id?: InputMaybe<Scalars['String']['input']>;
   /** pool address */
   id?: InputMaybe<Scalars['String']['input']>;
-  /** the concentrated-liquidity L the last swap reported */
+  /** the in-range concentrated liquidity L, as the pool's liquidity() reads it: set by each swap, moved by mints and burns around the pool's tick */
   liquidity?: InputMaybe<Scalars['numeric']['input']>;
   /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
   outcomeIndex?: InputMaybe<Scalars['Int']['input']>;
@@ -751,7 +751,7 @@ export type Pool_Stream_Cursor_Value_Input = {
 
 /** order by sum() on columns of table "Pool" */
 export type Pool_Sum_Order_By = {
-  /** the concentrated-liquidity L the last swap reported */
+  /** the in-range concentrated liquidity L, as the pool's liquidity() reads it: set by each swap, moved by mints and burns around the pool's tick */
   liquidity?: InputMaybe<Order_By>;
   /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
   outcomeIndex?: InputMaybe<Order_By>;
@@ -768,7 +768,7 @@ export type Pool_Sum_Order_By = {
 
 /** order by var_pop() on columns of table "Pool" */
 export type Pool_Var_Pop_Order_By = {
-  /** the concentrated-liquidity L the last swap reported */
+  /** the in-range concentrated liquidity L, as the pool's liquidity() reads it: set by each swap, moved by mints and burns around the pool's tick */
   liquidity?: InputMaybe<Order_By>;
   /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
   outcomeIndex?: InputMaybe<Order_By>;
@@ -785,7 +785,7 @@ export type Pool_Var_Pop_Order_By = {
 
 /** order by var_samp() on columns of table "Pool" */
 export type Pool_Var_Samp_Order_By = {
-  /** the concentrated-liquidity L the last swap reported */
+  /** the in-range concentrated liquidity L, as the pool's liquidity() reads it: set by each swap, moved by mints and burns around the pool's tick */
   liquidity?: InputMaybe<Order_By>;
   /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
   outcomeIndex?: InputMaybe<Order_By>;
@@ -802,7 +802,7 @@ export type Pool_Var_Samp_Order_By = {
 
 /** order by variance() on columns of table "Pool" */
 export type Pool_Variance_Order_By = {
-  /** the concentrated-liquidity L the last swap reported */
+  /** the in-range concentrated liquidity L, as the pool's liquidity() reads it: set by each swap, moved by mints and burns around the pool's tick */
   liquidity?: InputMaybe<Order_By>;
   /** which side of the market this pool trades: 0 is DOWN, 1 is UP */
   outcomeIndex?: InputMaybe<Order_By>;
@@ -1506,7 +1506,7 @@ export type Session = {
   /** emitted by SessionFactory, fixed at deploy */
   metadataUri: Scalars['String']['output'];
   openedAt: Scalars['numeric']['output'];
-  /** when trading stops */
+  /** the Reality question's opening time, when answers can be submitted */
   openingTime?: Maybe<Scalars['numeric']['output']>;
   outcomeCount: Scalars['numeric']['output'];
   /** wrapped ERC-20 per named outcome */
@@ -1740,7 +1740,7 @@ export type Session_Stream_Cursor_Value_Input = {
   /** emitted by SessionFactory, fixed at deploy */
   metadataUri?: InputMaybe<Scalars['String']['input']>;
   openedAt?: InputMaybe<Scalars['numeric']['input']>;
-  /** when trading stops */
+  /** the Reality question's opening time, when answers can be submitted */
   openingTime?: InputMaybe<Scalars['numeric']['input']>;
   outcomeCount?: InputMaybe<Scalars['numeric']['input']>;
   /** wrapped ERC-20 per named outcome */

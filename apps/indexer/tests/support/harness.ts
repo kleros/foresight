@@ -81,12 +81,44 @@ export const swapped = (
   params: { sender: pool, recipient, ...amounts, price, liquidity: 1_000n, tick },
 });
 
+/** A position over [bottomTick, topTick) gains `liquidityAmount`. */
+export const minted = (
+  pool: Address,
+  bottomTick: bigint,
+  topTick: bigint,
+  liquidityAmount: bigint,
+  block = BLOCK + 2,
+) => ({
+  contract: "AlgebraPool" as const,
+  event: "Mint" as const,
+  srcAddress: pool,
+  block: { number: block, timestamp: block },
+  params: { sender: OWNER, owner: OWNER, bottomTick, topTick, liquidityAmount, amount0: 1n, amount1: 1n },
+});
+
+/** A position over [bottomTick, topTick) loses `liquidityAmount`. */
+export const burned = (
+  pool: Address,
+  bottomTick: bigint,
+  topTick: bigint,
+  liquidityAmount: bigint,
+  block = BLOCK + 3,
+) => ({
+  contract: "AlgebraPool" as const,
+  event: "Burn" as const,
+  srcAddress: pool,
+  block: { number: block, timestamp: block },
+  params: { owner: OWNER, bottomTick, topTick, liquidityAmount, amount0: 1n, amount1: 1n },
+});
+
 type Simulated =
   | ReturnType<typeof executorDeployed>
   | ReturnType<typeof transfer>
   | ReturnType<typeof poolCreated>
   | ReturnType<typeof initialized>
-  | ReturnType<typeof swapped>;
+  | ReturnType<typeof swapped>
+  | ReturnType<typeof minted>
+  | ReturnType<typeof burned>;
 
 export const indexEvents = (indexer: TestIndexer, simulate: Simulated[]) =>
   indexer.process({ chains: { 31337: { simulate } } });

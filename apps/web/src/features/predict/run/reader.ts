@@ -131,10 +131,6 @@ export function createPredictReader(args: {
       return args.client.getBlockNumber();
     },
 
-    async latestTimestamp() {
-      return (await args.client.getBlock()).timestamp;
-    },
-
     async blockGasLimit() {
       return (await args.client.getBlock()).gasLimit;
     },

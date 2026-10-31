@@ -39,8 +39,8 @@ import { MarketPage } from "../../MarketPage";
  *       and a line saying how many positions the wallet holds; where it holds any, or complete sets to merge,
  *       a "Your positions" button opens a dialog of that name with one "Remove" per position and a "Merge"
  *       button with what merging returns. The section lists no position itself.
- *     - after the session's close: no banner, no "Add liquidity" control and no closed reason on the page;
- *       "Your positions", "Remove" and "Merge" stay enabled
+ *     - after the resolution date: no banner, no "Add liquidity" control and no closed reason on the page;
+ *       "Your positions", "Remove" and "Merge" stay enabled; trading goes on while a pool holds liquidity
  *     - "Add liquidity" opens a dialog named /liquidity/i: a "Total" amount in sDAI or xDAI, per branch a
  *       field named /depth/i (defaults to the total, editable down) and one named /price/i (UP's price,
  *       0.5 by default; disabled or read-only with a note saying it is locked where the pool holds liquidity),
@@ -62,9 +62,9 @@ export const WAD = 10n ** 18n;
 /** The session's two branches, in parent-outcome order. */
 export const BRANCH_NAMES = ["Denis Villeneuve", "Greta Gerwig"] as const;
 
-/** Closes on 1 January 2100, so the session is trading whatever the wall clock reads. */
+/** Resolution opens on 1 January 2100, so the session is trading whatever the wall clock reads. */
 export const TRADING_CLOSE = "4102444800";
-/** 2025-09-03, so the session has closed. */
+/** 2025-09-03, so the resolution date has passed. */
 export const PAST_CLOSE = "1756900800";
 
 const TOKEN_ABI = parseAbi([

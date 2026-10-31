@@ -39,7 +39,7 @@ export type SessionDraft = {
   language: string;
   minBond: string;
   /**
-   * The decision date: `parent.openingTime`, the end of the trading period.
+   * The decision date: `parent.openingTime`, when the Reality question opens for answers.
    * A UTC day and `HH:mm`; the picker shows them in the creator's time zone.
    */
   decisionDate: string;

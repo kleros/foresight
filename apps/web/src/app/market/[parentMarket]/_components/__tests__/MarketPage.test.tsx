@@ -15,6 +15,35 @@ import { addresses } from "@/testing/fixtures";
 import { MarketPage } from "../MarketPage";
 
 vi.mock("@/lib/web3/public-client", () => ({ publicClient: {} }));
+/* What the session's pools read as: not yet read, or one UP pool live or empty. */
+const pools = vi.hoisted(() => ({ read: "unread" as "unread" | "live" | "empty" }));
+vi.mock("@/features/liquidity/api/getLiquidityPools", async (importOriginal) => {
+  const token = (n: number) => `0x${n.toString(16).padStart(40, "0")}` as const;
+  const session = {
+    chainId: 100,
+    parentMarket: token(1),
+    collateral: token(2),
+    parentInvalid: token(3),
+    branches: [
+      { childMarket: token(4), outcome: token(5), downToken: token(6), upToken: token(7), invalidToken: token(8) },
+    ],
+  };
+  const price = { sqrtPriceX96: 2n ** 96n, tickSpacing: 60 };
+  const read = {
+    live: {
+      session,
+      branches: [{ up: { status: "live", ...price, liquidity: 10n ** 18n }, down: { status: "missing" } }],
+    },
+    empty: { session, branches: [{ up: { status: "empty", ...price }, down: { status: "missing" } }] },
+  };
+  return {
+    ...(await importOriginal<typeof import("@/features/liquidity/api/getLiquidityPools")>()),
+    useLiquidityPools: (markets: unknown) => ({
+      data: markets && pools.read !== "unread" ? read[pools.read] : undefined,
+      isError: false,
+    }),
+  };
+});
 vi.mock("@/features/sessions/api/verifySession", () => ({
   verifySession: async (_client: unknown, _chain: number, row: unknown) => row,
 }));
@@ -62,6 +91,7 @@ function renderPage(parentMarket: string = addresses.parentMarket) {
 
 beforeEach(() => {
   fetchMock.mockReset();
+  pools.read = "unread";
 });
 
 describe("MarketPage", () => {
@@ -212,30 +242,67 @@ describe("MarketPage on a trading session", () => {
   });
 });
 
-describe("MarketPage at the close", () => {
-  it("locks trading when the close time passes, with nothing else re-rendering the page", async () => {
+describe("MarketPage at the resolution date", () => {
+  /** Renders a session whose resolution date is a minute away, then moves the clock past it. */
+  async function crossTheDate() {
+    const closesAt = Math.floor(Date.now() / 1000) + 60;
+    fetchMock.mockImplementation(async (document) => {
+      if (queryName(document) === "SessionDetail") {
+        return {
+          Session: [{ ...sessionDetailColumns, openingTime: String(closesAt), children: [sessionChildRow()] }],
+        };
+      }
+      if (queryName(document) === "SessionChart") return new Promise(() => {});
+      return { Prediction: [], directSwaps: [], senderlessSwaps: [], Pool: [] };
+    });
+
+    renderPage();
+    await screen.findByRole("heading", { level: 1, name: "Dune: Part Three, director" });
+    expect(screen.queryAllByText("Trading has closed.")).toEqual([]);
+    expect(screen.getByText("Countdown:")).toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(61_000);
+    });
+  }
+
+  it("locks trading when the date passes over empty pools, with nothing else re-rendering the page", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
-      const closesAt = Math.floor(Date.now() / 1000) + 60;
-      fetchMock.mockImplementation(async (document) => {
-        if (queryName(document) === "SessionDetail") {
-          return {
-            Session: [{ ...sessionDetailColumns, openingTime: String(closesAt), children: [sessionChildRow()] }],
-          };
-        }
-        if (queryName(document) === "SessionChart") return new Promise(() => {});
-        return { Prediction: [], directSwaps: [], senderlessSwaps: [], Pool: [] };
-      });
-
-      renderPage();
-      await screen.findByRole("heading", { level: 1, name: "Dune: Part Three, director" });
-      expect(screen.queryAllByText("Trading has closed.")).toEqual([]);
-
-      await act(async () => {
-        vi.advanceTimersByTime(61_000);
-      });
+      pools.read = "empty";
+      await crossTheDate();
 
       expect(screen.getAllByText("Trading has closed.").length).toBeGreaterThan(0);
+      expect(screen.getByText("Closed")).toBeInTheDocument();
+      expect(screen.queryByText("Countdown:")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps trading past the date while a pool holds liquidity, dropping only the countdown", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      pools.read = "live";
+      await crossTheDate();
+
+      expect(screen.queryAllByText("Trading has closed.")).toEqual([]);
+      expect(screen.getByText("Trading")).toBeInTheDocument();
+      expect(screen.queryByText("Countdown:")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not call the session closed past the date while its pools are unread", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      pools.read = "unread";
+      await crossTheDate();
+
+      expect(screen.queryAllByText("Trading has closed.")).toEqual([]);
+      expect(screen.queryByText("Closed")).toBeNull();
+      expect(screen.getByText("Trading")).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }

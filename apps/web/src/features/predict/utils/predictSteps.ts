@@ -37,7 +37,7 @@ export interface PredictSteps {
 /** The credits swap has no quote or route, so a run spending credits cannot be planned. */
 export const CREDITS_UNAVAILABLE = "Credits can't be spent now. Untick them to use your own funds.";
 
-/** The session's close time has passed; the popup refuses to start or go on. */
+/** The page reads the session as closed; the popup refuses to start or go on. */
 export const SESSION_CLOSED = "This session has closed.";
 
 /** A stored run another open tab is driving; the card and the popup both say it. */
@@ -69,7 +69,6 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
   "wrong-chain": "Started on another network. Switch to it to finish.",
   elsewhere: RUNNING_ELSEWHERE,
   "prompt-open": PROMPT_OPEN,
-  closed: SESSION_CLOSED,
   unlisted: "This transaction isn't one Foresight sends, so it wasn't sent.",
   storage:
     "This browser couldn't save the prediction's progress, so no wallet prompt was opened. Free up storage or leave private browsing, then try again.",

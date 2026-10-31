@@ -75,8 +75,6 @@ export interface PredictReader {
   /** The underlying `shares` of the collateral redeem for now. */
   vaultValue(shares: bigint): Promise<bigint>;
   latestBlock(): Promise<bigint>;
-  /** The latest block's timestamp in seconds: the chain's own clock. */
-  latestTimestamp(): Promise<bigint>;
   /** The latest block's gas limit, which no one transaction may pass. */
   blockGasLimit(): Promise<bigint>;
   /** The gas the node expects `tx` to use against the latest state; rejects where it would revert. */

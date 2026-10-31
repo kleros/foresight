@@ -112,7 +112,7 @@ export function ReviewStep({
               <Chip>{draft.category}</Chip>
               <Chip>{draft.language}</Chip>
               <Chip>{draft.minBond} xDAI min bond</Chip>
-              <Chip>Trading until {decisionHuman}</Chip>
+              <Chip>Resolution opens {decisionHuman}</Chip>
             </div>
           </div>
           <button

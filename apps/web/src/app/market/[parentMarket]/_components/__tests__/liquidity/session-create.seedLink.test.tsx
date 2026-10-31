@@ -80,7 +80,7 @@ const deployed = (parentMarket: string): SessionDeployProgress => ({
   parentMarket,
 });
 
-/** `decisionDate` is the session's close, `parent.openingTime`. */
+/** `decisionDate` is the session's resolution date, `parent.openingTime`. */
 function renderDeployed(parentMarket: string, decisionDate = "2099-09-20") {
   const store = () => useDraftStore.getState();
   store().resetDraft();
@@ -127,14 +127,14 @@ describe("DeployStep's Seed liquidity, followed", () => {
   });
 });
 
-describe("DeployStep's Seed liquidity after the session's close", () => {
-  it("is disabled with the close as its reason, and links nowhere", () => {
+describe("DeployStep's Seed liquidity after the resolution date", () => {
+  it("is disabled with the resolution date as its reason, and links nowhere", () => {
     renderDeployed(createWorld().parentMarket, "2025-09-03");
 
     expect(screen.queryByRole("link", { name: "Seed liquidity" })).toBeNull();
     const seed = screen.getByRole("button", { name: "Seed liquidity" });
     expect(seed).toBeDisabled();
-    expect(seed).toHaveAccessibleDescription(/clos/i);
+    expect(seed).toHaveAccessibleDescription(/resolution opens/i);
   });
 });
 

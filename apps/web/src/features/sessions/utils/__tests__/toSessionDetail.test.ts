@@ -4,7 +4,7 @@ import { branchColor } from "@/utils/branchColor";
 
 import { addresses, GATEWAY } from "@/testing/fixtures";
 
-import { sessionStatus, type SessionDetailRow, toSessionDetail } from "../toSessionDetail";
+import { resolutionOpened, sessionStatus, type SessionDetailRow, toSessionDetail } from "../toSessionDetail";
 import { sessionChildRow as child, sessionDetailColumns } from "./fixtures";
 
 function row(overrides: Partial<SessionDetailRow> = {}): SessionDetailRow {
@@ -151,22 +151,54 @@ describe("toSessionDetail", () => {
 });
 
 describe("sessionStatus", () => {
-  const before = new Date(1756900800 * 1000 - 1);
+  const at = new Date(1756900800 * 1000);
+  const after = new Date(1756900800 * 1000 + 86_400_000);
+  const nows = { before: new Date(1756900800 * 1000 - 1), at, after };
+
+  // the rule: setting up first; past the resolution date, closed only once the pools are read and none is live
+  it.each([
+    [false, "before", true, "setting-up"],
+    [false, "before", false, "setting-up"],
+    [false, "before", undefined, "setting-up"],
+    [false, "after", true, "setting-up"],
+    [false, "after", false, "setting-up"],
+    [false, "after", undefined, "setting-up"],
+    [true, "before", true, "trading"],
+    [true, "before", false, "trading"],
+    [true, "before", undefined, "trading"],
+    [true, "at", true, "trading"],
+    [true, "at", false, "closed"],
+    [true, "at", undefined, "trading"],
+    [true, "after", true, "trading"],
+    [true, "after", false, "closed"],
+    [true, "after", undefined, "trading"],
+  ] as const)(
+    "setup complete %s, %s the resolution date, pools holding liquidity %s: %s",
+    (setupComplete, now, hasLiquidity, expected) => {
+      expect(sessionStatus({ setupComplete, closesAt: at }, nows[now], hasLiquidity)).toBe(expected);
+    },
+  );
+
+  it.each([true, false, undefined])(
+    "keeps trading a session whose resolution date could not be read, liquidity %s",
+    (hasLiquidity) => {
+      expect(sessionStatus({ setupComplete: true, closesAt: null }, after, hasLiquidity)).toBe("trading");
+    },
+  );
+});
+
+describe("resolutionOpened", () => {
   const at = new Date(1756900800 * 1000);
 
-  it("reports a session setting up ahead of anything else", () => {
-    expect(sessionStatus({ setupComplete: false, closesAt: before }, at)).toBe("setting-up");
+  it("is not open a millisecond before the date", () => {
+    expect(resolutionOpened(at, new Date(at.getTime() - 1))).toBe(false);
   });
 
-  it("reports trading before the closing time", () => {
-    expect(sessionStatus({ setupComplete: true, closesAt: at }, before)).toBe("trading");
+  it("is open at the date exactly", () => {
+    expect(resolutionOpened(at, at)).toBe(true);
   });
 
-  it("closes at the closing time exactly", () => {
-    expect(sessionStatus({ setupComplete: true, closesAt: at }, at)).toBe("closed");
-  });
-
-  it("never closes a session whose closing time could not be read", () => {
-    expect(sessionStatus({ setupComplete: true, closesAt: null }, at)).toBe("trading");
+  it("is never open where the date could not be read", () => {
+    expect(resolutionOpened(null, at)).toBe(false);
   });
 });

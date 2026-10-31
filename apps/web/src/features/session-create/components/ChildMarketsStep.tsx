@@ -234,10 +234,10 @@ export function ChildMarketsStep({
 
         <div className="rounded-fs bg-fs-surface-sunken border-fs-border flex flex-wrap items-center gap-3 border px-4 py-3">
           <ForesightIcon name="opening-time" size={16} className="text-fs-text-secondary" />
-          <span className="type-label text-fs-text-primary">Trading until {decisionHuman}</span>
+          <span className="type-label text-fs-text-primary">Resolution opens {decisionHuman}</span>
           <span className="type-caption text-fs-text-secondary text-pretty">
-            Every branch closes at the same moment as the decision. A branch can be given a later one below, never an
-            earlier one.
+            Every branch opens for answers at the same moment as the decision. A branch can be given a later one below,
+            never an earlier one.
           </span>
         </div>
 
@@ -336,7 +336,7 @@ export function ChildMarketsStep({
                           </div>
                           <div>
                             <div className="type-label text-fs-text-secondary pb-1">
-                              Trading until for this branch{zone ? ` (${zone})` : ""}
+                              Resolution opens for this branch{zone ? ` (${zone})` : ""}
                             </div>
                             <Datepicker
                               time

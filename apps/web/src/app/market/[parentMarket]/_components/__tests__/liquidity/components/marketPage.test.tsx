@@ -311,7 +311,7 @@ describe("the market page of a session with liquidity", () => {
   });
 });
 
-describe("the market page after the session's close", () => {
+describe("the market page after the resolution date", () => {
   it("shows no banner and no Add liquidity on a closed session with no liquidity, and keeps its position's Remove", async () => {
     await show(emptyPoolWithPosition(), PAST_CLOSE);
 

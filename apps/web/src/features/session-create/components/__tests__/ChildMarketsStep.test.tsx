@@ -155,3 +155,20 @@ describe("Errors on a blank draft", () => {
     expect(inError(unit)).toBe(true);
   });
 });
+
+describe("The resolution date", () => {
+  it("is labelled as when resolution opens for every branch", () => {
+    renderStep();
+
+    expect(screen.getByText(/^Resolution opens (?!for this branch)/)).toBeInTheDocument();
+  });
+
+  it("is labelled as when resolution opens for a branch given its own", async () => {
+    renderStep();
+
+    await userEvent.click(screen.getByRole("button", { name: "Edit branch 1" }));
+    await userEvent.click(screen.getByRole("button", { name: "Override" }));
+
+    expect(screen.getByText("Resolution opens for this branch (UTC)")).toBeInTheDocument();
+  });
+});

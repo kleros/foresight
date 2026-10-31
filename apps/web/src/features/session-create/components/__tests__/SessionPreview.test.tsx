@@ -95,3 +95,17 @@ describe("SessionPreview, on the deploy step", () => {
     expect(screen.queryByText(LISTED)).toBeNull();
   });
 });
+
+describe("SessionPreview, the decision date", () => {
+  it("is labelled as when resolution opens on the decision tree", () => {
+    render(<SessionPreview step={1} activeBranch={null} progress={progressOf()} />);
+
+    expect(screen.getByText("Resolution opens")).toBeInTheDocument();
+  });
+
+  it("is labelled as when resolution opens on the session card", () => {
+    render(<SessionPreview step={3} activeBranch={null} progress={progressOf()} />);
+
+    expect(screen.getByText(/^Resolution opens /)).toBeInTheDocument();
+  });
+});

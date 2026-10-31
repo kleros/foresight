@@ -42,7 +42,7 @@ import { toPriceMove, usePricePreview } from "./usePricePreview";
 
 interface PredictRunnerProps {
   session: SessionDetail;
-  /** The page's status, which flips to closed at the close; the driver checks the chain's clock before signing. */
+  /** The page's status, which flips to closed once the resolution date has passed and no pool holds liquidity. */
   status: SessionStatus;
   selected: SelectedEstimate[];
   onClose: () => void;

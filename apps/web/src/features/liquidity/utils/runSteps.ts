@@ -16,7 +16,7 @@ const FAILURE_COPY: Record<LiquidityFailureReason, string> = {
   rpc: "The network did not answer. Try again in a moment.",
   unknown: "Something went wrong.",
   unlisted: "A transaction did not match what was reviewed, so it was not sent.",
-  closed: "The session has closed, so liquidity can't be added.",
+  closed: "Resolution has opened, so liquidity can't be added.",
   "wrong-wallet": "Connect the wallet that started this run.",
   "wrong-chain": "Switch the wallet to Gnosis.",
   pending: "The wallet has a transaction waiting. Wait for it to land first.",

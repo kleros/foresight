@@ -90,34 +90,50 @@ describe("boundarySeconds", () => {
 
 describe("sessionWhere", () => {
   const boundary = boundarySeconds(NOON);
+  // a session trades while its resolution date is ahead, or after it while any of its pools holds liquidity
+  const dateAhead = { openingTime: { _gt: String(boundary) } };
+  const anyPoolLiquid = { children: { pools: { liquidity: { _gt: "0" } } } };
 
   it("constrains only the keyword when nothing is filtered", () => {
     expect(sessionWhere(NO_FILTERS, boundary)).toEqual({ keyword: { _ilike: "%" } });
   });
 
-  it("keeps a session open while its opening time is still ahead", () => {
-    expect(sessionWhere({ query: "", state: "open" }, boundary).openingTime).toEqual({ _gt: String(boundary) });
+  it("lists a session under Trading while its date is ahead or a pool of it holds liquidity", () => {
+    expect(sessionWhere({ query: "", state: "open" }, boundary)).toEqual({
+      keyword: { _ilike: "%" },
+      _or: [dateAhead, anyPoolLiquid],
+    });
   });
 
-  it("counts a session closed once its opening time has passed", () => {
-    expect(sessionWhere({ query: "", state: "closed" }, boundary).openingTime).toEqual({ _lte: String(boundary) });
+  it("lists a session under Closed once its date has passed and none of its pools holds liquidity", () => {
+    expect(sessionWhere({ query: "", state: "closed" }, boundary)).toEqual({
+      keyword: { _ilike: "%" },
+      openingTime: { _lte: String(boundary) },
+      _not: anyPoolLiquid,
+    });
   });
 
-  it("splits open and closed on the same instant, so neither drops a session", () => {
-    const open = sessionWhere({ query: "", state: "open" }, boundary).openingTime;
-    const closed = sessionWhere({ query: "", state: "closed" }, boundary).openingTime;
+  it("splits Trading and Closed on the same instant and the same pools, so neither drops a session", () => {
+    const open = sessionWhere({ query: "", state: "open" }, boundary);
+    const closed = sessionWhere({ query: "", state: "closed" }, boundary);
 
-    expect([open, closed]).toEqual([{ _gt: String(boundary) }, { _lte: String(boundary) }]);
+    expect(open._or?.[0]).toEqual({ openingTime: { _gt: String(boundary) } });
+    expect(closed.openingTime).toEqual({ _lte: String(boundary) });
+    expect(closed._not).toEqual(open._or?.[1]);
   });
 
-  it("leaves opening time unconstrained under all, which is where an unread one shows", () => {
-    expect(sessionWhere({ query: "dune", state: "all" }, boundary).openingTime).toBeUndefined();
+  it("leaves opening time and pools unconstrained under all, which is where an unread date with no liquidity shows", () => {
+    const all = sessionWhere({ query: "dune", state: "all" }, boundary);
+
+    expect(all.openingTime).toBeUndefined();
+    expect(all._or).toBeUndefined();
+    expect(all._not).toBeUndefined();
   });
 
   it("carries the search term alongside the state", () => {
     expect(sessionWhere({ query: "dune", state: "open" }, boundary)).toEqual({
       keyword: { _ilike: "%dune%" },
-      openingTime: { _gt: String(boundary) },
+      _or: [dateAhead, anyPoolLiquid],
     });
   });
 });

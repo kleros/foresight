@@ -23,6 +23,15 @@ function eventTransactionFields(config: string, signature: string): string[] | n
   return (stop === -1 ? entries : entries.slice(0, stop)).map((line) => line.trim().slice(2).trim());
 }
 
+/** The `- event:` line declaring `name` in a config, without its indentation. */
+const eventLine = (config: string, name: string) =>
+  config
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.startsWith(`- event: ${name}(`));
+
+const TEMPLATE = readFileSync(path.join(ROOT, "config.template.yaml"), "utf8");
+
 describe("indexer configs", () => {
   it("has the template and a generated config to check", ({ expect }) => {
     expect(CONFIGS).toContain("config.template.yaml");
@@ -34,4 +43,14 @@ describe("indexer configs", () => {
 
     expect(eventTransactionFields(config, "Swap")).toEqual(expect.arrayContaining(["hash", "from"]));
   });
+
+  it.for(CONFIGS.flatMap((name) => ["Mint", "Burn"].map((event) => [name, event] as const)))(
+    "declares a pool's %s %s exactly as the template does",
+    ([name, event], { expect }) => {
+      const config = readFileSync(path.join(ROOT, name), "utf8");
+
+      expect(eventLine(TEMPLATE, event)).toBeDefined();
+      expect(eventLine(config, event)).toBe(eventLine(TEMPLATE, event));
+    },
+  );
 });

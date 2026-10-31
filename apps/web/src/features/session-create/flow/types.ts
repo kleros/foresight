@@ -16,7 +16,7 @@ export type ParentMarketInput = {
   category: string;
   lang: string;
   minBond: bigint;
-  /** Seconds. Reality opening time; the end of the trading period. */
+  /** Seconds. Reality opening time, when answers can be submitted. */
   openingTime: number;
 };
 

@@ -169,7 +169,7 @@ export function DeployStep({
         category: draft.category,
         language: draft.language,
         minBond: draft.minBond,
-        tradingUntil: decisionHuman,
+        resolutionOpens: decisionHuman,
         hash: progress.parent.hash,
       },
       children: draft.outcomes.map((o, i) => ({
@@ -365,7 +365,7 @@ export function DeployStep({
             <div className="rounded-fs bg-fs-tone-warning-bg border-fs-tone-warning flex flex-col gap-3.5 border px-5 py-4.5">
               <div>
                 <div className="text-fs-text-primary text-base font-semibold">Deployed</div>
-                <div className="type-label text-fs-text-primary">Trading until {decisionHuman}</div>
+                <div className="type-label text-fs-text-primary">Resolution opens {decisionHuman}</div>
                 <div className="type-label text-fs-text-primary">Needs liquidity to be tradable</div>
               </div>
               <div className="flex flex-wrap items-center gap-4">

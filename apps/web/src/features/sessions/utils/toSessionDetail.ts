@@ -55,8 +55,20 @@ export function toSessionDetail(row: SessionDetailRow, gateway: string): Session
   };
 }
 
-export function sessionStatus(detail: Pick<SessionDetail, "setupComplete" | "closesAt">, now: Date): SessionStatus {
+/** Whether the Reality question has opened for answers; no liquidity is added from then (L7). */
+export const resolutionOpened = (closesAt: Date | null, now: Date): boolean =>
+  closesAt !== null && closesAt.getTime() <= now.getTime();
+
+/**
+ * @param hasLiquidity whether any of the session's pools holds in-range liquidity; undefined while unread.
+ * The pools trade past the resolution date, so a session closes only once they are read with none.
+ */
+export function sessionStatus(
+  detail: Pick<SessionDetail, "setupComplete" | "closesAt">,
+  now: Date,
+  hasLiquidity: boolean | undefined,
+): SessionStatus {
   if (!detail.setupComplete) return "setting-up";
-  if (detail.closesAt && detail.closesAt.getTime() <= now.getTime()) return "closed";
+  if (resolutionOpened(detail.closesAt, now) && hasLiquidity === false) return "closed";
   return "trading";
 }

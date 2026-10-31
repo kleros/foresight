@@ -795,7 +795,6 @@ describe("PredictRunner, a popup left open across the session's close", () => {
     const detail = session({ openingTime: String(Math.floor(Date.now() / 1000) + 60) });
     const view = mount(detail);
     expect(screen.getByTestId("notice")).toBeEmptyDOMElement();
-    expect(lastInput?.closesAt).toBe(Math.floor(detail.closesAt!.getTime() / 1000));
 
     view.rerenderAt("closed");
     fireEvent.click(screen.getByText("predict"));

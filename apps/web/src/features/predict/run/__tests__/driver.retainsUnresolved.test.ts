@@ -1,5 +1,5 @@
 import { createFlowRunStore, createMemoryStorage, type FlowTx, type TxGateway } from "@foresight/tx-orchestrator";
-import { decodeFunctionData, erc20Abi, type Hash, type PublicClient, type TransactionReceipt } from "viem";
+import type { Hash, PublicClient, TransactionReceipt } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -190,74 +190,5 @@ describe("unresolved send retention", () => {
     driver.retry();
     await vi.waitFor(() => expect(driver.getProgress().stage).toBe("complete"));
     expect(sends.filter((tx) => tx.to === addresses.collateral)).toHaveLength(1);
-  });
-
-  it("retains an unresolved deposit prompt after session close", async () => {
-    const flowId = "retention-close-live-deposit";
-    const store = createFlowRunStore({ storage: createMemoryStorage() });
-    const closesAt = 1_800_000_000;
-    let timestamp = BigInt(closesAt - 5);
-    let paid = 0n;
-    let approve: (() => void) | undefined;
-    const sends: FlowTx[] = [];
-    const gateway: TxGateway = {
-      sendTransaction: (tx) => {
-        sends.push(tx);
-        return new Promise((resolve) => {
-          approve = () => {
-            const transfer = decodeFunctionData({ abi: erc20Abi, data: tx.data! });
-            expect(transfer.functionName).toBe("transfer");
-            if (transfer.functionName !== "transfer") throw new Error("not a transfer");
-            expect(transfer.args[0]).toBe(addresses.executor);
-            paid += transfer.args[1];
-            resolve(hash(1));
-          };
-        });
-      },
-      waitForReceipt: async ({ hash: target }) => receipt(target),
-      getReceipt: async () => null,
-      isKnown: async () => false,
-    };
-    const reader = {
-      ...fakeReader({ deployed: true }),
-      latestTimestamp: async () => timestamp,
-      collateralBalance: async () => paid,
-    };
-    const open = () => {
-      const driver = createPredictRun({
-        gateway,
-        reader,
-        quoter: fakeQuoter(),
-        flowId,
-        store,
-        ctx: () => ctx(),
-        snapshot: () => snapshot(),
-        closesAt,
-        now: () => Number(timestamp) * 1000,
-      });
-      drivers.push(driver);
-      return driver;
-    };
-    const first = open();
-    first.start();
-    await vi.waitFor(() => expect(approve).toBeDefined());
-    expect(store.load<PredictSnapshot, PredictCtx>(flowId)?.snapshot.unanswered?.deposit).toBeDefined();
-    first.dispose();
-    timestamp = BigInt(closesAt + 1);
-    const second = open();
-    second.recover();
-    await vi.waitFor(() => expect(second.getProgress().failure?.reason).toBe("held"));
-    expect(second.getProgress().unanswered).toBe(true);
-    second.reset();
-    expect(store.load(flowId)).not.toBeNull();
-    approve!();
-    await Promise.resolve();
-    expect(sends).toHaveLength(1);
-    expect(sends[0]?.to).toBe(addresses.collateral);
-    expect(paid).toBe(WAD);
-    const third = open();
-    third.recover();
-    await vi.waitFor(() => expect(third.getProgress().failure?.reason).toBe("held"));
-    expect(store.load(flowId)).not.toBeNull();
   });
 });

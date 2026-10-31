@@ -216,7 +216,9 @@ export function useSessionLiquidity({
   const namesKey = ordered.map((branch) => branch.name).join("\n");
   const names = useMemo(() => (namesKey ? namesKey.split("\n") : []), [namesKey]);
   const childMarkets = ordered.map((branch) => branch.market);
-  const pools = useLiquidityPools(isReady ? { parentMarket, childMarkets } : undefined);
+  // past the resolution date the session trades only while a pool holds liquidity, which any wallet can withdraw
+  const pastResolution = closesAt !== null && closesAt.getTime() <= Date.now();
+  const pools = useLiquidityPools(isReady ? { parentMarket, childMarkets } : undefined, { poll: pastResolution });
   const positions = useLiquidityPositions(pools.data, owner);
   const balances = useLiquidityBalances(pools.data?.session, owner);
   const chainTime = useChainTime();

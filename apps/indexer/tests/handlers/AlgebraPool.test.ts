@@ -4,6 +4,7 @@ import { describe, it } from "vitest";
 import {
   BLOCK,
   bought,
+  burned,
   CHILD_MARKET,
   DOWN,
   DOWN_POOL,
@@ -11,6 +12,7 @@ import {
   executorDeployed,
   indexEvents,
   initialized,
+  minted,
   onlyPrediction,
   OTHER_DOWN,
   OTHER_MARKET,
@@ -385,5 +387,100 @@ describe("pool statistics", () => {
     t.expect(pool.liquidity).toBe(1_000n);
     t.expect(pool.volumeUnderlying).toBe(65n);
     t.expect(pool.volumeOutcome).toBe(160n);
+  });
+});
+
+// Algebra counts a position into `liquidity()` while bottomTick <= tick < topTick; the pool initializes at tick 0.
+describe("a pool's in-range liquidity", () => {
+  const followedPool = async () => {
+    const indexer = createTestIndexer();
+    await seedMarket(indexer, MARKET);
+    return indexer;
+  };
+  const opened = [poolCreated(UNDERLYING, UP, UP_POOL), initialized(UP_POOL, START_PRICE)];
+
+  it("counts a mint around the pool's tick before any swap", async (t) => {
+    const indexer = await followedPool();
+
+    await indexEvents(indexer, [...opened, minted(UP_POOL, -60n, 60n, 500n)]);
+
+    t.expect((await indexer.Pool.getOrThrow(UP_POOL)).liquidity).toBe(500n);
+  });
+
+  it("counts a mint whose range starts at the pool's tick", async (t) => {
+    const indexer = await followedPool();
+
+    await indexEvents(indexer, [...opened, minted(UP_POOL, 0n, 60n, 500n)]);
+
+    t.expect((await indexer.Pool.getOrThrow(UP_POOL)).liquidity).toBe(500n);
+  });
+
+  it("leaves out a mint whose range ends at the pool's tick, or lies above it", async (t) => {
+    const indexer = await followedPool();
+
+    await indexEvents(indexer, [...opened, minted(UP_POOL, -60n, 0n, 500n), minted(UP_POOL, 60n, 120n, 700n)]);
+
+    t.expect((await indexer.Pool.getOrThrow(UP_POOL)).liquidity).toBe(0n);
+  });
+
+  it("takes a burn in range off, and leaves a burn out of range alone", async (t) => {
+    const indexer = await followedPool();
+
+    await indexEvents(indexer, [
+      ...opened,
+      minted(UP_POOL, -60n, 60n, 500n),
+      minted(UP_POOL, 60n, 120n, 700n),
+      burned(UP_POOL, -60n, 60n, 200n),
+      burned(UP_POOL, 60n, 120n, 700n),
+    ]);
+
+    t.expect((await indexer.Pool.getOrThrow(UP_POOL)).liquidity).toBe(300n);
+  });
+
+  it("reads none once every in-range position is burnt", async (t) => {
+    const indexer = await followedPool();
+
+    await indexEvents(indexer, [...opened, minted(UP_POOL, -60n, 60n, 500n), burned(UP_POOL, -60n, 60n, 500n)]);
+
+    t.expect((await indexer.Pool.getOrThrow(UP_POOL)).liquidity).toBe(0n);
+  });
+
+  it("takes a swap's liquidity as it reports it, and tests later mints against the swap's tick", async (t) => {
+    const indexer = await followedPool();
+
+    await indexEvents(indexer, [
+      ...opened,
+      minted(UP_POOL, -60n, 60n, 500n, BLOCK + 2),
+      // the harness's swap reports 1,000 at tick 120
+      swapped(UP_POOL, STRANGER_TOKEN, AFTER_FIRST, 120n, BLOCK + 3, bought(40n, 100n)),
+      minted(UP_POOL, -60n, 60n, 400n, BLOCK + 4),
+      minted(UP_POOL, 60n, 180n, 250n, BLOCK + 4),
+    ]);
+
+    t.expect((await indexer.Pool.getOrThrow(UP_POOL)).liquidity).toBe(1_250n);
+  });
+
+  it("does not move a pool's last-updated time, which the chart reads as its last price", async (t) => {
+    const indexer = await followedPool();
+
+    await indexEvents(indexer, [
+      ...opened,
+      swapped(UP_POOL, STRANGER_TOKEN, AFTER_FIRST, 0n, BLOCK + 2, bought(40n, 100n)),
+      minted(UP_POOL, -60n, 60n, 500n, BLOCK + 5),
+      burned(UP_POOL, -60n, 60n, 100n, BLOCK + 6),
+    ]);
+
+    t.expect((await indexer.Pool.getOrThrow(UP_POOL)).updatedAt).toBe(BigInt(BLOCK + 2));
+  });
+
+  it("writes no pool for a mint on a pool of tokens it does not recognise", async (t) => {
+    const indexer = await followedPool();
+
+    await indexEvents(indexer, [
+      poolCreated(STRANGER_TOKEN, UNDERLYING, STRANGER_POOL),
+      minted(STRANGER_POOL, -60n, 60n, 500n),
+    ]);
+
+    t.expect(await indexer.Pool.getAll()).toHaveLength(0);
   });
 });

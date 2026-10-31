@@ -61,7 +61,7 @@ test.describe("a session seeded on the gnosis fork", () => {
       await page.goto(`/market/${parent}`);
       await wallet.connect("alice");
 
-      // the countdown is shown only while the session is trading
+      // the countdown runs until the resolution date, which these sessions have not reached
       await expect(page.getByText("Countdown")).toBeVisible({ timeout: 30_000 });
       await expect(page.getByText("Closed", { exact: true })).toHaveCount(0);
 

@@ -56,7 +56,7 @@ const UPPER = wei("500");
  */
 const OUTCOME_COUNT = "1";
 
-/** Trading until 2100, so the page renders its trading state whatever the wall clock reads. */
+/** Resolution opens in 2100, so the page renders its trading state whatever the wall clock reads. */
 export const sessionDetailAnswer = {
   Session: [
     {
