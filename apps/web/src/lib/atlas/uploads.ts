@@ -6,12 +6,12 @@ export const IPFS_PRODUCT = "Foresight" as IpfsProduct;
 export const IMAGE_UPLOAD_ROLE = "foresight-image" as Roles;
 export const DOCUMENT_UPLOAD_ROLE = "foresight-metadata" as Roles;
 
-/** Atlas names a role by its enum key, e.g. `ForesightImage`, and uploads take the value. */
-export const ROLE_BY_NAME: Record<string, Roles> = {
-  ...Roles,
-  ForesightImage: IMAGE_UPLOAD_ROLE,
-  ForesightMetadata: DOCUMENT_UPLOAD_ROLE,
-};
+// kleros-app's `uploadFile` resolves each role Atlas lists through this object by name and
+// rejects a role it cannot resolve. REVISIT WHEN: kleros-app's `Roles` has both names.
+Object.assign(Roles, { ForesightImage: IMAGE_UPLOAD_ROLE, ForesightMetadata: DOCUMENT_UPLOAD_ROLE });
+
+/** Atlas names a role by its `Roles` key, e.g. `ForesightImage`, and uploads take the value. */
+const ROLE_BY_NAME = Roles as unknown as Record<string, Roles | undefined>;
 
 type RoleRestrictions = ReturnType<typeof useAtlasProvider>["roleRestrictions"];
 
