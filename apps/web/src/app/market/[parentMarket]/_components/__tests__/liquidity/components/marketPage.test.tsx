@@ -8,10 +8,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { owner, sortPair } from "@/features/liquidity/api/__tests__/support/chain";
 import { fetchLiquidityPools } from "@/features/liquidity/api/getLiquidityPools";
-import { fullRange } from "@/features/liquidity/flow/__tests__/support/session";
+import { amount0Delta, amount1Delta, fullRange } from "@/features/liquidity/flow/__tests__/support/session";
 import { planMerge } from "@/features/liquidity/flow/plan";
 
 import { fetchGraphql } from "@/lib/graphql/batcher";
+import { sqrtPriceAtTick } from "@/lib/swap/tickMath";
 
 import { LIQUIDITY_CLOSED_REASON } from "@/config/liquidity";
 import { ADD_LIQUIDITY_PARAM } from "@/config/paths";
@@ -239,6 +240,28 @@ describe("the market page of a session with liquidity", () => {
     expect(
       within(dialog).getByRole("button", { name: removeButton(`${BRANCH_NAMES[1]} DOWN pool`) }),
     ).toBeInTheDocument();
+  });
+
+  it("shows a position's returns as its withdrawal plus what collect pays it", async () => {
+    const world = createWorld();
+    const [first] = world.branches as [World["branches"][0]];
+    world.setPool(first.upToken, first.outcome, { sqrtPriceX96: Q96, liquidity: 10n * WAD, tickSpacing: 60 });
+    const [token0, token1] = sortPair(first.upToken, first.outcome);
+    const owed = { amount0: WAD / 4n, amount1: WAD / 2n };
+    world.holdPosition(owner, { tokenId: 7n, token0, token1, tickLower, tickUpper, liquidity: WAD, owed });
+
+    await show(world, TRADING_CLOSE);
+    const dialog = await openPositions();
+
+    const remove = await within(dialog).findByRole(
+      "button",
+      { name: removeButton(`${BRANCH_NAMES[0]} UP pool`) },
+      { timeout: 5000 },
+    );
+    const row = remove.closest("li")!;
+    // at a price of one, a full-range withdrawal of liquidity WAD returns just under one of each token
+    expectShown(row, amount0Delta(Q96, sqrtPriceAtTick(tickUpper), WAD, false) + WAD / 4n, "token0 returned");
+    expectShown(row, amount1Delta(sqrtPriceAtTick(tickLower), Q96, WAD, false) + WAD / 2n, "token1 returned");
   });
 
   it("says the positions could not be read, not that the wallet holds none, and reads them again on request", async () => {

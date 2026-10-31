@@ -163,6 +163,29 @@ describe("the predict card names one reason Predict is disabled", () => {
     expect(screen.getByText(NO_LIQUIDITY)).toBeVisible();
   });
 
+  it("disables Predict over priced pools that hold no liquidity, with an estimate moved", () => {
+    const detail = session();
+    moveEveryEstimate(detail);
+
+    render(
+      <PredictCard session={detail} status="trading" marketEstimates={pricedMarkets(detail)} hasLiquidity={false} />,
+    );
+
+    expect(screen.getByRole("button", { name: "Predict 2 estimates" })).toBeDisabled();
+    expect(screen.getByText(NO_LIQUIDITY)).toBeVisible();
+  });
+
+  it("says none of the options can be traded over priced pools that hold no liquidity", () => {
+    const detail = session();
+
+    render(
+      <PredictCard session={detail} status="trading" marketEstimates={pricedMarkets(detail)} hasLiquidity={false} />,
+    );
+
+    expect(screen.getByText(NO_LIQUIDITY)).toBeVisible();
+    expect(screen.queryByText(NO_ESTIMATE_MOVED)).toBeNull();
+  });
+
   it("says only that there is no liquidity when no estimate has been moved either", () => {
     const detail = session();
 
@@ -181,6 +204,18 @@ describe("the predict card gives no disabled reason", () => {
     const button = renderCard(detail, "trading", pricedMarkets(detail));
 
     expect(button).toBeEnabled();
+    for (const reason of [CLOSED, NO_LIQUIDITY, NO_ESTIMATE_MOVED]) {
+      expect(screen.queryByText(reason)).toBeNull();
+    }
+  });
+
+  it("once an estimate is moved over pools that hold liquidity", () => {
+    const detail = session();
+    moveEveryEstimate(detail);
+
+    render(<PredictCard session={detail} status="trading" marketEstimates={pricedMarkets(detail)} hasLiquidity />);
+
+    expect(screen.getByRole("button", { name: "Predict 2 estimates" })).toBeEnabled();
     for (const reason of [CLOSED, NO_LIQUIDITY, NO_ESTIMATE_MOVED]) {
       expect(screen.queryByText(reason)).toBeNull();
     }

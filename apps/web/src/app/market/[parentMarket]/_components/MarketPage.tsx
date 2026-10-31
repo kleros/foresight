@@ -171,6 +171,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
           status={status}
           marketEstimates={marketEstimates}
           isMarketUnknown={chart.data === undefined}
+          hasLiquidity={liquidity.hasLiquidity}
         />
         <TradeHistory session={detail} />
         {walletMarket ? <TradeWallet market={walletMarket} noun={optionNounSingular(detail.itemName)} /> : null}

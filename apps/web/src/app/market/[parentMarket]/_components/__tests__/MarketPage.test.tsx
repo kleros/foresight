@@ -232,6 +232,38 @@ describe("MarketPage on a trading session", () => {
     expect(screen.queryByText(NO_LIQUIDITY)).toBeNull();
   });
 
+  /** The option's UP pool priced at half its range, as an initialized pool is before or without liquidity. */
+  const pricedChart = () => ({
+    Pool: [
+      {
+        id: "0x00000000000000000000000000000000000000f1",
+        childMarket_id: sessionChildRow().id.toLowerCase(),
+        underlyingPerOutcome: "500000000000000000",
+        updatedAt: "1756000000",
+        swaps: [],
+      },
+    ],
+  });
+
+  it("calls the options illiquid when the pools are priced but hold no liquidity", async () => {
+    pools.read = "empty";
+    answerTrading(pricedChart);
+
+    renderPage();
+
+    expect(await screen.findByText(NO_LIQUIDITY)).toBeVisible();
+  });
+
+  it("asks for an estimate to move over the same prices once a pool holds liquidity", async () => {
+    pools.read = "live";
+    answerTrading(pricedChart);
+
+    renderPage();
+
+    expect(await screen.findByText("Set an estimate above or below the market to predict.")).toBeVisible();
+    expect(screen.queryByText(NO_LIQUIDITY)).toBeNull();
+  });
+
   it("does not call the options illiquid when the price history failed", async () => {
     answerTrading(() => Promise.reject(new Error("boom")));
 

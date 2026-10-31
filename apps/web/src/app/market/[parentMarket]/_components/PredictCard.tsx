@@ -64,9 +64,17 @@ interface PredictCardProps {
   marketEstimates: Record<string, number | undefined>;
   /** True while the market numbers are loading or failed; an empty `marketEstimates` says nothing then. */
   isMarketUnknown?: boolean;
+  /** Whether any of the session's pools holds liquidity; undefined until the pools are read. */
+  hasLiquidity?: boolean;
 }
 
-export function PredictCard({ session, status, marketEstimates, isMarketUnknown = false }: PredictCardProps) {
+export function PredictCard({
+  session,
+  status,
+  marketEstimates,
+  isMarketUnknown = false,
+  hasLiquidity,
+}: PredictCardProps) {
   // what the popup lists, held from the press so a market refresh cannot empty it under the visitor
   const [opened, setOpened] = useState<SelectedEstimate[]>();
   const isOpen = opened !== undefined;
@@ -170,7 +178,8 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
   const estimates = useSessionEstimates(session.parentMarket);
   const selected = selectedEstimates(session.options, estimates, marketEstimates);
   // a stored run is resumed or discarded before a new one starts; unread counts as stored
-  const isDisabled = selected.length === 0 || status !== "trading" || !address || interrupted !== null;
+  const isDisabled =
+    selected.length === 0 || status !== "trading" || !address || interrupted !== null || hasLiquidity === false;
   const blocker = predictBlocker({
     status,
     options: session.options,
@@ -179,6 +188,7 @@ export function PredictCard({ session, status, marketEstimates, isMarketUnknown 
     selectedCount: selected.length,
     isConnected: Boolean(address),
     hasStoredRun: Boolean(interrupted),
+    hasLiquidity,
   });
   const changed = selected.filter(
     (estimate) => placed?.owner !== address || placed?.values[estimate.scale.market.toLowerCase()] !== estimate.value,

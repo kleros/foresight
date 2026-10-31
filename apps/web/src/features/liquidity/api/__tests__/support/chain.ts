@@ -46,14 +46,16 @@ import { LIQUIDITY_ALLOW_LIST } from "../../../oracle/allowlist";
  *     fetchLiquidityPositions(client: PublicClient, { pools: SessionPools; owner: Address })
  *       → Promise<LiquidityPosition[]>
  *     LiquidityPosition = { tokenId, token0, token1, tickLower, tickUpper, liquidity, amount0, amount1 }
- *       amount0/amount1: what decreaseLiquidity of the full liquidity returns at the pool's current price.
+ *       amount0/amount1: what decreaseLiquidity of the full liquidity returns at the pool's current price, plus
+ *       what `collect` pays after it.
  *     useLiquidityPositions(pools: SessionPools | undefined, owner: Address | undefined)
  *       → UseQueryResult<LiquidityPosition[]>
  *
  * The chain answers `eth_call`, alone or as Multicall3 `aggregate3`, for: a market's `wrappedOutcome`,
  * `numOutcomes` and `parentWrappedOutcome`; the factory's `poolByPair` (either token order); a pool's
  * `globalState`, `liquidity`, `tickSpacing`, `token0` and `token1`; the position manager's `factory`,
- * `balanceOf`, `tokenOfOwnerByIndex`, `positions` and `ownerOf`. Anything else reverts.
+ * `balanceOf`, `tokenOfOwnerByIndex`, `positions` and `ownerOf`, and its `multicall` of `collect`, which pays a
+ * position's `owed` and reverts unless sent from the account `ownerOf` names. Anything else reverts.
  */
 
 export const LIST = LIQUIDITY_ALLOW_LIST[100]!;
@@ -74,6 +76,8 @@ const WORLD_ABI: Abi = parseAbi([
   "function tokenOfOwnerByIndex(address owner, uint256 index) view returns (uint256)",
   "function positions(uint256 tokenId) view returns (uint96 nonce, address operator, address token0, address token1, int24 tickLower, int24 tickUpper, uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128, uint128 tokensOwed0, uint128 tokensOwed1)",
   "function ownerOf(uint256 tokenId) view returns (address)",
+  "function multicall(bytes[] data) payable returns (bytes[] results)",
+  "function collect((uint256 tokenId, address recipient, uint128 amount0Max, uint128 amount1Max) params) payable returns (uint256 amount0, uint256 amount1)",
 ]);
 
 /** Checksummed, as viem decodes every address it reads back. */
@@ -99,8 +103,13 @@ export interface PositionSetup {
   liquidity: bigint;
   /** Who `ownerOf` names; defaults to the account it is enumerated under. */
   ownerOf?: Address;
-  /** Which reads of it revert: its `tokenOfOwnerByIndex`, its `positions` and `ownerOf` (a burned token), or one of those two. */
-  reverts?: "enumeration" | "reads" | "positions" | "ownerOf";
+  /** What `collect` pays: its tokensOwed and the fees it has earned; none by default. */
+  owed?: { amount0: bigint; amount1: bigint };
+  /**
+   * Which reads of it revert: its `tokenOfOwnerByIndex`, its `positions` and `ownerOf` (a burned token), one of
+   * those two, or its `collect`.
+   */
+  reverts?: "enumeration" | "reads" | "positions" | "ownerOf" | "collect";
 }
 
 export interface BranchTokens {
@@ -162,7 +171,12 @@ export function createChain(branchCount: number, { maxCallsPerRequest = Infinity
   const positionById = (tokenId: bigint) =>
     [...enumerated.values()].flat().find((position) => position.tokenId === tokenId);
 
-  function result(to: Address, functionName: string, args: readonly unknown[]): unknown {
+  const holderOf = (position: PositionSetup) => {
+    const [enumeratedUnder] = [...enumerated.entries()].find(([, held]) => held.includes(position))!;
+    return position.ownerOf ?? (enumeratedUnder as Address);
+  };
+
+  function result(to: Address, functionName: string, args: readonly unknown[], from?: Address): unknown {
     const outcomes = marketOutcomes.get(to.toLowerCase());
     if (outcomes) {
       if (functionName === "wrappedOutcome") {
@@ -190,6 +204,13 @@ export function createChain(branchCount: number, { maxCallsPerRequest = Infinity
     }
     if (isAddressEqual(to, LIST.positionManager)) {
       if (functionName === "factory") return LIST.algebraFactory;
+      if (functionName === "multicall") {
+        return (args[0] as Hex[]).map((call) => {
+          const inner = decodeFunctionData({ abi: WORLD_ABI, data: call });
+          const answer = result(to, inner.functionName, inner.args ?? [], from);
+          return encodeFunctionResult({ abi: WORLD_ABI, functionName: inner.functionName, result: answer });
+        });
+      }
       if (functionName === "balanceOf") return BigInt(enumerated.get((args[0] as Address).toLowerCase())?.length ?? 0);
       if (functionName === "tokenOfOwnerByIndex") {
         const held = enumerated.get((args[0] as Address).toLowerCase()) ?? [];
@@ -197,13 +218,16 @@ export function createChain(branchCount: number, { maxCallsPerRequest = Infinity
         if (!position || position.reverts === "enumeration") throw new Error("index out of bounds");
         return position.tokenId;
       }
-      const position = positionById(args[0] as bigint);
+      const position = positionById(
+        functionName === "collect" ? (args[0] as { tokenId: bigint }).tokenId : (args[0] as bigint),
+      );
       if (!position || position.reverts === "reads" || position.reverts === functionName) {
         throw new Error("invalid token id");
       }
-      if (functionName === "ownerOf") {
-        const [enumeratedUnder] = [...enumerated.entries()].find(([, held]) => held.includes(position))!;
-        return position.ownerOf ?? (enumeratedUnder as Address);
+      if (functionName === "ownerOf") return holderOf(position);
+      if (functionName === "collect") {
+        if (!from || !isAddressEqual(from, holderOf(position))) throw new Error("Not approved");
+        return [position.owed?.amount0 ?? 0n, position.owed?.amount1 ?? 0n];
       }
       if (functionName === "positions") {
         const { token0, token1, tickLower, tickUpper, liquidity } = position;
@@ -213,13 +237,13 @@ export function createChain(branchCount: number, { maxCallsPerRequest = Infinity
     throw new Error(`no ${functionName} on ${to}`);
   }
 
-  function answer(to: Address, data: Hex): { ok: true; data: Hex } | { ok: false } {
+  function answer(to: Address, data: Hex, from?: Address): { ok: true; data: Hex } | { ok: false } {
     try {
       const { functionName, args = [] } = decodeFunctionData({ abi: WORLD_ABI, data });
       calls.push({ to, functionName, args });
       return {
         ok: true,
-        data: encodeFunctionResult({ abi: WORLD_ABI, functionName, result: result(to, functionName, args) }),
+        data: encodeFunctionResult({ abi: WORLD_ABI, functionName, result: result(to, functionName, args, from) }),
       };
     } catch {
       return { ok: false };
@@ -243,7 +267,7 @@ export function createChain(branchCount: number, { maxCallsPerRequest = Infinity
     if (method === "eth_chainId") return "0x64";
     if (method !== "eth_call") throw new Error(`unexpected rpc ${method}`);
     ethCalls += 1;
-    const [{ to, data }] = params as [{ to: Address; data: Hex }];
+    const [{ to, data, from }] = params as [{ to: Address; data: Hex; from?: Address }];
     if (isAddressEqual(to, multicall3)) {
       const decoded = decodeFunctionData({ abi: multicall3Abi, data });
       if (decoded.functionName !== "aggregate3") throw new Error(`unexpected multicall ${decoded.functionName}`);
@@ -261,7 +285,7 @@ export function createChain(branchCount: number, { maxCallsPerRequest = Infinity
       });
       return encodeFunctionResult({ abi: multicall3Abi, functionName: "aggregate3", result: results });
     }
-    const answered = answer(to, data);
+    const answered = answer(to, data, from);
     if (answered.ok) return answered.data;
     // the shape a node gives a reverted eth_call; viem builds it from the JSON-RPC error body
     throw new RpcRequestError({

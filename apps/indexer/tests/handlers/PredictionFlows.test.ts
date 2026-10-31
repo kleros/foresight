@@ -241,7 +241,7 @@ describe("prediction flows", () => {
     t.expect(new Set(rows.map((row) => row.transactionHash)).size).toBe(2);
   });
 
-  it("leaves prices off a swap that paid out through a middleman", async (t) => {
+  it("leaves the average price off a swap that paid out through a middleman", async (t) => {
     const indexer = createTestIndexer();
     await seedMarket(indexer, MARKET);
 
@@ -258,7 +258,6 @@ describe("prediction flows", () => {
     const row = await onlyPrediction(indexer);
     t.expect([row.upDelta, row.underlyingDelta]).toEqual([100n, -40n]);
     t.expect(row.upAvgPrice).toBeUndefined();
-    t.expect(row.upPriceAfter).toBeUndefined();
   });
 
   it("prices each market's trading separately within one transaction", async (t) => {
@@ -291,6 +290,84 @@ describe("prediction flows", () => {
     // each row carries only its own pool's prices
     t.expect([first!.upPriceAfter, first!.downPriceAfter]).toEqual([WAD / 4n, undefined]);
     t.expect([second!.upPriceAfter, second!.downPriceAfter]).toEqual([undefined, (4n * WAD) / 9n]);
+  });
+});
+
+/** Each side's pool price as the transaction first moved the market's tokens, and as it left the pool. */
+describe("a prediction's pool prices", () => {
+  /** Both of the market's pools: UP initialized at 2^97, a quarter; DOWN at 2^96, one. */
+  const BOTH_POOLS = [
+    poolCreated(UNDERLYING, UP, UP_POOL),
+    poolCreated(UNDERLYING, DOWN, DOWN_POOL),
+    initialized(UP_POOL, 2n ** 97n),
+    initialized(DOWN_POOL, PAR),
+  ];
+
+  it("prices each side of a transfer with no swap at its pool's price, the same before and after", async (t) => {
+    const indexer = createTestIndexer();
+    await seedMarket(indexer, MARKET);
+
+    await indexEvents(indexer, [
+      executorDeployed(OWNER, EXECUTOR),
+      ...BOTH_POOLS,
+      transfer(UP, OWNER, EXECUTOR, 20n, BLOCK + 2),
+    ]);
+
+    const row = await onlyPrediction(indexer);
+    t.expect([row.upPriceBefore, row.upPriceAfter]).toEqual([WAD / 4n, WAD / 4n]);
+    t.expect([row.downPriceBefore, row.downPriceAfter]).toEqual([WAD, WAD]);
+  });
+
+  it("prices a transfer with no swap at the price an earlier transaction's swap left the pool", async (t) => {
+    const indexer = createTestIndexer();
+    await seedMarket(indexer, MARKET);
+
+    // someone else's swap takes UP from a quarter to 1/16, then the executor only receives UP
+    const LATER = { transaction: { hash: "0xc2" } };
+    await indexEvents(indexer, [
+      executorDeployed(OWNER, EXECUTOR),
+      ...BOTH_POOLS,
+      swapped(UP_POOL, ROUTER, 2n ** 98n, 140n, BLOCK + 2, bought(40n, 100n)),
+      { ...transfer(UP, OWNER, EXECUTOR, 20n, BLOCK + 3), ...LATER },
+    ]);
+
+    const row = await onlyPrediction(indexer);
+    t.expect([row.upPriceBefore, row.upPriceAfter]).toEqual([WAD / 16n, WAD / 16n]);
+  });
+
+  it("prices a side as the transaction left it when a swap it was not paid by moved the pool", async (t) => {
+    const indexer = createTestIndexer();
+    await seedMarket(indexer, MARKET);
+
+    // the executor receives UP at a quarter, a swap paying the router takes UP to 1/16, then DOWN arrives
+    await indexEvents(indexer, [
+      executorDeployed(OWNER, EXECUTOR),
+      ...BOTH_POOLS,
+      transfer(UP, OWNER, EXECUTOR, 20n, BLOCK + 2),
+      swapped(UP_POOL, ROUTER, 2n ** 98n, 140n, BLOCK + 2, bought(40n, 100n)),
+      transfer(DOWN, OWNER, EXECUTOR, 20n, BLOCK + 2),
+    ]);
+
+    const row = await onlyPrediction(indexer);
+    t.expect([row.upPriceBefore, row.upPriceAfter]).toEqual([WAD / 4n, WAD / 16n]);
+  });
+
+  it("moves the swapped side's price and keeps the other side's where its pool stayed", async (t) => {
+    const indexer = createTestIndexer();
+    await seedMarket(indexer, MARKET);
+
+    // buy 100 UP for 40, which takes UP from a quarter to 1/16; DOWN's pool is not traded
+    await indexEvents(indexer, [
+      executorDeployed(OWNER, EXECUTOR),
+      ...BOTH_POOLS,
+      transfer(UNDERLYING, EXECUTOR, UP_POOL, 40n, BLOCK + 2),
+      transfer(UP, UP_POOL, EXECUTOR, 100n, BLOCK + 2),
+      swapped(UP_POOL, EXECUTOR, 2n ** 98n, 140n, BLOCK + 2, bought(40n, 100n)),
+    ]);
+
+    const row = await onlyPrediction(indexer);
+    t.expect([row.upPriceBefore, row.upPriceAfter]).toEqual([WAD / 4n, WAD / 16n]);
+    t.expect([row.downPriceBefore, row.downPriceAfter]).toEqual([WAD, WAD]);
   });
 });
 

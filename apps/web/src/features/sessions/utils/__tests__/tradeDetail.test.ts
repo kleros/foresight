@@ -273,10 +273,63 @@ describe("estimateAt", () => {
     );
   });
 
-  it("prefers UP when both sides swapped, and has none when neither did", () => {
-    const both = option({ upPriceBefore: parseEther("0.25"), downPriceBefore: parseEther("0.5") });
+  it("prefers UP when both sides swapped", () => {
+    const both = option({
+      upSwapTokens: parseEther("4"),
+      upSwapUnderlying: -parseEther("1"),
+      downSwapTokens: -parseEther("2"),
+      downSwapUnderlying: parseEther("1"),
+      upPriceBefore: parseEther("0.25"),
+      downPriceBefore: parseEther("0.5"),
+    });
 
     expect(estimateAt(both, SCALE, "before")).toBeCloseTo(200);
+  });
+
+  it("reads DOWN's move when only DOWN swapped, though UP's pool is priced too", () => {
+    // buying DOWN took it from 0.25 to 0.5: the mirror estimate falls from 400 to 300; UP stayed at 0.5
+    const downOnly = option({
+      downSwapTokens: parseEther("4"),
+      downSwapUnderlying: -parseEther("1.5"),
+      upPriceBefore: parseEther("0.5"),
+      upPriceAfter: parseEther("0.5"),
+      downPriceBefore: parseEther("0.25"),
+      downPriceAfter: parseEther("0.5"),
+    });
+
+    expect(estimateAt(downOnly, SCALE, "before")).toBeCloseTo(400);
+    expect(estimateAt(downOnly, SCALE, "after")).toBeCloseTo(300);
+  });
+
+  it.each([
+    ["sold dust DOWN for no underlying", { downSwapTokens: -1n, downSwapUnderlying: 0n }],
+    ["paid dust underlying for no DOWN", { downSwapTokens: 0n, downSwapUnderlying: -1n }],
+  ])("reads DOWN's price where DOWN's only swap %s", (_, swap) => {
+    // DOWN at 0.75 mirrors to 200, UP at 0.125 reads 150
+    const dust = option({ ...swap, upPriceAfter: parseEther("0.125"), downPriceAfter: parseEther("0.75") });
+
+    expect(estimateAt(dust, SCALE, "after")).toBeCloseTo(200);
+  });
+
+  it("reads UP's price where neither side swapped", () => {
+    // a transfer with no swap: UP's pool at 0.125, DOWN's at 0.75, neither moved
+    const unswapped = option({
+      upDelta: parseEther("10"),
+      upPriceBefore: parseEther("0.125"),
+      upPriceAfter: parseEther("0.125"),
+      downPriceBefore: parseEther("0.75"),
+      downPriceAfter: parseEther("0.75"),
+    });
+
+    expect(estimateAt(unswapped, SCALE, "before")).toBeCloseTo(150);
+    expect(estimateAt(unswapped, SCALE, "after")).toBeCloseTo(150);
+  });
+
+  it("reads DOWN's mirror where UP's pool has no price", () => {
+    expect(estimateAt(option({ downPriceAfter: parseEther("0.75") }), SCALE, "after")).toBeCloseTo(200);
+  });
+
+  it("has no estimate where neither side has a price", () => {
     expect(estimateAt(option(), SCALE, "before")).toBeNull();
   });
 });

@@ -49,6 +49,37 @@ describe("predictBlocker with an estimate moved", () => {
   });
 });
 
+describe("predictBlocker over pools that hold no liquidity", () => {
+  const empty = (overrides: Partial<Parameters<typeof predictBlocker>[0]> = {}) =>
+    predictBlocker({
+      status: "trading",
+      options: [{ market: LIQUID }],
+      // an empty pool still has the price it was initialized at
+      marketEstimates: { [LIQUID.toLowerCase()]: 312 },
+      isMarketUnknown: false,
+      selectedCount: 1,
+      isConnected: true,
+      hasLiquidity: false,
+      ...overrides,
+    });
+
+  it("reports no liquidity once an estimate is moved", () => {
+    expect(empty()).toBe("no-liquidity");
+  });
+
+  it("reports no liquidity rather than asking for an estimate to move", () => {
+    expect(empty({ selectedCount: 0 })).toBe("no-liquidity");
+  });
+
+  it("reports no liquidity before asking for a wallet", () => {
+    expect(empty({ isConnected: false })).toBe("no-liquidity");
+  });
+
+  it("asks for an estimate to move over the same prices once a pool holds liquidity", () => {
+    expect(empty({ selectedCount: 0, hasLiquidity: true })).toBe("no-move");
+  });
+});
+
 describe("predictBlocker with an unfinished run stored", () => {
   const stored = (overrides: Partial<Parameters<typeof predictBlocker>[0]> = {}) =>
     predictBlocker({

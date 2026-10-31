@@ -5,7 +5,7 @@ import { sqrtPriceAtTick } from "@/lib/swap/tickMath";
 
 import { amount0Delta, amount1Delta, fullRange } from "../../flow/__tests__/support/session";
 import { fetchLiquidityPools } from "../getLiquidityPools";
-import { fetchLiquidityPositions } from "../getLiquidityPositions";
+import { COLLECT_READ_BATCH, fetchLiquidityPositions } from "../getLiquidityPositions";
 import { createChain, owner, Q96, sortPair, stranger } from "./support/chain";
 
 vi.mock("@/lib/web3/public-client", () => ({ publicClient: {} }));
@@ -199,5 +199,81 @@ describe("fetchLiquidityPositions", () => {
       ),
       { numRuns: 60 },
     );
+  });
+});
+
+describe("fetchLiquidityPositions with tokens owed to a position", () => {
+  /** One live UP pool at a price of 1.5, and its token pair. */
+  function upPool() {
+    const chain = createChain(1);
+    const [only] = chain.branches as [(typeof chain.branches)[0]];
+    const upPrice = (Q96 * 3n) / 2n;
+    chain.setPool(only.upToken, only.outcome, { sqrtPriceX96: upPrice, liquidity: 100n * WAD, tickSpacing: 60 });
+    const [token0, token1] = sortPair(only.upToken, only.outcome);
+    return { chain, upPrice, token0, token1, ...fullRange(60) };
+  }
+
+  it("adds what collect pays, its tokens owed and fees earned, to what a full withdrawal returns", async () => {
+    const { chain, upPrice, token0, token1, tickLower, tickUpper } = upPool();
+    const owed = { amount0: WAD / 4n, amount1: WAD / 8n };
+    chain.holdPosition(owner, { tokenId: 101n, token0, token1, tickLower, tickUpper, liquidity: 3n * WAD, owed });
+    const pools = await fetchLiquidityPools(chain.client, chain.markets);
+
+    const [position] = await fetchLiquidityPositions(chain.client, { pools, owner });
+
+    const principal = withdrawal(upPrice, tickLower, tickUpper, 3n * WAD);
+    expect(position).toMatchObject({ amount0: principal.amount0 + WAD / 4n, amount1: principal.amount1 + WAD / 8n });
+  });
+
+  it("adds each position its own fees across more positions than one collect read carries", async () => {
+    const { chain, upPrice, token0, token1, tickLower, tickUpper } = upPool();
+    // two full reads and one position over; each position is owed its token id, and twice it
+    const tokenIds = Array.from({ length: COLLECT_READ_BATCH * 2 + 1 }, (_, index) => 500n + BigInt(index));
+    for (const tokenId of tokenIds) {
+      const owed = { amount0: tokenId, amount1: 2n * tokenId };
+      chain.holdPosition(owner, { tokenId, token0, token1, tickLower, tickUpper, liquidity: WAD, owed });
+    }
+    const pools = await fetchLiquidityPools(chain.client, chain.markets);
+
+    const positions = await fetchLiquidityPositions(chain.client, { pools, owner });
+
+    const principal = withdrawal(upPrice, tickLower, tickUpper, WAD);
+    expect(positions.map((each) => [each.tokenId, each.amount0, each.amount1])).toEqual(
+      tokenIds.map((tokenId) => [tokenId, principal.amount0 + tokenId, principal.amount1 + 2n * tokenId]),
+    );
+  });
+
+  it("asks for the collects of at most COLLECT_READ_BATCH positions in one request", async () => {
+    const { chain, token0, token1, tickLower, tickUpper } = upPool();
+    for (let index = 0n; index < BigInt(COLLECT_READ_BATCH * 2 + 1); index += 1n) {
+      chain.holdPosition(owner, { tokenId: 700n + index, token0, token1, tickLower, tickUpper, liquidity: WAD });
+    }
+    const pools = await fetchLiquidityPools(chain.client, chain.markets);
+
+    await fetchLiquidityPositions(chain.client, { pools, owner });
+
+    const collectReads = chain.calls.filter((call) => call.functionName === "multicall");
+    expect(collectReads.map((call) => (call.args[0] as readonly unknown[]).length)).toEqual([
+      COLLECT_READ_BATCH,
+      COLLECT_READ_BATCH,
+      1,
+    ]);
+  });
+
+  it("fails the read when a position's collect reverts, rather than list it without its fees", async () => {
+    const { chain, token0, token1, tickLower, tickUpper } = upPool();
+    chain.holdPosition(owner, { tokenId: 101n, token0, token1, tickLower, tickUpper, liquidity: WAD });
+    chain.holdPosition(owner, {
+      tokenId: 102n,
+      token0,
+      token1,
+      tickLower,
+      tickUpper,
+      liquidity: WAD,
+      reverts: "collect",
+    });
+    const pools = await fetchLiquidityPools(chain.client, chain.markets);
+
+    await expect(fetchLiquidityPositions(chain.client, { pools, owner })).rejects.toThrow();
   });
 });

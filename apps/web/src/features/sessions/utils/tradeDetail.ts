@@ -74,12 +74,20 @@ export function optionCost(option: TradeOption): bigint {
   return setsMinted(option) - option.upSwapUnderlying - option.downSwapUnderlying;
 }
 
-/** The estimate the pool price implies on the option's scale, from UP or else DOWN's mirror; null where neither swapped. */
+// a dust swap can move tokens for no underlying, or underlying for no tokens
+const swapped = (tokens: bigint, underlying: bigint) => tokens !== 0n || underlying !== 0n;
+
+/**
+ * The estimate a pool price implies on the option's scale, from UP or from DOWN's mirror: UP's unless only DOWN
+ * swapped, the other side's where that one has no price; null where neither has one.
+ */
 export function estimateAt(option: TradeOption, scale: OptionScale, moment: "before" | "after"): number | null {
   const up = moment === "before" ? option.upPriceBefore : option.upPriceAfter;
   const down = moment === "before" ? option.downPriceBefore : option.downPriceAfter;
   const span = scale.upperBound - scale.lowerBound;
-  if (up !== null) return scale.lowerBound + Number(formatEther(up)) * span;
-  if (down !== null) return scale.upperBound - Number(formatEther(down)) * span;
-  return null;
+  const fromUp = up === null ? null : scale.lowerBound + Number(formatEther(up)) * span;
+  const fromDown = down === null ? null : scale.upperBound - Number(formatEther(down)) * span;
+  const downOnly =
+    swapped(option.downSwapTokens, option.downSwapUnderlying) && !swapped(option.upSwapTokens, option.upSwapUnderlying);
+  return downOnly ? (fromDown ?? fromUp) : (fromUp ?? fromDown);
 }
