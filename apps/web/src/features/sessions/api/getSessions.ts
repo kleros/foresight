@@ -7,6 +7,7 @@ import { graphql } from "@/lib/graphql/generated";
 
 import { IPFS_GATEWAY } from "@/config/ipfs";
 
+import { LISTED_PARENT_MARKETS, legacySessions } from "../utils/curatedListing";
 import { boundarySeconds, PER_PAGE, sessionWhere, type SessionFilters } from "../utils/listing";
 import { toSessionSummary } from "../utils/toSessionSummary";
 
@@ -33,7 +34,8 @@ const SESSIONS = graphql(`
 `);
 
 export function useSessions({ page, filters }: { page: number; filters: SessionFilters }) {
-  const where = sessionWhere(filters, boundarySeconds(Date.now()));
+  const boundary = boundarySeconds(Date.now());
+  const where = { ...sessionWhere(filters, boundary), parentMarket: { _in: LISTED_PARENT_MARKETS } };
 
   return useQuery({
     queryKey: ["sessions", page, where],
@@ -45,11 +47,14 @@ export function useSessions({ page, filters }: { page: number; filters: SessionF
       });
 
       const rows = result.Session;
+      const hasNextPage = rows.length > PER_PAGE;
+      const legacy = legacySessions(filters, boundary);
+      const sessions = rows.slice(0, PER_PAGE).map((row) => toSessionSummary(row, IPFS_GATEWAY));
 
       return {
-        sessions: rows.slice(0, PER_PAGE).map((row) => toSessionSummary(row, IPFS_GATEWAY)),
-        hasNextPage: rows.length > PER_PAGE,
-        total: Number(result.SessionCounter[0]?.count ?? 0),
+        sessions: hasNextPage ? sessions : [...sessions, ...legacy],
+        hasNextPage,
+        total: LISTED_PARENT_MARKETS.length + legacy.length,
       };
     },
     placeholderData: keepPreviousData,

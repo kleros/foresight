@@ -19,7 +19,7 @@ export function SessionCard({ session }: { session: SessionSummary }) {
   const { closesAt } = session;
 
   return (
-    <Link className="fs-session-card" href={paths.market.getHref(session.parentMarket)}>
+    <Link className="fs-session-card" href={session.href ?? paths.market.getHref(session.parentMarket)}>
       <div className="fs-session-card__inner border-gradient-purple-blue">
         <div className="fs-session-card__banner" style={bannerStyle(session.heroUri)} />
 
