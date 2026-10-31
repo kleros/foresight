@@ -9,7 +9,7 @@ import { createUploadMemory, type UploadMemory } from "./uploadMemory";
  * `@/utils/ipfs`.
  */
 
-export const UPLOAD_ATTEMPTS = 4;
+export const UPLOAD_ATTEMPTS = 6;
 const RETRY_BASE_MS = 60_000;
 
 /**

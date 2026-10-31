@@ -26,6 +26,9 @@ export type UnpublishedMetadata = Omit<SessionMetadataInput, "heroImage" | "icon
 
 type PublishStage = "images" | "document" | "verifying";
 
+/** Images uploaded so far in this publish, of all it has to put up. */
+export type ImageCount = { done: number; total: number };
+
 export const READ_BACK_ATTEMPTS = 5;
 const READ_BACK_BASE_MS = 1_000;
 
@@ -43,7 +46,7 @@ export async function publishSessionMetadata(args: {
   uploader: MetadataUploader;
   images: { hero: ImageSource; icon?: ImageSource; gallery?: GalleryImageSource[] };
   metadata: UnpublishedMetadata;
-  onProgress?: (stage: PublishStage) => void;
+  onProgress?: (stage: PublishStage, images?: ImageCount) => void;
   /** How many times to ask the gateway before giving up. */
   attempts?: number;
   sleep?: (ms: number) => Promise<void>;
@@ -53,15 +56,22 @@ export async function publishSessionMetadata(args: {
 
   const attempts = Math.max(1, args.attempts ?? READ_BACK_ATTEMPTS);
 
-  onProgress?.("images");
+  const count: ImageCount = { done: 0, total: 1 + (images.icon ? 1 : 0) + (images.gallery?.length ?? 0) };
+  onProgress?.("images", { ...count });
   // A uri carried over from an earlier attempt has no bytes to fall back on, so a
   // dead one has to stop the deploy here rather than go into the document.
-  const put = async (image: ImageSource, what: string) => {
+  const putOne = async (image: ImageSource, what: string) => {
     if (!isUploaded(image)) return uploader.uploadFile(image);
     if (!(await uploader.isServed(image))) {
       throw new Error(`The ${what} uploaded earlier can no longer be found. Add it again and redeploy.`);
     }
     return image;
+  };
+  const put = async (image: ImageSource, what: string) => {
+    const uri = await putOne(image, what);
+    count.done += 1;
+    onProgress?.("images", { ...count });
+    return uri;
   };
   const heroImage = await put(images.hero, "hero image");
   const icon = images.icon ? await put(images.icon, "icon") : undefined;
