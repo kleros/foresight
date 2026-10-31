@@ -18,6 +18,13 @@ export const chartTimestamps = (firstTimestamp: number, lastTimestamp: number): 
   return timestamps;
 };
 
+// Pools keep trading past closesAt (the Reality question's opening time), so the line runs to the
+// later of the close and the last point; with no close it runs to now.
+export function chartEndTime(data: SessionChartData, closesAt: number | null, now: number): number {
+  const lastPoint = Math.max(0, ...data.map(({ points }) => points.at(-1)?.timestamp ?? 0));
+  return Math.min(now, Math.max(closesAt ?? Number.POSITIVE_INFINITY, lastPoint));
+}
+
 // The first point is the pool's seeded price, not a trade; bound-pinned values are pre-liquidity noise.
 const firstTradedIndex = (points: SessionChartPoint[], option: SessionChartOption): number => {
   const floor = option.lowerBound + 0.001 * (option.upperBound - option.lowerBound);

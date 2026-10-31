@@ -13,8 +13,10 @@ vi.mock("@/lib/graphql/batcher", () => ({ fetchGraphql: vi.fn() }));
 const SESSION = "session-1";
 const POLL_MS = 5_000;
 
-const served = (traders: number, volume: number, notional = 0) => ({
-  Prediction: Array.from({ length: traders }, (_, i) => ({ executor_id: `0x${i}` })),
+const served = (traders: number, volume: number, notional = 0, directSwappers: string[] = []) => ({
+  Prediction: Array.from({ length: traders }, (_, i) => ({ executor: { owner: `0x${i}` } })),
+  directSwaps: directSwappers.map((sender) => ({ sender })),
+  senderlessSwaps: [],
   Pool: [
     {
       id: "pool",
@@ -103,6 +105,22 @@ describe("refreshSessionAfterTrade", () => {
   it("invalidates when only the trader count moves, as when the volume is not indexed yet", async () => {
     queryClient.setQueryData(sessionStatsKey(SESSION), toSessionStats(served(1, 10)));
     serveInOrder(served(1, 10), served(2, 10));
+
+    const done = refreshSessionAfterTrade(queryClient, SESSION);
+    await settle(POLL_MS);
+    expect(invalidations).toEqual([]);
+    await settle(POLL_MS);
+
+    expect(keysInvalidated()).toEqual(
+      expect.arrayContaining([JSON.stringify(sessionChartKey(SESSION)), JSON.stringify(sessionStatsKey(SESSION))]),
+    );
+    await settle(POLL_MS * 20);
+    await done;
+  });
+
+  it("invalidates when a direct swapper joins the trader count", async () => {
+    queryClient.setQueryData(sessionStatsKey(SESSION), toSessionStats(served(1, 10)));
+    serveInOrder(served(1, 10), served(1, 10, 0, ["0xd1"]));
 
     const done = refreshSessionAfterTrade(queryClient, SESSION);
     await settle(POLL_MS);

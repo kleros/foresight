@@ -18,7 +18,29 @@ const SESSION_STATS = graphql(`
       distinct_on: executor_id
       order_by: { executor_id: asc }
     ) {
-      executor_id
+      executor {
+        owner
+      }
+    }
+    directSwaps: Swap(
+      where: { childMarket: { session_id: { _eq: $sessionId } }, sender: { _is_null: false } }
+      distinct_on: sender
+      order_by: { sender: asc }
+    ) {
+      sender
+    }
+    senderlessSwaps: Swap(
+      where: {
+        childMarket: { session_id: { _eq: $sessionId } }
+        sender: { _is_null: true }
+        executor_id: { _is_null: false }
+      }
+      distinct_on: executor_id
+      order_by: { executor_id: asc }
+    ) {
+      executor {
+        owner
+      }
     }
     Pool(where: { childMarket: { session_id: { _eq: $sessionId } } }) {
       id
@@ -35,7 +57,8 @@ const SESSION_STATS = graphql(`
 
 export const sessionStatsKey = (sessionId?: string) => ["session-stats", sessionId] as const;
 
-const fetchSessionStats = async (sessionId: string) => toSessionStats(await fetchGraphql(SESSION_STATS, { sessionId }));
+export const fetchSessionStats = async (sessionId: string) =>
+  toSessionStats(await fetchGraphql(SESSION_STATS, { sessionId }));
 
 const POLL_MS = 5_000;
 const POLL_ATTEMPTS = 12;

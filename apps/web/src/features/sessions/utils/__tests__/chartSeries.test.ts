@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { addresses, dune } from "@/testing/fixtures";
 
 import type { SessionChartSeries } from "../../types";
-import { buildChartSeries, chartTimestamps, GRID_STEP_SECONDS } from "../chartSeries";
+import { buildChartSeries, chartEndTime, chartTimestamps, GRID_STEP_SECONDS } from "../chartSeries";
 
 const S = GRID_STEP_SECONDS;
 
@@ -36,6 +36,32 @@ describe("chartTimestamps", () => {
 
   it("is empty when the range is inverted", () => {
     expect(chartTimestamps(S, 0)).toEqual([]);
+  });
+});
+
+describe("chartEndTime", () => {
+  const traded = (...timestamps: number[]) => [series(timestamps.map((timestamp) => ({ timestamp, value: 100 })))];
+
+  it("runs past the close to the last trade once both are over", () => {
+    expect(chartEndTime(traded(10, 30 * S), 20 * S, 40 * S)).toBe(30 * S);
+  });
+
+  it("stops at the close when nothing traded after it", () => {
+    expect(chartEndTime(traded(10, 5 * S), 20 * S, 40 * S)).toBe(20 * S);
+  });
+
+  it("runs to now while the session is still open", () => {
+    expect(chartEndTime(traded(10, 5 * S), 60 * S, 40 * S)).toBe(40 * S);
+  });
+
+  it("runs to now when the session has no close", () => {
+    expect(chartEndTime(traded(10, 5 * S), null, 40 * S)).toBe(40 * S);
+  });
+
+  it("takes the latest last point across the options", () => {
+    const data = [...traded(10, 25 * S), ...traded(10, 30 * S), series([])];
+
+    expect(chartEndTime(data, 20 * S, 40 * S)).toBe(30 * S);
   });
 });
 
@@ -122,6 +148,22 @@ describe("buildChartSeries", () => {
     ];
 
     expect(buildChartSeries([series(points)], 0, S)[0]?.points.map(({ timestamp }) => timestamp)).toEqual([0, 60, S]);
+  });
+
+  it("draws a trade after the close up to the bound chartEndTime gives", () => {
+    // DevCon Arcade UP pool on 0 to 150: closes 13 Sep 12:00, last swap 30 Sep 23:57:40 at price 0.56126
+    const closesAt = 1789300800;
+    const lastSwap = 1790812660;
+    const points = [
+      { timestamp: 1788662160, value: 0.5 * 150 },
+      { timestamp: 1789300000, value: 86.0 },
+      { timestamp: lastSwap, value: 0.56126 * 150 },
+    ];
+    const data = [series(points, { lowerBound: 0, upperBound: 150 })];
+
+    const built = buildChartSeries(data, 1787926020, chartEndTime(data, closesAt, 1793318400))[0]?.points;
+
+    expect(built?.at(-1)).toEqual({ timestamp: lastSwap, value: 0.56126 * 150 });
   });
 
   it("draws a series with no points flat at the lower bound", () => {

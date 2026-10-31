@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import type { PoolBalances, SessionStats, SessionStatus } from "@/features/sessions/types";
 import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 import { type SessionDetailRow, toSessionDetail } from "@/features/sessions/utils/toSessionDetail";
+import { toSessionStats } from "@/features/sessions/utils/toSessionStats";
 
 import { addresses, GATEWAY } from "@/testing/fixtures";
 
@@ -34,12 +35,12 @@ const stats: SessionStats = {
   ],
 };
 
-function renderHeader({ overrides = {}, status = "trading" as SessionStatus } = {}) {
+function renderHeader({ overrides = {}, status = "trading" as SessionStatus, sessionStats = stats } = {}) {
   return render(
     <SessionHeader
       session={toSessionDetail(row(overrides), GATEWAY)}
       status={status}
-      stats={stats}
+      stats={sessionStats}
       statsPending={false}
       poolBalances={undefined}
       poolBalancesPending={false}
@@ -128,6 +129,20 @@ describe("SessionHeader", () => {
     renderHeader();
 
     expect(screen.getByText("148")).toBeInTheDocument();
+  });
+
+  it("counts foresight traders and direct pool swappers together, each address once", () => {
+    // owners {0xaa, 0xbb} predicted; 0xAA and 0xcc swapped directly; a senderless swap names 0xbb: {aa, bb, cc}
+    const owner = (tail: string) => `0x${tail.padStart(40, "0")}`;
+    const counted = toSessionStats({
+      Prediction: [{ executor: { owner: owner("aa") } }, { executor: { owner: owner("bb") } }],
+      directSwaps: [{ sender: owner("AA") }, { sender: owner("cc") }],
+      senderlessSwaps: [{ executor: { owner: owner("bb") } }, { executor: null }],
+      Pool: [],
+    });
+    renderHeader({ sessionStats: { ...stats, traders: counted.traders } });
+
+    expect(screen.getByText("3")).toBeInTheDocument();
   });
 
   it("shows lifetime volume in the collateral's own name, one Nth per outcome token", () => {

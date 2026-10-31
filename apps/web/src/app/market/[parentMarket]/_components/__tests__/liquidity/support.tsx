@@ -262,7 +262,7 @@ export function graphqlFor(world: World, openingTime: string) {
   return async (document: DocumentNode) => {
     if (queryName(document) === "SessionDetail") return { Session: [sessionRow(world, openingTime)] };
     if (queryName(document) === "SessionChart") return new Promise(() => {});
-    return { Prediction: [], Pool: [] };
+    return { Prediction: [], directSwaps: [], senderlessSwaps: [], Pool: [] };
   };
 }
 

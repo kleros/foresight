@@ -29,6 +29,8 @@ describe("a pool's side and balances", () => {
     // pool 0xa1: the outcome token sorts first (token0); pool 0xa2: it sorts second (token1)
     const stats = toSessionStats({
       Prediction: [],
+      directSwaps: [],
+      senderlessSwaps: [],
       Pool: [
         { ...row, id: "0xA1", outcomeIndex: 0, outcomeToken: LOW, underlyingToken: HIGH },
         { ...row, id: "0xA2", outcomeIndex: 1, outcomeToken: HIGH, underlyingToken: LOW },
@@ -55,6 +57,8 @@ describe("a pool's side and balances", () => {
     const row = { childMarket_id: "0xc1", underlyingPerOutcome: null, volumeUnderlying: "0", volumeOutcome: "0" };
     const stats = toSessionStats({
       Prediction: [],
+      directSwaps: [],
+      senderlessSwaps: [],
       Pool: [
         { ...row, id: "0xb1", outcomeIndex: 1, outcomeToken: LOW, underlyingToken: HIGH },
         { ...row, id: "0xb2", outcomeIndex: 0, outcomeToken: HIGH, underlyingToken: LOW },

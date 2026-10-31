@@ -46,7 +46,7 @@ function answerQueries(chart: () => unknown) {
       return { Session: [{ ...sessionDetailColumns, children: [sessionChildRow()] }] };
     }
     if (queryName(document) === "SessionChart") return chart();
-    return { Prediction: [], Pool: [] };
+    return { Prediction: [], directSwaps: [], senderlessSwaps: [], Pool: [] };
   });
 }
 
@@ -140,7 +140,7 @@ describe("MarketPage", () => {
               },
             ],
           }
-        : { Prediction: [], Pool: [] },
+        : { Prediction: [], directSwaps: [], senderlessSwaps: [], Pool: [] },
     );
 
     renderPage();
@@ -156,7 +156,7 @@ describe("MarketPage's trade wallet", () => {
       if (queryName(document) === "SessionDetail") {
         return { Session: [{ ...sessionDetailColumns, itemName, children: [sessionChildRow()] }] };
       }
-      return { Prediction: [], Pool: [], SessionChart: [] };
+      return { Prediction: [], directSwaps: [], senderlessSwaps: [], Pool: [], SessionChart: [] };
     });
   }
 
@@ -189,7 +189,7 @@ describe("MarketPage on a trading session", () => {
         return { Session: [{ ...sessionDetailColumns, openingTime: "4102444800", children: [sessionChildRow()] }] };
       }
       if (queryName(document) === "SessionChart") return chart();
-      return { Prediction: [], Pool: [] };
+      return { Prediction: [], directSwaps: [], senderlessSwaps: [], Pool: [] };
     });
   }
 
@@ -224,7 +224,7 @@ describe("MarketPage at the close", () => {
           };
         }
         if (queryName(document) === "SessionChart") return new Promise(() => {});
-        return { Prediction: [], Pool: [] };
+        return { Prediction: [], directSwaps: [], senderlessSwaps: [], Pool: [] };
       });
 
       renderPage();
