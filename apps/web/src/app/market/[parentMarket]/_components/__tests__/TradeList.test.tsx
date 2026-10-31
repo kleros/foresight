@@ -38,20 +38,17 @@ const e = parseEther;
 const GERWIG = addresses.childMarkets[0]!.toLowerCase() as Address;
 const VILLENEUVE = addresses.childMarkets[1]!.toLowerCase() as Address;
 
+/** The session's collateral and two options; each session below sets its own outcome count. */
+const SESSION_ROW = {
+  collateralDecimals: 18,
+  collateralSymbol: "sDAI",
+  children: [
+    sessionChildRow({ id: GERWIG, displayName: "Greta Gerwig" }),
+    sessionChildRow({ id: VILLENEUVE, parentOutcomeIndex: "0", displayName: "Denis Villeneuve" }),
+  ],
+};
 /** One outcome, so an amount of underlying reads as the same amount of collateral. */
-const session = toSessionDetail(
-  {
-    ...sessionDetailColumns,
-    outcomeCount: "1",
-    collateralDecimals: 18,
-    collateralSymbol: "sDAI",
-    children: [
-      sessionChildRow({ id: GERWIG, displayName: "Greta Gerwig" }),
-      sessionChildRow({ id: VILLENEUVE, parentOutcomeIndex: "0", displayName: "Denis Villeneuve" }),
-    ],
-  },
-  GATEWAY,
-);
+const session = toSessionDetail({ ...sessionDetailColumns, ...SESSION_ROW, outcomeCount: "1" }, GATEWAY);
 
 const TRADER = "0x777777777777777777777777777777777777a001" as Address;
 const OTHER = "0x777777777777777777777777777777777777a002" as Address;
@@ -152,6 +149,9 @@ function external(overrides: Partial<ExternalTrade> & { legs: ExternalLeg[] }): 
 const swap = (logIndex: number, side: "UP" | "DOWN", bought: boolean, tokens: string, underlying: string) =>
   ({ kind: "swap", logIndex, side, bought, tokens: e(tokens), underlying: e(underlying) }) satisfies TradeOperation;
 
+// jsdom computes no Tailwind, so a row's hover look is read from its classes.
+const HOVER_LOOK = ["cursor-pointer", "hover:bg-fs-surface-tint"];
+
 /** The text of the popup line a label starts. */
 const lineOf = (dialog: HTMLElement, label: string) => within(dialog).getByText(label).parentElement!.textContent;
 
@@ -188,12 +188,58 @@ describe("TradeList rows", () => {
     expect(prediction.textContent).not.toMatch(/~-/);
   });
 
+  it("sizes a prediction in collateral at its underlying over the decision's outcome count", () => {
+    // 10 underlying in a four-outcome decision is 2.5 collateral
+    const fourOutcomes = toSessionDetail({ ...sessionDetailColumns, ...SESSION_ROW, outcomeCount: "4" }, GATEWAY);
+
+    render(<TradeList session={fourOutcomes} trades={[prediction({ cost: e("10"), options: [option(GERWIG)] })]} />);
+
+    expect(screen.getByRole("button").textContent).toContain("~2.5 sDAI");
+  });
+
+  it("sizes an external swap in collateral at its underlying over the decision's outcome count", () => {
+    // 6 underlying in a four-outcome decision is 1.5 collateral
+    const fourOutcomes = toSessionDetail({ ...sessionDetailColumns, ...SESSION_ROW, outcomeCount: "4" }, GATEWAY);
+    const outside = external({ legs: [{ childMarket: GERWIG, side: "UP", bought: true, underlying: e("6") }] });
+
+    render(<TradeList session={fourOutcomes} trades={[outside]} />);
+
+    expect(screen.getByRole("listitem").textContent).toContain("~1.5 sDAI");
+  });
+
   it("shows the first option a prediction traded and +1 for the second", () => {
     render(<TradeList session={session} trades={[prediction({ options: [option(GERWIG), option(VILLENEUVE)] })]} />);
 
     const row = screen.getByRole("button");
     expect(within(row).getByText("Greta Gerwig")).toBeInTheDocument();
     expect(within(row).getByText("+1")).toBeInTheDocument();
+  });
+
+  it("shows the first option a prediction traded and +2 for the other two", () => {
+    const COPPOLA = `0x${"c3".repeat(20)}` as Address;
+    const threeOptions = toSessionDetail(
+      {
+        ...sessionDetailColumns,
+        ...SESSION_ROW,
+        children: [
+          ...SESSION_ROW.children,
+          sessionChildRow({ id: COPPOLA, parentOutcomeIndex: "2", displayName: "Sofia Coppola" }),
+        ],
+        outcomeCount: "1",
+      },
+      GATEWAY,
+    );
+
+    render(
+      <TradeList
+        session={threeOptions}
+        trades={[prediction({ options: [option(GERWIG), option(VILLENEUVE), option(COPPOLA)] })]}
+      />,
+    );
+
+    const row = screen.getByRole("button");
+    expect(within(row).getByText("Greta Gerwig")).toBeInTheDocument();
+    expect(within(row).getByText("+2")).toBeInTheDocument();
   });
 
   it("names every option a prediction traded in its row's tooltip", () => {
@@ -262,6 +308,58 @@ describe("TradeList external rows", () => {
     const [first, second] = screen.getAllByRole("listitem");
     expect(first!.textContent).toContain("Greta Gerwig · UP buy");
     expect(second!.textContent).toContain("Greta Gerwig · DOWN sell");
+  });
+
+  it("says buy for a DOWN the pool paid out and sell for an UP it took in", () => {
+    const boughtDown = external({ legs: [{ childMarket: GERWIG, side: "DOWN", bought: true, underlying: e("1") }] });
+    const soldUp = external({
+      id: `0x${"03".repeat(32)}`,
+      transactionHash: `0x${"03".repeat(32)}`,
+      sender: OTHER,
+      legs: [{ childMarket: GERWIG, side: "UP", bought: false, underlying: e("2") }],
+    });
+    render(<TradeList session={session} trades={[boughtDown, soldUp]} />);
+
+    const [first, second] = screen.getAllByRole("listitem");
+    expect(first!.textContent).toContain("Greta Gerwig · DOWN buy");
+    expect(second!.textContent).toContain("Greta Gerwig · UP sell");
+  });
+
+  it("shows +2 beside the first swap of an external transaction that swapped three times", () => {
+    const three = external({
+      legs: [
+        { childMarket: GERWIG, side: "UP", bought: true, underlying: e("1") },
+        { childMarket: VILLENEUVE, side: "DOWN", bought: false, underlying: e("1") },
+        { childMarket: GERWIG, side: "DOWN", bought: true, underlying: e("1") },
+      ],
+    });
+    render(<TradeList session={session} trades={[three]} />);
+
+    const [only] = screen.getAllByRole("listitem");
+    expect(within(only!).getByText("Greta Gerwig · UP buy")).toBeInTheDocument();
+    expect(within(only!).getByText("+2")).toBeInTheDocument();
+  });
+
+  it("shows a dash for the sender of an external swap indexed without one", () => {
+    const unsent = external({
+      sender: null,
+      legs: [{ childMarket: GERWIG, side: "UP", bought: true, underlying: e("1") }],
+    });
+    render(<TradeList session={session} trades={[unsent]} />);
+
+    const [only] = screen.getAllByRole("listitem");
+    expect(within(only!).getByText("-")).toBeInTheDocument();
+  });
+
+  it("gives an external row none of the hover look of a prediction row", () => {
+    const outside = external({ legs: [{ childMarket: GERWIG, side: "UP", bought: true, underlying: e("1") }] });
+    render(<TradeList session={session} trades={[prediction({ options: [option(GERWIG)] }), outside]} />);
+
+    const [predictionItem, externalItem] = screen.getAllByRole("listitem");
+    for (const look of HOVER_LOOK) {
+      expect(within(predictionItem!).getByRole("button")).toHaveClass(look);
+      expect(externalItem!.firstElementChild).not.toHaveClass(look);
+    }
   });
 
   it("shows a transaction's swaps as one row: the first, +1 for the second, and their underlying summed", () => {
@@ -352,6 +450,21 @@ describe("the prediction popup from TradeList", () => {
     const dialog = await screen.findByRole("dialog");
     expect(lineOf(dialog, "Sell DOWN")).toContain("8 at 0.4 · 3.2 underlying");
     expect(lineOf(dialog, "Buy UP")).toContain("6.5 at 0.3 · 1.95 underlying");
+  });
+
+  it("labels a DOWN buy and an UP sell by their direction", async () => {
+    const trade = prediction({
+      options: [
+        option(GERWIG, { operations: [swap(10, "DOWN", true, "5", "3.5"), swap(20, "UP", false, "4", "1.2")] }),
+      ],
+    });
+    render(<TradeList session={session} trades={[trade]} />);
+
+    await userEvent.click(screen.getByRole("button"));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(lineOf(dialog, "Buy DOWN")).toContain("5 at 0.7 · 3.5 underlying");
+    expect(lineOf(dialog, "Sell UP")).toContain("4 at 0.3 · 1.2 underlying");
   });
 
   it("lists two buys on one side as two lines", async () => {
