@@ -185,4 +185,6 @@ export interface SessionSummary extends SessionCore {
   /** Plural, e.g. "Movies". */
   branchNoun: string;
   keyword: string;
+  /** Overrides the market page link, for sessions this indexer does not hold. */
+  href?: string;
 }
