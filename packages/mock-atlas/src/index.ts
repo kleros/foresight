@@ -49,16 +49,16 @@ export const MOCK_ROLES: Role[] = [
     },
   },
   {
-    name: "CurateItemImage",
+    name: "ForesightImage",
     restriction: {
-      maxSize: 20971520,
-      allowedMimeTypes: ["image/png", "image/jpeg", "image/svg+xml"],
+      maxSize: 5242880,
+      allowedMimeTypes: ["image/*"],
     },
   },
   {
-    name: "CurateItemFile",
+    name: "ForesightMetadata",
     restriction: {
-      maxSize: 20971520,
+      maxSize: 2097152,
       allowedMimeTypes: ["application/json"],
     },
   },
