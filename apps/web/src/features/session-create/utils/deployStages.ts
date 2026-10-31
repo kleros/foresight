@@ -17,6 +17,8 @@ export type DeployStage = {
   /** Set once this stage has a transaction to point at. */
   hash?: string;
   files?: StageFile[];
+  /** How far a stage with countable work has got. */
+  meter?: { done: number; total: number };
 };
 
 export function unfinished(progress: SessionDeployProgress): boolean {
@@ -59,9 +61,17 @@ function uploadStage(progress: SessionDeployProgress, imageCount: number): Deplo
 
   const running = progress.stage === "uploading" || progress.stage === "verifying";
 
+  const upload = progress.stage === "uploading" ? progress.upload : undefined;
+
   return {
     label: `Uploading ${what}`,
-    detail: progress.stage === "verifying" ? "Reading it back and checking it" : "",
+    detail:
+      progress.stage === "verifying"
+        ? "Reading it back and checking it"
+        : upload
+          ? `${upload.done} of ${upload.total} images uploaded`
+          : "",
+    meter: upload,
     // The uri is what proves the upload landed: it is only set after the
     // read-back, and it outlives the stage that produced it.
     state: progress.metadataUri ? "done" : running ? "active" : "todo",

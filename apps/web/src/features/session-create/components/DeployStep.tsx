@@ -52,6 +52,24 @@ const STAGE_BULLET: Partial<Record<StageState, () => React.ReactNode>> = {
 };
 
 /** What a stage put on IPFS, each opening in its own tab. */
+function StageMeter({ done, total }: { done: number; total: number }) {
+  return (
+    <span
+      role="progressbar"
+      aria-label="Images uploaded"
+      aria-valuemin={0}
+      aria-valuemax={total}
+      aria-valuenow={done}
+      className="bg-fs-surface-sunken block h-1.5 w-40 overflow-hidden rounded-full"
+    >
+      <span
+        className="bg-fs-accent block h-full rounded-full transition-[width] duration-300"
+        style={{ width: `${total > 0 ? (done / total) * 100 : 0}%` }}
+      />
+    </span>
+  );
+}
+
 function StageFiles({ files, gateway }: { files: NonNullable<DeployStage["files"]>; gateway: string }) {
   return (
     <span className="flex flex-wrap items-center gap-2.5">
@@ -106,7 +124,10 @@ export function DeployStep({
   const decisionHuman = formatUtcInstant(closesAt);
   const isClosed = closesAt !== null && closesAt.getTime() <= Date.now();
   const seedReasonId = useId();
-  const imageCount = (draft.heroImageName ? 1 : 0) + (draft.iconName ? 1 : 0);
+  const imageCount =
+    (draft.heroImageName ? 1 : 0) +
+    (draft.iconName ? 1 : 0) +
+    draft.outcomes.reduce((total, o) => total + o.images.length, 0);
 
   const stages = stagesFor(progress, imageCount, draft.outcomes.length);
   const seerUrl = progress.parentMarket ? seerMarketUrl(progress.parentMarket, DEFAULT_CHAIN.id) : undefined;
@@ -134,9 +155,10 @@ export function DeployStep({
 
   /** Everything a stage has to say under its own name: what, then where. */
   const stageLine = (stage: DeployStage) => {
-    if (!stage.detail && !stage.files && !stage.hash) return "";
+    if (!stage.detail && !stage.files && !stage.hash && !stage.meter) return "";
     return (
       <span className="fs-stage-line type-caption text-fs-text-secondary flex flex-wrap items-center gap-x-2.5 gap-y-1">
+        {stage.meter ? <StageMeter {...stage.meter} /> : null}
         {stage.detail ? <span>{stage.detail}</span> : null}
         {stage.files ? <StageFiles files={stage.files} gateway={gateway} /> : null}
         {stage.hash ? <TxHashLink hash={stage.hash} copiable /> : null}

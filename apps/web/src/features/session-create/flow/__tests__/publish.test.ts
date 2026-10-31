@@ -195,10 +195,24 @@ describe("publishSessionMetadata", () => {
       uploader: fakeIpfs().uploader,
       images: { hero: hero(), icon: icon() },
       metadata,
-      onProgress: (stage) => void stages.push(stage),
+      onProgress: (stage) => void (stages.at(-1) !== stage && stages.push(stage)),
     });
 
     expect(stages).toEqual(["images", "document", "verifying"]);
+  });
+
+  it("counts every image up as it lands, the gallery included", async () => {
+    const counts: Array<{ done: number; total: number }> = [];
+    const poster = new File(["poster-bytes"], "poster.png", { type: "image/png" });
+
+    await publishSessionMetadata({
+      uploader: fakeIpfs().uploader,
+      images: { hero: hero(), icon: icon(), gallery: [{ outcomeIndex: 1, label: "The poster", source: poster }] },
+      metadata,
+      onProgress: (_stage, images) => void (images && counts.push(images)),
+    });
+
+    expect(counts).toEqual([0, 1, 2, 3].map((done) => ({ done, total: 3 })));
   });
 
   it("uploads a branch's gallery and writes each image into that branch's blocks", async () => {

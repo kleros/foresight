@@ -96,6 +96,7 @@ export function createOrchestratedDeploy(args: {
   };
 
   let uploadPhase: "idle" | "uploading" | "verifying" | "done" = "idle";
+  let uploadCount: SessionDeployProgress["upload"];
   let failure: DeployFailure | undefined;
   /** What "Try again" does about the failure on screen. */
   let retryFailed: (() => void) | undefined;
@@ -271,6 +272,7 @@ export function createOrchestratedDeploy(args: {
       resume,
       metadataUri: snapshot?.metadataUri,
       images: snapshot?.images,
+      upload: uploadPhase === "uploading" ? uploadCount : undefined,
       parentMarket: snapshot?.parentMarket,
     };
   }
@@ -292,6 +294,7 @@ export function createOrchestratedDeploy(args: {
 
       // Claimed before the first await, or a second press slips in behind it.
       uploadPhase = "uploading";
+      uploadCount = undefined;
       notify();
 
       const startedAt = await chainTime();
@@ -299,8 +302,9 @@ export function createOrchestratedDeploy(args: {
         uploader: args.uploader,
         images: sources.images,
         metadata: sources.metadata,
-        onProgress: (phase) => {
+        onProgress: (phase, images) => {
           uploadPhase = phase === "verifying" ? "verifying" : "uploading";
+          if (images) uploadCount = images;
           notify();
         },
       });

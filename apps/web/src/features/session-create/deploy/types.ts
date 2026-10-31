@@ -57,6 +57,8 @@ export type SessionDeployProgress = {
   metadataUri?: string;
   /** Where the images went, once they are up. */
   images?: { hero?: string; icon?: string };
+  /** Images uploaded so far, while the upload runs. */
+  upload?: { done: number; total: number };
   parentMarket?: string;
 };
 
