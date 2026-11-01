@@ -50,6 +50,7 @@ const load = async () => ({
   ...(await import("../../plan")),
   ...(await import("../../../run/driver")),
   ...(await import("@/config/contracts")),
+  ...(await import("@/lib/trade-executor/executor")),
 });
 type App = Awaited<ReturnType<typeof load>>;
 
@@ -323,6 +324,7 @@ export function useFork() {
     collateral?: SeedCollateral;
     previewDeposit?: bigint;
     branches: { depth: bigint; upPriceBps: bigint }[];
+    tradeWallet?: SeedInput["tradeWallet"];
   }): Promise<LiquidityRequest> {
     const branches = await Promise.all(
       args.branches.map(async (each, index) => {
@@ -342,6 +344,7 @@ export function useFork() {
       ...(args.previewDeposit === undefined ? {} : { previewDeposit: args.previewDeposit }),
       chainTime: await reader.chainTime(),
       branches,
+      ...(args.tradeWallet ? { tradeWallet: args.tradeWallet } : {}),
     };
     return { kind: "seed", input };
   }
@@ -576,6 +579,8 @@ export function useFork() {
       return session;
     },
     balanceOf,
+    poolAddress,
+    client: () => client,
     send,
     approve,
     reader,

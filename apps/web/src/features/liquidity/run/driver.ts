@@ -29,7 +29,7 @@ import {
 
 import { assertListed, UnlistedTxError } from "../flow/allowed";
 import { LIQUIDITY_ALLOW_LIST } from "../oracle/allowlist";
-import { GAS_RESERVE_WEI } from "../oracle/tolerances";
+import { ATOMIC_BATCH_GAS, CALL_GAS, GAS_RESERVE_WEI, POOL_CREATE_GAS } from "../oracle/tolerances";
 import type {
   LiquidityFailureReason,
   LiquidityProgress,
@@ -100,6 +100,19 @@ const sessionOf = (request: LiquidityRequest): LiquiditySession =>
 
 const tradeWalletOf = (request: LiquidityRequest) =>
   request.kind === "seed" ? request.input.tradeWallet?.address : undefined;
+
+/**
+ * Whether `steps` fit one atomic batch, which runs as one transaction. A trade wallet run's steps are batches already,
+ * each near a block's worth of gas where it creates pools, so it never goes as one.
+ */
+function fitsOneBatch(request: LiquidityRequest, steps: LiquidityStep[]) {
+  if (tradeWalletOf(request) !== undefined) return false;
+  const created =
+    request.kind === "seed"
+      ? request.input.branches.flatMap(({ pools }) => [pools.up, pools.down]).filter((p) => p.status === "missing")
+      : [];
+  return BigInt(created.length) * POOL_CREATE_GAS + BigInt(steps.length) * CALL_GAS <= ATOMIC_BATCH_GAS;
+}
 
 const poolKey = (pool: PoolState) =>
   pool.status === "missing"
@@ -663,7 +676,10 @@ export function createLiquidityRun(args: {
     let atomic: boolean;
     try {
       checked = await checkedSteps(request);
-      atomic = checked.steps.every((step) => step.tx) && (await atomicReady(checked.account, checked.session.chainId));
+      atomic =
+        checked.steps.every((step) => step.tx) &&
+        fitsOneBatch(request, checked.steps) &&
+        (await atomicReady(checked.account, checked.session.chainId));
     } finally {
       preparing = false;
     }

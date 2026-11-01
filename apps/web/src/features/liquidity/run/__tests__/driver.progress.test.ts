@@ -34,6 +34,21 @@ const input: SeedInput = {
 };
 const SEED: LiquidityRequest = { kind: "seed", input };
 
+/** The same seed into live pools, which one atomic batch holds: it creates none. */
+const LIVE_POOLS = { up: live(5_000n, true), down: live(5_000n, false) };
+const LIVE_SEED: LiquidityRequest = {
+  kind: "seed",
+  input: { ...input, branches: input.branches.map((each) => ({ ...each, pools: LIVE_POOLS })) },
+};
+function liveChain() {
+  const fake = chain();
+  for (const tokens of TWO.branches) {
+    fake.setPool(tokens.upToken, tokens.outcome, LIVE_POOLS.up);
+    fake.setPool(tokens.downToken, tokens.outcome, LIVE_POOLS.down);
+  }
+  return fake;
+}
+
 /** The plan's step ids, which the popup's rows group: the parent split, then each branch's own steps. */
 const IDS = planSeed(input).steps.map((step) => step.id);
 const TOTAL = IDS.length;
@@ -263,9 +278,9 @@ describe("a recovered seed's progress", () => {
 
 describe("an atomic seed's progress", () => {
   it("is one signature, with every row running while the wallet holds the batch", async () => {
-    const fake = chain();
+    const fake = liveChain();
     const batch = wallet(fake, owner, { atomic: "supported", sendCalls: "hang" });
-    const { driver } = driverOn({ world: fake, gateway: gateway(fake, owner), wallet: batch, request: SEED });
+    const { driver } = driverOn({ world: fake, gateway: gateway(fake, owner), wallet: batch, request: LIVE_SEED });
 
     driver.start();
     await batch.sent();
@@ -285,9 +300,9 @@ describe("an atomic seed's progress", () => {
 
 describe("an atomic seed once the wallet takes the batch", () => {
   it("says the batch is confirming, then checks every row and counts the one signature once it lands", async () => {
-    const fake = chain();
+    const fake = liveChain();
     const batch = wallet(fake, owner, { atomic: "supported", sendCalls: "unmined" });
-    const { driver } = driverOn({ world: fake, gateway: gateway(fake, owner), wallet: batch, request: SEED });
+    const { driver } = driverOn({ world: fake, gateway: gateway(fake, owner), wallet: batch, request: LIVE_SEED });
 
     driver.start();
     await batch.sent();
