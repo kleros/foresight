@@ -11,6 +11,9 @@ import type { SessionFilters } from "./listing";
 export const LISTED_PARENT_MARKETS: Address[] = [
   "0xf094a219f85fc9880362fe096bd489bccb9b5359", // DevCon Side Event - Satisfaction
   "0xd1d81ec6c50cac45c9930f31f837b62eedfaefc4", // DevCon Side Event - Attendance
+  "0x6d7b44c1904f261538d8bf36e27909c2ab420b2c", // Devcon 8 events, Sun 1 – Tue 3 Nov
+  "0xad66d2f7df4a6c6f2057c8eee61d620ec4387a44", // Devcon 8 events, Wed 4 Nov
+  "0x2156d7c5ff280c87f0c9690c0f20a9a8f984a9e9", // Devcon 8 events, Thu 5 – Sat 7 Nov
 ];
 
 const MOVIES_QUESTION = "If watched, what percentile score would Clément give to the movie?";
