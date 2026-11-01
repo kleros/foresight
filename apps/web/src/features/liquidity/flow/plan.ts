@@ -3,8 +3,9 @@ import { encodeFunctionData, erc20Abi, isAddressEqual, type Address, type Hex } 
 
 import { ALGEBRA_ROUTER_ABI } from "@/lib/swap/algebraRouter";
 import { sqrtPriceAtTick } from "@/lib/swap/tickMath";
+import { batchExecuteTx, batchValueExecuteTx, createExecutorTx } from "@/lib/trade-executor/executor";
 
-import { gnosisRouterAbi } from "@/config/contracts";
+import { gnosisRouterAbi, tradeExecutorFactoryAddress } from "@/config/contracts";
 
 import { POSITION_MANAGER_ABI } from "./abi";
 import {
@@ -154,8 +155,11 @@ type ResolvedPool = ReturnType<typeof resolvePool>;
 
 interface Build {
   list: LiquidityAllowList;
+  /** Who the run's mints, swaps and collects pay: the owner, or the owner's trade wallet. */
   owner: Address;
   deadline: bigint;
+  /** The run goes through a trade wallet, which cannot withdraw a dust position in the batch that mints it. */
+  keepDust: boolean;
 }
 
 /**
@@ -219,7 +223,9 @@ function realignSteps(id: string, pool: ResolvedPool, current: bigint, b: Build)
     },
     ...approvals(`${id}:swap`, b.list.swaprRouter, [[tokenIn, amountIn]]),
     { id: `${id}:swap`, tx: swap, leaves: { token0, token1, liquidity, ...band } },
-    {
+  ];
+  if (!b.keepDust) {
+    steps.push({
       id: `${id}:dust-withdraw`,
       withdraws: `${id}:dust`,
       leaves: { token0, token1, liquidity: 0n, ...band },
@@ -235,8 +241,8 @@ function realignSteps(id: string, pool: ResolvedPool, current: bigint, b: Build)
           ),
           b.deadline,
         ),
-    },
-  ];
+    });
+  }
   const spendOf = (token: Address) => (token === token0 ? amount0 : amount1) + (token === tokenIn ? amountIn : 0n);
   const outcome = pool.childIsToken0 ? token1 : token0;
   return { steps, childSpend: spendOf(pool.child), outcomeSpend: spendOf(outcome) };
@@ -282,10 +288,12 @@ export function planSeed(input: SeedInput): SeedPlan {
   const list = listFor(session.chainId);
   // the parent split mints every branch's outcome, so each one needs a plan for its leftovers to be listed
   if (input.branches.length !== session.branches.length) throw new Error("A seed plans every branch of the session.");
+  const recipient = input.tradeWallet?.address ?? owner;
   const b: Build = {
     list,
-    owner,
+    owner: recipient,
     deadline: chainTime + LIQUIDITY_DEADLINE_SECONDS,
+    keepDust: input.tradeWallet !== undefined,
   };
 
   let cap: bigint | undefined;
@@ -392,7 +400,7 @@ export function planSeed(input: SeedInput): SeedPlan {
                   }),
                 ]
               : []),
-            mintCall(pool, owner, b.deadline),
+            mintCall(pool, recipient, b.deadline),
           ]),
         ),
       },
@@ -410,7 +418,55 @@ export function planSeed(input: SeedInput): SeedPlan {
     return { depth, split, upPriceBps, downPriceBps, pools: { up, down } };
   });
 
-  return { parentSplit, branches, leftovers: leftovers.filter(({ amount }) => amount > 0n), steps };
+  return {
+    parentSplit,
+    branches,
+    leftovers: leftovers.filter(({ amount }) => amount > 0n),
+    steps: input.tradeWallet ? throughTradeWallet(input, steps) : steps,
+  };
+}
+
+/**
+ * The seed's steps sent through the owner's trade wallet: its creation where it is not deployed, the sDAI paid into it,
+ * then each row's calls (the parent split, each branch) as one batch the trade wallet runs from its own balances.
+ */
+function throughTradeWallet(input: SeedInput, steps: LiquidityStep[]): LiquidityStep[] {
+  const wallet = input.tradeWallet!;
+  const factory = tradeExecutorFactoryAddress(input.session.chainId);
+  if (!factory) throw new Error(`No trade wallet factory on chain ${input.session.chainId}.`);
+  const out: LiquidityStep[] = wallet.deployed ? [] : [{ id: "parent:wallet", tx: createExecutorTx(factory) }];
+  if (input.collateral === "sDAI") {
+    out.push({
+      id: "parent:fund",
+      tx: {
+        to: input.session.collateral,
+        data: encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [wallet.address, input.total] }),
+      },
+    });
+  }
+
+  const rows = new Map<string, FlowTx[]>();
+  for (const step of steps) {
+    if (!step.tx) throw new Error("A trade wallet run has no step built from a receipt.");
+    const [scope, index] = step.id.split(":");
+    const row = scope === "branch" ? `branch:${index}:seed` : "parent:split";
+    rows.set(row, [...(rows.get(row) ?? []), step.tx]);
+  }
+  for (const [id, txs] of rows) {
+    const value = txs.reduce((sum, tx) => sum + (tx.value ?? 0n), 0n);
+    const calls = txs.map((tx) => ({ to: tx.to, data: tx.data ?? "0x", value: tx.value ?? 0n }));
+    out.push({
+      id,
+      tx:
+        value > 0n
+          ? { ...batchValueExecuteTx(wallet.address, calls), value }
+          : batchExecuteTx(
+              wallet.address,
+              calls.map(({ to, data }) => ({ to, data })),
+            ),
+    });
+  }
+  return out;
 }
 
 /** A position's liquidity out, everything owed collected to `owner`, then the emptied NFT burned. */

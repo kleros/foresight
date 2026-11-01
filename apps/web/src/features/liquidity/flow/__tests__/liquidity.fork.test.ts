@@ -70,6 +70,7 @@ const load = async () => ({
   ...(await import("../plan")),
   ...(await import("../../run/driver")),
   ...(await import("@/config/contracts")),
+  ...(await import("@/lib/trade-executor/executor")),
 });
 type App = Awaited<ReturnType<typeof load>>;
 
@@ -404,6 +405,7 @@ describe.skipIf(!FORK_RPC_URL)("the liquidity flow, against a gnosis fork", () =
     collateral?: SeedCollateral;
     previewDeposit?: bigint;
     branches: { depth: bigint; upPriceBps: bigint }[];
+    tradeWallet?: SeedInput["tradeWallet"];
   }): Promise<LiquidityRequest> {
     const branches = await Promise.all(
       args.branches.map(async (each, index) => {
@@ -423,6 +425,7 @@ describe.skipIf(!FORK_RPC_URL)("the liquidity flow, against a gnosis fork", () =
       ...(args.previewDeposit === undefined ? {} : { previewDeposit: args.previewDeposit }),
       chainTime: await reader.chainTime(),
       branches,
+      ...(args.tradeWallet ? { tradeWallet: args.tradeWallet } : {}),
     };
     return { kind: "seed", input };
   }
@@ -722,6 +725,58 @@ describe.skipIf(!FORK_RPC_URL)("the liquidity flow, against a gnosis fork", () =
           for (const b of parentTokens.slice(at + 1)) {
             expect(await poolAddress(a, b)).toBe(zeroAddress);
           }
+        }
+      },
+      RUN_TIMEOUT_MS,
+    );
+  });
+
+  describe("seeding through the trade wallet", () => {
+    it(
+      "creates and funds the trade wallet, seeds each branch in one transaction, and leaves the NFTs and leftovers there",
+      async () => {
+        await fundSDai(OWNER, parseEther("50"));
+        const factory = app.tradeExecutorFactoryAddress(CHAIN_ID)!;
+        const state = await app.fetchExecutorState(client, { factory, owner: OWNER });
+        const tradeWallet = state.deployed ?? state.predicted;
+        const sDaiBefore = await balanceOf(session.collateral);
+        const request = await seedRequest({
+          total: parseEther("20"),
+          branches: [
+            { depth: parseEther("20"), upPriceBps: 6_000n },
+            { depth: parseEther("12"), upPriceBps: 2_500n },
+          ],
+          tradeWallet: { address: tradeWallet, deployed: state.deployed !== null },
+        });
+        const plan = shown(request);
+        const gateway = ownerGateway();
+
+        expect(await drive(request, gateway)).toEqual({ stage: "complete" });
+
+        // one signature for the creation, the funding, the parent split and each branch
+        expect(gateway.sent).toHaveLength(plan.steps.length);
+        expect(plan.steps.length).toBe((state.deployed ? 0 : 1) + 1 + 1 + session.branches.length);
+        expect(sDaiBefore - (await balanceOf(session.collateral))).toBe(parseEther("20"));
+        for (const token of sessionTokens().slice(1)) {
+          expect({ token, balance: await balanceOf(token, tradeWallet) }).toEqual({
+            token,
+            balance: leftoverOf(plan.leftovers, token),
+          });
+        }
+        expect(await positionsOf(OWNER)).toHaveLength(0);
+        const positions = await positionsOf(tradeWallet);
+        expect(positions).toHaveLength(4);
+        for (const pool of plan.branches.flatMap((branch) => [branch.pools.up, branch.pools.down])) {
+          const held = positions.filter((position) => inPool(position, pool.token0, pool.token1));
+          expect(held).toHaveLength(1);
+          expect(held[0]!.liquidity).toBe(pool.liquidity);
+        }
+
+        // what one branch's batch costs, against Gnosis's 17M block gas limit
+        for (const sent of gateway.sent) {
+          const receipt = await client.getTransactionReceipt({ hash: sent.hash! });
+          console.info(`trade wallet seed: ${sent.tx.to} used ${receipt.gasUsed} gas`);
+          expect(receipt.gasUsed).toBeLessThan(17_000_000n);
         }
       },
       RUN_TIMEOUT_MS,
@@ -1091,11 +1146,16 @@ describe.skipIf(!FORK_RPC_URL)("the liquidity flow, against a gnosis fork", () =
     }
 
     it("names selectors that match their signatures and that the deployed code dispatches", async () => {
+      const factory = app.tradeExecutorFactoryAddress(CHAIN_ID)!;
+      const state = await app.fetchExecutorState(client, { factory, owner: OWNER });
+      if (!state.deployed) await send(OWNER, factory, app.createExecutorTx(factory).data!);
       const targets: Record<string, Address[]> = {
         sessionToken: [session.collateral, session.branches[0]!.outcome, session.branches[0]!.upToken],
         gnosisRouter: [LIST.gnosisRouter],
         positionManager: [LIST.positionManager],
         swaprRouter: [LIST.swaprRouter],
+        tradeWallet: [state.predicted],
+        tradeWalletFactory: [factory],
       };
       const entries = [
         ...LIST.calls.map((call) => ({ ...call, targets: targets[call.target]! })),

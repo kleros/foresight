@@ -2,8 +2,9 @@ import type { FlowTx } from "@foresight/tx-orchestrator";
 import { decodeFunctionData, isAddressEqual, maxUint256, parseAbi, slice, type Address, type Hex } from "viem";
 
 import { ALGEBRA_ROUTER_ABI } from "@/lib/swap/algebraRouter";
+import { executorAddress } from "@/lib/trade-executor/executor";
 
-import { gnosisRouterAbi } from "@/config/contracts";
+import { gnosisRouterAbi, tradeExecutorAbi, tradeExecutorFactoryAddress } from "@/config/contracts";
 
 import { POSITION_MANAGER_ABI } from "./abi";
 import { LIQUIDITY_ALLOW_LIST } from "../oracle/allowlist";
@@ -18,6 +19,7 @@ export class UnlistedTxError extends Error {
 }
 
 const APPROVE_ABI = parseAbi(["function approve(address spender, uint256 amount)"]);
+const TRANSFER_ABI = parseAbi(["function transfer(address to, uint256 amount)"]);
 
 const same = (a: Address, b: Address) => isAddressEqual(a, b);
 const selectorOf = (data: Hex): Hex => (data.length >= 10 ? slice(data, 0, 4) : "0x");
@@ -37,14 +39,25 @@ const pairKey = (a: Address, b: Address) => {
 
 /**
  * Every way `tx` departs from the chain's allow-list (L5) and the owner rule (L4), as readable lines; empty when
- * it keeps to both. `from` is the account the wallet will send it from.
+ * it keeps to both. `from` is the account the wallet will send it from. With `tradeWallet`, the owner may also
+ * create and fund that trade wallet and have it batch calls, each held to the same rules with the trade wallet as owner.
  */
-export function departures(args: { tx: FlowTx; session: LiquiditySession; owner: Address; from?: Address }): string[] {
-  const { tx, session, owner, from } = args;
+export function departures(args: {
+  tx: FlowTx;
+  session: LiquiditySession;
+  owner: Address;
+  from?: Address;
+  tradeWallet?: Address;
+}): string[] {
+  const { tx, session, owner, from, tradeWallet } = args;
   const list = LIQUIDITY_ALLOW_LIST[session.chainId];
   if (!list) return [`no allow-list for chain ${session.chainId}`];
   const out: string[] = [];
   if (from !== undefined && !same(from, owner)) out.push(`sent from ${from}, not the run's owner ${owner}`);
+  const factory = tradeWallet === undefined ? null : tradeExecutorFactoryAddress(session.chainId);
+  if (tradeWallet !== undefined && !(factory && same(executorAddress(factory, owner), tradeWallet))) {
+    out.push(`${tradeWallet} is not the owner's trade wallet`);
+  }
   const data = tx.data ?? "0x";
   const value = tx.value ?? 0n;
   const selector = selectorOf(data);
@@ -62,7 +75,11 @@ export function departures(args: { tx: FlowTx; session: LiquiditySession; owner:
         ? "swaprRouter"
         : sessionTokens.some((token) => same(token, tx.to))
           ? "sessionToken"
-          : null;
+          : tradeWallet !== undefined && same(tx.to, tradeWallet)
+            ? "tradeWallet"
+            : factory && same(tx.to, factory)
+              ? "tradeWalletFactory"
+              : null;
   const entry = list.calls.find((call) => call.target === target && call.selector === selector);
   if (!entry) return [...out, `${tx.to} ${selector} is not allowed`];
   if (value !== 0n && !entry.value) out.push(`${entry.name} carries ${value} native`);
@@ -103,6 +120,27 @@ export function departures(args: { tx: FlowTx; session: LiquiditySession; owner:
     case "multicall(bytes[])":
       out.push(...multicallDepartures(data, list.multicallInner, pairs, owner));
       break;
+    case "transfer(address,uint256)": {
+      const [to, amount] = decodeFunctionData({ abi: TRANSFER_ABI, data }).args;
+      if (!same(tx.to, session.collateral)) out.push(`transfers ${tx.to}, not the session's collateral`);
+      if (tradeWallet === undefined || !same(to, tradeWallet)) out.push(`transfer pays ${to}`);
+      if (amount === maxUint256) out.push("transfers an unbounded amount");
+      break;
+    }
+    case "batchExecute((address,bytes)[])":
+    case "batchValueExecute((address,uint256,bytes)[])": {
+      const decoded = decodeFunctionData({ abi: tradeExecutorAbi, data });
+      if (decoded.functionName !== "batchExecute" && decoded.functionName !== "batchValueExecute") break;
+      const calls: readonly FlowTx[] = decoded.args[0];
+      if (calls.length === 0) out.push("batches no calls");
+      const paid = calls.reduce((sum, call) => sum + (call.value ?? 0n), 0n);
+      if (paid !== value) out.push(`batch carries ${value} native but its calls spend ${paid}`);
+      for (const [index, call] of calls.entries()) {
+        const inner = departures({ tx: call, session, owner: tx.to });
+        out.push(...inner.map((line) => `batch call ${index}: ${line}`));
+      }
+      break;
+    }
   }
   return out;
 }
