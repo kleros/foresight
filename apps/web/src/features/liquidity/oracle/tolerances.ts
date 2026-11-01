@@ -23,5 +23,17 @@ export const MINT_RATE_MARGIN_BPS = 1n;
 /** Native balance an xDAI split always leaves for gas: 0.01 xDAI. */
 export const GAS_RESERVE_WEI = 10n ** 16n;
 
+/**
+ * Gas a wallet's atomic batch may spend, as one transaction under Gnosis's 17M block limit. A run planned above it
+ * signs one transaction at a time instead.
+ */
+export const ATOMIC_BATCH_GAS = 16_000_000n;
+
+/** Gas an Algebra pool's creation costs, measured at about 7M on a Gnosis fork. */
+export const POOL_CREATE_GAS = 7_000_000n;
+
+/** Gas any other call of a run is counted at: an approval, a split, a mint into a pool, a withdrawal. */
+export const CALL_GAS = 250_000n;
+
 /** Per-token scale of the throwaway position a self-realign trades against, in wei. */
 export const REALIGN_DUST_WEI = 10n ** 12n;

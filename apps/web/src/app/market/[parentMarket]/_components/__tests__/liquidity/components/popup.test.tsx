@@ -261,6 +261,7 @@ describe("what the liquidity popup says a seed does", () => {
   it("lists the steps to sign in the timeline: the parent split and each branch's seed at least", async () => {
     const dialog = await openPopup(mixedWorld());
     await enterTotal(dialog, "37");
+    await userEvent.click(within(dialog).getByRole("button", { name: /^Steps and leftovers/ }));
 
     await waitFor(() =>
       expect(within(dialog).queryAllByRole("listitem", { name: /^Timeline item/ }).length).toBeGreaterThanOrEqual(3),
@@ -319,6 +320,10 @@ describe("the liquidity popup's timeline", () => {
     const scopes = ["parent:", ...world.branches.map((_, index) => `branch:${index}:`)];
     const counts = scopes.map((scope) => plan.steps.filter((step) => step.id.startsWith(scope)).length);
     expect(counts.some((count) => count > 1)).toBe(true);
+    const total = counts.reduce((sum, count) => sum + count, 0);
+    const toggle = within(dialog).getByRole("button", { name: /^Steps and leftovers/ });
+    await waitFor(() => expect(toggle).toHaveTextContent(`${total} signatures`));
+    await userEvent.click(toggle);
 
     await waitFor(() => {
       const items = within(dialog).queryAllByRole("listitem", { name: /^Timeline item/ });

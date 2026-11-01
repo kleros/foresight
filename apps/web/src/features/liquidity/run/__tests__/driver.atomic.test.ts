@@ -2,6 +2,10 @@ import { createMemoryStorage } from "@foresight/tx-orchestrator";
 import { hexToBigInt, isAddressEqual } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { executorAddress } from "@/lib/trade-executor/executor";
+
+import { tradeExecutorFactoryAddress } from "@/config/contracts";
+
 import { mergeInput, mergeRequest, mergeTxs, seedInput, seedRequest, seedTxs } from "./support/requests";
 import {
   callOf,
@@ -18,7 +22,9 @@ import {
   type LiquidityRequestLike,
   type SendCallsRequest,
 } from "./support/world";
-import { owner } from "../../flow/__tests__/support/session";
+import { branch, owner, session } from "../../flow/__tests__/support/session";
+import { planSeed } from "../../flow/plan";
+import type { SeedInput } from "../../types";
 
 afterEach(disposeDrivers);
 
@@ -195,5 +201,41 @@ describe("createLiquidityRun with a wallet that does not batch atomically on Gno
 
     expect(batch.sendCalls).toEqual([]);
     expect(sends.prompts).toEqual(seedTxs(seedInput()));
+  });
+});
+
+describe("createLiquidityRun with a wallet that batches atomically, for a run no one transaction holds", () => {
+  const atomicRun = async (input: SeedInput) => {
+    const fake = chain();
+    const sends = gateway(fake, owner);
+    const batch = wallet(fake, owner, { atomic: "supported" });
+    const { driver } = driverOn({ world: fake, gateway: sends, wallet: batch, request: { kind: "seed", input } });
+
+    driver.start();
+    await complete(driver);
+    return { batch, sends };
+  };
+
+  it("signs one transaction at a time when the seed creates more pools than one block's gas holds", async () => {
+    const two = session([branch(1), branch(2)]);
+    const one = seedInput();
+    const input: SeedInput = { ...one, session: two, branches: [one.branches[0]!, one.branches[0]!] };
+
+    const { batch, sends } = await atomicRun(input);
+
+    expect(batch.sendCalls).toEqual([]);
+    expect(sends.prompts).toEqual(seedTxs(input));
+  });
+
+  it("signs a trade wallet seed one batch transaction at a time", async () => {
+    const address = executorAddress(tradeExecutorFactoryAddress(100)!, owner);
+    const input: SeedInput = { ...seedInput(), tradeWallet: { address, deployed: true } };
+
+    const { batch, sends } = await atomicRun(input);
+
+    expect(batch.sendCalls).toEqual([]);
+    expect(sends.prompts.map((tx) => tx.to.toLowerCase())).toEqual(
+      planSeed(input).steps.map((step) => step.tx!.to.toLowerCase()),
+    );
   });
 });

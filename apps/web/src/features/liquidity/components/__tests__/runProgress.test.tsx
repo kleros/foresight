@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -132,7 +132,15 @@ const addPopup = (progress: LiquidityProgress, opts: { readable?: boolean; onClo
   );
 
 const dialog = (name: string) => screen.getByRole("dialog", { name });
-const item = (title: string) => screen.getByRole("listitem", { name: `Timeline item: ${title}` });
+/** Unfolds the Add popup's steps, which start folded behind their toggle. */
+function showSteps() {
+  const toggle = screen.queryByRole("button", { name: /^Steps and leftovers/ });
+  if (toggle?.getAttribute("aria-expanded") === "false") fireEvent.click(toggle);
+}
+const item = (title: string) => {
+  showSteps();
+  return screen.getByRole("listitem", { name: `Timeline item: ${title}` });
+};
 const bullet = (title: string) => item(title).querySelector("[data-bullet]")?.getAttribute("data-bullet");
 const statusText = (scope: HTMLElement) => within(scope).getByTestId("status-text").textContent;
 
@@ -295,7 +303,10 @@ describe("Your positions while a seed holds the session", () => {
 
 const IDLE: LiquidityProgress = { stage: "idle", rows: [], signatures: { done: 0, total: 0 } };
 const tone = (scope: HTMLElement) => within(scope).getByRole("status").getAttribute("data-tone");
-const timelineItems = () => screen.queryAllByRole("listitem", { name: /^Timeline item/ });
+const timelineItems = () => {
+  showSteps();
+  return screen.queryAllByRole("listitem", { name: /^Timeline item/ });
+};
 
 /** Two positions in branch 0's pools: the UP pool's under token 78, the DOWN pool's under token 77. */
 const position = (tokenId: bigint, pool: string): ShownPosition => {

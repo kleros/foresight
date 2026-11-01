@@ -283,6 +283,139 @@ describe.skipIf(!FORK_RPC_URL)("the liquidity flow's amounts, against a gnosis f
     );
   });
 
+  describe("seeding through the trade wallet", () => {
+    async function tradeWallet() {
+      const factory = fork.app.tradeExecutorFactoryAddress(CHAIN_ID)!;
+      const state = await fork.app.fetchExecutorState(fork.client(), { factory, owner: OWNER });
+      return { address: state.deployed ?? state.predicted, deployed: state.deployed !== null };
+    }
+
+    /** What the owner paid in gas for every send of the run, in wei. */
+    async function gasPaid(gateway: ReturnType<typeof fork.ownerGateway>) {
+      const receipts = await Promise.all(
+        gateway.sent.map((each) => fork.client().getTransactionReceipt({ hash: each.hash! })),
+      );
+      return receipts.reduce((sum, receipt) => sum + receipt.gasUsed * receipt.effectiveGasPrice, 0n);
+    }
+
+    /**
+     * Every branch's tokens accounted for between the trade wallet and its two pools: each child set's half in its
+     * pool bar rounding, the outcome split between the pools at the user's UP price, and nothing in the owner's wallet.
+     */
+    async function expectLedger(wallet: Address, minted: bigint, branches: { depth: bigint; upPriceBps: bigint }[]) {
+      expect(await fork.balanceOf(fork.session.parentInvalid, wallet)).toBe(minted);
+      for (const [index, tokens] of fork.session.branches.entries()) {
+        const { depth, upPriceBps } = branches[index]!;
+        const half = depth / 2n;
+        const held = async (token: Address) => ({
+          wallet: await fork.balanceOf(token, wallet),
+          owner: await fork.balanceOf(token),
+        });
+        const upPool = await fork.poolAddress(tokens.upToken, tokens.outcome);
+        const downPool = await fork.poolAddress(tokens.downToken, tokens.outcome);
+        const up = await held(tokens.upToken);
+        const down = await held(tokens.downToken);
+        const outcome = await held(tokens.outcome);
+        const invalid = await held(tokens.invalidToken);
+        const pooled = {
+          up: await fork.balanceOf(tokens.upToken, upPool),
+          down: await fork.balanceOf(tokens.downToken, downPool),
+          upOutcome: await fork.balanceOf(tokens.outcome, upPool),
+          downOutcome: await fork.balanceOf(tokens.outcome, downPool),
+        };
+        // UP costs upPriceBps of the outcome, so its pool pairs half × UP price of outcome with half of UP
+        // a mint rounds the amounts it pulls up, so either side of the exact figure by a hair
+        const near = (actual: bigint, expected: bigint) =>
+          (actual > expected ? actual - expected : expected - actual) <= expected / 1_000n;
+        expect({
+          index,
+          owner: [up.owner, down.owner, outcome.owner, invalid.owner],
+          invalid: invalid.wallet,
+          up: up.wallet + pooled.up === half && up.wallet <= DUST_WEI,
+          down: down.wallet + pooled.down === half && down.wallet <= DUST_WEI,
+          outcome: outcome.wallet + pooled.upOutcome + pooled.downOutcome === minted - half,
+          upOutcome: near(pooled.upOutcome, (half * upPriceBps) / BPS),
+          downOutcome: near(pooled.downOutcome, (half * (BPS - upPriceBps)) / BPS),
+        }).toEqual({
+          index,
+          owner: [0n, 0n, 0n, 0n],
+          invalid: half,
+          up: true,
+          down: true,
+          outcome: true,
+          upOutcome: true,
+          downOutcome: true,
+        });
+      }
+      const positions = await fork.positionsOf(wallet);
+      expect(positions).toHaveLength(2 * fork.session.branches.length);
+      expect(await fork.positionsOf(OWNER)).toHaveLength(0);
+    }
+
+    it(
+      "takes exactly the sDAI total from the wallet and places it all in the pools and the trade wallet",
+      async () => {
+        await fundSDai(parseEther("50"));
+        const wallet = await tradeWallet();
+        const total = parseEther("20");
+        const branches = [
+          { depth: total, upPriceBps: 6_000n },
+          { depth: parseEther("12"), upPriceBps: 2_500n },
+        ];
+        const sDaiBefore = await fork.balanceOf(fork.session.collateral);
+        const nativeBefore = await fork.nativeOf(OWNER);
+        const request = await fork.seedRequest({ total, branches, tradeWallet: wallet });
+        const gateway = fork.ownerGateway();
+
+        expect(await fork.drive(request, gateway)).toEqual({ stage: "complete" });
+
+        expect(sDaiBefore - (await fork.balanceOf(fork.session.collateral))).toBe(total);
+        expect(nativeBefore - (await fork.nativeOf(OWNER))).toBe(await gasPaid(gateway));
+        // the deepest branch takes the whole total, so no sDAI is left over
+        expect(await fork.balanceOf(fork.session.collateral, wallet.address)).toBe(0n);
+        await expectLedger(wallet.address, total, branches);
+      },
+      RUN_TIMEOUT_MS,
+    );
+
+    it(
+      "takes exactly the xDAI total plus gas from the wallet, and the trade wallet splits what it deposits",
+      async () => {
+        const wallet = await tradeWallet();
+        const total = parseEther("10");
+        const preview = await fork.previewDeposit(total);
+        const nativeBefore = await fork.nativeOf(OWNER);
+        const request = await fork.seedRequest({
+          total,
+          collateral: "xDAI",
+          previewDeposit: preview,
+          branches: [
+            { depth: total, upPriceBps: 5_000n },
+            { depth: total, upPriceBps: 3_000n },
+          ],
+          tradeWallet: wallet,
+        });
+        if (request.kind !== "seed") throw new Error("not a seed");
+        const plan = fork.app.planSeed(request.input);
+        const gateway = fork.ownerGateway();
+
+        expect(await fork.drive(request, gateway)).toEqual({ stage: "complete" });
+
+        expect(nativeBefore - (await fork.nativeOf(OWNER))).toBe(total + (await gasPaid(gateway)));
+        expect(await fork.nativeOf(wallet.address)).toBe(0n);
+        const minted = await fork.balanceOf(fork.session.parentInvalid, wallet.address);
+        // splitFromBase mints the shares the deposit gets, which interest only raises above the preview
+        expect(minted >= preview && minted - preview <= preview / BPS).toBe(true);
+        await expectLedger(
+          wallet.address,
+          minted,
+          plan.branches.map((branch) => ({ depth: branch.depth, upPriceBps: branch.upPriceBps })),
+        );
+      },
+      RUN_TIMEOUT_MS,
+    );
+  });
+
   const fundSDai = (xdai: bigint) => fork.fundSDai(OWNER, xdai);
 
   async function splitAt(market: Address, collateral: Address, amount: bigint) {

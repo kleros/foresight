@@ -5,6 +5,7 @@ import { useId, useMemo, useState } from "react";
 import clsx from "clsx";
 import type { Address } from "viem";
 
+import { ChevronIcon } from "@/components/ui/ChevronIcon";
 import { Modal } from "@/components/ui/Modal";
 import { POPUP_FRAME, PopupCloseButton } from "@/components/ui/Popup";
 import { ScrollFade } from "@/components/ui/ScrollFade";
@@ -13,14 +14,15 @@ import { StepsTimeline } from "@/components/ui/StepsTimeline";
 import WithHelpTooltip from "@/components/ui/WithHelpTooltip";
 
 import { formatDisplayAmount } from "@/utils/amount";
+import { INERT } from "@/utils/inert";
 
 import { AmountRow } from "./AmountRow";
 import { LiquidityPopupFooter } from "./LiquidityPopupFooter";
 import type { LiquidityBalances } from "../api/getLiquidityBalances";
 import type { LiquidityRun } from "../hooks/useLiquidityRun";
 import { formOf, useLiquiditySeed, type SeedForm, type TradeWalletRead } from "../hooks/useLiquiditySeed";
-import type { SeedCollateral, SessionPools } from "../types";
-import { runStatus, runSteps } from "../utils/runSteps";
+import type { LiquidityProgress, SeedCollateral, SessionPools } from "../types";
+import { runStatus, runSteps, type PlannedRow } from "../utils/runSteps";
 
 const COLLATERALS: SeedCollateral[] = ["sDAI", "xDAI"];
 
@@ -32,6 +34,15 @@ const TRADE_WALLET_HELP =
 
 /** A remove or merge holds the session, so this popup cannot start one. */
 const HELD_ELSEWHERE = "Removing or merging from this wallet is unfinished. Finish it in Your positions first.";
+
+/** The folded steps' one line: what there is to sign, or how far the run has got. */
+function detailsHeadline(progress: LiquidityProgress | null, planned: PlannedRow[] = []) {
+  const ran = progress?.kind === "seed" && progress.rows.length > 0 ? progress.signatures : undefined;
+  if (ran) return `Steps and leftovers · ${ran.done} of ${ran.total} signed`;
+  const total = planned.reduce((sum, row) => sum + row.signatures, 0);
+  if (total === 0) return "Steps and leftovers";
+  return `Steps and leftovers · ${total} ${total === 1 ? "signature" : "signatures"}`;
+}
 
 const FIELD = clsx(
   "rounded-fs-control bg-fs-surface text-fs-popup-text h-10 w-full min-w-0 border border-(--fs-popup-line) px-3",
@@ -92,6 +103,7 @@ export function LiquidityDialog({
     stored: signing,
   });
   const id = useId();
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const balance = form.collateral === "sDAI" ? balances?.collateral : balances?.native;
 
   const edit = (key: "depths" | "prices", index: number, value: string) =>
@@ -200,11 +212,11 @@ export function LiquidityDialog({
               <p className="text-fs-popup-text-2 mt-1.5 text-[13px] leading-[18px] text-pretty">
                 Split into every outcome, then paired with each branch&apos;s UP and DOWN.
               </p>
-              <WithHelpTooltip label="About adding through the trade wallet" tooltipMsg={TRADE_WALLET_HELP}>
+              <div className="mt-0.5 -mb-2.5 flex items-center">
                 <label
                   className={clsx(
                     // a 44px target on the 20px row
-                    "group mt-0.5 -mb-2.5 flex min-w-0 items-center gap-2 py-3 text-[13px] leading-5 font-medium",
+                    "group flex min-w-0 items-center gap-2 py-3 text-[13px] leading-5 font-medium",
                     isLocked ? "text-fs-popup-text-3" : "text-fs-popup-text cursor-pointer",
                   )}
                 >
@@ -237,7 +249,8 @@ export function LiquidityDialog({
                   </span>
                   Add through your trade wallet
                 </label>
-              </WithHelpTooltip>
+                <WithHelpTooltip label="About adding through the trade wallet" tooltipMsg={TRADE_WALLET_HELP} />
+              </div>
             </section>
 
             {seed.fields.map((field, index) => {
@@ -291,26 +304,55 @@ export function LiquidityDialog({
               );
             })}
 
-            {seed.shown ? (
-              <section className="rounded-fs-panel bg-fs-popup-panel px-4 py-3">
-                <h3 className="type-label text-fs-popup-text-2 font-medium">
-                  {form.tradeWallet ? "Stays in your trade wallet" : "Stays in your wallet"}
-                </h3>
-                <ul className="text-fs-popup-text mt-1 flex flex-col gap-0.5 text-[13px] leading-[18px] tabular-nums wrap-anywhere">
-                  {seed.shown.leftovers.map((each) => (
-                    <li key={each.label}>
-                      {formatDisplayAmount(each.amount, 18)} {each.label}
-                    </li>
-                  ))}
-                </ul>
-                <p className="text-fs-popup-text-2 mt-1 text-xs leading-4">
-                  Rounding dust of a few wei per token may stay too.
-                </p>
-              </section>
-            ) : null}
+            <button
+              type="button"
+              aria-expanded={detailsOpen}
+              aria-controls={`${id}-details`}
+              onClick={() => setDetailsOpen((open) => !open)}
+              className={clsx(
+                "rounded-fs-control relative flex h-9 w-full items-center justify-between gap-3 px-1 text-left",
+                "type-label text-fs-popup-text cursor-pointer font-medium tabular-nums",
+                "transition-colors duration-(--fs-dur-echo) ease-(--fs-ease-enter)",
+                "[@media(hover:hover)]:hover:bg-fs-popup-hover",
+                // the body's scroll area clips at its sides, so the ring sits inside the edge
+                "[--fs-focus-offset:-2px]",
+              )}
+            >
+              <span className="truncate">{detailsHeadline(progress, seed.shown?.steps)}</span>
+              <ChevronIcon className={clsx("fs-chevron size-4 shrink-0", detailsOpen && "rotate-180")} />
+            </button>
+            {/* mounted while closed, so the toggle's aria-controls always names it; inert keeps its rows out of reach */}
+            <div data-open={detailsOpen || undefined} className="fs-disclosure">
+              <div className="min-h-0 overflow-hidden">
+                <div
+                  id={`${id}-details`}
+                  aria-hidden={detailsOpen ? undefined : true}
+                  {...(detailsOpen ? {} : INERT)}
+                  className="flex flex-col gap-2"
+                >
+                  {seed.shown ? (
+                    <section className="rounded-fs-panel bg-fs-popup-panel px-4 py-3">
+                      <h3 className="type-label text-fs-popup-text-2 font-medium">
+                        {form.tradeWallet ? "Stays in your trade wallet" : "Stays in your wallet"}
+                      </h3>
+                      <ul className="text-fs-popup-text mt-1 flex flex-col gap-0.5 text-[13px] leading-[18px] tabular-nums wrap-anywhere">
+                        {seed.shown.leftovers.map((each) => (
+                          <li key={each.label}>
+                            {formatDisplayAmount(each.amount, 18)} {each.label}
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="text-fs-popup-text-2 mt-1 text-xs leading-4">
+                        Rounding dust of a few wei per token may stay too.
+                      </p>
+                    </section>
+                  ) : null}
 
-            <div className="pt-1">
-              <StepsTimeline rows={steps} stopped={stopped} className="liquidity-steps" />
+                  <div className="pt-1">
+                    <StepsTimeline rows={steps} stopped={stopped} className="liquidity-steps" />
+                  </div>
+                </div>
+              </div>
             </div>
             {stopped && !run.progress?.holdsSend ? (
               <p className="text-fs-popup-text-2 px-1 pb-1 text-xs leading-4 text-pretty">
