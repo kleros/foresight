@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 
 import { ALGEBRA_ROUTER_ABI } from "@/lib/swap/algebraRouter";
 
-import { gnosisRouterAbi } from "@/config/contracts";
+import { gnosisRouterAbi, tradeExecutorAbi, tradeExecutorFactoryAbi } from "@/config/contracts";
 
 import { NEW_POOL_TICK_SPACING } from "../../oracle/tolerances";
 import { assertListed, departures, UnlistedTxError } from "../allowed";
@@ -146,6 +146,21 @@ describe("liquidity allow-list fixtures", () => {
       ...NFPM_ABI.map((item) => toFunctionSelector(item)),
       toFunctionSelector(APPROVE_ABI[0]),
       toFunctionSelector(ALGEBRA_ROUTER_ABI[0]),
+      toFunctionSelector("function transfer(address to, uint256 amount)"),
+      ...(["batchExecute", "batchValueExecute"] as const).map((name) =>
+        toFunctionSelector(
+          tradeExecutorAbi.find(
+            (item): item is Extract<(typeof tradeExecutorAbi)[number], { type: "function" }> =>
+              item.type === "function" && item.name === name,
+          )!,
+        ),
+      ),
+      toFunctionSelector(
+        tradeExecutorFactoryAbi.find(
+          (item): item is Extract<(typeof tradeExecutorFactoryAbi)[number], { type: "function" }> =>
+            item.type === "function" && item.name === "createExecutor",
+        )!,
+      ),
       ...["splitPosition", "splitFromBase", "mergePositions"].map((name) =>
         toFunctionSelector(
           gnosisRouterAbi.find(

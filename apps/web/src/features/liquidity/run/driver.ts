@@ -98,6 +98,9 @@ class RunStop extends Error {
 const sessionOf = (request: LiquidityRequest): LiquiditySession =>
   request.kind === "remove" ? request.session : request.input.session;
 
+const tradeWalletOf = (request: LiquidityRequest) =>
+  request.kind === "seed" ? request.input.tradeWallet?.address : undefined;
+
 const poolKey = (pool: PoolState) =>
   pool.status === "missing"
     ? "missing"
@@ -259,7 +262,15 @@ export function createLiquidityRun(args: {
       for (const position of positions) await assertHolds(position.tokenId, account);
     }
     for (const step of steps) {
-      if (step.tx) assertListed({ tx: step.tx, session, owner: request.input.owner, from: account });
+      if (step.tx) {
+        assertListed({
+          tx: step.tx,
+          session,
+          owner: request.input.owner,
+          from: account,
+          tradeWallet: tradeWalletOf(request),
+        });
+      }
     }
     const paying = steps.flatMap((step) => (!settled.has(step.id) && step.tx?.value ? [step.tx] : []));
     const value = paying.reduce((sum, tx) => sum + tx.value!, 0n);
@@ -364,7 +375,8 @@ export function createLiquidityRun(args: {
           const pool = await args.reader.pool(step.leaves.token0, step.leaves.token1);
           if (pool.status === "missing") throw new RunStop("moved", false);
           tx = step.build({ tokenId, sqrtPriceX96: pool.sqrtPriceX96 });
-          assertListed({ tx, session, owner: snapshot.request.input.owner, from: account });
+          const { owner } = snapshot.request.input;
+          assertListed({ tx, session, owner, from: account, tradeWallet: tradeWalletOf(snapshot.request) });
         }
         await recordSend(id, account, tx);
         return tx;

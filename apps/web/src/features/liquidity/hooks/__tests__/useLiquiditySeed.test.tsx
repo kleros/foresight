@@ -40,7 +40,8 @@ function seedWith(down: PoolState) {
         },
         chainTime: 1_900_000_000n,
         closed: false,
-        form: { total: "10", collateral: "sDAI", depths: [], prices: [] },
+        form: { total: "10", collateral: "sDAI", depths: [], prices: [], tradeWallet: false },
+        tradeWallet: { data: undefined, error: null },
       }),
     { wrapper },
   ).result.current;

@@ -22,6 +22,7 @@ import { useRenderAtClose } from "@/features/sessions/hooks/useRenderAtClose";
 import { latestEstimates } from "@/features/sessions/utils/latestEstimates";
 import { optionNoun, optionNounSingular } from "@/features/sessions/utils/optionNoun";
 import { resolutionOpened, sessionStatus } from "@/features/sessions/utils/toSessionDetail";
+import { useExecutor } from "@/features/trade-executor/api/getExecutor";
 import { TradeWallet } from "@/features/trade-executor/components/TradeWallet/TradeWallet";
 
 import { PageMessage } from "@/components/layout/PageMessage";
@@ -64,6 +65,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
     // the header's Liquidity reads pool balances keyed under the stats
     alsoReread: sessionStatsKey(session.data?.id),
   });
+  const tradeWallet = useExecutor();
 
   if (!isAddress(parentMarket, { strict: false }) || session.data === null) {
     return (
@@ -198,6 +200,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
         balances={liquidity.balances}
         chainTime={liquidity.chainTime}
         closed={addsClosed}
+        tradeWallet={tradeWallet}
         run={liquidity.run}
       />
     </PageColumn>

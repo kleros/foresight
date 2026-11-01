@@ -12,13 +12,16 @@ export interface LiquidityAllowList {
   algebraFactory: Address;
   /** Swapr's Algebra router: only to move an initialized but empty pool to the run's price before its mint. */
   swaprRouter: Address;
-  /** Every call a run may send. A token target means the session's collateral or one of its outcome tokens. */
+  /**
+   * Every call a run may send. A token target means the session's collateral or one of its outcome tokens; the
+   * trade wallet and its factory are targets only of a run through the owner's own trade wallet.
+   */
   calls: {
-    target: "sessionToken" | "gnosisRouter" | "positionManager" | "swaprRouter";
+    target: "sessionToken" | "gnosisRouter" | "positionManager" | "swaprRouter" | "tradeWallet" | "tradeWalletFactory";
     selector: Hex;
     name: string;
     spender?: LiquiditySpender[];
-    /** The one call that may carry native value: an xDAI split at the parent. */
+    /** A call that may carry native value: an xDAI split at the parent, or the trade wallet batch paying for it. */
     value?: true;
   }[];
   /** The only calls a position manager `multicall` may wrap. */
@@ -37,6 +40,15 @@ export const LIQUIDITY_ALLOW_LIST: Record<number, LiquidityAllowList> = {
         selector: "0x095ea7b3",
         name: "approve(address,uint256)",
         spender: ["gnosisRouter", "positionManager", "swaprRouter"],
+      },
+      { target: "sessionToken", selector: "0xa9059cbb", name: "transfer(address,uint256)" },
+      { target: "tradeWalletFactory", selector: "0xf0791d5c", name: "createExecutor()" },
+      { target: "tradeWallet", selector: "0xb1bdad27", name: "batchExecute((address,bytes)[])" },
+      {
+        target: "tradeWallet",
+        selector: "0xfc792715",
+        name: "batchValueExecute((address,uint256,bytes)[])",
+        value: true,
       },
       { target: "gnosisRouter", selector: "0xd5f82280", name: "splitPosition(address,address,uint256)" },
       { target: "gnosisRouter", selector: "0x50d9991c", name: "splitFromBase(address)", value: true },

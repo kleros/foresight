@@ -67,6 +67,8 @@ export interface SeedInput {
   /** The chain's latest block timestamp, in seconds. */
   chainTime: bigint;
   branches: SeedBranchInput[];
+  /** The owner's trade wallet, which then holds the run's positions and leftovers and makes each branch one transaction. */
+  tradeWallet?: { address: Address; deployed: boolean };
 }
 
 /** One full-range seed mint, with the amounts the popup shows. */

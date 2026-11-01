@@ -6,6 +6,8 @@ import type { Address } from "viem";
 
 import { formatAmount, parseAmount } from "@/utils/amount";
 
+import type { ExecutorState } from "@/lib/trade-executor/types";
+
 import { LIQUIDITY_CLOSED_REASON } from "@/config/liquidity";
 
 import { tokenLabels, type TokenAmount } from "./useSessionLiquidity";
@@ -26,6 +28,14 @@ export interface SeedForm {
   collateral: SeedCollateral;
   depths: (string | undefined)[];
   prices: (string | undefined)[];
+  /** Seed through the owner's trade wallet instead of from the wallet itself. */
+  tradeWallet: boolean;
+}
+
+/** The owner's trade wallet as read: where it is or will be deployed, or why it cannot be read. */
+export interface TradeWalletRead {
+  data: ExecutorState | undefined;
+  error: Error | null;
 }
 
 /** A seed request as the form shows it, every wei of it, so a stored run's fields read what it signs. */
@@ -34,6 +44,7 @@ export const formOf = (input: SeedInput): SeedForm => ({
   collateral: input.collateral,
   depths: input.branches.map((branch) => formatAmount(branch.depth, 18, 18)),
   prices: input.branches.map((branch) => formatAmount(branch.upPriceBps, PRICE_DECIMALS)),
+  tradeWallet: input.tradeWallet !== undefined,
 });
 
 const childIsToken0 = (child: Address, outcome: Address) => BigInt(child) < BigInt(outcome);
@@ -106,6 +117,7 @@ export function useLiquiditySeed({
   chainTime,
   closed,
   form,
+  tradeWallet,
   stored,
 }: {
   pools: SessionPools | undefined;
@@ -115,6 +127,7 @@ export function useLiquiditySeed({
   chainTime: bigint | undefined;
   closed: boolean;
   form: SeedForm;
+  tradeWallet: TradeWalletRead;
   /** The request a held run signs: shown as it is, never planned again from live reads. */
   stored?: SeedInput;
 }) {
@@ -158,6 +171,8 @@ export function useLiquiditySeed({
         return `A DOWN pool's own price is outside ${min} to ${max}, so this session can't be seeded here.`;
       }
       if (form.collateral === "xDAI" && previewDeposit.data === undefined) return "Reading the sDAI rate…";
+      if (form.tradeWallet && tradeWallet.error) return tradeWallet.error.message;
+      if (form.tradeWallet && !tradeWallet.data) return "Reading your trade wallet…";
       return undefined;
     })();
     // the plan is shown whenever the form reads, even where it cannot be signed yet
@@ -166,6 +181,8 @@ export function useLiquiditySeed({
       return { fields, problem };
     if (!downPrices.every((bps) => bps === undefined || inRange(bps))) return { fields, problem };
     if (form.collateral === "xDAI" && previewDeposit.data === undefined) return { fields, problem };
+    const wallet = tradeWallet.data;
+    if (form.tradeWallet && (tradeWallet.error || !wallet)) return { fields, problem };
 
     const input: SeedInput = {
       session: pools.session,
@@ -179,6 +196,9 @@ export function useLiquiditySeed({
         upPriceBps: prices[index]!,
         pools: branchPools,
       })),
+      ...(form.tradeWallet && wallet
+        ? { tradeWallet: { address: wallet.deployed ?? wallet.predicted, deployed: wallet.deployed !== null } }
+        : {}),
     };
     const plan = planned(input);
     if (!plan) return { fields, problem: problem ?? "Too small to seed. Raise the amounts." };
@@ -191,5 +211,18 @@ export function useLiquiditySeed({
       request,
       shown: shownOf(input, plan, names),
     };
-  }, [pools, owner, names, balances, chainTime, closed, form, total, previewDeposit.data, stored]);
+  }, [
+    pools,
+    owner,
+    names,
+    balances,
+    chainTime,
+    closed,
+    form,
+    tradeWallet.data,
+    tradeWallet.error,
+    total,
+    previewDeposit.data,
+    stored,
+  ]);
 }

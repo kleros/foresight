@@ -10,6 +10,7 @@ import { POPUP_FRAME, PopupCloseButton } from "@/components/ui/Popup";
 import { ScrollFade } from "@/components/ui/ScrollFade";
 import { StatusCallout } from "@/components/ui/StatusCallout";
 import { StepsTimeline } from "@/components/ui/StepsTimeline";
+import WithHelpTooltip from "@/components/ui/WithHelpTooltip";
 
 import { formatDisplayAmount } from "@/utils/amount";
 
@@ -17,11 +18,17 @@ import { AmountRow } from "./AmountRow";
 import { LiquidityPopupFooter } from "./LiquidityPopupFooter";
 import type { LiquidityBalances } from "../api/getLiquidityBalances";
 import type { LiquidityRun } from "../hooks/useLiquidityRun";
-import { formOf, useLiquiditySeed, type SeedForm } from "../hooks/useLiquiditySeed";
+import { formOf, useLiquiditySeed, type SeedForm, type TradeWalletRead } from "../hooks/useLiquiditySeed";
 import type { SeedCollateral, SessionPools } from "../types";
 import { runStatus, runSteps } from "../utils/runSteps";
 
 const COLLATERALS: SeedCollateral[] = ["sDAI", "xDAI"];
+
+const TRADE_WALLET_HELP =
+  "From your wallet, every split, approval, pool and mint is its own signature. Your trade wallet runs each " +
+  "branch's in one transaction, so you sign a few times instead of many.\n\n" +
+  "The positions and leftovers then belong to your trade wallet, not this wallet, and are removed through the " +
+  "trade wallet too. Removing trade wallet positions from this page is not available yet.";
 
 /** A remove or merge holds the session, so this popup cannot start one. */
 const HELD_ELSEWHERE = "Removing or merging from this wallet is unfinished. Finish it in Your positions first.";
@@ -45,6 +52,7 @@ export function LiquidityDialog({
   balances,
   chainTime,
   closed,
+  tradeWallet,
   run,
 }: {
   isOpen: boolean;
@@ -55,9 +63,16 @@ export function LiquidityDialog({
   balances: LiquidityBalances | undefined;
   chainTime: bigint | undefined;
   closed: boolean;
+  tradeWallet: TradeWalletRead;
   run: LiquidityRun;
 }) {
-  const [typed, setForm] = useState<SeedForm>({ total: "", collateral: "sDAI", depths: [], prices: [] });
+  const [typed, setForm] = useState<SeedForm>({
+    total: "",
+    collateral: "sDAI",
+    depths: [],
+    prices: [],
+    tradeWallet: false,
+  });
   const { isRunning, progress } = run;
   // a remove or merge holds the same slot; its steps and actions are the positions popup's
   const isOwn = progress?.kind === undefined || progress.kind === "seed";
@@ -65,7 +80,17 @@ export function LiquidityDialog({
   // a held seed shows the request it signs, which a run recovered from storage does not share with what was typed
   const signing = isLocked && progress?.request?.kind === "seed" ? progress.request.input : undefined;
   const form = useMemo(() => (signing ? formOf(signing) : typed), [signing, typed]);
-  const seed = useLiquiditySeed({ pools, owner, names, balances, chainTime, closed, form, stored: signing });
+  const seed = useLiquiditySeed({
+    pools,
+    owner,
+    names,
+    balances,
+    chainTime,
+    closed,
+    form,
+    tradeWallet,
+    stored: signing,
+  });
   const id = useId();
   const balance = form.collateral === "sDAI" ? balances?.collateral : balances?.native;
 
@@ -81,7 +106,11 @@ export function LiquidityDialog({
     planned: seed.shown?.steps ?? [],
     progress,
     title: (row) =>
-      row === "parent" ? "Split into outcomes" : `Seed ${names[Number(row.split(":")[1])] ?? "a branch"}`,
+      row === "parent"
+        ? form.tradeWallet
+          ? "Fund your trade wallet and split"
+          : "Split into outcomes"
+        : `Seed ${names[Number(row.split(":")[1])] ?? "a branch"}`,
   });
   const ran = isOwn ? runStatus(progress) : run.isHeld ? { text: HELD_ELSEWHERE, tone: "warning" as const } : null;
   const problem = seed.problem;
@@ -171,6 +200,44 @@ export function LiquidityDialog({
               <p className="text-fs-popup-text-2 mt-1.5 text-[13px] leading-[18px] text-pretty">
                 Split into every outcome, then paired with each branch&apos;s UP and DOWN.
               </p>
+              <WithHelpTooltip label="About adding through the trade wallet" tooltipMsg={TRADE_WALLET_HELP}>
+                <label
+                  className={clsx(
+                    // a 44px target on the 20px row
+                    "group mt-0.5 -mb-2.5 flex min-w-0 items-center gap-2 py-3 text-[13px] leading-5 font-medium",
+                    isLocked ? "text-fs-popup-text-3" : "text-fs-popup-text cursor-pointer",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    className="peer sr-only"
+                    checked={form.tradeWallet}
+                    disabled={isLocked}
+                    onChange={(event) => setForm((now) => ({ ...now, tradeWallet: event.target.checked }))}
+                  />
+                  <span
+                    aria-hidden
+                    className={clsx(
+                      "predict-check grid size-4 shrink-0 place-items-center rounded-[5px] border",
+                      "border-fs-popup-line-strong bg-fs-surface peer-checked:border-transparent",
+                      !isLocked && "[@media(hover:hover)]:group-hover:border-fs-popup-text-3",
+                      "peer-focus-visible:ring-fs-focus-ring peer-focus-visible:ring-2 peer-focus-visible:ring-offset-1",
+                      "peer-focus-visible:ring-offset-fs-popup-panel peer-disabled:opacity-60",
+                    )}
+                  >
+                    <svg viewBox="0 0 10.17 10.17" className="size-2.5" fill="none">
+                      <path
+                        d="M1 5.52L3.92 9.17L9.17 1"
+                        stroke="var(--fs-popup-on-axis)"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
+                  Add through your trade wallet
+                </label>
+              </WithHelpTooltip>
             </section>
 
             {seed.fields.map((field, index) => {
@@ -226,7 +293,9 @@ export function LiquidityDialog({
 
             {seed.shown ? (
               <section className="rounded-fs-panel bg-fs-popup-panel px-4 py-3">
-                <h3 className="type-label text-fs-popup-text-2 font-medium">Stays in your wallet</h3>
+                <h3 className="type-label text-fs-popup-text-2 font-medium">
+                  {form.tradeWallet ? "Stays in your trade wallet" : "Stays in your wallet"}
+                </h3>
                 <ul className="text-fs-popup-text mt-1 flex flex-col gap-0.5 text-[13px] leading-[18px] tabular-nums wrap-anywhere">
                   {seed.shown.leftovers.map((each) => (
                     <li key={each.label}>

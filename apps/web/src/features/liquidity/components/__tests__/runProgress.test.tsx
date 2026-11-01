@@ -126,6 +126,7 @@ const addPopup = (progress: LiquidityProgress, opts: { readable?: boolean; onClo
       balances={opts.readable ? BALANCES : undefined}
       chainTime={opts.readable ? input.chainTime : undefined}
       closed={false}
+      tradeWallet={{ data: undefined, error: null }}
       run={runAt(progress)}
     />,
   );
