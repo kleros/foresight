@@ -388,6 +388,7 @@ describe("Your positions during a remove", () => {
     const pool: ShownPosition = {
       key: "0:down",
       pool: DOWN_POOL,
+      heldBy: "wallet",
       count: 2,
       returns: [{ label: "sDAI", amount: WAD }],
       request: { kind: "remove", session: SESSION, input: base },
