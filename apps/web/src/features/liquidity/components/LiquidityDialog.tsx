@@ -29,8 +29,8 @@ const COLLATERALS: SeedCollateral[] = ["sDAI", "xDAI"];
 const TRADE_WALLET_HELP =
   "From your wallet, every split, approval, pool and mint is its own signature. Your trade wallet runs each " +
   "branch's in one transaction, so you sign a few times instead of many.\n\n" +
-  "The positions and leftovers then belong to your trade wallet, not this wallet, and are removed through the " +
-  "trade wallet too. Removing trade wallet positions from this page is not available yet.";
+  "The positions and leftovers then belong to your trade wallet, not this wallet. Removing them in Your positions " +
+  "returns their tokens to your trade wallet.";
 
 /** A remove or merge holds the session, so this popup cannot start one. */
 const HELD_ELSEWHERE = "Removing or merging from this wallet is unfinished. Finish it in Your positions first.";

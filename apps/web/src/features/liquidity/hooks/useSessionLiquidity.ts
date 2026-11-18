@@ -220,6 +220,8 @@ export function useSessionLiquidity({
   isReady,
   alsoReread,
   tradeWallet,
+  tradeWalletUnread = false,
+  rereadTradeWallet,
 }: {
   parentMarket: Address;
   branches: LiquidityBranchName[];
@@ -230,6 +232,9 @@ export function useSessionLiquidity({
   alsoReread?: QueryKey[];
   /** The connected wallet's trade wallet, read only once deployed. */
   tradeWallet?: ExecutorState;
+  /** The trade wallet's state could not be read, so whether it holds positions is unknown. */
+  tradeWalletUnread?: boolean;
+  rereadTradeWallet?: () => void;
 }) {
   const { address: owner } = useAccount();
   const ordered = [...branches].sort((a, b) => a.outcomeIndex - b.outcomeIndex);
@@ -294,10 +299,12 @@ export function useSessionLiquidity({
     positionsUnread:
       Boolean(owner) &&
       ((positions.isError && positions.data === undefined) ||
+        tradeWalletUnread ||
         (tradeWalletAddress !== undefined && tradeWalletPositions.isError && tradeWalletPositions.data === undefined)),
     rereadPositions: () => {
       void positions.refetch();
       if (tradeWalletAddress) void tradeWalletPositions.refetch();
+      if (tradeWalletUnread) rereadTradeWallet?.();
     },
     merge: shown.merge,
     run,

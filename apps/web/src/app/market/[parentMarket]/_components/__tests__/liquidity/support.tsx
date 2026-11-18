@@ -13,6 +13,7 @@ import {
   numberToHex,
   parseAbi,
   RpcRequestError,
+  zeroAddress,
   zeroHash,
   type Address,
   type Hex,
@@ -23,6 +24,10 @@ import { expect } from "vitest";
 
 import { createChain, LIST, owner } from "@/features/liquidity/api/__tests__/support/chain";
 import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
+
+import { executorAddress } from "@/lib/trade-executor/executor";
+
+import { tradeExecutorFactoryAbi, tradeExecutorFactoryAddress } from "@/config/contracts";
 
 import { MarketPage } from "../../MarketPage";
 
@@ -141,8 +146,26 @@ export function createWorld() {
   const reverted = (method: string, params: unknown) =>
     new RpcRequestError({ body: { method, params }, error: { code: 3, message: "execution reverted" }, url: "fake" });
 
+  // every owner's trade wallet is predicted and not deployed
+  function factoryAnswer(to: Address, data: Hex): Hex | undefined {
+    const factory = tradeExecutorFactoryAddress(100);
+    if (!factory || !isAddressEqual(to, factory)) return undefined;
+    const { functionName, args } = decodeFunctionData({ abi: tradeExecutorFactoryAbi, data });
+    if (functionName === "predictExecutor") {
+      return encodeFunctionResult({
+        abi: tradeExecutorFactoryAbi,
+        functionName,
+        result: executorAddress(factory, args[0] as Address),
+      });
+    }
+    if (functionName === "executorOf") {
+      return encodeFunctionResult({ abi: tradeExecutorFactoryAbi, functionName, result: zeroAddress });
+    }
+    return undefined;
+  }
+
   async function call(to: Address, data: Hex, from?: Address): Promise<Hex> {
-    const mine = tokenAnswer(to, data);
+    const mine = tokenAnswer(to, data) ?? factoryAnswer(to, data);
     if (mine) return mine;
     return (await chain.client.request({ method: "eth_call", params: [{ to, data, from }, "latest"] } as never)) as Hex;
   }

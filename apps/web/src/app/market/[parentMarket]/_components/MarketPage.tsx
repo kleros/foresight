@@ -23,6 +23,7 @@ import { latestEstimates } from "@/features/sessions/utils/latestEstimates";
 import { optionNoun, optionNounSingular } from "@/features/sessions/utils/optionNoun";
 import { resolutionOpened, sessionStatus } from "@/features/sessions/utils/toSessionDetail";
 import { executorKeyPrefix, useExecutor } from "@/features/trade-executor/api/getExecutor";
+import { fundsKeyPrefix } from "@/features/trade-executor/api/getFunds";
 import { TradeWallet } from "@/features/trade-executor/components/TradeWallet/TradeWallet";
 
 import { PageMessage } from "@/components/layout/PageMessage";
@@ -63,9 +64,12 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
     branches: session.data?.options.map(({ market, outcomeIndex, name }) => ({ market, outcomeIndex, name })) ?? [],
     closesAt: session.data?.closesAt ?? null,
     isReady: session.data?.setupComplete ?? false,
-    // the header's Liquidity reads pool balances keyed under the stats; a seed may deploy the trade wallet
-    alsoReread: [sessionStatsKey(session.data?.id), executorKeyPrefix],
+    // the header's Liquidity reads pool balances keyed under the stats; a seed may deploy the trade wallet, and any
+    // run may change the trade wallet's token balances
+    alsoReread: [sessionStatsKey(session.data?.id), executorKeyPrefix, fundsKeyPrefix],
     tradeWallet: tradeWallet.data,
+    tradeWalletUnread: tradeWallet.isError && tradeWallet.data === undefined,
+    rereadTradeWallet: () => void tradeWallet.refetch(),
   });
 
   if (!isAddress(parentMarket, { strict: false }) || session.data === null) {

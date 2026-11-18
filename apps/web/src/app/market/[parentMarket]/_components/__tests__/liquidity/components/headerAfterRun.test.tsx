@@ -8,6 +8,8 @@ import { owner } from "@/features/liquidity/api/__tests__/support/chain";
 import type { LiquidityProgress } from "@/features/liquidity/types";
 import { sessionStatsKey } from "@/features/sessions/api/getSessionStats";
 import { sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
+import { executorKey } from "@/features/trade-executor/api/getExecutor";
+import { fundsKeyPrefix } from "@/features/trade-executor/api/getFunds";
 
 import { fetchGraphql } from "@/lib/graphql/batcher";
 
@@ -80,6 +82,7 @@ const STATS_KEY = sessionStatsKey(sessionDetailColumns.id);
 
 beforeEach(() => {
   vi.mocked(fetchGraphql).mockReset();
+  driver.moveTo("idle");
   window.history.replaceState(null, "", "/");
 });
 
@@ -106,5 +109,31 @@ describe("the market header after a liquidity run on the same page", () => {
     act(() => driver.moveTo("complete"));
 
     await waitFor(() => expect(reads()).toEqual([2, 2]));
+  });
+
+  it("marks the trade wallet's state and token balances stale once the run completes", async () => {
+    const world = createWorld();
+    current.world = world;
+    vi.mocked(fetchGraphql).mockImplementation(graphqlFor(world, TRADING_CLOSE) as never);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const balanceKey = [...fundsKeyPrefix, 100, owner, world.parentMarket];
+    render(
+      <QueryClientProvider client={client}>
+        <MarketPage parentMarket={world.parentMarket} />
+      </QueryClientProvider>,
+    );
+    await sessionLoaded();
+    await waitFor(() => expect(client.getQueryState(executorKey(owner))?.fetchStatus).toBe("idle"));
+    const executorUpdates = () => {
+      const state = client.getQueryState(executorKey(owner));
+      return (state?.dataUpdateCount ?? 0) + (state?.errorUpdateCount ?? 0);
+    };
+    const before = executorUpdates();
+    client.setQueryData(balanceKey, 1n);
+
+    act(() => driver.moveTo("complete"));
+
+    await waitFor(() => expect(client.getQueryState(balanceKey)?.isInvalidated).toBe(true));
+    await waitFor(() => expect(executorUpdates()).toBeGreaterThan(before));
   });
 });

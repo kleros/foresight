@@ -135,11 +135,12 @@ export function LiquidityPositionsDialog({
                     </li>
                   ))}
                 </ul>
-              ) : (
+              ) : null}
+              {positions.length === 0 || positionsUnread ? (
                 <p className="text-fs-popup-text-2 py-2.5 text-sm">
                   {positionsUnread ? POSITIONS_UNREAD : "This wallet holds no liquidity in this session."}
                 </p>
-              )}
+              ) : null}
             </section>
 
             {merge ? (

@@ -10,6 +10,7 @@ import { owner } from "../../flow/__tests__/support/session";
 import type { LiquidityRun } from "../../hooks/useLiquidityRun";
 import type { ShownPosition } from "../../hooks/useSessionLiquidity";
 import { removeInput, SESSION } from "../../run/__tests__/support/requests";
+import { POSITIONS_UNREAD } from "../../utils/runSteps";
 import { LiquidityPositionsDialog } from "../LiquidityPositionsDialog";
 
 vi.mock("@/lib/web3/public-client", () => ({ publicClient: {} }));
@@ -51,10 +52,17 @@ const POSITIONS: ShownPosition[] = [
   },
 ];
 
-const popup = () =>
+const popup = ({ positions = POSITIONS, positionsUnread = false } = {}) =>
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <LiquidityPositionsDialog isOpen onClose={() => {}} names={NAMES} positions={POSITIONS} run={idle} />
+      <LiquidityPositionsDialog
+        isOpen
+        onClose={() => {}}
+        names={NAMES}
+        positions={positions}
+        positionsUnread={positionsUnread}
+        run={idle}
+      />
     </QueryClientProvider>,
   );
 
@@ -80,5 +88,18 @@ describe("Your positions listing a trade wallet's positions", () => {
 
     const remove = within(rowOf(DOWN_POOL)).getByRole("button", { name: /^Remove / });
     expect(remove.getAttribute("aria-label")).toMatch(/trade wallet/);
+  });
+
+  it("says the positions could not be read when one holder's read failed and the other's has rows", () => {
+    popup({ positions: POSITIONS.slice(0, 1), positionsUnread: true });
+
+    expect(within(rowOf(UP_POOL)).getByRole("button", { name: /^Remove / })).toBeTruthy();
+    expect(screen.getByText(POSITIONS_UNREAD)).toBeTruthy();
+  });
+
+  it("says nothing of an unread position when both reads succeeded", () => {
+    popup();
+
+    expect(screen.queryByText(POSITIONS_UNREAD)).toBeNull();
   });
 });
