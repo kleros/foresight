@@ -137,6 +137,8 @@ export interface RemoveInput {
   sqrtPriceX96: bigint;
   /** Every position withdrawn, all in one pool: the same token0 and token1. */
   positions: RemovedPosition[];
+  /** The owner's trade wallet, when it holds the positions; only it can withdraw them. */
+  tradeWallet?: Address;
 }
 
 export interface RemovedPosition {
