@@ -32,6 +32,7 @@ const POSITION: ShownPosition = {
   pool: `${NAMES[0]} UP pool`,
   count: 2,
   returns: [{ label: "sDAI", amount: WAD }],
+  heldBy: "wallet",
   request: { kind: "remove", session: SESSION, input: removeInput() },
 };
 

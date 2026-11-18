@@ -1,4 +1,9 @@
+import type { Address } from "viem";
 import { describe, expect, it, vi } from "vitest";
+
+import { executorAddress } from "@/lib/trade-executor/executor";
+
+import { tradeExecutorFactoryAddress } from "@/config/contracts";
 
 import { createChain, owner, Q96, sortPair } from "../../api/__tests__/support/chain";
 import { fetchLiquidityPools } from "../../api/getLiquidityPools";
@@ -79,5 +84,48 @@ describe("the positions popup's rows", () => {
     const request = rows[0]!.request;
     if (request.kind !== "remove") throw new Error("not a remove");
     expect(() => planRemove(request.input)).not.toThrow();
+  });
+});
+
+describe("the positions popup's rows by who holds them", () => {
+  const tradeWallet = executorAddress(tradeExecutorFactoryAddress(100)!, owner);
+
+  /** Branch 0's UP pool live at price 1, holding positions 7 and 9 under `holder`. */
+  async function heldBy(holder: Address) {
+    const chain = createChain(2);
+    const [first] = chain.branches as [(typeof chain.branches)[0]];
+    chain.setPool(first.upToken, first.outcome, { sqrtPriceX96: Q96, liquidity: 100n * WAD, tickSpacing: 60 });
+    const [token0, token1] = sortPair(first.upToken, first.outcome);
+    for (const tokenId of [7n, 9n]) {
+      chain.holdPosition(holder, { tokenId, token0, token1, ...fullRange(60), liquidity: 5n * WAD });
+    }
+    const pools = await fetchLiquidityPools(chain.client, chain.markets);
+    return { pools, positions: await fetchLiquidityPositions(chain.client, { pools, owner: holder }) };
+  }
+
+  it("marks every row of the trade wallet's positions as held by it, its Remove withdrawing through it", async () => {
+    const { pools, positions } = await heldBy(tradeWallet);
+
+    const rows = shownPools({ pools, positions, owner, chainTime: CHAIN_TIME, names: NAMES, tradeWallet });
+
+    expect(rows.map((row) => [row.pool, tokenIds(row)])).toEqual([["Movie A UP pool", [7n, 9n]]]);
+    for (const row of rows) {
+      expect(row.heldBy).toBe("tradeWallet");
+      expect(row.key.startsWith("tradeWallet:")).toBe(true);
+      if (row.request.kind !== "remove") throw new Error("not a remove");
+      expect(row.request.input.tradeWallet).toBe(tradeWallet);
+      expect(row.request.input.owner).toBe(owner);
+    }
+  });
+
+  it("marks the wallet's own rows as held by the wallet, keyed by pool", async () => {
+    const { pools, positions } = await heldBy(owner);
+
+    const rows = shownPools({ pools, positions, owner, chainTime: CHAIN_TIME, names: NAMES });
+
+    expect(rows.map((row) => [row.key, row.heldBy])).toEqual([["0:up", "wallet"]]);
+    const request = rows[0]!.request;
+    if (request.kind !== "remove") throw new Error("not a remove");
+    expect(request.input.tradeWallet).toBeUndefined();
   });
 });

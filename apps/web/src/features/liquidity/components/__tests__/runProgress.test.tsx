@@ -316,6 +316,7 @@ const position = (tokenId: bigint, pool: string): ShownPosition => {
     pool,
     count: 1,
     returns: [{ label: "sDAI", amount: WAD }],
+    heldBy: "wallet",
     request: { kind: "remove", session: SESSION, input: { ...base, positions: [{ ...base.positions[0]!, tokenId }] } },
   };
 };

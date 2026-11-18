@@ -781,6 +781,62 @@ describe.skipIf(!FORK_RPC_URL)("the liquidity flow, against a gnosis fork", () =
       },
       RUN_TIMEOUT_MS,
     );
+
+    it(
+      "withdraws a pool's trade wallet positions through the trade wallet, paying it and burning each NFT",
+      async () => {
+        await fundSDai(OWNER, parseEther("50"));
+        const factory = app.tradeExecutorFactoryAddress(CHAIN_ID)!;
+        const state = await app.fetchExecutorState(client, { factory, owner: OWNER });
+        const tradeWallet = state.deployed ?? state.predicted;
+        const seed = await seedRequest({
+          total: parseEther("20"),
+          branches: [
+            { depth: parseEther("20"), upPriceBps: 6_000n },
+            { depth: parseEther("12"), upPriceBps: 2_500n },
+          ],
+          tradeWallet: { address: tradeWallet, deployed: state.deployed !== null },
+        });
+        expect(await drive(seed, ownerGateway())).toEqual({ stage: "complete" });
+        const tokens = session.branches[0]!;
+        const positions = (await positionsOf(tradeWallet)).filter((each) =>
+          inPool(each, tokens.upToken, tokens.outcome),
+        );
+        expect(positions.length).toBeGreaterThan(0);
+        const [first] = positions as [Position];
+        const { price } = await poolPrice(first.token0, first.token1);
+        const input = {
+          chainId: CHAIN_ID,
+          owner: OWNER,
+          chainTime: await reader.chainTime(),
+          sqrtPriceX96: price,
+          positions,
+          tradeWallet,
+        };
+        const plan = app.planRemove(input);
+        const walletBefore = [await balanceOf(first.token0, tradeWallet), await balanceOf(first.token1, tradeWallet)];
+        const ownerBefore = [await balanceOf(first.token0), await balanceOf(first.token1)];
+        const gateway = ownerGateway();
+
+        expect(await drive({ kind: "remove", session, input }, gateway)).toEqual({ stage: "complete" });
+
+        expect(gateway.sent).toHaveLength(1);
+        expect(isAddressEqual(gateway.sent[0]!.tx.to, tradeWallet)).toBe(true);
+        const left = (await positionsOf(tradeWallet)).map((each) => each.tokenId);
+        for (const each of positions) {
+          expect(left).not.toContain(each.tokenId);
+          expect(await burned(each.tokenId)).toBe(true);
+        }
+        const received = [
+          (await balanceOf(first.token0, tradeWallet)) - walletBefore[0]!,
+          (await balanceOf(first.token1, tradeWallet)) - walletBefore[1]!,
+        ];
+        expect(received[0]!).toBeGreaterThanOrEqual(plan.amount0Min);
+        expect(received[1]!).toBeGreaterThanOrEqual(plan.amount1Min);
+        expect([await balanceOf(first.token0), await balanceOf(first.token1)]).toEqual(ownerBefore);
+      },
+      RUN_TIMEOUT_MS,
+    );
   });
 
   // ------------------------------------------------------------------------------------------------ A2
