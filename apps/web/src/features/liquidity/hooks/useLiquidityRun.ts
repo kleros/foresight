@@ -43,9 +43,13 @@ export interface LiquidityRun {
 
 /**
  * One liquidity run at a time for the connected account on this session: seed, add, remove or merge.
- * `alsoReread` is a query of the page's that a landed run changes, reread with the pools and positions.
+ * `alsoReread` are queries of the page's that a landed run changes, reread with the pools and positions.
  */
-export function useLiquidityRun(parentMarket: Address, closesAt: Date | null, alsoReread?: QueryKey): LiquidityRun {
+export function useLiquidityRun(
+  parentMarket: Address,
+  closesAt: Date | null,
+  alsoReread: QueryKey[] = [],
+): LiquidityRun {
   const { address, chainId } = useAccount();
   const queryClient = useQueryClient();
   const account = useRef(address);
@@ -107,7 +111,7 @@ export function useLiquidityRun(parentMarket: Address, closesAt: Date | null, al
     // a halted run may have landed sends before it stopped
     if (stage === "complete" || stage === "moved" || stage === "halted") {
       void queryClient.invalidateQueries({ queryKey: liquidityKeyPrefix });
-      if (pageQuery.current) void queryClient.invalidateQueries({ queryKey: pageQuery.current });
+      for (const queryKey of pageQuery.current) void queryClient.invalidateQueries({ queryKey });
     }
   }, [stage, queryClient]);
 

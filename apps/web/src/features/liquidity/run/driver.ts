@@ -99,7 +99,11 @@ const sessionOf = (request: LiquidityRequest): LiquiditySession =>
   request.kind === "remove" ? request.session : request.input.session;
 
 const tradeWalletOf = (request: LiquidityRequest) =>
-  request.kind === "seed" ? request.input.tradeWallet?.address : undefined;
+  request.kind === "seed"
+    ? request.input.tradeWallet?.address
+    : request.kind === "remove"
+      ? request.input.tradeWallet
+      : undefined;
 
 /**
  * Whether `steps` fit one atomic batch, which runs as one transaction. A trade wallet run's steps are batches already,
@@ -272,7 +276,8 @@ export function createLiquidityRun(args: {
       if (!first) throw new RunStop("unknown", false);
       const pool = await args.reader.pool(first.token0, first.token1);
       if (pool.status !== "live" || pool.sqrtPriceX96 !== sqrtPriceX96) throw new RunStop("moved", false);
-      for (const position of positions) await assertHolds(position.tokenId, account);
+      const holder = request.input.tradeWallet ?? account;
+      for (const position of positions) await assertHolds(position.tokenId, holder);
     }
     for (const step of steps) {
       if (step.tx) {

@@ -7,6 +7,7 @@ import { isAddressEqual, type Address } from "viem";
 import { useAccount } from "wagmi";
 
 import { STALE_TIME } from "@/lib/query";
+import type { ExecutorState } from "@/lib/trade-executor/types";
 import { publicClient } from "@/lib/web3/public-client";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
@@ -43,6 +44,8 @@ export interface TokenAmount {
 export interface ShownPosition {
   key: string;
   pool: string;
+  /** Who holds the row's NFTs: the connected wallet, or its trade wallet. */
+  heldBy: "wallet" | "tradeWallet";
   /** The position NFTs the row withdraws. */
   count: number;
   /** What withdrawing all of them returns now. */
@@ -133,8 +136,9 @@ function withdrawable(input: Omit<RemoveInput, "positions">, position: RemovedPo
 }
 
 /**
- * The wallet's positions as the popup lists them: one row per pool, its Remove withdrawing all of them in one
+ * The positions one holder has, as the popup lists them: one row per pool, its Remove withdrawing all of them in one
  * multicall. A position the remove cannot plan gets a row of its own, so it never blocks the rest of its pool.
+ * With `tradeWallet`, the positions are the trade wallet's, and each Remove goes through it.
  */
 export function shownPools({
   pools,
@@ -142,12 +146,14 @@ export function shownPools({
   owner,
   chainTime,
   names,
+  tradeWallet,
 }: {
   pools: SessionPools;
   positions: LiquidityPosition[];
   owner: Address;
   chainTime: bigint;
   names: string[];
+  tradeWallet?: Address;
 }): ShownPosition[] {
   const label = tokenLabels(pools.session, names);
   const rows = new Map<string, { pool: string; input: Omit<RemoveInput, "positions">; held: LiquidityPosition[] }>();
@@ -155,8 +161,15 @@ export function shownPools({
     const pool = poolOf(pools, position.token0, position.token1);
     // a pool reads as empty while every position in it is out of range
     if (!pool || pool.state.status === "missing") continue;
-    const input = { chainId: pools.session.chainId, owner, chainTime, sqrtPriceX96: pool.state.sqrtPriceX96 };
-    const key = withdrawable(input, position) ? `${pool.index}:${pool.side}` : position.tokenId.toString();
+    const input = {
+      chainId: pools.session.chainId,
+      owner,
+      chainTime,
+      sqrtPriceX96: pool.state.sqrtPriceX96,
+      ...(tradeWallet ? { tradeWallet } : {}),
+    };
+    const slot = withdrawable(input, position) ? `${pool.index}:${pool.side}` : position.tokenId.toString();
+    const key = tradeWallet ? `tradeWallet:${slot}` : slot;
     const row = rows.get(key) ?? {
       pool: `${names[pool.index] ?? ""} ${pool.side === "up" ? "UP" : "DOWN"} pool`,
       input,
@@ -171,6 +184,7 @@ export function shownPools({
     return {
       key,
       pool,
+      heldBy: tradeWallet ? "tradeWallet" : "wallet",
       count: held.length,
       returns: [
         { label: label(first.token0), amount: sum((each) => each.amount0) },
@@ -195,21 +209,32 @@ export function shownPools({
   });
 }
 
-/** A session's liquidity as the market page shows it: its pools, the wallet's positions and merge, and the run. */
+/**
+ * A session's liquidity as the market page shows it: its pools, the positions the wallet and its trade wallet hold,
+ * the wallet's merge, and the run.
+ */
 export function useSessionLiquidity({
   parentMarket,
   branches,
   closesAt,
   isReady,
   alsoReread,
+  tradeWallet,
+  tradeWalletUnread = false,
+  rereadTradeWallet,
 }: {
   parentMarket: Address;
   branches: LiquidityBranchName[];
   closesAt: Date | null;
   /** Every child market exists, so the pools can be read. */
   isReady: boolean;
-  /** A query of the page's that a landed run changes. */
-  alsoReread?: QueryKey;
+  /** Queries of the page's that a landed run changes. */
+  alsoReread?: QueryKey[];
+  /** The connected wallet's trade wallet, read only once deployed. */
+  tradeWallet?: ExecutorState;
+  /** The trade wallet's state could not be read, so whether it holds positions is unknown. */
+  tradeWalletUnread?: boolean;
+  rereadTradeWallet?: () => void;
 }) {
   const { address: owner } = useAccount();
   const ordered = [...branches].sort((a, b) => a.outcomeIndex - b.outcomeIndex);
@@ -220,6 +245,8 @@ export function useSessionLiquidity({
   const pastResolution = closesAt !== null && closesAt.getTime() <= Date.now();
   const pools = useLiquidityPools(isReady ? { parentMarket, childMarkets } : undefined, { poll: pastResolution });
   const positions = useLiquidityPositions(pools.data, owner);
+  const tradeWalletAddress = tradeWallet?.deployed ?? undefined;
+  const tradeWalletPositions = useLiquidityPositions(pools.data, tradeWalletAddress);
   const balances = useLiquidityBalances(pools.data?.session, owner);
   const chainTime = useChainTime();
   const run = useLiquidityRun(parentMarket, closesAt, alsoReread);
@@ -231,12 +258,33 @@ export function useSessionLiquidity({
     const shownPositions =
       time === undefined
         ? []
-        : shownPools({ pools: data, positions: positions.data ?? [], owner, chainTime: time, names });
+        : [
+            ...shownPools({ pools: data, positions: positions.data ?? [], owner, chainTime: time, names }),
+            ...(tradeWalletAddress
+              ? shownPools({
+                  pools: data,
+                  positions: tradeWalletPositions.data ?? [],
+                  owner,
+                  chainTime: time,
+                  names,
+                  tradeWallet: tradeWalletAddress,
+                })
+              : []),
+          ];
     return {
       positions: shownPositions,
       merge: balances.data && shownMerge(data.session, owner, balances.data, names),
     };
-  }, [pools.data, positions.data, balances.data, chainTime.data, owner, names]);
+  }, [
+    pools.data,
+    positions.data,
+    tradeWalletPositions.data,
+    tradeWalletAddress,
+    balances.data,
+    chainTime.data,
+    owner,
+    names,
+  ]);
 
   return {
     names,
@@ -247,9 +295,17 @@ export function useSessionLiquidity({
     chainTime: chainTime.data,
     owner,
     positions: shown.positions,
-    /** The wallet's positions could not be read, so none are listed; never read as holding none. */
-    positionsUnread: Boolean(owner) && positions.isError && positions.data === undefined,
-    rereadPositions: () => void positions.refetch(),
+    /** The wallet's or its trade wallet's positions could not be read; never read as holding none. */
+    positionsUnread:
+      Boolean(owner) &&
+      ((positions.isError && positions.data === undefined) ||
+        tradeWalletUnread ||
+        (tradeWalletAddress !== undefined && tradeWalletPositions.isError && tradeWalletPositions.data === undefined)),
+    rereadPositions: () => {
+      void positions.refetch();
+      if (tradeWalletAddress) void tradeWalletPositions.refetch();
+      if (tradeWalletUnread) rereadTradeWallet?.();
+    },
     merge: shown.merge,
     run,
   };

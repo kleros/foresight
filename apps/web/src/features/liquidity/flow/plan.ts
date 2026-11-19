@@ -503,9 +503,13 @@ function withdrawTx(
   return multicallTx(list, withdrawCalls(owner, tokenId, liquidity, mins, deadline));
 }
 
-/** A full withdrawal of the given positions, all of one pool, in one multicall: each one's liquidity out, collected, burned (L6). */
+/**
+ * A full withdrawal of the given positions, all of one pool, in one multicall: each one's liquidity out, collected,
+ * burned (L6). Positions the trade wallet holds are withdrawn by it, in one batch the owner sends, and paid to it.
+ */
 export function planRemove(input: RemoveInput): RemovePlan {
-  const { positions, owner, sqrtPriceX96: sqrtP } = input;
+  const { positions, sqrtPriceX96: sqrtP, tradeWallet } = input;
+  const holder = tradeWallet ?? input.owner;
   const first = positions[0];
   if (!first) throw new Error("A remove withdraws at least one position.");
   const samePool = (each: RemovedPosition) =>
@@ -527,9 +531,13 @@ export function planRemove(input: RemoveInput): RemovePlan {
     total.amount1 += amount1;
     total.amount0Min += mins.amount0Min;
     total.amount1Min += mins.amount1Min;
-    return withdrawCalls(owner, position.tokenId, position.liquidity, mins, deadline);
+    return withdrawCalls(holder, position.tokenId, position.liquidity, mins, deadline);
   });
-  return { ...total, tx: multicallTx(list, calls) };
+  const multicall = multicallTx(list, calls);
+  return {
+    ...total,
+    tx: tradeWallet ? batchExecuteTx(tradeWallet, [{ to: multicall.to, data: multicall.data! }]) : multicall,
+  };
 }
 
 const min = (...values: bigint[]) => values.reduce((least, value) => (value < least ? value : least));

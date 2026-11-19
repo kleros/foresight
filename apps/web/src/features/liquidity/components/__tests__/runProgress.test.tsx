@@ -316,6 +316,7 @@ const position = (tokenId: bigint, pool: string): ShownPosition => {
     pool,
     count: 1,
     returns: [{ label: "sDAI", amount: WAD }],
+    heldBy: "wallet",
     request: { kind: "remove", session: SESSION, input: { ...base, positions: [{ ...base.positions[0]!, tokenId }] } },
   };
 };
@@ -387,6 +388,7 @@ describe("Your positions during a remove", () => {
     const pool: ShownPosition = {
       key: "0:down",
       pool: DOWN_POOL,
+      heldBy: "wallet",
       count: 2,
       returns: [{ label: "sDAI", amount: WAD }],
       request: { kind: "remove", session: SESSION, input: base },

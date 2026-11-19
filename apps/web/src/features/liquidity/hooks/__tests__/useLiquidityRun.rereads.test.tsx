@@ -111,20 +111,23 @@ describe("useLiquidityRun rereads the session's pools and positions", () => {
   });
 });
 
-describe("useLiquidityRun rereads the page query it is handed", () => {
+describe("useLiquidityRun rereads the page queries it is handed", () => {
   /** The page's own query, and one keyed under it, both holding data before the run. */
   const PAGE_KEY = ["session-stats", "0xsession"] as const;
   const UNDER_PAGE_KEY = [...PAGE_KEY, "pool-balances"] as const;
+  const OTHER_PAGE_KEY = ["trade-executor", 100] as const;
 
   function renderWithPageQuery() {
     const queryClient = new QueryClient();
     queryClient.setQueryData(PAGE_KEY, "stats");
     queryClient.setQueryData(UNDER_PAGE_KEY, "balances");
+    queryClient.setQueryData(OTHER_PAGE_KEY, "trade wallet");
     const wrapper = ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
-    const { result } = renderHook(() => useLiquidityRun(PARENT, null, PAGE_KEY), { wrapper });
-    const stale = () => [PAGE_KEY, UNDER_PAGE_KEY].map((key) => queryClient.getQueryState(key)?.isInvalidated);
+    const { result } = renderHook(() => useLiquidityRun(PARENT, null, [PAGE_KEY, OTHER_PAGE_KEY]), { wrapper });
+    const stale = () =>
+      [PAGE_KEY, UNDER_PAGE_KEY, OTHER_PAGE_KEY].map((key) => queryClient.getQueryState(key)?.isInvalidated);
     return { result, stale };
   }
 
@@ -137,7 +140,7 @@ describe("useLiquidityRun rereads the page query it is handed", () => {
 
       act(() => driver.moveTo(stage));
 
-      expect(stale()).toEqual([true, true]);
+      expect(stale()).toEqual([true, true, true]);
     },
   );
 
@@ -147,6 +150,6 @@ describe("useLiquidityRun rereads the page query it is handed", () => {
 
     act(() => driver.moveTo("signing"));
 
-    expect(stale()).toEqual([false, false]);
+    expect(stale()).toEqual([false, false, false]);
   });
 });

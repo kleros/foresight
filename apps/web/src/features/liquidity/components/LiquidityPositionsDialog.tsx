@@ -104,15 +104,22 @@ export function LiquidityPositionsDialog({
                       <div className="flex items-center gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="text-fs-popup-text text-sm font-semibold wrap-anywhere">{position.pool}</div>
-                          {position.count > 1 ? (
-                            <div className="text-fs-popup-text-2 text-xs leading-4">{position.count} positions</div>
+                          {position.count > 1 || position.heldBy === "tradeWallet" ? (
+                            <div className="text-fs-popup-text-2 text-xs leading-4">
+                              {[
+                                position.count > 1 ? `${position.count} positions` : "",
+                                position.heldBy === "tradeWallet" ? "In your trade wallet" : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </div>
                           ) : null}
                         </div>
                         <Button
                           small
                           variant="secondary"
                           text="Remove"
-                          aria-label={`Remove ${position.pool}, ${spoken(position.returns)}`}
+                          aria-label={`Remove ${position.pool}${position.heldBy === "tradeWallet" ? " from your trade wallet" : ""}, ${spoken(position.returns)}`}
                           isDisabled={run.isHeld}
                           onPress={() => {
                             const first =
@@ -128,11 +135,12 @@ export function LiquidityPositionsDialog({
                     </li>
                   ))}
                 </ul>
-              ) : (
+              ) : null}
+              {positions.length === 0 || positionsUnread ? (
                 <p className="text-fs-popup-text-2 py-2.5 text-sm">
                   {positionsUnread ? POSITIONS_UNREAD : "This wallet holds no liquidity in this session."}
                 </p>
-              )}
+              ) : null}
             </section>
 
             {merge ? (
