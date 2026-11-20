@@ -72,6 +72,7 @@ describe.skipIf(!FORK_RPC_URL)("the session resolution read, against a gnosis fo
   let app: App;
   let snapshotId: string;
   let markets: { parentMarket: Address; childMarkets: Address[] };
+  let session: { sessionFactory: Address; sessionId: bigint };
   let conditionalTokens: Address;
 
   const read = <T>(args: Parameters<PublicClient["readContract"]>[0]) => client.readContract(args) as Promise<T>;
@@ -167,6 +168,7 @@ describe.skipIf(!FORK_RPC_URL)("the session resolution read, against a gnosis fo
       args: [sessionId],
     });
     markets = { parentMarket: deployed.parentMarket, childMarkets: [...deployed.childMarkets] };
+    session = { sessionFactory: factory, sessionId };
     const proxy = await read<Address>({ address: markets.parentMarket, abi: MARKET_ABI, functionName: "realityProxy" });
     conditionalTokens = await read<Address>({
       address: proxy,
@@ -203,17 +205,23 @@ describe.skipIf(!FORK_RPC_URL)("the session resolution read, against a gnosis fo
     async () => {
       const [valued, waiting, invalid] = markets.childMarkets as [Address, Address, Address];
 
-      const resolution: SessionResolution = await app.fetchSessionResolution(client, markets);
+      const resolution: SessionResolution = await app.fetchSessionResolution(client, session);
 
       const parent = await chainPayouts(markets.parentMarket, 4);
       expect(parent.payoutNumerators).toEqual([1n, 1n, 1n, 0n]);
-      expect(resolution.parent).toMatchObject({ resolved: true, winningOutcomes: [0, 1, 2], ...parent });
+      expect(resolution.parent).toMatchObject({
+        resolved: true,
+        invalid: false,
+        winningOutcomes: [0, 1, 2],
+        ...parent,
+      });
 
       const valuedPayouts = await chainPayouts(valued, 3);
       const low = await read<bigint>({ address: valued, abi: MARKET_ABI, functionName: "lowerBound" });
       const high = await read<bigint>({ address: valued, abi: MARKET_ABI, functionName: "upperBound" });
       expect(valuedPayouts.payoutNumerators).toEqual([high - parseEther("42"), parseEther("42") - low, 0n]);
       expect(resolution.children[0]).toMatchObject({
+        deployed: true,
         market: valued,
         resolved: true,
         invalid: false,
@@ -224,6 +232,7 @@ describe.skipIf(!FORK_RPC_URL)("the session resolution read, against a gnosis fo
       const invalidPayouts = await chainPayouts(invalid, 3);
       expect(invalidPayouts.payoutNumerators).toEqual([0n, 0n, 1n]);
       expect(resolution.children[2]).toMatchObject({
+        deployed: true,
         market: invalid,
         resolved: true,
         invalid: true,
@@ -232,12 +241,12 @@ describe.skipIf(!FORK_RPC_URL)("the session resolution read, against a gnosis fo
       });
 
       expect((await chainPayouts(waiting, 3)).payoutDenominator).toBe(0n);
-      expect(resolution.children[1]).toMatchObject({ market: waiting, resolved: false });
+      expect(resolution.children[1]).toMatchObject({ deployed: true, market: waiting, resolved: false });
       const claims = resolution.children[1] as Record<string, unknown>;
       expect(claims.payoutNumerators ?? null).toBeNull();
       expect(claims.payoutDenominator ?? null).toBeNull();
       expect(claims.finalValue ?? null).toBeNull();
-      expect(resolution.children).toHaveLength(3);
+      expect(Object.keys(resolution.children).sort()).toEqual(["0", "1", "2"]);
     },
     READ_TIMEOUT_MS,
   );
