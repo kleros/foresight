@@ -1,4 +1,5 @@
-// Runs the simulate-resolve action on an in-process gnosis fork config with instrumented Seer and Reality contracts.
+// Runs the simulate-resolve action with instrumented Seer and Reality contracts, on an in-process gnosis fork
+// config unless a test passes its own; the provider always reports gnosis fork metadata.
 import { expect } from "chai";
 import hre from "hardhat";
 import type { HardhatRuntimeEnvironment, NetworkConfig } from "hardhat/types";
@@ -15,12 +16,20 @@ interface Question {
 interface Run {
   error: unknown;
   sent: string[];
+  signerRequests: number;
   questions: Question[];
   now: bigint;
 }
 
-async function runAction(questions: Question[], args: { answerOnly?: boolean } = {}): Promise<Run> {
+const GNOSIS_FORK_METADATA = { chainId: 100, forkedNetwork: { chainId: 100, forkBlockNumber: 40_000_000 } };
+
+async function runAction(
+  questions: Question[],
+  args: { answerOnly?: boolean } = {},
+  config?: NetworkConfig,
+): Promise<Run> {
   const sent: string[] = [];
+  let signerRequests = 0;
   let now = NOW;
   const questionId = (i: number) => QUESTION.slice(0, -2) + i.toString(16).padStart(2, "0");
   const byId = (id: string) => {
@@ -68,13 +77,14 @@ async function runAction(questions: Question[], args: { answerOnly?: boolean } =
     }
   }
 
-  const networkConfig = {
+  const networkConfig = (config ?? {
     ...hre.config.networks.hardhat,
     chainId: 100,
     forking: { enabled: true, url: "https://rpc.gnosischain.com", blockNumber: 40_000_000 },
-  } as NetworkConfig;
+  }) as NetworkConfig;
   const provider = Object.assign(Object.create(hre.network.provider) as typeof hre.network.provider, {
     send: (method: string, params?: unknown[]) => {
+      if (method === "hardhat_metadata") return Promise.resolve(GNOSIS_FORK_METADATA);
       if (method === "evm_setNextBlockTimestamp") now = BigInt((params as number[])[0]!);
       return Promise.resolve(null);
     },
@@ -87,7 +97,10 @@ async function runAction(questions: Question[], args: { answerOnly?: boolean } =
     ethers: Object.assign(Object.create(hre.ethers) as typeof hre.ethers, {
       Contract: FakeContract,
       provider: { getBlock: () => Promise.resolve({ timestamp: Number(now) }) },
-      getSigners: () => Promise.resolve([{}]),
+      getSigners: () => {
+        signerRequests++;
+        return Promise.resolve([{}]);
+      },
       getContractAt: () =>
         Promise.resolve({ sessionCount: () => Promise.resolve(1n), getSession: () => Promise.resolve(session) }),
     }),
@@ -106,17 +119,56 @@ async function runAction(questions: Question[], args: { answerOnly?: boolean } =
   } catch (caught) {
     error = caught;
   }
-  return { error, sent, questions, now };
+  return { error, sent, signerRequests, questions, now };
 }
 
 const fresh = (): Question => ({ openingTS: NOW + 3_600n, finalizeTS: 0n });
 
+describe("simulate-resolve refuses a configuration that only looks like a gnosis fork", function () {
+  const refused = async (config: NetworkConfig) => {
+    const run = await runAction([fresh(), fresh()], {}, config);
+    expect(run.error, "the action must exit with an error").to.be.instanceOf(Error);
+    expect(run.signerRequests, "a signer was requested").to.equal(0);
+    expect(run.sent, "transactions sent").to.deep.equal([]);
+  };
+  const remote = (url: string) => ({ url, chainId: 100, accounts: "remote", timeout: 20_000 }) as NetworkConfig;
+
+  it("refuses the in-process network whose forking config is disabled", async function () {
+    await refused({
+      ...hre.config.networks.hardhat,
+      chainId: 100,
+      forking: { enabled: false, url: "https://rpc.gnosischain.com", blockNumber: 40_000_000 },
+    } as NetworkConfig);
+  });
+
+  it("refuses a remote host whose name starts with a loopback name", async function () {
+    await refused(remote("http://localhost.gnosis.invalid:8545"));
+    await refused(remote("http://127.0.0.1.gnosis.invalid:8545"));
+  });
+
+  it("refuses a remote host whose name ends with a loopback name", async function () {
+    await refused(remote("http://rpc-localhost:8545"));
+  });
+
+  it("refuses a remote host whose URL carries a loopback name outside the host", async function () {
+    await refused(remote("https://rpc.gnosis.invalid/127.0.0.1?via=localhost"));
+  });
+});
+
 describe("simulate-resolve refuses an open or answered question before sending any answer", function () {
   const refused = async (question: Question, reason: RegExp) => {
-    const run = await runAction([fresh(), question]);
-    expect(run.error, "the action must exit with an error").to.be.instanceOf(Error);
-    expect((run.error as Error).message).to.match(reason);
-    expect(run.sent, "transactions sent").to.deep.equal([]);
+    for (const [slot, questions] of [
+      ["parent", [question, fresh(), fresh()]],
+      ["child 0", [fresh(), question, fresh()]],
+      ["child 1", [fresh(), fresh(), question]],
+    ] as const) {
+      const run = await runAction([...questions]);
+      expect(run.error, `the action must exit with an error (${slot})`).to.be.instanceOf(Error);
+      expect((run.error as Error).message)
+        .to.match(reason)
+        .and.to.include(slot);
+      expect(run.sent, `transactions sent (${slot})`).to.deep.equal([]);
+    }
   };
 
   it("refuses a question that is open with no answer", async function () {
