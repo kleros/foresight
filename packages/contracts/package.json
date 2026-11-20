@@ -30,6 +30,7 @@
     "simulate:session": "hardhat simulate-session --network localhost",
     "simulate:session:gnosis-fork": "hardhat simulate-session --network gnosis-fork",
     "simulate:liquidity:gnosis-fork": "hardhat simulate-liquidity --network gnosis-fork",
+    "simulate:resolve:gnosis-fork": "hardhat simulate-resolve --network gnosis-fork",
     "simulate:credits": "hardhat grant-credits --network localhost",
     "simulate:credits:gnosis-fork": "hardhat grant-credits --network gnosis-fork",
     "deploy:gnosis": "hardhat deploy --network gnosis --tags SessionFactory,TradeExecutorFactory && yarn codegen:gnosis",

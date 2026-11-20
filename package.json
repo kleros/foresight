@@ -40,6 +40,7 @@
     "simulate:session": "yarn workspace @foresight/contracts simulate:session",
     "simulate:session:gnosis-fork": "yarn workspace @foresight/contracts simulate:session:gnosis-fork",
     "simulate:liquidity:gnosis-fork": "yarn workspace @foresight/contracts simulate:liquidity:gnosis-fork",
+    "simulate:resolve:gnosis-fork": "yarn workspace @foresight/contracts simulate:resolve:gnosis-fork",
     "simulate:credits": "yarn workspace @foresight/contracts simulate:credits",
     "simulate:credits:gnosis-fork": "yarn workspace @foresight/contracts simulate:credits:gnosis-fork",
     "-----": "-----------------------------------------------------------------------------------------",

@@ -12,6 +12,7 @@ import "hardhat-deploy-ethers";
 
 import "./tasks/simulateSession";
 import "./tasks/simulateLiquidity";
+import "./tasks/simulateResolve";
 import "./tasks/grantCredits";
 import "./tasks/exportCreationCode";
 import solidityConfig from "./solidity.config.json";
