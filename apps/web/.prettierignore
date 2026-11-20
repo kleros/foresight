@@ -6,3 +6,4 @@ playwright-report/
 test-results/
 .turbo/
 src/lib/graphql/generated/
+src/features/*/oracle/*.md
