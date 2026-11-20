@@ -2,6 +2,7 @@
 // config and fork metadata; the defaults are an in-process gnosis fork that reports gnosis fork metadata.
 import { expect } from "chai";
 import hre from "hardhat";
+import { ArgumentsParser } from "hardhat/internal/cli/ArgumentsParser";
 import type { HardhatRuntimeEnvironment, NetworkConfig } from "hardhat/types";
 
 const NOW = 1_000_000n;
@@ -11,6 +12,7 @@ const QUESTION = "0x" + "11".repeat(32);
 interface Question {
   openingTS: bigint;
   finalizeTS: bigint;
+  timeout?: bigint;
 }
 
 interface Run {
@@ -30,7 +32,7 @@ const forkMetadata = (forkedChainId?: number): Metadata => ({
 
 async function runAction(
   questions: Question[],
-  args: { answerOnly?: boolean } = {},
+  args: { answerOnly?: boolean } | string[] = {},
   config?: NetworkConfig,
   metadata: Metadata = forkMetadata(100),
 ): Promise<Run> {
@@ -58,7 +60,10 @@ async function runAction(
       getFinalizeTS: (id: string) => byId(id).finalizeTS,
       getMinBond: () => 0n,
       submitAnswer: (id: string) => {
-        byId(id).finalizeTS = now + TIMEOUT;
+        // Sequential answer transactions mine in different blocks.
+        now += 2n;
+        const question = byId(id);
+        question.finalizeTS = now + (question.timeout ?? TIMEOUT);
         return tx(`submitAnswer ${id}`);
       },
     },
@@ -123,8 +128,18 @@ async function runAction(
   if (!task) throw new Error("simulate-resolve is not registered");
   let error: unknown;
   try {
+    const taskArgs = Array.isArray(args)
+      ? new ArgumentsParser().parseTaskArguments(task, [
+          "--session",
+          "0",
+          "--winners",
+          "0",
+          ...(children ? ["--children", children] : []),
+          ...args,
+        ])
+      : { session: 0, winners: "0", ...(children && { children }), ...args };
     const noSuper = Object.assign(() => Promise.resolve(), { isDefined: false });
-    await task.action({ session: 0, winners: "0", ...(children && { children }), ...args }, fake, noSuper);
+    await task.action(taskArgs, fake, noSuper);
   } catch (caught) {
     error = caught;
   }
@@ -244,6 +259,34 @@ describe("simulate-resolve --answer-only", function () {
       run.sent.filter((label) => label.startsWith("resolve")),
       "resolve calls",
     ).to.deep.equal([]);
+    expect(run.questions[1]!.finalizeTS).to.be.greaterThan(run.questions[0]!.finalizeTS);
+    for (const question of run.questions) expect(run.now > question.finalizeTS, "final in Reality").to.equal(true);
+  });
+
+  it("accepts the CLI flag and waits for the latest finalization, even in the middle of the selection", async function () {
+    const run = await runAction(
+      [fresh(), { ...fresh(), timeout: TIMEOUT * 3n }, { ...fresh(), timeout: TIMEOUT * 2n }],
+      ["--answer-only"],
+    );
+    expect(run.error).to.equal(undefined);
+    expect(run.sent.filter((label) => label.startsWith("submitAnswer"))).to.have.length(3);
+    expect(
+      run.sent.filter((label) => label.startsWith("resolve")),
+      "resolve calls",
+    ).to.deep.equal([]);
+    expect(run.questions[1]!.finalizeTS).to.be.greaterThan(run.questions[0]!.finalizeTS);
+    expect(run.questions[1]!.finalizeTS).to.be.greaterThan(run.questions[2]!.finalizeTS);
+    for (const question of run.questions) expect(run.now > question.finalizeTS, "final in Reality").to.equal(true);
+  });
+
+  it("keeps resolution enabled when the CLI flag is omitted", async function () {
+    const run = await runAction([fresh(), fresh()], []);
+    expect(run.error).to.equal(undefined);
+    expect(run.sent.filter((label) => label.startsWith("submitAnswer"))).to.have.length(2);
+    expect(run.sent.filter((label) => label.startsWith("resolve"))).to.deep.equal([
+      "resolve market0",
+      "resolve market1",
+    ]);
     for (const question of run.questions) expect(run.now > question.finalizeTS, "final in Reality").to.equal(true);
   });
 });

@@ -8,6 +8,7 @@ import { expect } from "chai";
 import type { Contract } from "ethers";
 import { parseEther, toBeHex } from "ethers";
 import hre from "hardhat";
+import { ArgumentsParser } from "hardhat/internal/cli/ArgumentsParser";
 
 import { getSeerDeployment } from "../config/seer";
 
@@ -105,6 +106,52 @@ describe("simulate-resolve on the gnosis fork", function () {
     // in memory only: a chainId 100 file in deployments/hardhat breaks the default suite
     hre.network.saveDeployments = false;
     await hre.deployments.save("SessionFactory", { address: artifact.address, abi: artifact.abi });
+  });
+
+  it("A3 --answer-only from the CLI finalizes chosen markets without reporting payouts", async function () {
+    const { id, parent, children } = await newSession(3, true);
+    const [valued, untouched, invalid] = children;
+    if (!valued || !untouched || !invalid) throw new Error("Expected three child markets");
+    const task = hre.tasks["simulate-resolve"];
+    if (!task) throw new Error("simulate-resolve is not registered");
+    const args = new ArgumentsParser().parseTaskArguments(task, [
+      "--session",
+      String(id),
+      "--winners",
+      "0,2",
+      "--children",
+      "0=42,2=invalid",
+      "--answer-only",
+    ]);
+
+    await hre.run("simulate-resolve", args);
+
+    const reality = getSeerDeployment(100, "Reality");
+    if (!reality) throw new Error("Expected the Seer Reality deployment");
+    const proxy = new hre.ethers.Contract(
+      (await parent.getFunction("realityProxy")()) as string,
+      REALITY_PROXY_ABI,
+      hre.ethers.provider,
+    );
+    const realitio = new hre.ethers.Contract(
+      (await proxy.getFunction("realitio")()) as string,
+      reality.abi,
+      hre.ethers.provider,
+    );
+    const expected: [Contract, string][] = [
+      [parent, toBeHex(0b101n, 32)],
+      [valued, toBeHex(parseEther("42"), 32)],
+      [invalid, `0x${"ff".repeat(32)}`],
+    ];
+    for (const [target, answer] of expected) {
+      const question = ((await target.getFunction("questionsIds")()) as string[])[0]!;
+      expect(await realitio.getFunction("isFinalized")(question), "final in Reality").to.equal(true);
+      expect(await realitio.getFunction("resultFor")(question)).to.equal(answer);
+      expect(await denominator(target), "payoutDenominator").to.equal(0n);
+    }
+    const untouchedQuestion = ((await untouched.getFunction("questionsIds")()) as string[])[0]!;
+    expect(await realitio.getFunction("getFinalizeTS")(untouchedQuestion)).to.equal(0n);
+    expect(await denominator(untouched)).to.equal(0n);
   });
 
   describe("A1 parent", function () {
