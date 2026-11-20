@@ -207,7 +207,7 @@ describe("simulate-resolve checks fork metadata on every loopback host", functio
   }
 });
 
-describe("simulate-resolve refuses an open or answered question before sending any answer", function () {
+describe("simulate-resolve refuses an answered question before sending any answer", function () {
   const refused = async (question: Question, reason: RegExp) => {
     for (const [slot, questions] of [
       ["parent", [question, fresh(), fresh()]],
@@ -223,13 +223,17 @@ describe("simulate-resolve refuses an open or answered question before sending a
     }
   };
 
-  it("refuses a question that is open with no answer", async function () {
-    await refused({ openingTS: NOW - 10n, finalizeTS: 0n }, /already open/);
-  });
-
-  it("refuses a question whose opening time is the latest block's", async function () {
-    await refused({ openingTS: NOW, finalizeTS: 0n }, /already open/);
-  });
+  for (const [what, openingTS] of [
+    ["opened before the latest block", NOW - 10n],
+    ["opening at the latest block", NOW],
+  ] as const) {
+    it(`answers and resolves a question with no answer, ${what}`, async function () {
+      const run = await runAction([{ openingTS, finalizeTS: 0n }, fresh()]);
+      expect(run.error).to.equal(undefined);
+      expect(run.sent.filter((label) => label.startsWith("submitAnswer"))).to.have.length(2);
+      expect(run.sent.filter((label) => label.startsWith("resolve"))).to.have.length(2);
+    });
+  }
 
   it("refuses a question answered inside its timeout", async function () {
     await refused({ openingTS: NOW - 10n, finalizeTS: NOW + 100n }, /already has an answer/);

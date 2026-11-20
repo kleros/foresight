@@ -114,15 +114,10 @@ task("simulate-resolve", "Answers a session's Reality questions and resolves its
     const openings = await Promise.all(
       questions.map(async (q) => (await realitio.getFunction("getOpeningTS")(q)) as bigint),
     );
-    const latest = await hre.ethers.provider.getBlock("latest");
-    if (!latest) throw new Error("Could not read the latest block");
     for (const [i, target] of targets.entries()) {
       // Reality keeps finalize_ts at UNANSWERED (0) until the first answer
       if (((await realitio.getFunction("getFinalizeTS")(questions[i])) as bigint) !== 0n) {
         throw new Error(`The ${target.label} question ${questions[i]} already has an answer - nothing was sent.`);
-      }
-      if (openings[i]! <= BigInt(latest.timestamp)) {
-        throw new Error(`The ${target.label} question ${questions[i]} is already open - nothing was sent.`);
       }
     }
 
