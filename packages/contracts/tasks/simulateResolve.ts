@@ -6,11 +6,14 @@ import { getSeerDeployment } from "../config/seer";
 import { encodeChildAnswer, encodeParentAnswer } from "./resolveAnswers";
 
 const MULTI_SELECT_TEMPLATE = 3n;
+const GNOSIS_CHAIN_ID = 100;
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
 interface SimulateResolveArgs {
   session?: number;
   winners?: string;
   children?: string;
+  answerOnly?: boolean;
 }
 
 interface Target {
@@ -27,6 +30,22 @@ async function advancePast(hre: HardhatRuntimeEnvironment, timestamp: bigint) {
   await hre.network.provider.send("evm_mine");
 }
 
+async function assertGnosisFork(hre: HardhatRuntimeEnvironment) {
+  const config = hre.network.config;
+  if (!("url" in config)) {
+    if (config.forking?.enabled === true) return;
+    throw new Error(`Network '${hre.network.name}' is in-process without forking - set HARDHAT_FORK=gnosis.`);
+  }
+  if (!LOOPBACK_HOSTS.has(new URL(config.url).hostname)) {
+    throw new Error(`Refusing ${config.url}: simulate-resolve runs only against a local gnosis fork.`);
+  }
+  const metadata = (await hre.network.provider.send("hardhat_metadata").catch(() => undefined)) as
+    { forkedNetwork?: { chainId?: number } } | undefined;
+  if (metadata?.forkedNetwork?.chainId !== GNOSIS_CHAIN_ID) {
+    throw new Error(`Refusing ${config.url}: the node reports no fork of gnosis.`);
+  }
+}
+
 const maxOf = (values: bigint[]) => values.reduce((max, value) => (value > max ? value : max), 0n);
 
 task("simulate-resolve", "Answers a session's Reality questions and resolves its Seer markets (needs a gnosis fork)")
@@ -36,7 +55,9 @@ task("simulate-resolve", "Answers a session's Reality questions and resolves its
     "children",
     'Child values in the session\'s unit by child index, e.g. "0=42,2=invalid"; omitted resolves no child',
   )
+  .addFlag("answerOnly", "Answer and finalize in Reality without resolving the markets")
   .setAction(async (args: SimulateResolveArgs, hre: HardhatRuntimeEnvironment) => {
+    await assertGnosisFork(hre);
     const chainId = Number(await hre.getChainId());
     const seerMarket = getSeerDeployment(chainId, "Market");
     const realityProxy = getSeerDeployment(chainId, "RealityProxy");
@@ -90,6 +111,13 @@ task("simulate-resolve", "Answers a session's Reality questions and resolves its
       targets.map(async (target) => ((await target.market.getFunction("questionsIds")()) as string[])[0]!),
     );
 
+    for (const [i, target] of targets.entries()) {
+      // Reality keeps finalize_ts at UNANSWERED (0) until the first answer
+      if (((await realitio.getFunction("getFinalizeTS")(questions[i])) as bigint) !== 0n) {
+        throw new Error(`The ${target.label} question ${questions[i]} already has an answer - nothing was sent.`);
+      }
+    }
+
     await advancePast(
       hre,
       maxOf(await Promise.all(questions.map(async (q) => (await realitio.getFunction("getOpeningTS")(q)) as bigint))),
@@ -108,6 +136,7 @@ task("simulate-resolve", "Answers a session's Reality questions and resolves its
       maxOf(await Promise.all(questions.map(async (q) => (await realitio.getFunction("getFinalizeTS")(q)) as bigint))),
     );
 
+    if (args.answerOnly) return;
     for (const target of targets) {
       console.log(`Resolving ${target.label}…`);
       await (await proxy.getFunction("resolve")(await target.market.getAddress())).wait();
