@@ -122,9 +122,14 @@ export interface ChainOptions {
   deployedChildren?: number;
   /** The parent's Reality template; multi-select by default. */
   parentTemplate?: number;
+  /** What `getSession` reports as `expectedChildCount`; the option count by default. Not the parent's outcome count. */
+  expectedChildCount?: number;
 }
 
-export function createChain(optionCount: number, { bounds, deployedChildren, parentTemplate }: ChainOptions = {}) {
+export function createChain(
+  optionCount: number,
+  { bounds, deployedChildren, parentTemplate, expectedChildCount }: ChainOptions = {},
+) {
   const sessionFactory = at("5f");
   const sessionId = 7n;
   const parentMarket = at("b0");
@@ -181,7 +186,7 @@ export function createChain(optionCount: number, { bounds, deployedChildren, par
         childMarkets,
         openedAt: 1_700_000_000n,
         completedAt: childMarkets.length === optionCount ? 1_700_000_000n : 0n,
-        expectedChildCount: BigInt(optionCount),
+        expectedChildCount: BigInt(expectedChildCount ?? optionCount),
         metadataUri: "ipfs://session",
       };
     }
