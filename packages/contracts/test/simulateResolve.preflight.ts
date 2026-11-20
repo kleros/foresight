@@ -1,5 +1,5 @@
-// Runs the simulate-resolve action with instrumented Seer and Reality contracts, on an in-process gnosis fork
-// config unless a test passes its own; the provider always reports gnosis fork metadata.
+// Runs the simulate-resolve action with instrumented Seer and Reality contracts. A test may pass its own network
+// config and fork metadata; the defaults are an in-process gnosis fork that reports gnosis fork metadata.
 import { expect } from "chai";
 import hre from "hardhat";
 import type { HardhatRuntimeEnvironment, NetworkConfig } from "hardhat/types";
@@ -21,12 +21,18 @@ interface Run {
   now: bigint;
 }
 
-const GNOSIS_FORK_METADATA = { chainId: 100, forkedNetwork: { chainId: 100, forkBlockNumber: 40_000_000 } };
+type Metadata = { chainId: number; forkedNetwork?: { chainId: number; forkBlockNumber: number } } | "unsupported";
+
+const forkMetadata = (forkedChainId?: number): Metadata => ({
+  chainId: 100,
+  ...(forkedChainId !== undefined && { forkedNetwork: { chainId: forkedChainId, forkBlockNumber: 40_000_000 } }),
+});
 
 async function runAction(
   questions: Question[],
   args: { answerOnly?: boolean } = {},
   config?: NetworkConfig,
+  metadata: Metadata = forkMetadata(100),
 ): Promise<Run> {
   const sent: string[] = [];
   let signerRequests = 0;
@@ -84,7 +90,10 @@ async function runAction(
   }) as NetworkConfig;
   const provider = Object.assign(Object.create(hre.network.provider) as typeof hre.network.provider, {
     send: (method: string, params?: unknown[]) => {
-      if (method === "hardhat_metadata") return Promise.resolve(GNOSIS_FORK_METADATA);
+      if (method === "hardhat_metadata") {
+        if (metadata === "unsupported") return Promise.reject(new Error("Method not found"));
+        return Promise.resolve(metadata);
+      }
       if (method === "evm_setNextBlockTimestamp") now = BigInt((params as number[])[0]!);
       return Promise.resolve(null);
     },
@@ -155,6 +164,34 @@ describe("simulate-resolve refuses a configuration that only looks like a gnosis
   });
 });
 
+describe("simulate-resolve checks fork metadata on every loopback host", function () {
+  const hosts = ["127.0.0.1", "localhost", "[::1]"];
+  const loopback = (host: string) =>
+    ({ url: `http://${host}:8545`, chainId: 100, accounts: "remote", timeout: 20_000 }) as NetworkConfig;
+
+  for (const host of hosts) {
+    for (const [what, metadata] of [
+      ["has no fork metadata method", "unsupported"],
+      ["names no forked network", forkMetadata()],
+      ["forks a chain other than gnosis", forkMetadata(1)],
+    ] as const) {
+      it(`refuses ${host} when the node ${what}`, async function () {
+        const run = await runAction([fresh(), fresh()], {}, loopback(host), metadata);
+        expect(run.error, "the action must exit with an error").to.be.instanceOf(Error);
+        expect((run.error as Error).message).to.match(/no fork of gnosis/);
+        expect(run.signerRequests, "a signer was requested").to.equal(0);
+        expect(run.sent, "transactions sent").to.deep.equal([]);
+      });
+    }
+
+    it(`passes ${host} when the node reports a gnosis fork (control)`, async function () {
+      const run = await runAction([fresh(), fresh()], {}, loopback(host));
+      expect(run.error).to.equal(undefined);
+      expect(run.signerRequests).to.equal(1);
+    });
+  }
+});
+
 describe("simulate-resolve refuses an open or answered question before sending any answer", function () {
   const refused = async (question: Question, reason: RegExp) => {
     for (const [slot, questions] of [
@@ -203,7 +240,10 @@ describe("simulate-resolve --answer-only", function () {
     const run = await runAction([fresh(), fresh()], { answerOnly: true });
     expect(run.error).to.equal(undefined);
     expect(run.sent.filter((label) => label.startsWith("submitAnswer"))).to.have.length(2);
-    expect(run.sent.filter((label) => label.startsWith("resolve")), "resolve calls").to.deep.equal([]);
+    expect(
+      run.sent.filter((label) => label.startsWith("resolve")),
+      "resolve calls",
+    ).to.deep.equal([]);
     for (const question of run.questions) expect(run.now > question.finalizeTS, "final in Reality").to.equal(true);
   });
 });
