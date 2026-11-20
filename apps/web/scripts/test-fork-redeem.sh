@@ -30,9 +30,15 @@ node --env-file=.env.gnosis-fork.example --env-file-if-exists=.env.local --env-f
   "$vitest" run --no-file-parallelism --reporter=default --reporter=json --outputFile.json="$report" "$@" || status=$?
 [ "$status" -eq 0 ] || exit "$status"
 node -e '
-  const { numPassedTests, numFailedTests } = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));
-  if (numPassedTests + numFailedTests === 0) {
-    console.error("No fork test ran: none collected, or every one skipped.");
+  const [path, ...suites] = process.argv.slice(1);
+  const { testResults } = JSON.parse(require("node:fs").readFileSync(path, "utf8"));
+  const ran = (suite) =>
+    testResults.some(
+      (file) => file.name.includes(suite) && file.assertionResults.some((test) => ["passed", "failed"].includes(test.status)),
+    );
+  const idle = suites.filter((suite) => !ran(suite));
+  if (idle.length > 0) {
+    console.error(`No test ran in fork suite ${idle.join(", ")}: none collected, or every one skipped.`);
     process.exit(1);
   }
-' "$report"
+' "$report" ${suites:-$REGISTERED_SUITES}
