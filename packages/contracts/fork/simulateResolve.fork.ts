@@ -6,16 +6,23 @@ import path from "node:path";
 
 import { expect } from "chai";
 import type { Contract } from "ethers";
-import { parseEther } from "ethers";
+import { parseEther, toBeHex } from "ethers";
 import hre from "hardhat";
+
+import { getSeerDeployment } from "../config/seer";
 
 const MARKET_ABI = [
   "function conditionId() view returns (bytes32)",
   "function realityProxy() view returns (address)",
   "function lowerBound() view returns (uint256)",
   "function upperBound() view returns (uint256)",
+  "function questionsIds() view returns (bytes32[])",
 ];
-const REALITY_PROXY_ABI = ["function conditionalTokens() view returns (address)"];
+const REALITY_PROXY_ABI = [
+  "function conditionalTokens() view returns (address)",
+  "function realitio() view returns (address)",
+  "function resolve(address market)",
+];
 const CONDITIONAL_TOKENS_ABI = [
   "function payoutDenominator(bytes32 conditionId) view returns (uint256)",
   "function payoutNumerators(bytes32 conditionId, uint256 index) view returns (uint256)",
@@ -62,6 +69,27 @@ async function newSession(outcomes: number, multi: boolean): Promise<Session & {
     hre.ethers.provider,
   );
   return { id, parent: market(session.parentMarket), children: session.childMarkets.map(market) };
+}
+
+async function answerAndResolveDirectly(target: Contract, answer: string) {
+  const [signer] = await hre.ethers.getSigners();
+  const reality = getSeerDeployment(100, "Reality");
+  if (!signer || !reality) throw new Error("Expected a signer and the Seer Reality deployment");
+  const proxy = new hre.ethers.Contract(
+    (await target.getFunction("realityProxy")()) as string,
+    REALITY_PROXY_ABI,
+    signer,
+  );
+  const realitio = new hre.ethers.Contract((await proxy.getFunction("realitio")()) as string, reality.abi, signer);
+  const question = ((await target.getFunction("questionsIds")()) as string[])[0]!;
+  const minBond = (await realitio.getFunction("getMinBond")(question)) as bigint;
+  await (
+    await realitio.getFunction("submitAnswer")(question, answer, 0, { value: minBond > 0n ? minBond : 1n })
+  ).wait();
+  const finalizeTS = (await realitio.getFunction("getFinalizeTS")(question)) as bigint;
+  await hre.network.provider.send("evm_setNextBlockTimestamp", [Number(finalizeTS) + 1]);
+  await hre.network.provider.send("evm_mine");
+  await (await proxy.getFunction("resolve")(await target.getAddress())).wait();
 }
 
 describe("simulate-resolve on the gnosis fork", function () {
@@ -142,7 +170,12 @@ describe("simulate-resolve on the gnosis fork", function () {
         invalid: await numerators(invalid, 3),
       };
 
-      await hre.run("simulate-resolve", { session: id, children: "1=7" });
+      // the first run warped past the session's opening time, so the task refuses the open question
+      const refusal = await hre
+        .run("simulate-resolve", { session: id, children: "1=7" })
+        .catch((error: Error) => error);
+      expect((refusal as Error | undefined)?.message).to.match(/already open/);
+      await answerAndResolveDirectly(later, toBeHex(parseEther("7"), 32));
 
       const low = (await later.getFunction("lowerBound")()) as bigint;
       const high = (await later.getFunction("upperBound")()) as bigint;
