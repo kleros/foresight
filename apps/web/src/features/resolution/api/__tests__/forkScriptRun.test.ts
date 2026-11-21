@@ -7,7 +7,7 @@ import { expect, it } from "vitest";
 const SCRIPT = path.resolve(import.meta.dirname, "../../../../../scripts/test-fork-redeem.sh");
 const RUN_TIMEOUT_MS = 120_000;
 
-function runProbe(env: NodeJS.ProcessEnv = {}) {
+function runProbe(env: Record<string, string> = {}) {
   const childEnv: NodeJS.ProcessEnv = { ...process.env };
   for (const key of Object.keys(childEnv)) {
     if (key.startsWith("VITEST") || key === "FORK_RPC_URL") delete childEnv[key];
