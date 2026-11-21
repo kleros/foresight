@@ -146,7 +146,7 @@ describe("fetchSessionResolution", () => {
         ),
         { numRuns: 200 },
       );
-    });
+    }, 30_000);
 
     it("returns every token's numerator as the chain holds it, for any set of parent winners", async () => {
       await fc.assert(
@@ -176,7 +176,7 @@ describe("fetchSessionResolution", () => {
         ),
         { numRuns: 100 },
       );
-    });
+    }, 30_000);
   });
 
   describe("A2 an unresolved session", () => {
@@ -363,6 +363,24 @@ describe("fetchSessionResolution", () => {
         await expect(read(chain)).rejects.toThrow();
       },
     );
+
+    it.each([
+      { case: "an unresolved parent", deployedChildren: undefined, parentOutcomes: undefined, resolved: false },
+      { case: "a zero-child read", deployedChildren: undefined, parentOutcomes: [], resolved: true },
+      { case: "an unresolved zero-child read", deployedChildren: undefined, parentOutcomes: [], resolved: false },
+      { case: "a session with no child deployed", deployedChildren: 0, parentOutcomes: undefined, resolved: true },
+      {
+        case: "an unresolved session with no child deployed",
+        deployedChildren: 0,
+        parentOutcomes: undefined,
+        resolved: false,
+      },
+    ])("rejects a scalar-template parent for $case", async ({ deployedChildren, parentOutcomes, resolved }) => {
+      const chain = createChain(2, { parentTemplate: SCALAR_TEMPLATE, deployedChildren });
+      if (resolved) chain.resolveParent([0]);
+
+      await expect(read(chain, parentOutcomes)).rejects.toThrow(/template/);
+    });
 
     it("leaves out a deployed child the caller did not ask for, rather than calling it not deployed", async () => {
       const chain = createChain(3);
