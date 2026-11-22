@@ -77,6 +77,21 @@ describe("useSessionResolution re-reads an unresolved parent every 30 s", () => 
     await advance(1_500);
     expect(parentCalls()).toBe(2);
   });
+
+  it("gives the homepage the Error of a failed re-read in place of the cached answer", async () => {
+    let calls = 0;
+    fetchMock.mockImplementation(async () => {
+      if (calls++ > 0) throw new Error("HTTP request failed");
+      return { parent: { resolved: false }, children: {} };
+    });
+    const { result } = renderHook(() => useParentResolutions([READ]), { wrapper: wrapper() });
+
+    await advance(1);
+    expect(result.current[0]).toEqual({ resolved: false });
+
+    await advance(30_500);
+    expect(result.current[0]).toBeInstanceOf(Error);
+  });
 });
 
 describe("useSessionResolution does not re-read on focus", () => {
