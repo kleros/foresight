@@ -5,6 +5,7 @@ import { PositionRow } from "@/features/predict/components/PositionRow";
 import { useEstimate, useEstimateStore } from "@/features/predict/stores/estimateStore";
 import { estimateDirection } from "@/features/predict/utils/estimates";
 import type { OptionPosition } from "@/features/predict/utils/position";
+import { RESOLUTION_UNKNOWN, SESSION_RESOLVED } from "@/features/predict/utils/predictSteps";
 import { DisplayBlocks } from "@/features/sessions/components/DisplayBlocks";
 import type { SessionOption, SessionStatus } from "@/features/sessions/types";
 
@@ -30,6 +31,8 @@ interface OptionCardProps {
 const LOCKED: Partial<Record<SessionStatus, string>> = {
   "setting-up": "Opens once the session is set up.",
   closed: "Trading has closed.",
+  resolved: SESSION_RESOLVED,
+  unknown: RESOLUTION_UNKNOWN,
 };
 
 export function OptionCard({

@@ -3,7 +3,8 @@ import type { Address } from "viem";
 
 import type { OptionScale } from "@/types/optionScale";
 
-export type SessionStatus = "setting-up" | "trading" | "closed";
+/** "unknown": the parent market's resolution could not be read. */
+export type SessionStatus = "setting-up" | "trading" | "closed" | "resolved" | "unknown";
 
 /** The fields every session read shares, whichever query fetched it. */
 export interface SessionCore {
@@ -185,6 +186,8 @@ export interface SessionSummary extends SessionCore {
   /** Plural, e.g. "Movies". */
   branchNoun: string;
   keyword: string;
+  /** Whether the parent market has resolved; undefined while unread or where the read failed. */
+  resolved?: boolean;
   /** Overrides the market page link, for sessions this indexer does not hold. */
   href?: string;
 }

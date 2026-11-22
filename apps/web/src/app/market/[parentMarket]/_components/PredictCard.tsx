@@ -20,7 +20,12 @@ import { tabOwnership } from "@/features/predict/run/ownership";
 import { useSessionEstimates } from "@/features/predict/stores/estimateStore";
 import type { SelectedEstimate } from "@/features/predict/types";
 import { selectedEstimates } from "@/features/predict/utils/estimates";
-import { PROMPT_OPEN, RUNNING_ELSEWHERE } from "@/features/predict/utils/predictSteps";
+import {
+  PROMPT_OPEN,
+  RESOLUTION_UNKNOWN,
+  RUNNING_ELSEWHERE,
+  SESSION_RESOLVED,
+} from "@/features/predict/utils/predictSteps";
 import type { SessionDetail, SessionStatus } from "@/features/sessions/types";
 import { optionNoun, optionNounSingular } from "@/features/sessions/utils/optionNoun";
 
@@ -53,6 +58,8 @@ const HELD_ELSEWHERE_POLL_MS = 2_000;
 const blockerText = (blocker: Exclude<PredictBlocker, "unfinished">, noun: string): string =>
   ({
     closed: "Trading has closed.",
+    resolved: SESSION_RESOLVED,
+    unknown: RESOLUTION_UNKNOWN,
     "no-liquidity": `None of the ${noun} can be traded yet.`,
     "no-move": "Set an estimate above or below the market to predict.",
     disconnected: "Connect a wallet to predict.",
@@ -66,6 +73,8 @@ interface PredictCardProps {
   isMarketUnknown?: boolean;
   /** Whether any of the session's pools holds liquidity; undefined until the pools are read. */
   hasLiquidity?: boolean;
+  /** Reads the session's status again, before each transaction a run sends. */
+  recheckStatus?: () => Promise<SessionStatus>;
 }
 
 export function PredictCard({
@@ -74,6 +83,7 @@ export function PredictCard({
   marketEstimates,
   isMarketUnknown = false,
   hasLiquidity,
+  recheckStatus,
 }: PredictCardProps) {
   // what the popup lists, held from the press so a market refresh cannot empty it under the visitor
   const [opened, setOpened] = useState<SelectedEstimate[]>();
@@ -308,6 +318,7 @@ export function PredictCard({
           <PredictRunner
             session={session}
             status={status}
+            recheckStatus={recheckStatus}
             selected={opened}
             onClose={closePopup}
             onSuccess={(leftOut: Address[], run: PlacedPrediction) => {

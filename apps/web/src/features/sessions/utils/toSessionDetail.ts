@@ -62,12 +62,16 @@ export const resolutionOpened = (closesAt: Date | null, now: Date): boolean =>
 /**
  * @param hasLiquidity whether any of the session's pools holds in-range liquidity; undefined while unread.
  * The pools trade past the resolution date, so a session closes only once they are read with none.
+ * @param parent the parent market's resolution read, or the Error it failed with; undefined while unread.
  */
 export function sessionStatus(
   detail: Pick<SessionDetail, "setupComplete" | "closesAt">,
   now: Date,
   hasLiquidity: boolean | undefined,
+  parent?: { resolved: boolean } | Error,
 ): SessionStatus {
+  if (parent instanceof Error) return "unknown";
+  if (parent?.resolved) return "resolved";
   if (!detail.setupComplete) return "setting-up";
   if (resolutionOpened(detail.closesAt, now) && hasLiquidity === false) return "closed";
   return "trading";

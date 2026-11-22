@@ -1,6 +1,7 @@
 import type { SessionOption, SessionStatus } from "@/features/sessions/types";
 
-export type PredictBlocker = "closed" | "unfinished" | "no-liquidity" | "no-move" | "disconnected";
+export type PredictBlocker =
+  "closed" | "resolved" | "unknown" | "unfinished" | "no-liquidity" | "no-move" | "disconnected";
 
 interface PredictBlockerArgs {
   status: SessionStatus;
@@ -16,7 +17,7 @@ interface PredictBlockerArgs {
 }
 
 /**
- * Why Predict is off, one cause by priority: closed, then a stored run, then no liquidity, then no estimate
+ * Why Predict is off, one cause by priority: closed, resolved or unknown, then a stored run, then no liquidity, then no estimate
  * moved, then no wallet. Null when Predict is on, while setting up, and while the market numbers are not known.
  */
 export function predictBlocker({
@@ -29,7 +30,7 @@ export function predictBlocker({
   hasStoredRun = false,
   hasLiquidity,
 }: PredictBlockerArgs): PredictBlocker | null {
-  if (status === "closed") return "closed";
+  if (status === "closed" || status === "resolved" || status === "unknown") return status;
   if (hasStoredRun) return "unfinished";
   if (status !== "trading" || isMarketUnknown) return null;
   // a pool can hold a price with no liquidity in range, so a market estimate alone does not make it tradable

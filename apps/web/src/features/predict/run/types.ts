@@ -21,6 +21,7 @@ import type { HeldTo, MovedPlans, PredictSnapshot } from "../flow/types";
  * `resign`: a held send's nonce, or a hash no node finds, stayed unused past its hold; retrying signs the step again,
  * which the visitor is asked first.
  * `unseen`: no node finds a sent hash and its nonce reads unused; it is kept for ten minutes from its send.
+ * `blocked`: the page refused the next send, because the session no longer takes predictions or its status is unknown.
  */
 export type PredictFailureReason =
   | TxErrorCause
@@ -40,7 +41,8 @@ export type PredictFailureReason =
   | "storage"
   | "held"
   | "resign"
-  | "unseen";
+  | "unseen"
+  | "blocked";
 
 /** What the popup shows while a prediction runs. */
 export type PredictStage =
