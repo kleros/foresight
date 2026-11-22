@@ -75,6 +75,7 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
   held: "Your wallet may still send the last transaction. Check again in a few minutes.",
   resign: SIGN_AGAIN_ASK,
   unseen: "The network can't find your last transaction yet. Check again, or discard it.",
+  refused: "Stopped before the next transaction. Nothing was sent.",
 };
 
 /** Once the credits are in the trade wallet the run is locked to them, so only waiting helps. */

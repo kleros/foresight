@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Address } from "viem";
 import { useAccount } from "wagmi";
@@ -32,7 +32,9 @@ import { TradeWalletMismatchError } from "@/lib/trade-executor/executor";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
+import { predictAction } from "./predictAction";
 import type { PlacedPrediction } from "./PredictSuccessView";
+import { STATUS_REASON, stopsSends } from "./statusReason";
 import { toPredictOptions, toSavedEstimates } from "./toPredictOptions";
 import { useCreditsSwapPreview } from "./useCreditsSwapPreview";
 import { useHasPredicted } from "./useHasPredicted";
@@ -42,8 +44,10 @@ import { toPriceMove, usePricePreview } from "./usePricePreview";
 
 interface PredictRunnerProps {
   session: SessionDetail;
-  /** The page's status, which flips to closed once the resolution date has passed and no pool holds liquidity. */
+  /** The page's status, which may change while the popup is open. */
   status: SessionStatus;
+  /** Reads the session's status afresh; asked before each transaction a run sends. */
+  recheckStatus?: () => Promise<SessionStatus>;
   selected: SelectedEstimate[];
   onClose: () => void;
   /** Options the run left out for lack of a route, and what it placed; the run is reset by the time this is called. */
@@ -56,8 +60,18 @@ const NATIVE: PayTokenChoice = { id: "native", symbol: "xDAI", decimals: 18 };
  * Everything behind the predict button, mounted only once it is pressed: the wallet, the run and
  * the popup. Kept out of the page so the route does not carry the orchestrator and the quoter.
  */
-export function PredictRunner({ session, status, selected, onClose, onSuccess }: PredictRunnerProps) {
-  const isClosed = status === "closed";
+export function PredictRunner({ session, status, recheckStatus, selected, onClose, onSuccess }: PredictRunnerProps) {
+  const blockedBy = status === "closed" ? SESSION_CLOSED : stopsSends(status) ? STATUS_REASON[status] : undefined;
+  // the run asks after awaits of its own, so it reads the latest status rather than the one it was built with
+  const statusRef = useRef(status);
+  statusRef.current = status;
+  const recheckRef = useRef(recheckStatus);
+  recheckRef.current = recheckStatus;
+  const maySend = useCallback(async () => {
+    if (stopsSends(statusRef.current)) return false;
+    const fresh = await recheckRef.current?.().catch(() => "unknown" as const);
+    return !(fresh && stopsSends(fresh)) && !stopsSends(statusRef.current);
+  }, []);
   const { address: owner, chainId } = useAccount();
 
   const [amount, setAmount] = useState<bigint>();
@@ -110,6 +124,7 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
     funding,
     native: token.id === "native",
     slippage,
+    maySend,
   });
   const stage = progress?.stage ?? "idle";
   const recovered = progress?.recovered;
@@ -258,25 +273,33 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
   const reviewsCredits = Boolean(recovered && recovered.creditsToSpend > 0n && !creditsLanded && !held?.credits);
   const checksSend = Boolean(pendingHash || progress?.unanswered);
   const recoveryPricesReady = !reviewsCredits || creditsQuote !== undefined || checksSend;
+  const failureReason = progress?.failure?.reason;
+  const action = predictAction({
+    status,
+    stage,
+    isMoved: moved !== undefined,
+    canRetry,
+    isRecovered: Boolean(recovered),
+    recoveryPricesReady,
+    checksChain: checksSend || failureReason === "pending" || failureReason === "deposit-unconfirmed",
+  });
+  const checksOnly = stopsSends(status) && action !== "none";
 
   const predict = () => {
-    if (isClosed) return;
-    if (moved) {
+    if (action === "none") return;
+    if (action === "confirm") {
       driver?.confirm();
       return;
     }
-    if (recovered && !recoveryPricesReady) return;
     const reviewedCredits = reviewsCredits ? (creditsQuote ? { credits: creditsQuote } : {}) : undefined;
-    if (stage === "review") {
+    if (action === "resume") {
       driver?.resume(reviewedCredits);
       return;
     }
-    if (canRetry) {
+    if (action === "retry") {
       driver?.retry(reviewedCredits);
       return;
     }
-    // a stored run is resumed or closed, never replaced by the form behind it
-    if (recovered) return;
     if (stage === "halted" && !pendingHash) driver?.reset();
     for (const market of removed) clearEstimate(session.parentMarket, market);
     setFrozenToAdd(fundsToAdd(funding, token, collateral));
@@ -305,7 +328,7 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
   const shownNotice = isRunning
     ? undefined
     : notice({
-        isClosed,
+        blockedBy,
         owner,
         onRightChain: chainId === DEFAULT_CHAIN_ID,
         walletMismatch: executor.error instanceof TradeWalletMismatchError ? executor.error.message : undefined,
@@ -349,6 +372,7 @@ export function PredictRunner({ session, status, selected, onClose, onSuccess }:
       canRetry={canRetry}
       isPending={Boolean(pendingHash) || (stage === "halted" && Boolean(progress?.unanswered))}
       asksToSignAgain={stage === "halted" && progress?.failure?.reason === "resign"}
+      isCheckOnly={checksOnly}
       onDiscard={canDiscard ? discard : undefined}
       recovered={
         recovered && {
@@ -403,7 +427,8 @@ const PRICES_FAILED_AGAIN = "Prices still could not be read.";
 
 /** Why this prediction cannot be made, in the words of the thing the visitor has to do. */
 function notice(args: {
-  isClosed: boolean;
+  /** Why the session takes no new transaction, said ahead of anything the wallet needs. */
+  blockedBy?: string;
   owner?: string;
   onRightChain: boolean;
   /** Said where the node's trade wallet is not the one derived for the owner. */
@@ -415,7 +440,7 @@ function notice(args: {
   /** A read after a failed one failed too. */
   pricesFailedAgain: boolean;
 }): string | undefined {
-  if (args.isClosed) return SESSION_CLOSED;
+  if (args.blockedBy) return args.blockedBy;
   if (!args.owner) return "Connect a wallet to predict.";
   if (!args.onRightChain) return "Switch to Gnosis to predict.";
   if (args.walletMismatch) return args.walletMismatch;

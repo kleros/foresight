@@ -7,4 +7,6 @@ export const statusChip: Record<SessionStatus, { tone: StatusTone; label: string
   trading: { tone: "done", label: "Trading" },
   "setting-up": { tone: "attention", label: "Setting up" },
   closed: { tone: "none", label: "Closed" },
+  resolved: { tone: "none", label: "Resolved" },
+  unknown: { tone: "attention", label: "Status unknown" },
 };

@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { Button, StandardPagination } from "@kleros/ui-components-library";
 
+import { sessionKey, useParentResolutions } from "@/features/resolution/api/useSessionResolution";
 import { useSessions } from "@/features/sessions/api/getSessions";
 import { SessionFilters } from "@/features/sessions/components/SessionFilters";
 import { SessionGrid } from "@/features/sessions/components/SessionGrid";
@@ -18,6 +19,8 @@ import {
   type SessionFilters as Filters,
 } from "@/features/sessions/utils/listing";
 
+import { sessionFactoryAddress } from "@/config/contracts";
+
 const plural = (count: number) => (count === 1 ? "session" : "sessions");
 
 export function SessionBrowser() {
@@ -26,7 +29,19 @@ export function SessionBrowser() {
 
   const { data, isPending, isError, isPlaceholderData } = useSessions({ page, filters });
 
-  const sessions = data?.sessions ?? [];
+  const listed = data?.sessions ?? [];
+  const sessionFactory = sessionFactoryAddress();
+  // a session with its own link lives on another deployment, not this factory
+  const resolutions = useParentResolutions(
+    listed.map((session) => (session.href ? undefined : sessionKey(session.id, sessionFactory))),
+  );
+  const sessions = listed.map((session, index) => {
+    const parent = resolutions[index];
+    if (parent === undefined) return session;
+    return parent instanceof Error
+      ? { ...session, resolutionUnknown: true }
+      : { ...session, resolved: parent.resolved };
+  });
   const filtered = isFiltered(filters);
 
   /** Exact only unfiltered: neither a search nor open/closed has an aggregate. */

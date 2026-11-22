@@ -67,6 +67,8 @@ interface PredictDialogProps {
   isPending?: boolean;
   /** A held send may still be open in the wallet; pressing on signs its step again. */
   asksToSignAgain?: boolean;
+  /** Pressing on only reads sent transactions from the chain, so the button stays on through a notice. */
+  isCheckOnly?: boolean;
   /** Checks a sent transaction before discarding; unresolved transactions stay saved. */
   onDiscard?: () => void;
   /**
@@ -186,6 +188,7 @@ export function PredictDialog({
   canRetry,
   isPending = false,
   asksToSignAgain = false,
+  isCheckOnly = false,
   onDiscard,
   recovered,
   notice,
@@ -536,15 +539,17 @@ export function PredictDialog({
                     ? moved?.bySlippage
                       ? CONFIRM_SLIPPAGE
                       : CONFIRM_MOVED
-                    : asksToSignAgain
-                      ? "Sign again"
-                      : recovered
-                        ? "Resume"
-                        : isPending
-                          ? "Check again"
-                          : canRetry
-                            ? "Try the rest"
-                            : "Predict"
+                    : isCheckOnly
+                      ? "Check again"
+                      : asksToSignAgain
+                        ? "Sign again"
+                        : recovered
+                          ? "Resume"
+                          : isPending
+                            ? "Check again"
+                            : canRetry
+                              ? "Try the rest"
+                              : "Predict"
               }
               busyText={
                 isRunning
@@ -559,7 +564,7 @@ export function PredictDialog({
               isDisabled={
                 onRetryPrices
                   ? false
-                  : notice !== undefined ||
+                  : (notice !== undefined && !isCheckOnly) ||
                     (recovered !== undefined && !pricesReady) ||
                     (!canRetry &&
                       !isMoved &&

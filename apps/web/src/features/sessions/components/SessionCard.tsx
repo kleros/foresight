@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { StatusChip } from "@/components/ui/StatusChip";
+
 import ArrowIcon from "@/assets/svg/arrow-right.svg";
 import TradingIcon from "@/assets/svg/chart-bar.svg";
 import CountdownIcon from "@/assets/svg/cronometer.svg";
@@ -13,6 +15,7 @@ import { paths } from "@/config/paths";
 import type { SessionSummary } from "../types";
 import { SessionStat } from "./SessionStat";
 import { bannerStyle } from "../utils/bannerStyle";
+import { statusChip } from "../utils/statusChip";
 import { resolutionOpened } from "../utils/toSessionDetail";
 
 export function SessionCard({ session }: { session: SessionSummary }) {
@@ -31,6 +34,12 @@ export function SessionCard({ session }: { session: SessionSummary }) {
                 {session.description}
               </p>
             </div>
+
+            {session.resolutionUnknown ? (
+              <div className="mt-4 shrink-0">
+                <StatusChip tone={statusChip.unknown.tone} label={statusChip.unknown.label} />
+              </div>
+            ) : null}
 
             <div className="mt-4 flex shrink-0 items-center gap-2">
               <TagIcon className="text-fs-accent size-4 shrink-0 [&_path]:fill-current" />

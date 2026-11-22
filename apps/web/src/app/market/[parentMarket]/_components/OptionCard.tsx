@@ -13,6 +13,8 @@ import { Disclosure } from "@/components/ui/Disclosure";
 import CheckCircle from "@/assets/svg/check-circle.svg";
 import MinusOutline from "@/assets/svg/minus-outline.svg";
 
+import { STATUS_REASON } from "./statusReason";
+
 interface OptionCardProps {
   option: SessionOption;
   parentMarket: string;
@@ -30,6 +32,7 @@ interface OptionCardProps {
 const LOCKED: Partial<Record<SessionStatus, string>> = {
   "setting-up": "Opens once the session is set up.",
   closed: "Trading has closed.",
+  ...STATUS_REASON,
 };
 
 export function OptionCard({

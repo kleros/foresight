@@ -80,6 +80,9 @@ class HeldSendError extends Error {}
 /** A held send's nonce stayed unused past its hold; the visitor is asked before its step is signed again. */
 class SignAgainError extends Error {}
 
+/** The page refused the next send; the wallet was not asked. */
+class SendRefusedError extends Error {}
+
 const TRANSPORT_FAILURES = new Set(["TimeoutError", "HttpRequestError"]);
 
 /**
@@ -214,6 +217,8 @@ export function createPredictRun(args: {
   ownership?: RunOwnership;
   /** Every option of the session, which a stored run's options must match before it is restored. */
   sessionOptions?: () => readonly OptionTokens[];
+  /** Asked right before each wallet send, and before a held send is let go to be signed again; false refuses. */
+  maySend?: () => Promise<boolean>;
 }): PredictDriver {
   const listeners = new Set<() => void>();
   /** Options left out by each batch not yet settled, by step id; a settled batch's are kept in the run's snapshot. */
@@ -237,6 +242,7 @@ export function createPredictRun(args: {
     | "resign"
     | "wrong-chain"
     | "wrong-wallet"
+    | "refused"
     | undefined;
   /** Set while a sent transaction's outcome is read from the chain; the run itself stays stopped meanwhile. */
   let reconciling = false;
@@ -285,6 +291,9 @@ export function createPredictRun(args: {
 
   const waiting = { ...UNANSWERED_SEND, ...args.unansweredSend };
   const now = args.now ?? Date.now;
+
+  /** A permission check that fails to answer refuses. */
+  const sendsAllowed = async () => (args.maySend ? await args.maySend().catch(() => false) : true);
 
   /**
    * How `send` ended, under the nonce read for it or, where another send took that, a later one. `taken` means
@@ -360,6 +369,8 @@ export function createPredictRun(args: {
 
       const owner = run.ctx.owner;
       const [nonce, fromBlock] = await Promise.all([args.reader.nextNonce(owner), args.reader.latestBlock()]);
+      // asked after the reads above, with nothing awaited between it and the wallet call
+      if (!(await sendsAllowed())) throw new SendRefusedError();
       const send: UnansweredSend = { owner, nonce, fromBlock, tx, heldAt: now() };
       // held before the wallet opens: a prompt approved after the tab closed has no hash stored to find it by
       try {
@@ -418,7 +429,7 @@ export function createPredictRun(args: {
           if (found.status === "mined" && found.success) return true;
           if (found.status === "none") {
             if (holding(send)) throw new HeldSendError();
-            if (!answered) throw new SignAgainError();
+            if (!answered || !(await sendsAllowed())) throw new SignAgainError();
           }
           forgetUnanswered(step.id);
         }
@@ -453,6 +464,10 @@ export function createPredictRun(args: {
       if (error instanceof UnlistedTxError) {
         buildFailure = "unlisted";
         return "unknown";
+      }
+      if (error instanceof SendRefusedError) {
+        buildFailure = "refused";
+        return "rpc";
       }
       if (error instanceof HeldSendError || error instanceof SignAgainError) {
         buildFailure = error instanceof HeldSendError ? "held" : "resign";
@@ -698,7 +713,7 @@ export function createPredictRun(args: {
       return;
     }
     if (send && holding(send)) report("unseen", reconcileRun);
-    else if (answered) {
+    else if (answered && (await sendsAllowed())) {
       releaseHash(stepId);
       await settleOwedMint();
       await orchestrator.resume();
