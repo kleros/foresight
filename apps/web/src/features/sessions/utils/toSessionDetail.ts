@@ -70,9 +70,9 @@ export function sessionStatus(
   hasLiquidity: boolean | undefined,
   parent?: { resolved: boolean } | Error,
 ): SessionStatus {
-  if (parent instanceof Error) return "unknown";
-  if (parent?.resolved) return "resolved";
+  if (!(parent instanceof Error) && parent?.resolved) return "resolved";
   if (!detail.setupComplete) return "setting-up";
+  if (parent instanceof Error) return "unknown";
   if (resolutionOpened(detail.closesAt, now) && hasLiquidity === false) return "closed";
   return "trading";
 }

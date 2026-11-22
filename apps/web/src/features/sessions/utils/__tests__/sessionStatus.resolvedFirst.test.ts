@@ -19,9 +19,9 @@ describe("sessionStatus ranks the parent's resolution above setup", () => {
     );
   });
 
-  it("reads unknown for a session whose setup never finished when the read failed", () => {
+  it("keeps a session whose setup never finished setting up when the read failed", () => {
     expect(sessionStatus({ setupComplete: false, closesAt: null }, new Date(0), undefined, new Error("x"))).toBe(
-      "unknown",
+      "setting-up",
     );
   });
 
