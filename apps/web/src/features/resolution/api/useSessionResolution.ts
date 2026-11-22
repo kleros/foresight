@@ -31,7 +31,7 @@ export function sessionKey(id: string, sessionFactory: Address | null): SessionK
 }
 
 /** How often, in ms, a read that has not settled on resolved is made again. */
-export const REREAD_MS = 30_000;
+const REREAD_MS = 30_000;
 
 /** bigint is not JSON, which the query key hash needs. */
 const sessionPart = ({ sessionFactory, sessionId }: SessionKey) => [sessionFactory.toLowerCase(), String(sessionId)];
