@@ -17,8 +17,9 @@ interface PredictBlockerArgs {
 }
 
 /**
- * Why Predict is off, one cause by priority: closed, resolved or unknown, then a stored run, then no liquidity, then no estimate
- * moved, then no wallet. Null when Predict is on, while setting up, and while the market numbers are not known.
+ * Why Predict is off, one cause by priority: closed, resolved or unknown, then a stored run, then no liquidity,
+ * then no estimate moved, then no wallet. Null when Predict is on, while setting up, and while the market numbers
+ * are not known.
  */
 export function predictBlocker({
   status,
