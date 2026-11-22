@@ -39,7 +39,8 @@ export function SessionBrowser() {
   );
   const sessions = listed.map((session, index) => {
     const parent = resolutions[index];
-    return parent && !(parent instanceof Error) ? { ...session, resolved: parent.resolved } : session;
+    if (parent instanceof Error) return { ...session, resolutionUnknown: true };
+    return parent ? { ...session, resolved: parent.resolved } : session;
   });
   const filtered = isFiltered(filters);
 

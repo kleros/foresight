@@ -271,8 +271,12 @@ export function PredictRunner({ session, status, recheckStatus, selected, onClos
   const checksSend = Boolean(pendingHash || progress?.unanswered);
   const recoveryPricesReady = !reviewsCredits || creditsQuote !== undefined || checksSend;
 
+  // reading a sent transaction's receipt opens no wallet; the run's maySend refuses whatever it would send next
+  const checksOnly =
+    stopsSends(status) && canRetry && stage === "halted" && checksSend && progress?.failure?.reason !== "resign";
+
   const predict = () => {
-    if (blockedBy) return;
+    if (blockedBy && !checksOnly) return;
     if (moved) {
       driver?.confirm();
       return;
@@ -360,6 +364,7 @@ export function PredictRunner({ session, status, recheckStatus, selected, onClos
       canClose={stage === "confirming" && Boolean(progress?.sentHash)}
       canRetry={canRetry}
       isPending={Boolean(pendingHash) || (stage === "halted" && Boolean(progress?.unanswered))}
+      isCheckOnly={checksOnly}
       asksToSignAgain={stage === "halted" && progress?.failure?.reason === "resign"}
       onDiscard={canDiscard ? discard : undefined}
       recovered={

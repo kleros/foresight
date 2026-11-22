@@ -76,6 +76,35 @@ describe("createPredictRun asks maySend before each send", () => {
     expect(driver.getProgress().failure?.reason).toBe("blocked");
   });
 
+  it("asks after the nonce read, so a refusal while it is pending opens no wallet", async () => {
+    let allowed = true;
+    let release!: (nonce: number) => void;
+    const nextNonce = vi.fn(() => new Promise<number>((resolve) => (release = resolve)));
+    const fake = chain();
+    const store = createFlowRunStore({ storage: createMemoryStorage() });
+    const driver = createPredictRun({
+      gateway: fake.gateway,
+      reader: { ...fakeReader({ deployed: true }), nextNonce },
+      quoter: fakeQuoter(),
+      flowId: FLOW_ID,
+      ctx: () => ctx(),
+      snapshot: () => snapshot(),
+      store,
+      maySend: () => Promise.resolve(allowed),
+    });
+    drivers.push(driver);
+
+    driver.start();
+    await vi.waitFor(() => expect(nextNonce).toHaveBeenCalled());
+    allowed = false;
+    release(0);
+    await vi.waitFor(() => expect(driver.getProgress().stage).toBe("halted"));
+
+    expect(fake.sends).toEqual([]);
+    expect(driver.getProgress().failure?.reason).toBe("blocked");
+    expect(hasPendingTransaction(store, SESSION, addresses.owner)).toBe(false);
+  });
+
   it("goes on with the next send once allowed again", async () => {
     let allowed = false;
     const { driver, fake } = run(() => Promise.resolve(allowed));

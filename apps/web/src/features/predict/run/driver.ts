@@ -357,7 +357,6 @@ export function createPredictRun(args: {
       const run = orchestrator.getRun();
       const stepId = run ? currentEntry(run.steps)?.stepId : undefined;
       if (!run || stepId === undefined) throw new UnlistedTxError(["no run to check it against"]);
-      if (args.maySend && !(await args.maySend())) throw new SendRefusedError();
       assertListed({
         tx,
         ctx: run.ctx,
@@ -367,6 +366,8 @@ export function createPredictRun(args: {
 
       const owner = run.ctx.owner;
       const [nonce, fromBlock] = await Promise.all([args.reader.nextNonce(owner), args.reader.latestBlock()]);
+      // asked after the last await before the wallet opens, so a status change during these reads still stops it
+      if (args.maySend && !(await args.maySend())) throw new SendRefusedError();
       const send: UnansweredSend = { owner, nonce, fromBlock, tx, heldAt: now() };
       // held before the wallet opens: a prompt approved after the tab closed has no hash stored to find it by
       try {

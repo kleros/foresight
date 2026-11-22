@@ -188,6 +188,8 @@ export interface SessionSummary extends SessionCore {
   keyword: string;
   /** Whether the parent market has resolved; undefined while unread or where the read failed. */
   resolved?: boolean;
+  /** True where the parent market's resolution read failed. */
+  resolutionUnknown?: boolean;
   /** Overrides the market page link, for sessions this indexer does not hold. */
   href?: string;
 }
