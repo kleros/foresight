@@ -31,7 +31,7 @@ function literals(file: string, text: string): string[] {
   return found;
 }
 
-/** Only `@/` (tsconfig paths) and relative paths reach src; there is no baseUrl. */
+/** `@/` and relative paths resolved; any other spelling (absolute, `web/src/...`) is matched by name. */
 function target(file: string, specifier: string): string | undefined {
   if (specifier.startsWith("@/")) return join(SRC, specifier.slice(2));
   if (specifier.startsWith(".")) return resolve(dirname(file), specifier);
@@ -39,11 +39,12 @@ function target(file: string, specifier: string): string | undefined {
 }
 
 const inResolution = (path: string) => path === RESOLUTION || path.startsWith(RESOLUTION + sep);
+const NAMES_RESOLUTION = /(^|\/)features\/resolution(\/|$)/;
 
 function reachesResolution(file: string, text: string): boolean {
   return literals(file, text).some((specifier) => {
     const path = target(file, specifier);
-    return path !== undefined && inResolution(path);
+    return path === undefined ? NAMES_RESOLUTION.test(specifier) : inResolution(path);
   });
 }
 
@@ -65,6 +66,8 @@ describe("A7 no module specifier under features/sessions resolves into features/
       'export { x } from "../resolution/api/useSessionResolution";',
       'export * from "@/features/resolution";',
       'import "@/features/resolution/api/useSessionResolution";',
+      'type R = import(/**/ "web/src/features/resolution/api/getSessionResolution").ParentResolution;',
+      `type R = import(/**/ "${RESOLUTION}/api/getSessionResolution").ParentResolution;`,
     ]) {
       expect(reachesResolution(file, text), text).toBe(true);
     }

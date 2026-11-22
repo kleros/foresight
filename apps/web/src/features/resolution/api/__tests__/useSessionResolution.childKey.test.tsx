@@ -57,13 +57,16 @@ afterEach(() => {
 });
 
 describe("A9 the children read is keyed on the child markets themselves", () => {
-  it("reads the children again when one child market is swapped for another, the count unchanged", async () => {
+  it.each([
+    ["last", [A, C]],
+    ["first", [C, B]],
+  ])("reads the children again when the %s child market is swapped, the count unchanged", async (_at, next) => {
     const { rerender } = mount(read([A, B]));
     await advance(1);
     const before = childCalls();
     expect(before).toBe(1);
 
-    rerender({ at: read([A, C]) });
+    rerender({ at: read(next) });
     await advance(1);
 
     expect(childCalls()).toBe(before + 1);
