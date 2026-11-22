@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
 import { branchColor } from "@/utils/branchColor";
@@ -185,6 +186,104 @@ describe("sessionStatus", () => {
       expect(sessionStatus({ setupComplete: true, closesAt: null }, after, hasLiquidity)).toBe("trading");
     },
   );
+});
+
+/**
+ * sessionStatus(detail, now, hasLiquidity, parent) takes the parent's resolution as a fourth argument:
+ * `{ resolved }` from the resolution read, or the Error that read rejected with. The route composes the two features.
+ */
+describe("sessionStatus after the parent market resolves", () => {
+  const at = new Date(1756900800 * 1000);
+  const liquidity = [true, false, undefined] as const;
+
+  async function parentRead(_optionCount: number, winners: number[] | null): Promise<{ resolved: boolean }> {
+    return Promise.resolve({ resolved: winners !== null });
+  }
+
+  function failedRead(): Promise<Error> {
+    return Promise.resolve(new Error("HTTP request failed"));
+  }
+
+  const instant = fc.integer({ min: 0, max: 4102444800 }).map((seconds) => new Date(seconds * 1000));
+  const closesAt = fc.option(instant, { nil: null });
+  const hasLiquidity = fc.constantFrom(...liquidity);
+
+  describe("A2 a resolved parent reads Resolved", () => {
+    it.each([
+      ["before", new Date(at.getTime() - 1)],
+      ["after", new Date(at.getTime() + 86_400_000)],
+    ] as const)("with in-range liquidity in its pools, %s the resolution date", async (_, now) => {
+      const parent = await parentRead(3, [1]);
+
+      expect(sessionStatus({ setupComplete: true, closesAt: at }, now, true, parent)).toBe("resolved");
+    });
+
+    it("with its pools read as empty past the resolution date", async () => {
+      const parent = await parentRead(3, [0, 2]);
+
+      expect(sessionStatus({ setupComplete: true, closesAt: at }, new Date(at.getTime() + 1), false, parent)).toBe(
+        "resolved",
+      );
+    });
+
+    it("whatever the date, the clock or the liquidity read, for single- and multi-winner parents", async () => {
+      const parents = await Promise.all([parentRead(3, [1]), parentRead(3, [0, 1, 2]), parentRead(5, [4])]);
+
+      fc.assert(
+        fc.property(fc.constantFrom(...parents), closesAt, instant, hasLiquidity, (parent, closes, now, liquid) => {
+          expect(sessionStatus({ setupComplete: true, closesAt: closes }, now, liquid, parent)).toBe("resolved");
+        }),
+      );
+    });
+
+    it("leaves the status as it was when the read says the parent has not resolved", async () => {
+      const parent = await parentRead(3, null);
+      expect(parent.resolved).toBe(false);
+
+      fc.assert(
+        fc.property(fc.boolean(), closesAt, instant, hasLiquidity, (setupComplete, closes, now, liquid) => {
+          const detail = { setupComplete, closesAt: closes };
+          expect(sessionStatus(detail, now, liquid, parent)).toBe(sessionStatus(detail, now, liquid));
+        }),
+      );
+    });
+  });
+
+  describe("A6 a failed resolution read is not shown as fact", () => {
+    it.each([
+      ["before", true, -1],
+      ["before", false, -1],
+      ["before", undefined, -1],
+      ["after", true, 86_400_000],
+      ["after", undefined, 86_400_000],
+    ] as const)(
+      "is neither Resolved nor Trading %s the resolution date, liquidity %s",
+      async (_, liquid, offset) => {
+        const failure = await failedRead();
+
+        const status = sessionStatus(
+          { setupComplete: true, closesAt: at },
+          new Date(at.getTime() + offset),
+          liquid,
+          failure,
+        );
+
+        expect(status).not.toBe("resolved");
+        expect(status).not.toBe("trading");
+      },
+    );
+
+    it("is neither Resolved nor Trading for any date, clock or liquidity read", async () => {
+      const failure = await failedRead();
+
+      fc.assert(
+        fc.property(closesAt, instant, hasLiquidity, (closes, now, liquid) => {
+          const status = sessionStatus({ setupComplete: true, closesAt: closes }, now, liquid, failure);
+          expect(["resolved", "trading"]).not.toContain(status);
+        }),
+      );
+    });
+  });
 });
 
 describe("resolutionOpened", () => {
