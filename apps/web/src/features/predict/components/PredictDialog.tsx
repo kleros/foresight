@@ -565,7 +565,7 @@ export function PredictDialog({
                 onRetryPrices
                   ? false
                   : (notice !== undefined && !isCheckOnly) ||
-                    (recovered !== undefined && !pricesReady) ||
+                    (recovered !== undefined && !pricesReady && !isCheckOnly) ||
                     (!canRetry &&
                       !isMoved &&
                       (recovered !== undefined ||

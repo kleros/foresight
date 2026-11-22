@@ -291,7 +291,8 @@ export function PredictRunner({ session, status, recheckStatus, selected, onClos
       driver?.confirm();
       return;
     }
-    const reviewedCredits = reviewsCredits ? (creditsQuote ? { credits: creditsQuote } : {}) : undefined;
+    // a check signs nothing, so it holds the run to no credits price; the press that signs does
+    const reviewedCredits = reviewsCredits && !checksOnly ? (creditsQuote ? { credits: creditsQuote } : {}) : undefined;
     if (action === "resume") {
       driver?.resume(reviewedCredits);
       return;
