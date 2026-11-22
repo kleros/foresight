@@ -34,11 +34,6 @@ vi.mock("@/lib/web3/public-client", () => ({
     return current.world.client;
   },
 }));
-/* The parent market reads as unresolved. */
-vi.mock("@/features/resolution/api/getSessionResolution", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/features/resolution/api/getSessionResolution")>()),
-  fetchSessionResolution: async () => ({ parent: { resolved: false }, children: {} }),
-}));
 vi.mock("@/config/chains", async (importOriginal) => {
   const { gnosis } = await import("viem/chains");
   return {

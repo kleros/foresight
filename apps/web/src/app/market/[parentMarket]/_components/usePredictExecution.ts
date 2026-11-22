@@ -31,8 +31,6 @@ export function usePredictExecution(args: {
   funding: Funding | null;
   native: boolean;
   slippage: PredictSlippage;
-  /** Asked before each transaction the run sends; false stops the run with nothing sent. */
-  maySend?: () => Promise<boolean>;
 }) {
   const { session, selected, owner, chainId, tradeWallet } = args;
   const queryClient = useQueryClient();
@@ -78,7 +76,6 @@ export function usePredictExecution(args: {
                 };
           },
           slippage: () => fundingRef.current.slippage,
-          maySend: args.maySend,
           onComplete: () => {
             void queryClient.invalidateQueries({ queryKey: fundsKeyPrefix });
             void queryClient.invalidateQueries({ queryKey: executorKey(owner) });

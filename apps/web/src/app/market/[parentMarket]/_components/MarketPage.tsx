@@ -14,7 +14,6 @@ import { EstimateActions } from "@/features/predict/components/EstimateActions";
 import { EstimateCsvDialog } from "@/features/predict/components/EstimateCsvDialog";
 import { useEstimateHydration } from "@/features/predict/hooks/useEstimateHydration";
 import { snapEstimate } from "@/features/predict/utils/estimates";
-import { useSessionResolution } from "@/features/resolution/api/useSessionResolution";
 import { usePoolBalances, useSDaiUsdPrice } from "@/features/sessions/api/getPoolBalances";
 import { useSession } from "@/features/sessions/api/getSession";
 import { useSessionChart } from "@/features/sessions/api/getSessionChart";
@@ -29,7 +28,6 @@ import { TradeWallet } from "@/features/trade-executor/components/TradeWallet/Tr
 
 import { PageMessage } from "@/components/layout/PageMessage";
 
-import { sessionFactoryAddress } from "@/config/contracts";
 import { ADD_LIQUIDITY_PARAM } from "@/config/paths";
 
 import { AdvancedSection } from "./AdvancedSection";
@@ -53,16 +51,6 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
   const usdPrice = useSDaiUsdPrice(session.data?.collateralToken);
   const chart = useSessionChart(session.data ?? undefined);
   const positions = useOptionPositions(session.data ?? undefined);
-  const sessionFactory = sessionFactoryAddress();
-  const resolution = useSessionResolution(
-    session.data && sessionFactory
-      ? {
-          sessionFactory,
-          sessionId: BigInt(session.data.id),
-          childMarkets: session.data.options.map(({ market }) => market),
-        }
-      : undefined,
-  );
   useRenderAtClose(session.data?.closesAt);
   useEstimateHydration();
   const searchParams = useSearchParams();
@@ -109,10 +97,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
 
   const detail = session.data;
   const now = new Date();
-  const status = sessionStatus(detail, now, liquidity.hasLiquidity, resolution.parent);
-  const { recheckParent } = resolution;
-  const recheckStatus =
-    recheckParent && (async () => sessionStatus(detail, new Date(), liquidity.hasLiquidity, await recheckParent()));
+  const status = sessionStatus(detail, now, liquidity.hasLiquidity);
   // trading can outlast the resolution date; adding liquidity cannot (L7)
   const addsClosed = resolutionOpened(detail.closesAt, now);
   if (isAddingLiquidity === "link") setAddingLiquidity(!addsClosed);
@@ -194,7 +179,6 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
           marketEstimates={marketEstimates}
           isMarketUnknown={chart.data === undefined}
           hasLiquidity={liquidity.hasLiquidity}
-          recheckStatus={recheckStatus}
         />
         <TradeHistory session={detail} />
         {walletMarket ? <TradeWallet market={walletMarket} noun={optionNounSingular(detail.itemName)} /> : null}

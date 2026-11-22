@@ -235,21 +235,6 @@ describe("OptionCard", () => {
   });
 
   it.each([
-    { status: "resolved" as const, reason: "This session has resolved." },
-    { status: "unknown" as const, reason: "Couldn't check whether this session has resolved. Trying again." },
-  ])("refuses estimates under status $status and says why", async ({ status, reason }) => {
-    renderCard({ status });
-
-    await open();
-
-    const { slider, sliderRoot } = estimateControls();
-    expect(slider).toBeDisabled();
-    expect(sliderRoot).toHaveClass(DIMMED);
-    expect(screen.queryByRole("button", { name: /type your estimate/ })).toBeNull();
-    expect(screen.getByText(reason)).toBeInTheDocument();
-  });
-
-  it.each([
     { label: "a closed session", overrides: { status: "closed" as const } },
     { label: "an option with no trading", overrides: { marketEstimate: undefined } },
   ])("dims the slider and offers no typed estimate on $label", async ({ overrides }) => {

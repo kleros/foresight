@@ -15,11 +15,6 @@ import { addresses } from "@/testing/fixtures";
 import { MarketPage } from "../MarketPage";
 
 vi.mock("@/lib/web3/public-client", () => ({ publicClient: {} }));
-/* The parent market reads as unresolved. */
-vi.mock("@/features/resolution/api/getSessionResolution", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/features/resolution/api/getSessionResolution")>()),
-  fetchSessionResolution: async () => ({ parent: { resolved: false }, children: {} }),
-}));
 /* What the session's pools read as: not yet read, or one UP pool live or empty. */
 const pools = vi.hoisted(() => ({ read: "unread" as "unread" | "live" | "empty" }));
 vi.mock("@/features/liquidity/api/getLiquidityPools", async (importOriginal) => {

@@ -67,8 +67,6 @@ interface PredictDialogProps {
   isPending?: boolean;
   /** A held send may still be open in the wallet; pressing on signs its step again. */
   asksToSignAgain?: boolean;
-  /** Pressing on only reads sent transactions from the chain, so the notice leaves the button on. */
-  isCheckOnly?: boolean;
   /** Checks a sent transaction before discarding; unresolved transactions stay saved. */
   onDiscard?: () => void;
   /**
@@ -188,7 +186,6 @@ export function PredictDialog({
   canRetry,
   isPending = false,
   asksToSignAgain = false,
-  isCheckOnly = false,
   onDiscard,
   recovered,
   notice,
@@ -562,7 +559,7 @@ export function PredictDialog({
               isDisabled={
                 onRetryPrices
                   ? false
-                  : (notice !== undefined && !isCheckOnly) ||
+                  : notice !== undefined ||
                     (recovered !== undefined && !pricesReady) ||
                     (!canRetry &&
                       !isMoved &&

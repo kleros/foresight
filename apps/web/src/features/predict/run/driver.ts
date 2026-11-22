@@ -80,9 +80,6 @@ class HeldSendError extends Error {}
 /** A held send's nonce stayed unused past its hold; the visitor is asked before its step is signed again. */
 class SignAgainError extends Error {}
 
-/** The page refused the next send; nothing was asked of the wallet. */
-class SendRefusedError extends Error {}
-
 const TRANSPORT_FAILURES = new Set(["TimeoutError", "HttpRequestError"]);
 
 /**
@@ -217,8 +214,6 @@ export function createPredictRun(args: {
   ownership?: RunOwnership;
   /** Every option of the session, which a stored run's options must match before it is restored. */
   sessionOptions?: () => readonly OptionTokens[];
-  /** Asked before each send; false stops the run with nothing sent. */
-  maySend?: () => Promise<boolean>;
 }): PredictDriver {
   const listeners = new Set<() => void>();
   /** Options left out by each batch not yet settled, by step id; a settled batch's are kept in the run's snapshot. */
@@ -242,7 +237,6 @@ export function createPredictRun(args: {
     | "resign"
     | "wrong-chain"
     | "wrong-wallet"
-    | "blocked"
     | undefined;
   /** Set while a sent transaction's outcome is read from the chain; the run itself stays stopped meanwhile. */
   let reconciling = false;
@@ -366,8 +360,6 @@ export function createPredictRun(args: {
 
       const owner = run.ctx.owner;
       const [nonce, fromBlock] = await Promise.all([args.reader.nextNonce(owner), args.reader.latestBlock()]);
-      // asked after the last await before the wallet opens, so a status change during these reads still stops it
-      if (args.maySend && !(await args.maySend())) throw new SendRefusedError();
       const send: UnansweredSend = { owner, nonce, fromBlock, tx, heldAt: now() };
       // held before the wallet opens: a prompt approved after the tab closed has no hash stored to find it by
       try {
@@ -461,10 +453,6 @@ export function createPredictRun(args: {
       if (error instanceof UnlistedTxError) {
         buildFailure = "unlisted";
         return "unknown";
-      }
-      if (error instanceof SendRefusedError) {
-        buildFailure = "blocked";
-        return "rpc";
       }
       if (error instanceof HeldSendError || error instanceof SignAgainError) {
         buildFailure = error instanceof HeldSendError ? "held" : "resign";

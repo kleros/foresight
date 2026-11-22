@@ -39,10 +39,6 @@ export const CREDITS_UNAVAILABLE = "Credits can't be spent now. Untick them to u
 
 /** The page reads the session as closed; the popup refuses to start or go on. */
 export const SESSION_CLOSED = "This session has closed.";
-/** The parent market has resolved; the card and the popup refuse to start or go on. */
-export const SESSION_RESOLVED = "This session has resolved.";
-/** The parent market's resolution could not be read; the page reads it again, and nothing new starts meanwhile. */
-export const RESOLUTION_UNKNOWN = "Couldn't check whether this session has resolved. Trying again.";
 
 /** A stored run another open tab is driving; the card and the popup both say it. */
 export const RUNNING_ELSEWHERE = "This prediction is running in another tab. Finish or close it there.";
@@ -79,7 +75,6 @@ const FAILURE_COPY: Record<NonNullable<PredictProgress["failure"]>["reason"], st
   held: "Your wallet may still send the last transaction. Check again in a few minutes.",
   resign: SIGN_AGAIN_ASK,
   unseen: "The network can't find your last transaction yet. Check again, or discard it.",
-  blocked: "Stopped before the next transaction.",
 };
 
 /** Once the credits are in the trade wallet the run is locked to them, so only waiting helps. */

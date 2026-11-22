@@ -45,8 +45,6 @@ export interface PredictRunInput {
   funding: () => Omit<PredictRequest, "options" | "startedAt" | "slippage">;
   /** The popup's slippage settings, read when Predict is pressed. */
   slippage: () => PredictSlippage;
-  /** Asked before each transaction the run sends; false stops the run with nothing sent. */
-  maySend?: () => Promise<boolean>;
   onComplete?: () => void;
 }
 
@@ -136,7 +134,6 @@ export function usePredictRun(input: PredictRunInput | null): {
         return now.sessionOptions();
       },
       onComplete: () => latest.current?.onComplete?.(),
-      maySend: async () => (await latest.current?.maySend?.()) ?? true,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuilt on identity, read through the ref otherwise
   }, [identity]);
