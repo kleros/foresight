@@ -166,6 +166,7 @@ describe.each(["resolved", "unknown"] as const)(
         progressAt("review", { unanswered: true, recovered: snapshot() }),
         "resume",
       ],
+      ["a stopped run waiting on a transaction from the wallet", halted("pending", { moneyMoved: true }), "retry"],
     ] satisfies Array<[string, PredictProgress, "retry" | "resume"]>)(
       "reads it from the chain on the press: %s",
       (_name, at, action) => {
@@ -181,6 +182,16 @@ describe.each(["resolved", "unknown"] as const)(
         expect(driver.confirm).not.toHaveBeenCalled();
       },
     );
+
+    it("holds a check on a stored run that spends credits to the same credits review as a signing press", () => {
+      progress = progressAt("review", { pendingHash: HASH, recovered: snapshot({ creditsToSpend: 10n ** 18n }) });
+      mount(status);
+
+      fireEvent.click(screen.getByText("predict"));
+
+      // no credits price is quoted here, so the run stops at moved before it signs the swap
+      expect(driver.resume).toHaveBeenCalledWith({});
+    });
 
     it("offers no check where nothing is outstanding", () => {
       progress = halted("refused", { moneyMoved: true });

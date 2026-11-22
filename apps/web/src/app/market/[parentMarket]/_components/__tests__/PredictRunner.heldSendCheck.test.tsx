@@ -36,7 +36,7 @@ const WAD = 10n ** 18n;
 const A = "0xa11ce000000000000000000000000000000a11ce" as Address;
 const A_EXECUTOR = "0xa11ce000000000000000000000000000000e0e0a" as Address;
 
-/** What the visit before the reload put in, and what the form holds on reopening. */
+/** The form Predict is pressed with, and the form each test starts from. */
 const SAVED = { deposit: 725n * 10n ** 16n, estimate: 410 } as const;
 const CURRENT = { deposit: WAD, estimate: 250 } as const;
 
@@ -249,8 +249,8 @@ vi.mock("../usePredictFunding", () => ({
   }),
 }));
 vi.mock("../useHasPredicted", () => ({ useHasPredicted: () => true }));
-// a live preview for every estimate in the form, which a reopened run's summary must not show; its plans are
-// the fake chain's pools for the form's split, which a new run is held to
+// a live preview for every estimate in the form; its plans are the fake chain's pools for the form's split, which a
+// new run is held to
 vi.mock("../usePricePreview", async (importOriginal) => {
   const { chainState } = await import("@/features/predict/flow/__tests__/support/fakes");
   const { previewTrades } = await import("@/features/predict/utils/plan");

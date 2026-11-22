@@ -147,11 +147,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
         <SessionChart
           data={chart.data}
           startTime={Math.floor(detail.openedAt.getTime() / 1000)}
-          endTime={
-            status !== "trading" && status !== "unknown" && detail.closesAt
-              ? Math.floor(detail.closesAt.getTime() / 1000)
-              : null
-          }
+          endTime={status !== "trading" && detail.closesAt ? Math.floor(detail.closesAt.getTime() / 1000) : null}
           noun={noun}
         />
       ) : null}

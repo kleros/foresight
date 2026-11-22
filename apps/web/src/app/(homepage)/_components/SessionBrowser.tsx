@@ -31,10 +31,7 @@ export function SessionBrowser() {
 
   const listed = data?.sessions ?? [];
   const sessionFactory = sessionFactoryAddress();
-  // a session with its own link lives on another deployment, not this factory
-  const resolutions = useParentResolutions(
-    listed.map((session) => (session.href ? undefined : sessionKey(session.id, sessionFactory))),
-  );
+  const resolutions = useParentResolutions(listed.map((session) => sessionKey(session.id, sessionFactory)));
   const sessions = listed.map((session, index) => {
     const parent = resolutions[index];
     if (parent === undefined) return session;
