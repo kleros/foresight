@@ -93,6 +93,7 @@ export default [
     files: ["src/features/*/flow/__tests__/*.fork*.ts"],
     rules: {
       "import-x/no-restricted-paths": "off",
+      "architecture/no-restricted-type-references": "off",
     },
   },
   {

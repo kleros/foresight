@@ -28,7 +28,11 @@ function imports(text: string): string[] {
             (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
               (ts.isIdentifier(node.expression) && node.expression.text === "require"))
           ? node.arguments[0]
-          : undefined;
+          : ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)
+            ? node.argument.literal
+            : ts.isExternalModuleReference(node)
+              ? node.expression
+              : undefined;
     if (specifier && (ts.isStringLiteral(specifier) || ts.isNoSubstitutionTemplateLiteral(specifier))) {
       found.push(specifier.text);
     }
@@ -76,6 +80,9 @@ describe("feature and shared-layer imports", () => {
     "import(`@/features/other/value`);",
     'require("@/features/other/value");',
     "require(`@/features/other/value`);",
+    'type Value = import("@/features/other/value").Value;',
+    'type Value = import(/* type */ "@/features/other/value").Value;',
+    'import value = require("@/features/other/value");',
   ])("reads the dependency in %s", (text) => {
     expect(imports(text)).toEqual(["@/features/other/value"]);
   });

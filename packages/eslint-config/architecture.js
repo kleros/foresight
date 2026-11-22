@@ -42,6 +42,29 @@ const listFeatures = (cwd) => {
     .map((entry) => entry.name);
 };
 
+const restrictedPaths = importX.rules["no-restricted-paths"];
+
+/**
+ * import-x's no-restricted-paths, over the two module references it does not visit:
+ * `import("…")` in a type and `import x = require("…")`.
+ */
+const typeReferencePaths = {
+  meta: restrictedPaths.meta,
+  defaultOptions: restrictedPaths.defaultOptions,
+  create(context) {
+    const visitors = restrictedPaths.create(context);
+    const check = (source) => {
+      if (source?.type === "Literal" && typeof source.value === "string") {
+        visitors.ImportDeclaration({ type: "ImportDeclaration", source });
+      }
+    };
+    return {
+      TSImportType: (node) => check(node.source ?? node.argument?.literal),
+      TSExternalModuleReference: (node) => check(node.expression),
+    };
+  },
+};
+
 const featureZones = (appRoot) =>
   listFeatures(appRoot).map((feature) => ({
     target: `./src/features/${feature}`,
@@ -78,35 +101,39 @@ export const architectureConfig = (appRoot) => {
     );
   }
 
+  const restrictedPathsOptions = [
+    "error",
+    {
+      basePath: appRoot,
+      zones: [
+        ...featureZones(appRoot),
+        {
+          target: "./src/features",
+          from: "./src/app",
+          message: "Features cannot import from the app layer - dependencies flow shared -> features -> app.",
+        },
+        {
+          target: SHARED_LAYERS,
+          from: ["./src/features", "./src/app"],
+          message: "Shared layers cannot import from features or app - they must stay reusable in isolation.",
+        },
+      ],
+    },
+  ];
+
   return {
     files: ["src/**/*.{ts,tsx,js,jsx}"],
     plugins: {
       "import-x": importX,
+      architecture: { rules: { "no-restricted-type-references": typeReferencePaths } },
     },
     // The zones match on resolved file paths, so `@/*` has to resolve through tsconfig.
     settings: {
       "import-x/resolver-next": [createTypeScriptImportResolver()],
     },
     rules: {
-      "import-x/no-restricted-paths": [
-        "error",
-        {
-          basePath: appRoot,
-          zones: [
-            ...featureZones(appRoot),
-            {
-              target: "./src/features",
-              from: "./src/app",
-              message: "Features cannot import from the app layer - dependencies flow shared -> features -> app.",
-            },
-            {
-              target: SHARED_LAYERS,
-              from: ["./src/features", "./src/app"],
-              message: "Shared layers cannot import from features or app - they must stay reusable in isolation.",
-            },
-          ],
-        },
-      ],
+      "import-x/no-restricted-paths": restrictedPathsOptions,
+      "architecture/no-restricted-type-references": restrictedPathsOptions,
     },
   };
 };
