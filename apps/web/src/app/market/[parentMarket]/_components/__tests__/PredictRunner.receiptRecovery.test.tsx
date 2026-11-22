@@ -397,3 +397,35 @@ describe.each(["trading", "resolved", "unknown"] as const)(
     }, 20_000);
   },
 );
+
+describe.each(["trading", "resolved", "unknown"] as const)(
+  "a stored run reopened for review while its deposit is pending, at %s",
+  (status) => {
+    it("reads the deposit's receipt again on Resume once it mines, and opens no wallet", async () => {
+      const view = await firstVisit([], { holdMining: true });
+      await waitFor(() => expect(chain.prompts.some(isDeposit)).toBe(true));
+      view.unmount();
+      const deposit = chain.prompts.find(isDeposit)!;
+      const reads = vi.spyOn(publicClient, "getTransactionReceipt");
+      const readsOfDeposit = () => reads.mock.calls.filter(([args]) => args.hash === deposit.hash).length;
+
+      connect(A);
+      fill(CURRENT);
+      const sent = chain.prompts.length;
+      renderRunner(status);
+      const resume = await screen.findByRole("button", { name: "Resume" });
+      await waitFor(() => expect(readsOfDeposit()).toBeGreaterThan(0));
+      await settle();
+      const atReview = readsOfDeposit();
+      expect(resume).toBeEnabled();
+
+      chain.receipts.set(deposit.hash, "success");
+      await userEvent.click(resume);
+
+      await waitFor(() => expect(readsOfDeposit()).toBeGreaterThan(atReview));
+      await settle();
+      if (status !== "trading") expect(chain.prompts).toHaveLength(sent);
+      reads.mockRestore();
+    });
+  },
+);

@@ -105,4 +105,9 @@ describe("predictBlocker with an unfinished run stored", () => {
   it("still says trading has closed first", () => {
     expect(stored({ status: "closed" })).toBe("closed");
   });
+
+  it.each(["resolved", "unknown"] as const)("says the session is %s before naming the run", (status) => {
+    expect(stored({ status })).toBe(status);
+    expect(stored({ status, selectedCount: 0, isMarketUnknown: true })).toBe(status);
+  });
 });

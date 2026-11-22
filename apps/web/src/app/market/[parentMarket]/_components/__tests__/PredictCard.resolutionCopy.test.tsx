@@ -95,6 +95,15 @@ describe("the predict card names the status it is blocked by", () => {
 });
 
 describe.each(["resolved", "unknown"] as const)("a stored run under status %s", (status) => {
+  it("says why Predict is off, in place of asking for the run to be resumed first", async () => {
+    stored.run = { deposit: 0n, creditsToSpend: 0n };
+    renderCard(status);
+
+    await screen.findByRole("button", { name: "Resume" });
+    expect(screen.getByText(status === "resolved" ? RESOLVED : UNKNOWN)).toBeInTheDocument();
+    expect(screen.queryByText(/before starting a new one/)).toBeNull();
+  });
+
   it("opens with no transaction in flight, so what it sent can be inspected", async () => {
     stored.run = { deposit: 0n, creditsToSpend: 0n };
     stored.pending = false;

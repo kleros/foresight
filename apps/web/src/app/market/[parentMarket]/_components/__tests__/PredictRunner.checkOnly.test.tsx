@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAccount } from "wagmi";
 
 import type { PredictDialog } from "@/features/predict/components/PredictDialog";
+import { snapshot } from "@/features/predict/flow/__tests__/support/fakes";
 import { usePredictRun } from "@/features/predict/hooks/usePredictRun";
 import type { PredictDriver, PredictProgress, PredictStage } from "@/features/predict/run/types";
 import type { PayToken, SelectedEstimate } from "@/features/predict/types";
@@ -209,6 +210,41 @@ describe("Check again on a sent transaction", () => {
 
     fireEvent.click(screen.getByText("predict"));
 
+    expect(driver.retry).not.toHaveBeenCalled();
+    expect(driver.start).not.toHaveBeenCalled();
+  });
+});
+
+describe("Resume on a stored run under review", () => {
+  const reviewing = (sent: Partial<PredictProgress>): PredictProgress => ({
+    ...progressAt("review"),
+    recovered: snapshot(),
+    ...sent,
+  });
+
+  it.each([
+    ["trading", { pendingHash: HASH }],
+    ["resolved", { pendingHash: HASH }],
+    ["unknown", { pendingHash: HASH }],
+    ["resolved", { unanswered: true as const }],
+    ["unknown", { unanswered: true as const }],
+  ] as const)("reads the sent transaction under %s", (status, sent) => {
+    progress = reviewing(sent);
+    mount(session(), status);
+
+    fireEvent.click(screen.getByText("predict"));
+
+    expect(driver.resume).toHaveBeenCalledTimes(1);
+    expect(driver.start).not.toHaveBeenCalled();
+  });
+
+  it.each(["resolved", "unknown"] as const)("does nothing under %s when no transaction awaits an answer", (status) => {
+    progress = reviewing({});
+    mount(session(), status);
+
+    fireEvent.click(screen.getByText("predict"));
+
+    expect(driver.resume).not.toHaveBeenCalled();
     expect(driver.retry).not.toHaveBeenCalled();
     expect(driver.start).not.toHaveBeenCalled();
   });

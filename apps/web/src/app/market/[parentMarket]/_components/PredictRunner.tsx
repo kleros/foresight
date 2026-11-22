@@ -273,7 +273,11 @@ export function PredictRunner({ session, status, recheckStatus, selected, onClos
 
   // reading a sent transaction's receipt opens no wallet; the run's maySend refuses whatever it would send next
   const checksOnly =
-    stopsSends(status) && canRetry && stage === "halted" && checksSend && progress?.failure?.reason !== "resign";
+    stopsSends(status) &&
+    canRetry &&
+    (stage === "halted" || stage === "review") &&
+    checksSend &&
+    progress?.failure?.reason !== "resign";
 
   const predict = () => {
     if (blockedBy && !checksOnly) return;
