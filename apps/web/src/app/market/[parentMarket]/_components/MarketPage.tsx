@@ -15,6 +15,7 @@ import { EstimateCsvDialog } from "@/features/predict/components/EstimateCsvDial
 import { useEstimateHydration } from "@/features/predict/hooks/useEstimateHydration";
 import { snapEstimate } from "@/features/predict/utils/estimates";
 import { useSessionResolution } from "@/features/resolution/api/useSessionResolution";
+import { sessionResults } from "@/features/resolution/utils/sessionResults";
 import { usePoolBalances, useSDaiUsdPrice } from "@/features/sessions/api/getPoolBalances";
 import { useSession } from "@/features/sessions/api/getSession";
 import { useSessionChart } from "@/features/sessions/api/getSessionChart";
@@ -102,6 +103,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
   const detail = session.data;
   const now = new Date();
   const status = sessionStatus(detail, now, liquidity.hasLiquidity, resolution.parent);
+  const results = sessionResults(resolution.parent, resolution.children, detail.options);
   const { recheckParent } = resolution;
   const { hasLiquidity } = liquidity;
   const recheckStatus =
@@ -135,6 +137,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
         poolBalances={poolBalances.data}
         poolBalancesPending={poolBalances.isPending}
         usdPrice={usdPrice.data}
+        results={results}
       />
       {liquidity.hasLiquidity === false && !addsClosed ? (
         <LiquidityBanner reason={addLiquidityReason} onAdd={() => setAddingLiquidity(true)} />
@@ -164,6 +167,8 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
             isMarketUnavailable={chart.isError}
             position={positions[option.market.toLowerCase()]}
             collateralDecimals={detail.collateralDecimals ?? undefined}
+            collateralSymbol={detail.collateralSymbol}
+            result={results?.options[option.market.toLowerCase()]}
           />
         ))}
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">

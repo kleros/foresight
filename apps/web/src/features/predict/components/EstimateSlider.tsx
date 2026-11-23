@@ -26,6 +26,8 @@ interface EstimateSliderProps {
   onClear: () => void;
   /** Set when the session as a whole cannot take estimates; shown in place of the hint. */
   lockedReason?: string;
+  /** The option's resolved answer, marked on the track. */
+  finalValue?: { value: number; text: string };
 }
 
 const ESTIMATE_COLOR = { higher: "var(--fs-estimate-up)", lower: "var(--fs-estimate-down)" } as const;
@@ -59,6 +61,7 @@ export function EstimateSlider({
   onCommit,
   onClear,
   lockedReason,
+  finalValue,
 }: EstimateSliderProps) {
   const range = scale.upperBound - scale.lowerBound;
   // react-aria snaps a controlled value to the step, so the market's number is held on the same grid
@@ -178,6 +181,16 @@ export function EstimateSlider({
                 width: `${Math.abs(thumbShare - marketShare) * 100}%`,
                 backgroundColor: tone,
               }}
+            />
+          ) : null}
+          {finalValue ? (
+            <span
+              data-testid="final-value-marker"
+              role="img"
+              aria-label={`Final value ${finalValue.text}`}
+              // centred on the library's 8px track, over the thumb so the answer is never hidden
+              className="ring-fs-surface pointer-events-none absolute top-3.5 z-11 h-5 w-1 -translate-x-1/2 -translate-y-1/2 bg-fs-tone-success rounded-full ring-2"
+              style={{ left: `${((finalValue.value - scale.lowerBound) / range) * 100}%` }}
             />
           ) : null}
           {isDisabled && value !== undefined ? (

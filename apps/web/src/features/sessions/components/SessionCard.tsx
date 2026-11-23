@@ -4,6 +4,7 @@ import { StatusChip } from "@/components/ui/StatusChip";
 
 import ArrowIcon from "@/assets/svg/arrow-right.svg";
 import TradingIcon from "@/assets/svg/chart-bar.svg";
+import CheckIcon from "@/assets/svg/check-circle.svg";
 import CountdownIcon from "@/assets/svg/cronometer.svg";
 import TagIcon from "@/assets/svg/tag-category.svg";
 
@@ -19,7 +20,7 @@ import { statusChip } from "../utils/statusChip";
 import { resolutionOpened } from "../utils/toSessionDetail";
 
 export function SessionCard({ session }: { session: SessionSummary }) {
-  const { closesAt } = session;
+  const { closesAt, winningOptionNames } = session;
 
   return (
     <Link className="fs-session-card" href={session.href ?? paths.market.getHref(session.parentMarket)}>
@@ -41,12 +42,23 @@ export function SessionCard({ session }: { session: SessionSummary }) {
               </div>
             ) : null}
 
-            <div className="mt-4 flex shrink-0 items-center gap-2">
-              <TagIcon className="text-fs-accent size-4 shrink-0 [&_path]:fill-current" />
-              <span className="text-fs-accent text-sm font-semibold">
-                {session.branchCount} {session.branchNoun}
-              </span>
-            </div>
+            {/* the card at rest holds one line here; the winners take the count's place */}
+            {session.resolved && winningOptionNames?.length ? (
+              <div className="mt-4 flex min-w-0 shrink-0 items-center gap-2" title={winningOptionNames.join(", ")}>
+                <CheckIcon className="text-fs-tone-success-text size-4 shrink-0 [&_path]:fill-current" />
+                <p className="min-w-0 truncate text-sm">
+                  <span className="text-fs-text-secondary">Selected: </span>
+                  <span className="text-fs-text-primary font-semibold">{winningOptionNames.join(", ")}</span>
+                </p>
+              </div>
+            ) : (
+              <div className="mt-4 flex shrink-0 items-center gap-2">
+                <TagIcon className="text-fs-accent size-4 shrink-0 [&_path]:fill-current" />
+                <span className="text-fs-accent text-sm font-semibold">
+                  {session.branchCount} {session.branchNoun}
+                </span>
+              </div>
+            )}
 
             {closesAt ? (
               <div className="fs-session-card__reveal mt-2 flex shrink-0 flex-col gap-2">

@@ -5,6 +5,7 @@ import { useCallback, useRef, useState, type RefObject } from "react";
 import { AlertMessage } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
+import { formatPayouts, type OptionResult, type SessionResults } from "@/features/resolution/utils/sessionResults";
 import { DisplayBlocks } from "@/features/sessions/components/DisplayBlocks";
 import {
   approxCollateral,
@@ -42,6 +43,7 @@ export function SessionHeader({
   poolBalances,
   poolBalancesPending,
   usdPrice,
+  results,
 }: {
   session: SessionDetail;
   status: SessionStatus;
@@ -51,6 +53,8 @@ export function SessionHeader({
   poolBalancesPending: boolean;
   /** USD per unit of collateral; only an sDAI session has one. */
   usdPrice: number | undefined;
+  /** Set once the parent has resolved. */
+  results?: SessionResults;
 }) {
   // a gateway that cannot serve an image leaves the gradient and no icon, not a broken image
   const [heroFailed, setHeroFailed] = useState(false);
@@ -145,6 +149,7 @@ export function SessionHeader({
             {explorer ? <ExternalLink href={explorer}>{shortenAddress(session.parentMarket)}</ExternalLink> : null}
           </div>
           <h2 className="text-fs-text-primary text-lg font-semibold text-pretty">{session.question}</h2>
+          {results ? <Results session={session} results={results} /> : null}
           {session.description ? (
             <p className="text-fs-text-secondary text-sm leading-relaxed">{session.description}</p>
           ) : null}
@@ -172,5 +177,53 @@ export function SessionHeader({
         </p>
       )}
     </header>
+  );
+}
+
+const WINNER_READS: Record<Exclude<OptionResult["kind"], "final" | "not-selected" | "pending">, string> = {
+  waiting: "Waiting for result",
+  invalid: "Invalid",
+  unread: "Could not read the result",
+};
+
+function Results({ session, results }: { session: SessionDetail; results: SessionResults }) {
+  if (results.invalid) {
+    return (
+      <p className="text-fs-text-primary text-sm">
+        <span className="font-semibold">Invalid</span>
+        {`: ${formatPayouts(results.invalid, session.collateralSymbol)}.`}
+      </p>
+    );
+  }
+  const winners = session.options.flatMap((option) => {
+    const result = results.options[option.market.toLowerCase()];
+    return result && result.kind !== "not-selected" ? [{ option, result }] : [];
+  });
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="type-label text-fs-text-secondary">{winners.length === 1 ? "Winning option" : "Winning options"}</p>
+      <ul className="flex flex-col gap-1.5">
+        {winners.map(({ option, result }) => (
+          <li key={option.market} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-0.5 text-sm">
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="size-2 flex-none rounded-full" style={{ backgroundColor: option.color }} aria-hidden />
+              <span className="text-fs-text-primary min-w-0 font-medium wrap-break-word">{option.name}</span>
+            </span>
+            {result.kind === "pending" ? (
+              <span className="fs-skeleton inline-block h-4 w-12" />
+            ) : (
+              <span
+                className={clsx(
+                  "tabular-nums",
+                  result.kind === "final" ? "text-fs-text-primary font-semibold" : "text-fs-text-secondary",
+                )}
+              >
+                {result.kind === "final" ? result.text : WINNER_READS[result.kind]}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

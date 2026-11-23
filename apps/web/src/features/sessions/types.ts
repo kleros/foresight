@@ -188,6 +188,8 @@ export interface SessionSummary extends SessionCore {
   keyword: string;
   /** Whether the parent market has resolved; undefined while unread or where the read failed. */
   resolved?: boolean;
+  /** The parent's winning options, by display name; set only on a resolved session. */
+  winningOptionNames?: string[];
   /** True where the parent market's resolution could not be read. */
   resolutionUnknown?: boolean;
   /** Overrides the market page link, for sessions this indexer does not hold. */
