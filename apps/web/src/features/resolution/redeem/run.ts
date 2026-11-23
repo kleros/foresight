@@ -742,6 +742,8 @@ export function createRedeemRun(args: {
         report("wrong-chain", recoverRun);
         return;
       }
+      // whatever the probe finds, the run leaves review: a refusal halts it, a let-go reviews it afresh
+      reviewing = false;
       discarding = true;
       notify();
       let landing: boolean;
