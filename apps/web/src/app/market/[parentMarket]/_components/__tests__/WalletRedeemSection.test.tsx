@@ -44,8 +44,10 @@ function progress(value: RedeemProgress | null) {
   vi.mocked(useWalletRedeemRun).mockReturnValue({ progress: value, start, resume, retry, discard });
 }
 
-const renderSection = () =>
-  render(<WalletRedeemSection session={SESSION} parent={TWO_WINNERS.parent} parentMarket={PARENT} options={OPTIONS} />);
+const section = () => (
+  <WalletRedeemSection session={SESSION} parent={TWO_WINNERS.parent} parentMarket={PARENT} options={OPTIONS} />
+);
+const renderSection = () => render(section());
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -133,6 +135,23 @@ describe("the wallet's Redeem section", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start over" }));
     expect(discard).toHaveBeenCalledTimes(1);
     expect(retry).not.toHaveBeenCalled();
+  });
+
+  it("asks again on a later hold, not carrying an earlier press over a run that went on", () => {
+    read({ input: plannerInput() });
+    const held: RedeemProgress = { stage: "halted", failure: { reason: "held", retryable: true }, holdsSend: true };
+    progress(held);
+    const { rerender } = renderSection();
+    fireEvent.click(screen.getByRole("button", { name: "Start over" }));
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+
+    progress({ stage: "signing" });
+    rerender(section());
+    progress(held);
+    rerender(section());
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(discard).not.toHaveBeenCalled();
   });
 
   it("goes back from Start over without discarding", () => {

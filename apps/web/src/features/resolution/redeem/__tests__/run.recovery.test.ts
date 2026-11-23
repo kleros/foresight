@@ -145,6 +145,8 @@ function tab(
 const progress = (run: Run) => run.getProgress();
 const tick = () => new Promise((resolve) => setTimeout(resolve, 50));
 const storedRun = (storage: FlowRunStorage) => createFlowRunStore({ storage }).load("redeem-recovery");
+const storedSends = (storage: FlowRunStorage) =>
+  Object.keys((storedRun(storage)?.snapshot as { sends?: object } | undefined)?.sends ?? {});
 const sameCalls = (sent: FlowTx[], expected: FlowTx[]) =>
   expect(sent.map((tx) => [tx.to, tx.data])).toEqual(expected.map((tx) => [tx.to, tx.data]));
 const settled = (run: Run) =>
@@ -447,16 +449,61 @@ describe("createRedeemRun discard (L8)", () => {
     expect(sends.prompts).toEqual([]);
   });
 
+  it("keeps a held run whose redeem is broadcast at a later nonce after another send took the stored one", async () => {
+    const world = chain();
+    const { left, hung } = await leftOpen(world, 1);
+    const { run, sends, storage } = await reopened(world, left);
+    expect(progress(run).failure?.reason).toBe("held");
+    world.approveLater({ to: OTHER, data: "0x" }, OWNER);
+    world.broadcast(hung, OWNER, false);
+
+    await run.discard();
+
+    expect(progress(run)).toEqual({
+      stage: "halted",
+      failure: { reason: "pending", retryable: true },
+      holdsSend: true,
+    });
+    expect(storedSends(storage)).toEqual(["call:0", "call:1"]);
+    expect(sends.prompts).toEqual([]);
+  });
+
+  it("atomic: keeps a run whose batch has not landed, and the retry completes it without a second batch", async () => {
+    const world = chain();
+    const first = tab(world, { atomic: true, sendCalls: "unmined" });
+    first.run.start();
+    await first.batch.sent();
+    const left = copyStorage(first.storage);
+    first.run.dispose();
+    const { run, batch, storage } = await reopened(world, left, { atomic: true });
+    expect(progress(run).failure?.reason).toBe("pending");
+
+    await run.discard();
+
+    expect(progress(run)).toEqual({
+      stage: "halted",
+      failure: { reason: "pending", retryable: true },
+      holdsSend: true,
+    });
+    expect(storedRun(storage)).not.toBeNull();
+    world.land();
+    run.retry();
+    await vi.waitFor(() => expect(progress(run).stage).toBe("complete"), { timeout: 3_000 });
+    expect(first.batch.sendCalls.length + batch.sendCalls.length).toBe(1);
+  });
+
   it("keeps another account's run", async () => {
     const world = chain();
     const { left } = await leftOpen(world, 1);
     const next = tab(world, { storage: left, account: OTHER });
     next.run.recover();
-    expect(progress(next.run)).toEqual({ stage: "halted", failure: { reason: "wrong-wallet", retryable: true } });
+    const halted = { stage: "halted", failure: { reason: "wrong-wallet", retryable: true } };
+    expect(progress(next.run)).toEqual(halted);
 
     await next.run.discard();
 
-    expect(storedRun(left)).not.toBeNull();
+    expect(progress(next.run)).toEqual(halted);
+    expect(storedSends(left)).toEqual(["call:0", "call:1"]);
     expect(next.sends.prompts).toEqual([]);
   });
 
@@ -465,11 +512,13 @@ describe("createRedeemRun discard (L8)", () => {
     const { left } = await leftOpen(world, 1);
     const next = tab(world, { storage: left, chainId: 1 });
     next.run.recover();
-    expect(progress(next.run).failure?.reason).toBe("wrong-chain");
+    const halted = { stage: "halted", failure: { reason: "wrong-chain", retryable: true } };
+    expect(progress(next.run)).toEqual(halted);
 
     await next.run.discard();
 
-    expect(storedRun(left)).not.toBeNull();
+    expect(progress(next.run)).toEqual(halted);
+    expect(storedSends(left)).toEqual(["call:0", "call:1"]);
   });
 
   it("atomic: keeps a run whose batch the wallet cannot report, and never sends it again (L9)", async () => {
