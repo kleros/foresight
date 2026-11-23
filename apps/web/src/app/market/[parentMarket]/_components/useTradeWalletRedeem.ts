@@ -36,6 +36,8 @@ const wagmiConfig = () => import("@/lib/web3/wagmi").then((module) => module.wag
 
 const NOT_SENT_COPY = "Not sent: this redeem does not match what Foresight allows for your connected account.";
 const NETWORK_COPY = "The network did not answer.";
+/** How often, in ms, the list is read again while an option waits for its child's result. */
+const WAITING_REREAD_MS = 30_000;
 
 /**
  * What the connected account's trade wallet can redeem in the session. Keyed under the funds prefix, so every run
@@ -67,6 +69,7 @@ export function useTradeWalletRedeem(session: SessionKey | undefined) {
             })
         : skipToken,
     staleTime: STALE_TIME.balance,
+    refetchInterval: (query) => (query.state.data?.waiting.length ? WAITING_REREAD_MS : false),
   });
 }
 

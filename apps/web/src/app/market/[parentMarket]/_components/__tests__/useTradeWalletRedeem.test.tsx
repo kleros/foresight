@@ -4,14 +4,16 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { getConnection, sendTransaction, waitForTransactionReceipt } from "@wagmi/core";
 import { getAddress, type Address } from "viem";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fetchRedeemScope, fetchTradeWalletRedeem } from "@/features/resolution/api/getTradeWalletRedeem";
-import { planTradeWalletRedeem, type TradeWalletRedeemInput } from "@/features/resolution/redeem/plan";
+import { planTradeWalletRedeem, type RedeemPlan, type TradeWalletRedeemInput } from "@/features/resolution/redeem/plan";
 import type { RedeemScope } from "@/features/resolution/redeem/tradeWalletBatchAllowed";
 import { fundsKeyPrefix } from "@/features/trade-executor/api/getFunds";
 
 import { errorToast } from "@/utils/toast";
+
+import { makeQueryClient } from "@/lib/query";
 
 import { useRedeemFromTradeWallet, useTradeWalletRedeem } from "../useTradeWalletRedeem";
 
@@ -226,5 +228,53 @@ describe("sending a trade wallet redeem", () => {
     await act(() => result.current.run.mutateAsync({ plan: result.current.list.data!, session: SESSION }));
 
     await waitFor(() => expect(result.current.list.data).toMatchObject({ parts: [], payout: 0n, tx: null }));
+  });
+});
+
+describe("the redeem list while an option waits for its child's result", () => {
+  /** Option 0 won; its child has not resolved, so nothing is redeemable yet. */
+  const WAITING: RedeemPlan = { parts: [], waiting: [0], payout: 0n, tx: null };
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  /** Runs the fake clock `ms` ahead, with the reads and renders it releases. */
+  const after = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
+
+  function renderList() {
+    const client = makeQueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    return renderHook(() => useTradeWalletRedeem(SESSION), { wrapper }).result;
+  }
+
+  it("is read again until the child resolves, then offers its redeem and stops rereading", async () => {
+    let childResolved = false;
+    vi.mocked(fetchTradeWalletRedeem).mockImplementation(async (_client, { owner }) =>
+      childResolved ? planFor(owner) : WAITING,
+    );
+    const result = renderList();
+    await after(100);
+    expect(result.current.data).toEqual(WAITING);
+
+    childResolved = true;
+    await after(30_000);
+
+    expect(fetchTradeWalletRedeem).toHaveBeenCalledTimes(2);
+    expect(result.current.data).toMatchObject({ waiting: [], tx: planFor(OWNER).tx });
+
+    await after(90_000);
+    expect(fetchTradeWalletRedeem).toHaveBeenCalledTimes(2);
+  });
+
+  it("is not read again while nothing waits", async () => {
+    const result = renderList();
+    await after(100);
+    expect(result.current.data?.tx).not.toBeNull();
+
+    await after(90_000);
+
+    expect(fetchTradeWalletRedeem).toHaveBeenCalledTimes(1);
   });
 });
