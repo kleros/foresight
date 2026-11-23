@@ -113,6 +113,23 @@ describe("createRedeemRun R6 signs only what was shown", () => {
     expect(run.getProgress().stage).toBe("complete");
     expect(sends.prompts).toHaveLength(PLANNED.length);
   });
+  it("starts a new review's run on the next press after stopping as changed", async () => {
+    const balances: Record<string, bigint> = { [TOKEN_A]: 3n * WAD - 1n };
+    const { run, sends, setInput } = tab({ balances });
+    run.start();
+    await settled(run);
+    expect(run.getProgress().failure).toEqual({ reason: "changed", retryable: false });
+
+    const reread = {
+      ...INPUT,
+      parentTokens: [{ token: TOKEN_A, balance: 3n * WAD - 1n }, ...INPUT.parentTokens.slice(1)],
+    };
+    setInput(reread);
+    run.start();
+    await vi.waitFor(() => expect(run.getProgress().stage).toBe("complete"), { timeout: 3_000 });
+
+    expect(sends.prompts.map((tx) => tx.data)).toEqual(planWalletRedeem(reread).calls.map((tx) => tx.data));
+  });
 });
 
 describe("createRedeemRun R8 decodes every call before the wallet opens", () => {

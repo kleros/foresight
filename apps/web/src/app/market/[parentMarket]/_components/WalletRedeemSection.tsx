@@ -26,10 +26,11 @@ interface RedeemOption {
 
 const FAILURE_COPY: Partial<Record<RedeemFailureReason, string>> = {
   rejected: "You rejected the request in your wallet.",
-  changed: "What your wallet holds changed since you pressed Redeem. Nothing more was sent.",
+  changed:
+    "What your wallet holds changed since you pressed Redeem. Nothing more was sent; check the list and press Redeem again.",
   unlisted: "Not sent: this redeem does not match what Foresight allows for your account.",
   pending: "Your wallet has a transaction that has not landed yet. Try again once it has.",
-  held: "A request from an earlier visit may still be open in your wallet. Reject it there, or approve it and try again.",
+  held: "A redeem request from an earlier visit is not on chain. If it is still open in your wallet, approve it and try again once it lands.",
   "wrong-wallet": "Connect the account that started this redeem.",
   "wrong-chain": "Switch your wallet to Gnosis.",
   reverted: "A redeem transaction reverted.",
@@ -122,12 +123,10 @@ export function WalletRedeemSection({
         <div>
           <Button small text="Continue redeem" onPress={run.resume} />
         </div>
-      ) : stage === "halted" ? (
-        run.progress?.failure?.retryable ? (
-          <div>
-            <Button small text="Try again" onPress={run.retry} />
-          </div>
-        ) : null
+      ) : stage === "halted" && run.progress?.failure?.retryable ? (
+        <div>
+          <Button small text="Try again" onPress={run.retry} />
+        </div>
       ) : data && plan && plan.calls.length > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="type-label text-fs-text-secondary min-w-0 break-all tabular-nums">

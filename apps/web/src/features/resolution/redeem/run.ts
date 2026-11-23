@@ -199,7 +199,7 @@ const sleep = (ms: number, signal?: AbortSignal) =>
   });
 
 /** A run holding a send or a batch id whose step has not settled stays stored past its expiry (R7). */
-export function unsettledRedeemRun(run: PersistedFlowRun<unknown, unknown>): boolean {
+export function unsettledRedeemRun(run: Pick<PersistedFlowRun<unknown, unknown>, "snapshot" | "steps">): boolean {
   const snapshot = run.snapshot as Partial<RedeemSnapshot> | undefined;
   const open = new Set(
     run.steps
@@ -562,14 +562,23 @@ export function createRedeemRun(args: {
 
   const busy = () => disposed || preparing || recovering;
 
+  /** A send of the run may still land: a submitted step, or a send or batch id stored for a step not settled. */
+  const holdsSend = (stored: Pick<PersistedFlowRun<RedeemSnapshot, RedeemCtx>, "snapshot" | "steps">) =>
+    unsettledRedeemRun(stored) || stored.steps.some((step) => step.outcome.status === "submitted");
+
   return {
     start() {
       if (busy()) return;
-      // a finished run is cleared from storage; the next press redeems what is left
-      if (orchestrator.getStatus() === "completed") orchestrator.trash();
+      // a finished or stopped run that holds no send is let go of; the next press redeems what the new list shows
+      const current = run();
+      if (current && current.status !== "running" && !holdsSend(current)) orchestrator.trash();
       if (orchestrator.getStatus() !== "idle") return;
-      // a stored run may have sends on chain already
-      if (args.store.load(args.flowId)) {
+      const stored = args.store.load<RedeemSnapshot, RedeemCtx>(args.flowId);
+      const account = args.account();
+      if (stored && !holdsSend(stored) && account && isAddressEqual(stored.ctx.owner, account)) {
+        orchestrator.trash(args.flowId);
+      } else if (stored) {
+        // its sends may be on chain already
         recoverRun();
         return;
       }

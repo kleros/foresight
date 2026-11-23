@@ -93,7 +93,7 @@ describe("the wallet's Redeem section", () => {
     expect(screen.queryByRole("button", { name: "Redeem" })).toBeNull();
   });
 
-  it("offers a retry after a rejected signature, and none after a stop that cannot retry", () => {
+  it("offers a retry after a rejected signature, and a new Redeem after a stop that cannot retry", () => {
     read({ input: plannerInput() });
     progress({ stage: "halted", failure: { reason: "rejected", retryable: true } });
     const { unmount } = renderSection();
@@ -106,6 +106,8 @@ describe("the wallet's Redeem section", () => {
     renderSection();
     expect(screen.getByRole("status")).toHaveTextContent("What your wallet holds changed");
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Redeem" }));
+    expect(start).toHaveBeenCalledTimes(1);
   });
 
   it("keeps a stopped run's section while the list shows nothing left", () => {
