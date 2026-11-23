@@ -81,6 +81,8 @@ export interface WalletRedeemRun {
   start: (input: WalletRedeemInput) => void;
   resume: () => void;
   retry: () => void;
+  /** Lets go of a stopped run's sends that cannot land; for after the user confirmed Start over. */
+  discard: () => void;
 }
 
 /** One connected wallet redeem at a time for `owner` on the session, recovered from this browser on mount. */
@@ -154,5 +156,6 @@ export function useWalletRedeemRun(owner: Address | undefined, session: SessionK
     },
     resume: () => driver?.resume(),
     retry: () => driver?.retry(),
+    discard: () => void driver?.discard(),
   };
 }

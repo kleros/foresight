@@ -5,6 +5,7 @@ import {
   createTxOrchestrator,
   currentEntry,
   isUserRejection,
+  settledEntries,
   StorageWriteError,
   type BalanceTxGateway,
   type FlowRunStore,
@@ -60,6 +61,8 @@ export type RedeemFailureReason =
 export interface RedeemProgress {
   stage: "idle" | "signing" | "confirming" | "review" | "halted" | "complete";
   failure?: { reason: RedeemFailureReason; retryable: boolean };
+  /** The stopped run holds a send or batch id not settled, which only a confirmed discard lets go of. */
+  holdsSend?: true;
 }
 
 export type SentWithNonce =
@@ -86,6 +89,7 @@ export interface RedeemRun {
   recover(): void;
   resume(): void;
   retry(): void;
+  discard(): Promise<void>;
   dispose(): void;
   getProgress(): RedeemProgress;
   subscribe(listener: () => void): () => void;
@@ -293,6 +297,19 @@ export function createRedeemRun(args: {
     }
   }
 
+  /** Drops the sends and batch id of every step not settled, so each is built and asked for afresh. */
+  function forgetUnsettled() {
+    const settled = new Set(settledEntries(run()?.steps ?? []).map((entry) => entry.stepId));
+    orchestrator.updateSnapshot(
+      (prev) => {
+        const sends = Object.fromEntries(Object.entries(prev.sends).filter(([id]) => settled.has(id)));
+        const { callsId: _id, ...rest } = prev;
+        return { ...rest, sends };
+      },
+      { source: "adapter", durable: true },
+    );
+  }
+
   function forget(id: string) {
     if (!run()) return;
     orchestrator.updateSnapshot(
@@ -442,6 +459,10 @@ export function createRedeemRun(args: {
     },
   });
 
+  /** A send of the run may still land: a submitted step, or a send or batch id stored for a step not settled. */
+  const holdsSend = (stored: Pick<PersistedFlowRun<RedeemSnapshot, RedeemCtx>, "snapshot" | "steps">) =>
+    unsettledRedeemRun(stored) || stored.steps.some((step) => step.outcome.status === "submitted");
+
   let cached: RedeemProgress = { stage: "idle" };
 
   function stage(): RedeemProgress["stage"] {
@@ -461,7 +482,9 @@ export function createRedeemRun(args: {
   }
 
   function notify() {
-    cached = { stage: stage(), ...(failure ? { failure } : {}) };
+    const current = run();
+    const holds = current !== null && current.status !== "running" && holdsSend(current);
+    cached = { stage: stage(), ...(failure ? { failure } : {}), ...(holds ? { holdsSend: true as const } : {}) };
     for (const listener of listeners) listener();
   }
 
@@ -576,11 +599,37 @@ export function createRedeemRun(args: {
     })();
   }
 
-  const busy = () => disposed || preparing || recovering;
+  let discarding = false;
+  const busy = () => disposed || preparing || recovering || discarding;
 
-  /** A send of the run may still land: a submitted step, or a send or batch id stored for a step not settled. */
-  const holdsSend = (stored: Pick<PersistedFlowRun<RedeemSnapshot, RedeemCtx>, "snapshot" | "steps">) =>
-    unsettledRedeemRun(stored) || stored.steps.some((step) => step.outcome.status === "submitted");
+  /** Whether a send of the stored run is in flight or has landed; retry, not a discard, must settle it. */
+  async function mayHaveLanded(
+    stored: Pick<PersistedFlowRun<RedeemSnapshot, RedeemCtx>, "snapshot" | "ctx" | "steps">,
+  ) {
+    const { snapshot, ctx, steps } = stored;
+    // a batch the wallet cannot report throws batch-unknown, so the run is kept and never sent again (L9)
+    if (snapshot.callsId !== undefined && (await callsStatus(snapshot.callsId)).status < 300) return true;
+    for (const step of steps) {
+      if (step.outcome.status !== "submitted") continue;
+      const receipt = await args.gateway.getReceipt(step.outcome.hash);
+      if (!receipt || receipt.status === "success") return true;
+    }
+    const live = steps.filter(
+      (step) => step.outcome.status !== "confirmed" && step.outcome.status !== "skipped" && snapshot.sends[step.stepId],
+    );
+    if (live.length === 0) return false;
+    if (await args.reader.hasPending(ctx.owner)) return true;
+    for (const step of live) {
+      const send = snapshot.sends[step.stepId] as Partial<SendRecord>;
+      if (!send.tx || send.nonce === undefined || send.fromBlock === undefined) continue;
+      const found = await args.reader.sentWithNonce({ owner: ctx.owner, nonce: send.nonce, fromBlock: send.fromBlock });
+      if (found.status === "pending") return true;
+      if (found.status !== "mined" || !sameCall(found, send.tx)) continue;
+      const receipt = await args.gateway.getReceipt(found.hash);
+      if (!receipt || receipt.status === "success") return true;
+    }
+    return false;
+  }
 
   return {
     start() {
@@ -619,6 +668,51 @@ export function createRedeemRun(args: {
       if (!again || busy()) return;
       report(undefined);
       again();
+    },
+
+    /**
+     * Lets go of a stopped run's sends that the chain shows neither pending nor landed, signing nothing; for the UI
+     * once the user confirmed. Settled steps are kept for review, and resume asks only for the rest.
+     */
+    async discard() {
+      if (busy() || !failure || orchestrator.getStatus() === "running") return;
+      const stored = run() ?? args.store.load<RedeemSnapshot, RedeemCtx>(args.flowId);
+      const account = args.account();
+      if (stored && !(account && isAddressEqual(stored.ctx.owner, account))) return;
+      // the probe reads the connected chain
+      if (stored && stored.ctx.chainId !== args.chainId()) return;
+      discarding = true;
+      let landing: boolean;
+      try {
+        landing = stored ? await mayHaveLanded(stored) : false;
+      } catch (error) {
+        stop(error, resumeRun);
+        return;
+      } finally {
+        discarding = false;
+      }
+      if (disposed) return;
+      if (landing) {
+        report("pending", resumeRun);
+        return;
+      }
+      if (stored?.steps.some((step) => step.outcome.status === "confirmed" || step.outcome.status === "skipped")) {
+        try {
+          if (!run()) orchestrator.restore({ flowId: args.flowId, steps: stepsFor(stored.snapshot) });
+          // a submitted step whose receipt reverted is asked for again
+          orchestrator.releaseInFlight();
+          forgetUnsettled();
+        } catch (error) {
+          stop(error, resumeRun);
+          return;
+        }
+        reviewing = true;
+        report(undefined);
+        return;
+      }
+      if (stored) orchestrator.trash(args.flowId);
+      reviewing = false;
+      report(undefined);
     },
 
     dispose() {

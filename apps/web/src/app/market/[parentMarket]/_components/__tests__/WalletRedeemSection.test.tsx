@@ -27,6 +27,7 @@ const OPTIONS = [
 const start = vi.fn();
 const resume = vi.fn();
 const retry = vi.fn();
+const discard = vi.fn();
 const refetch = vi.fn();
 
 function read(state: { input?: WalletRedeemInput; isError?: boolean; isFetching?: boolean }) {
@@ -40,7 +41,7 @@ function read(state: { input?: WalletRedeemInput; isError?: boolean; isFetching?
 }
 
 function progress(value: RedeemProgress | null) {
-  vi.mocked(useWalletRedeemRun).mockReturnValue({ progress: value, start, resume, retry });
+  vi.mocked(useWalletRedeemRun).mockReturnValue({ progress: value, start, resume, retry, discard });
 }
 
 const renderSection = () =>
@@ -117,6 +118,64 @@ describe("the wallet's Redeem section", () => {
 
     expect(screen.getByRole("heading", { name: "Redeem from your wallet" })).toBeInTheDocument();
     expect(screen.queryByRole("list")).toBeNull();
+  });
+
+  it("asks the user to reject the open prompt before it discards a held send, and only then discards", () => {
+    read({ input: plannerInput() });
+    progress({ stage: "halted", failure: { reason: "held", retryable: true }, holdsSend: true });
+    renderSection();
+    expect(screen.queryByRole("button", { name: "Redeem" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start over" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("reject it first");
+    expect(discard).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start over" }));
+    expect(discard).toHaveBeenCalledTimes(1);
+    expect(retry).not.toHaveBeenCalled();
+  });
+
+  it("goes back from Start over without discarding", () => {
+    read({ input: plannerInput() });
+    progress({ stage: "halted", failure: { reason: "held", retryable: true }, holdsSend: true });
+    renderSection();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start over" }));
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
+    expect(discard).not.toHaveBeenCalled();
+  });
+
+  it("offers Start over on a held run that cannot retry", () => {
+    read({ input: plannerInput() });
+    progress({ stage: "halted", failure: { reason: "reverted", retryable: false }, holdsSend: true });
+    renderSection();
+
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Redeem" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Start over" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start over" }));
+    expect(discard).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers neither Start over nor Redeem on a run whose batch the wallet cannot report (L9)", () => {
+    read({ input: plannerInput() });
+    progress({ stage: "halted", failure: { reason: "batch-unknown", retryable: false }, holdsSend: true });
+    renderSection();
+
+    expect(screen.getByRole("status")).toHaveTextContent("does not send it again");
+    expect(screen.queryByRole("button", { name: "Start over" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Redeem" })).toBeNull();
+  });
+
+  it("offers no Start over on a stopped run that holds no send", () => {
+    read({ input: plannerInput() });
+    progress({ stage: "halted", failure: { reason: "rejected", retryable: true } });
+    renderSection();
+
+    expect(screen.queryByRole("button", { name: "Start over" })).toBeNull();
   });
 
   it("says the read failed and offers to read again", () => {

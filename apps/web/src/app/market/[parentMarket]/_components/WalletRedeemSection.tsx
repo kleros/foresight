@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { Button } from "@kleros/ui-components-library";
 import { isAddressEqual, type Address } from "viem";
@@ -30,11 +30,16 @@ const FAILURE_COPY: Partial<Record<RedeemFailureReason, string>> = {
     "What your wallet holds changed since you pressed Redeem. Nothing more was sent; check the list and press Redeem again.",
   unlisted: "Not sent: this redeem does not match what Foresight allows for your account.",
   pending: "Your wallet has a transaction that has not landed yet. Try again once it has.",
-  held: "A redeem request from an earlier visit is not on chain. If it is still open in your wallet, approve it and try again once it lands.",
+  held: "A redeem request from an earlier visit is not on chain. If it is still open in your wallet, approve it and try again once it lands, or reject it and start over.",
   "wrong-wallet": "Connect the account that started this redeem.",
   "wrong-chain": "Switch your wallet to Gnosis.",
   reverted: "A redeem transaction reverted.",
+  "batch-unknown":
+    "Your wallet cannot report the redeem batch it was sent, so Foresight does not send it again. Check your wallet's activity.",
 };
+
+const START_OVER_WARNING =
+  "If your wallet still shows a redeem prompt from this run, reject it first. Anything that already went through stays done.";
 
 function progressCopy(progress: RedeemProgress | null) {
   switch (progress?.stage) {
@@ -71,6 +76,12 @@ export function WalletRedeemSection({
   const stage = run.progress?.stage ?? "idle";
   const live = stage !== "idle" && stage !== "complete";
   const running = stage === "signing" || stage === "confirming";
+  const holdsSend = run.progress?.holdsSend === true;
+  const [asking, setAsking] = useState(false);
+  // a press answers the stop it was made on, so a later hold asks again
+  useEffect(() => {
+    if (!holdsSend) setAsking(false);
+  }, [holdsSend]);
 
   if (!session || !read.owner || parent instanceof Error || !parent?.resolved) return null;
 
@@ -93,6 +104,9 @@ export function WalletRedeemSection({
       ? "Winning outcome tokens"
       : (options.find((option) => isAddressEqual(option.market, market))?.name ?? market);
   const status = progressCopy(run.progress);
+  const failure = run.progress?.failure;
+  // a batch the wallet cannot report is never sent again (L9)
+  const startOver = stage === "halted" && holdsSend && failure?.reason !== "batch-unknown";
 
   return (
     <Section>
@@ -119,14 +133,34 @@ export function WalletRedeemSection({
           {status}
         </p>
       ) : null}
-      {stage === "review" ? (
+      {asking && holdsSend ? (
+        <div className="flex flex-col gap-2">
+          <p role="alert" className="type-label text-fs-text-secondary text-pretty">
+            {START_OVER_WARNING}
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button small variant="secondary" text="Back" onPress={() => setAsking(false)} />
+            <Button
+              small
+              text="Start over"
+              onPress={() => {
+                setAsking(false);
+                run.discard();
+              }}
+            />
+          </div>
+        </div>
+      ) : stage === "review" ? (
         <div>
           <Button small text="Continue redeem" onPress={run.resume} />
         </div>
-      ) : stage === "halted" && run.progress?.failure?.retryable ? (
-        <div>
-          <Button small text="Try again" onPress={run.retry} />
-        </div>
+      ) : stage === "halted" && (failure?.retryable || holdsSend) ? (
+        failure?.retryable || startOver ? (
+          <div className="flex flex-wrap items-center gap-3">
+            {failure?.retryable ? <Button small text="Try again" onPress={run.retry} /> : null}
+            {startOver ? <Button small variant="secondary" text="Start over" onPress={() => setAsking(true)} /> : null}
+          </div>
+        ) : null
       ) : data && plan && plan.calls.length > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="type-label text-fs-text-secondary min-w-0 break-all tabular-nums">

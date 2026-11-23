@@ -5,10 +5,10 @@ import {
   type FlowRunStorage,
   type FlowTx,
 } from "@foresight/tx-orchestrator";
-import { getAddress, type Address, type Hash } from "viem";
+import { getAddress, type Address, type Hash, type Hex } from "viem";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { chain, copyStorage, gateway, wallet, type Chain, type PromptScript } from "./support/world";
+import { chain, copyStorage, gateway, timesBroadcast, wallet, type Chain, type PromptScript } from "./support/world";
 import type { ParentResolution } from "../../api/getSessionResolution";
 import { planWalletRedeem, type WalletRedeemInput } from "../plan";
 import { createRedeemRun } from "../run";
@@ -16,6 +16,7 @@ import { createRedeemRun } from "../run";
 const WAD = 10n ** 18n;
 const at = (prefix: string): Address => getAddress(`0x${prefix.padEnd(40, "0")}`);
 const OWNER: Address = "0x00000000000000000000000000000000000000a1";
+const OTHER: Address = "0x00000000000000000000000000000000000000a2";
 const SDAI: Address = "0xaf204776c7245bF4147c2612BF6e5972Ee483701";
 const PARENT = at("b0");
 const TOKEN_A = at("e00");
@@ -91,6 +92,8 @@ function tab(
     sendCalls?: "answer" | "unmined";
     /** Replaces the wallet's wallet_getCallsStatus answer while it returns one. */
     callsStatus?: () => CallsStatusAnswer | undefined;
+    account?: Address;
+    chainId?: number;
   } = {},
 ) {
   const storage = opts.storage ?? createMemoryStorage();
@@ -129,8 +132,8 @@ function tab(
     },
     store: createFlowRunStore({ storage }),
     flowId: "redeem-recovery",
-    account: () => OWNER,
-    chainId: () => 100,
+    account: () => opts.account ?? OWNER,
+    chainId: () => opts.chainId ?? 100,
     request: () => INPUT,
     now: () => 1_700_000_000_000,
     pollMs: 5,
@@ -140,6 +143,10 @@ function tab(
 }
 
 const progress = (run: Run) => run.getProgress();
+const tick = () => new Promise((resolve) => setTimeout(resolve, 50));
+const storedRun = (storage: FlowRunStorage) => createFlowRunStore({ storage }).load("redeem-recovery");
+const sameCalls = (sent: FlowTx[], expected: FlowTx[]) =>
+  expect(sent.map((tx) => [tx.to, tx.data])).toEqual(expected.map((tx) => [tx.to, tx.data]));
 const settled = (run: Run) =>
   vi.waitFor(() => expect(["complete", "halted", "review"]).toContain(progress(run).stage), { timeout: 3_000 });
 
@@ -278,8 +285,35 @@ describe("createRedeemRun reads a stored send back after a reload", () => {
 
     const { run, sends } = await reopened(world, left);
 
-    expect(progress(run)).toEqual({ stage: "halted", failure: { reason: "held", retryable: true } });
+    expect(progress(run)).toEqual({ stage: "halted", failure: { reason: "held", retryable: true }, holdsSend: true });
     expect(sends.prompts).toEqual([]);
+  });
+
+  it("stops as held, signing nothing, when another call to the same router took the stored send's nonce", async () => {
+    const world = chain();
+    const { left, hung } = await leftOpen(world, 1);
+    const data = hung.data!;
+    const other = `${data.slice(0, -1)}${data.endsWith("0") ? "1" : "0"}` as Hex;
+    world.approveLater({ to: hung.to, data: other }, OWNER);
+
+    const { run, sends } = await reopened(world, left);
+
+    expect(progress(run)).toEqual({ stage: "halted", failure: { reason: "held", retryable: true }, holdsSend: true });
+    expect(sends.prompts).toEqual([]);
+  });
+
+  it("signs nothing when Redeem is pressed on a held run in the same tab", async () => {
+    const world = chain();
+    const { left } = await leftOpen(world, 1);
+    const { run, sends, storage } = await reopened(world, left);
+    expect(progress(run).failure?.reason).toBe("held");
+
+    run.start();
+    await tick();
+
+    expect(sends.prompts).toEqual([]);
+    expect(progress(run).failure?.reason).toBe("held");
+    expect(storedRun(storage)).not.toBeNull();
   });
 
   it("halts as reverted when the stored send mined and reverted", async () => {
@@ -308,7 +342,11 @@ describe("createRedeemRun reads a stored send back after a reload", () => {
 
     const { run, batch } = await reopened(world, left, { atomic: true });
 
-    expect(progress(run)).toEqual({ stage: "halted", failure: { reason: "pending", retryable: true } });
+    expect(progress(run)).toEqual({
+      stage: "halted",
+      failure: { reason: "pending", retryable: true },
+      holdsSend: true,
+    });
     expect(first.batch.sendCalls.length + batch.sendCalls.length).toBe(1);
   });
 
@@ -322,5 +360,142 @@ describe("createRedeemRun reads a stored send back after a reload", () => {
 
     expect(progress(next.run).stage).toBe("review");
     expect(next.sends.prompts).toEqual([]);
+  });
+});
+
+describe("createRedeemRun discard (L8)", () => {
+  it("keeps the approve of a run held on its redeem, and resume asks for the redeem only, once", async () => {
+    const world = chain();
+    const { left, hung } = await leftOpen(world, 1);
+    const { run, sends, storage } = await reopened(world, left);
+    expect(progress(run)).toEqual({ stage: "halted", failure: { reason: "held", retryable: true }, holdsSend: true });
+
+    await run.discard();
+
+    expect(progress(run)).toEqual({ stage: "review" });
+    expect(storedRun(storage)?.steps.map((step) => step.outcome.status)).toEqual(["confirmed", "pending"]);
+    expect(sends.prompts).toEqual([]);
+    run.resume();
+    await vi.waitFor(() => expect(progress(run).stage).toBe("complete"), { timeout: 3_000 });
+    sameCalls(sends.prompts, [hung]);
+    expect(timesBroadcast(world, PLANNED)).toEqual(PLANNED.map(() => 1));
+  });
+
+  it("lets go of a held redeem whose nonce another transaction took, and resume signs the redeem once", async () => {
+    const world = chain();
+    const { left, hung } = await leftOpen(world, 1);
+    world.approveLater({ to: OWNER, data: "0x" }, OWNER);
+    const { run, sends } = await reopened(world, left);
+    expect(progress(run).failure?.reason).toBe("held");
+
+    await run.discard();
+    expect(progress(run)).toEqual({ stage: "review" });
+    run.resume();
+    await vi.waitFor(() => expect(progress(run).stage).toBe("complete"), { timeout: 3_000 });
+
+    sameCalls(sends.prompts, [hung]);
+    expect(timesBroadcast(world, PLANNED)).toEqual(PLANNED.map(() => 1));
+  });
+
+  it("forgets a run held on its first prompt, and the next Redeem signs every call once", async () => {
+    const world = chain();
+    const { left } = await leftOpen(world, 0);
+    const { run, sends, storage } = await reopened(world, left);
+    expect(progress(run).failure?.reason).toBe("held");
+
+    await run.discard();
+
+    expect(progress(run)).toEqual({ stage: "idle" });
+    expect(storedRun(storage)).toBeNull();
+    expect(sends.prompts).toEqual([]);
+    run.start();
+    await vi.waitFor(() => expect(progress(run).stage).toBe("complete"), { timeout: 3_000 });
+    sameCalls(sends.prompts, PLANNED);
+  });
+
+  it("keeps a held run whose prompt was approved and mined since it halted, and the retry signs nothing", async () => {
+    const world = chain();
+    const { left, hung } = await leftOpen(world, 1);
+    const { run, sends, storage } = await reopened(world, left);
+    expect(progress(run).failure?.reason).toBe("held");
+    world.approveLater(hung, OWNER);
+
+    await run.discard();
+
+    expect(progress(run)).toEqual({
+      stage: "halted",
+      failure: { reason: "pending", retryable: true },
+      holdsSend: true,
+    });
+    expect(storedRun(storage)).not.toBeNull();
+    run.retry();
+    await vi.waitFor(() => expect(progress(run).stage).toBe("complete"), { timeout: 3_000 });
+    expect(sends.prompts).toEqual([]);
+    expect(timesBroadcast(world, PLANNED)).toEqual(PLANNED.map(() => 1));
+  });
+
+  it("keeps a held run whose prompt was approved and is broadcast, not yet mined", async () => {
+    const world = chain();
+    const { left, hung } = await leftOpen(world, 1);
+    const { run, sends, storage } = await reopened(world, left);
+    world.broadcast(hung, OWNER, false);
+
+    await run.discard();
+
+    expect(progress(run).failure).toEqual({ reason: "pending", retryable: true });
+    expect(storedRun(storage)).not.toBeNull();
+    expect(sends.prompts).toEqual([]);
+  });
+
+  it("keeps another account's run", async () => {
+    const world = chain();
+    const { left } = await leftOpen(world, 1);
+    const next = tab(world, { storage: left, account: OTHER });
+    next.run.recover();
+    expect(progress(next.run)).toEqual({ stage: "halted", failure: { reason: "wrong-wallet", retryable: true } });
+
+    await next.run.discard();
+
+    expect(storedRun(left)).not.toBeNull();
+    expect(next.sends.prompts).toEqual([]);
+  });
+
+  it("keeps a run while the wallet is on another chain than the run's", async () => {
+    const world = chain();
+    const { left } = await leftOpen(world, 1);
+    const next = tab(world, { storage: left, chainId: 1 });
+    next.run.recover();
+    expect(progress(next.run).failure?.reason).toBe("wrong-chain");
+
+    await next.run.discard();
+
+    expect(storedRun(left)).not.toBeNull();
+  });
+
+  it("atomic: keeps a run whose batch the wallet cannot report, and never sends it again (L9)", async () => {
+    const world = chain();
+    const first = tab(world, { atomic: true, sendCalls: "unmined" });
+    first.run.start();
+    await first.batch.sent();
+    const left = copyStorage(first.storage);
+    first.run.dispose();
+    world.batches.clear();
+
+    const { run, batch, storage } = await reopened(world, left, { atomic: true });
+    expect(progress(run)).toEqual({
+      stage: "halted",
+      failure: { reason: "batch-unknown", retryable: false },
+      holdsSend: true,
+    });
+
+    await run.discard();
+    expect(progress(run).failure).toEqual({ reason: "batch-unknown", retryable: false });
+    expect(storedRun(storage)).not.toBeNull();
+    run.start();
+    run.retry();
+    await tick();
+
+    expect(batch.sendCalls).toEqual([]);
+    expect(storedRun(storage)).not.toBeNull();
   });
 });
