@@ -275,10 +275,22 @@ export function createRedeemRun(args: {
     if (await args.reader.hasPending(account)) throw new RunStop("pending", true);
     const nonce = await args.reader.nextNonce(account);
     const send: SendRecord = { tx, nonce, fromBlock };
-    orchestrator.updateSnapshot((prev) => ({ ...prev, sends: { ...prev.sends, [id]: send } }), {
-      source: "adapter",
-      durable: true,
-    });
+    durably(id, () =>
+      orchestrator.updateSnapshot((prev) => ({ ...prev, sends: { ...prev.sends, [id]: send } }), {
+        source: "adapter",
+        durable: true,
+      }),
+    );
+  }
+
+  /** Runs a durable write for `id`; when storage refuses it, the in-memory record is let go of as well. */
+  function durably(id: string, write: () => void) {
+    try {
+      write();
+    } catch (error) {
+      if (error instanceof StorageWriteError) forget(id);
+      throw error;
+    }
   }
 
   function forget(id: string) {
@@ -352,7 +364,7 @@ export function createRedeemRun(args: {
       const { calls, account } = checkedCalls(snapshot.request);
       await assertAsReviewed(calls.filter(isApprove).map(approved), account);
       const id = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
-      orchestrator.updateSnapshot({ callsId: id }, { source: "adapter", durable: true });
+      durably(BATCH, () => orchestrator.updateSnapshot({ callsId: id }, { source: "adapter", durable: true }));
       batch = { id, account, calls };
       return { to: account, data: "0x" };
     },
@@ -478,7 +490,11 @@ export function createRedeemRun(args: {
     const raised = stopped;
     stopped = undefined;
     const current = run();
-    const cause = current?.status === "paused" || current?.status === "failed" ? current.error?.cause : undefined;
+    const error = current?.status === "paused" || current?.status === "failed" ? current.error : undefined;
+    const cause = error?.cause;
+    // a reverted send, or a batch the wallet reports did not land, can no longer land
+    const settled = raised ? raised.reason === "reverted" || raised.reason === "batch-failed" : cause === "reverted";
+    if (!paused && settled && error) forget(error.stepId);
     if (raised) stop(raised, resumeRun);
     else report(cause ?? "unknown", paused ? resumeRun : undefined);
   }
