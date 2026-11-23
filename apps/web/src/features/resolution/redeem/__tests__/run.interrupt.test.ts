@@ -33,12 +33,14 @@ async function comeBack(next: ReturnType<typeof tab>) {
 describe("createRedeemRun interrupted anywhere and reloaded (A3, L8)", () => {
   // every planned call index crossed with every mode, at about 150 ms a run
   it("one by one: broadcasts no call twice, and ends complete or held on a prompt no one answered", async () => {
+    let ran = 0;
     await fc.assert(
       fc.asyncProperty(
         fc.integer({ min: 0, max: PLANNED.length - 1 }),
         fc.constantFrom(...MODES),
         fc.boolean(),
         async (at, mode, approvedAfterClose) => {
+          ran += 1;
           const world = newWorld();
           const first = tab(world, { script: (index) => (index === at ? mode : "sign") });
           first.run.start();
@@ -67,13 +69,16 @@ describe("createRedeemRun interrupted anywhere and reloaded (A3, L8)", () => {
           next.run.dispose();
         },
       ),
-      { numRuns: 10, examples: EVERY_SEQUENTIAL },
+      { numRuns: EVERY_SEQUENTIAL.length + 10, examples: EVERY_SEQUENTIAL },
     );
+    expect(ran).toBeGreaterThanOrEqual(EVERY_SEQUENTIAL.length);
   }, 60_000);
 
   it("atomic: lands the batch at most once, and ends complete or halted with no batch sent again", async () => {
+    let ran = 0;
     await fc.assert(
       fc.asyncProperty(fc.constantFrom(...MODES), fc.boolean(), async (mode, approvedAfterClose) => {
+        ran += 1;
         const world = newWorld();
         const first = tab(world, {
           atomic: true,
@@ -114,7 +119,8 @@ describe("createRedeemRun interrupted anywhere and reloaded (A3, L8)", () => {
         }
         next.run.dispose();
       }),
-      { numRuns: 4, examples: EVERY_ATOMIC },
+      { numRuns: EVERY_ATOMIC.length + 4, examples: EVERY_ATOMIC },
     );
+    expect(ran).toBeGreaterThanOrEqual(EVERY_ATOMIC.length);
   }, 30_000);
 });
