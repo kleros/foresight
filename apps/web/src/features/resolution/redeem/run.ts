@@ -100,7 +100,7 @@ export interface RedeemRun {
   subscribe(listener: () => void): () => void;
 }
 
-export const BATCH = "batch";
+const BATCH = "batch";
 const callStep = (index: number) => `call:${index}`;
 
 /** A send asked of the wallet: the transaction built for it, the account's next nonce, and the head block before. */
@@ -110,7 +110,7 @@ interface SendRecord {
   fromBlock: bigint;
 }
 
-export interface RedeemSnapshot {
+interface RedeemSnapshot {
   /** What the Redeem section showed; every build re-plans from it. */
   request: WalletRedeemInput;
   atomic: boolean;
@@ -551,11 +551,11 @@ export function createRedeemRun(args: {
   }
 
   orchestrator.subscribe(notify);
-  // a cancelled or reverted send can no longer land, so its step may be asked for again
+  // a cancelled send can no longer land, so its step may be asked for again
   orchestrator.on("step:failed", ({ stepId, error }) => {
     if (error.cause === "cancelled") forget(stepId);
   });
-  // a revert found on reload is announced by flow:failed alone
+  // a reverted send cannot land again either; the loop and a reload both announce it with flow:failed
   orchestrator.on("flow:failed", ({ error }) => {
     if (error.cause === "reverted") forget(error.stepId);
     halt(false);
