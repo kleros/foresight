@@ -1,8 +1,13 @@
-import { createFlowRunStore, createMemoryStorage, type FlowTx } from "@foresight/tx-orchestrator";
+import {
+  createFlowRunStore,
+  createMemoryStorage,
+  type BalanceTxGateway,
+  type FlowTx,
+} from "@foresight/tx-orchestrator";
 import { getAddress, type Address } from "viem";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { chain, gateway, wallet } from "./support/world";
+import { chain, gateway, timesBroadcast, wallet } from "./support/world";
 import type { ParentResolution } from "../../api/getSessionResolution";
 import { planWalletRedeem, type WalletRedeemInput } from "../plan";
 import { createRedeemRun } from "../run";
@@ -60,14 +65,52 @@ afterEach(() => {
   tamper.calls = undefined;
 });
 
-function tab(opts: { balances?: Record<string, bigint>; account?: Address } = {}) {
+function tab(
+  opts: {
+    balances?: Record<string, bigint>;
+    account?: Address;
+    chainId?: number;
+    /** What wallet_getCapabilities reports as the chain's atomic status; none by default. */
+    atomic?: string;
+    /** The first wallet_sendCalls is answered with an error of this code. */
+    sendCallsRefuse?: number;
+    /** The first one-by-one send is answered with an error of this code, opening no prompt. */
+    sendRefuse?: number;
+    /** Called as the n-th one-by-one prompt opens. */
+    onPrompt?: (index: number) => void;
+  } = {},
+) {
   const world = chain();
   const sends = gateway(world, OWNER);
-  const batch = wallet(world, OWNER);
+  const batch = wallet(
+    world,
+    OWNER,
+    opts.sendCallsRefuse === undefined ? {} : { sendCallsRefuse: opts.sendCallsRefuse },
+  );
   let input = INPUT;
+  let asked = 0;
+  const port: BalanceTxGateway = {
+    ...sends.port,
+    sendTransaction: (tx, options) => {
+      const index = asked++;
+      if (index === 0 && opts.sendRefuse !== undefined) {
+        return Promise.reject(
+          Object.assign(new Error("The wallet cannot take this request."), { code: opts.sendRefuse }),
+        );
+      }
+      opts.onPrompt?.(index);
+      return sends.port.sendTransaction(tx, options);
+    },
+  };
+  const walletPort = {
+    request: (args: { method: string; params?: unknown }) =>
+      args.method === "wallet_getCapabilities" && opts.atomic !== undefined
+        ? Promise.resolve({ "0x64": { atomic: { status: opts.atomic } } })
+        : batch.port.request(args),
+  };
   const run = createRedeemRun({
-    gateway: sends.port,
-    wallet: batch.port,
+    gateway: port,
+    wallet: walletPort,
     reader: {
       ...world.reader,
       balanceOf: (token: Address) =>
@@ -76,13 +119,13 @@ function tab(opts: { balances?: Record<string, bigint>; account?: Address } = {}
     store: createFlowRunStore({ storage: createMemoryStorage() }),
     flowId: "redeem-guards",
     account: () => opts.account ?? OWNER,
-    chainId: () => 100,
+    chainId: () => opts.chainId ?? 100,
     request: () => input,
     now: () => 1_700_000_000_000,
     pollMs: 5,
   });
   runs.push(run);
-  return { run, sends, world, setInput: (next: WalletRedeemInput) => (input = next) };
+  return { run, sends, batch, world, setInput: (next: WalletRedeemInput) => (input = next) };
 }
 
 const settled = (run: Run) =>
@@ -113,6 +156,42 @@ describe("createRedeemRun R6 signs only what was shown", () => {
     expect(run.getProgress().stage).toBe("complete");
     expect(sends.prompts).toHaveLength(PLANNED.length);
   });
+  it("stops as changed before a redeem when an earlier approve's balance moved after it was signed", async () => {
+    const twoWinners: WalletRedeemInput = {
+      ...INPUT,
+      resolution: {
+        parent: { ...PARENT_RESOLVED, winningOutcomes: [0, 1], payoutNumerators: [1n, 1n, 0n], payoutDenominator: 2n },
+        children: {},
+      },
+    };
+    const calls = planWalletRedeem(twoWinners).calls;
+    expect(calls.map((call) => call.data!.slice(0, 10))).toEqual(["0x095ea7b3", "0x095ea7b3", "0x865955a0"]);
+    const balances: Record<string, bigint> = {};
+    const { run, sends, setInput } = tab({
+      balances,
+      onPrompt: (index) => {
+        if (index === 0) balances[TOKEN_A] = 3n * WAD - 1n;
+      },
+    });
+    setInput(twoWinners);
+
+    run.start();
+    await settled(run);
+
+    expect(run.getProgress()).toEqual({ stage: "halted", failure: { reason: "changed", retryable: false } });
+    expect(sends.prompts.map((tx) => tx.data)).toEqual(calls.slice(0, 2).map((tx) => tx.data));
+  });
+
+  it("atomic: stops as changed, sending no batch, when a balance it redeems differs from the shown one", async () => {
+    const { run, batch } = tab({ atomic: "supported", balances: { [TOKEN_A]: 3n * WAD - 1n } });
+
+    run.start();
+    await settled(run);
+
+    expect(run.getProgress()).toEqual({ stage: "halted", failure: { reason: "changed", retryable: false } });
+    expect(batch.sendCalls).toEqual([]);
+  });
+
   it("starts a new review's run on the next press after stopping as changed", async () => {
     const balances: Record<string, bigint> = { [TOKEN_A]: 3n * WAD - 1n };
     const { run, sends, setInput } = tab({ balances });
@@ -161,7 +240,70 @@ describe("createRedeemRun R8 decodes every call before the wallet opens", () => 
   });
 });
 
+describe("createRedeemRun picks atomic or one by one from the wallet's capabilities", () => {
+  it.each(["supported", "ready"])("sends one atomic batch when the wallet reports atomic %s", async (status) => {
+    const { run, sends, batch } = tab({ atomic: status });
+
+    run.start();
+    await settled(run);
+
+    expect(run.getProgress().stage).toBe("complete");
+    expect(batch.sendCalls).toHaveLength(1);
+    expect(sends.prompts).toEqual([]);
+  });
+
+  it("signs one by one when the wallet reports atomic unsupported", async () => {
+    const { run, sends, batch } = tab({ atomic: "unsupported" });
+
+    run.start();
+    await settled(run);
+
+    expect(batch.sendCalls).toEqual([]);
+    expect(sends.prompts).toHaveLength(PLANNED.length);
+  });
+});
+
+/** Wallet answers that open no prompt (liquidity oracle L8). */
+const NO_PROMPT = [4100, 4200, -32601, -32602, 3, 5700, 5710, 5740, 5750, 5760];
+
+describe("createRedeemRun after a wallet answer that opened no prompt", () => {
+  it.each(NO_PROMPT)("one by one: code %i stops as wallet, and the retry signs each call once", async (code) => {
+    const { run, sends, world } = tab({ sendRefuse: code });
+
+    run.start();
+    await settled(run);
+    expect(run.getProgress()).toEqual({ stage: "halted", failure: { reason: "wallet", retryable: true } });
+
+    run.retry();
+    await vi.waitFor(() => expect(run.getProgress().stage).toBe("complete"), { timeout: 3_000 });
+    expect(sends.prompts).toHaveLength(PLANNED.length);
+    expect(timesBroadcast(world, PLANNED)).toEqual(PLANNED.map(() => 1));
+  });
+
+  it.each(NO_PROMPT)("atomic: code %i stops as wallet, and the retry sends the batch", async (code) => {
+    const { run, batch } = tab({ atomic: "supported", sendCallsRefuse: code });
+
+    run.start();
+    await settled(run);
+    expect(run.getProgress()).toEqual({ stage: "halted", failure: { reason: "wallet", retryable: true } });
+
+    run.retry();
+    await vi.waitFor(() => expect(run.getProgress().stage).toBe("complete"), { timeout: 3_000 });
+    expect(batch.sendCalls).toHaveLength(2);
+  });
+});
+
 describe("createRedeemRun who and when", () => {
+  it("refuses to start while the wallet is on another chain than the shown list's", async () => {
+    const { run, sends } = tab({ chainId: 1 });
+
+    run.start();
+    await settled(run);
+
+    expect(run.getProgress().failure).toEqual({ reason: "wrong-chain", retryable: true });
+    expect(sends.prompts).toEqual([]);
+  });
+
   it("refuses to start for an account other than the one the shown list was read for", async () => {
     const { run, sends } = tab({ account: OTHER });
 

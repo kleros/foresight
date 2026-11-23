@@ -8,19 +8,25 @@ import {
   type PersistedFlowRunInput,
 } from "@foresight/tx-orchestrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import type { Address } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { RedeemSnapshot } from "@/features/resolution/redeem/run";
+import { liquidityKeyPrefix } from "@/features/liquidity/api/getLiquidityPools";
+import type { RedeemProgress, RedeemSnapshot } from "@/features/resolution/redeem/run";
 
-import { useWalletRedeemRun } from "../useWalletRedeem";
+import { useWalletRedeemRun, walletRedeemKeyPrefix } from "../useWalletRedeem";
 
 const OWNER: Address = "0x00000000000000000000000000000000000000a1";
 const SESSION = { sessionFactory: "0x5f00000000000000000000000000000000000000" as Address, sessionId: 7n };
 const T0 = 1_700_000_000_000;
 
-const captured = vi.hoisted(() => ({ store: undefined as FlowRunStore | undefined, now: 0 }));
+const captured = vi.hoisted(() => ({
+  store: undefined as FlowRunStore | undefined,
+  now: 0,
+  progress: { stage: "idle" } as RedeemProgress,
+  listeners: new Set<() => void>(),
+}));
 
 vi.mock("wagmi", () => ({ useAccount: () => ({ address: OWNER, chainId: 100 }) }));
 vi.mock("@wagmi/core", () => ({ getConnectorClient: vi.fn(), sendTransaction: vi.fn() }));
@@ -45,15 +51,18 @@ vi.mock("@/features/resolution/redeem/run", async (importOriginal) => {
     ...actual,
     createRedeemRun: (args: Parameters<typeof actual.createRedeemRun>[0]) => {
       captured.store = args.store;
-      const idle = { stage: "idle" as const };
       return {
         start() {},
         recover() {},
         resume() {},
         retry() {},
+        discard: () => Promise.resolve(),
         dispose() {},
-        getProgress: () => idle,
-        subscribe: () => () => {},
+        getProgress: () => captured.progress,
+        subscribe: (listener: () => void) => {
+          captured.listeners.add(listener);
+          return () => void captured.listeners.delete(listener);
+        },
       };
     },
   };
@@ -61,6 +70,8 @@ vi.mock("@/features/resolution/redeem/run", async (importOriginal) => {
 
 afterEach(() => {
   captured.store = undefined;
+  captured.progress = { stage: "idle" };
+  captured.listeners.clear();
 });
 
 function storedRun(sends: RedeemSnapshot["sends"]): PersistedFlowRunInput<Partial<RedeemSnapshot>, unknown> {
@@ -70,7 +81,11 @@ function storedRun(sends: RedeemSnapshot["sends"]): PersistedFlowRunInput<Partia
     snapshot: { atomic: false, sends },
     ctx: { owner: OWNER, chainId: 100 },
     steps: [
-      { stepId: "call:0", label: "call:0", outcome: { status: "confirmed", hash: `0x${"1".repeat(64)}`, blockNumber: 1n } },
+      {
+        stepId: "call:0",
+        label: "call:0",
+        outcome: { status: "confirmed", hash: `0x${"1".repeat(64)}`, blockNumber: 1n },
+      },
       { stepId: "call:1", label: "call:1", outcome: { status: "pending" } },
     ],
     status: "paused",
@@ -78,8 +93,7 @@ function storedRun(sends: RedeemSnapshot["sends"]): PersistedFlowRunInput<Partia
   };
 }
 
-async function hookStore() {
-  const client = new QueryClient();
+async function hookStore(client = new QueryClient()) {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
@@ -110,4 +124,24 @@ describe("useWalletRedeemRun's store (R7)", () => {
 
     expect(store.load("redeem-store")).toBeNull();
   });
+});
+
+describe("useWalletRedeemRun rereads balances after a run", () => {
+  it.each(["complete", "halted"] as const)(
+    "rereads the wallet's redeem list and pools once a run is %s",
+    async (stage) => {
+      const client = new QueryClient();
+      const invalidate = vi.spyOn(client, "invalidateQueries");
+      await hookStore(client);
+      expect(invalidate).not.toHaveBeenCalled();
+
+      act(() => {
+        captured.progress = { stage };
+        for (const listener of captured.listeners) listener();
+      });
+
+      await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: walletRedeemKeyPrefix }));
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: liquidityKeyPrefix });
+    },
+  );
 });
