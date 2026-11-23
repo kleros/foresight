@@ -144,7 +144,21 @@ describe("sending a trade wallet redeem", () => {
     await act(() => result.current.mutateAsync({ plan: planFor(OWNER), session: SESSION }).catch(() => undefined));
 
     expect(sendTransaction).not.toHaveBeenCalled();
-    expect(errorToast).toHaveBeenCalledOnce();
+    expect(errorToast).toHaveBeenCalledExactlyOnceWith(
+      "What your trade wallet can redeem changed. Check the list and press Redeem again.",
+    );
+  });
+
+  it("R6 stops when the same batch would now pay another amount than the one shown", async () => {
+    vi.mocked(fetchTradeWalletRedeem).mockImplementation(async (_client, { owner }) => {
+      const fresh = planFor(owner);
+      return { ...fresh, payout: fresh.payout + 1n };
+    });
+    const { result } = setup();
+
+    await act(() => result.current.mutateAsync({ plan: planFor(OWNER), session: SESSION }).catch(() => undefined));
+
+    expect(sendTransaction).not.toHaveBeenCalled();
   });
 
   it("R8 stops as unlisted, with no prompt, when the batch names a token outside the session's markets", async () => {

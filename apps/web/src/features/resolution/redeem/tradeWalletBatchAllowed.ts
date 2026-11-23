@@ -21,7 +21,6 @@ export interface RedeemScope {
 
 /** A redeem transaction departs from the allow-list (oracle R8), so it is not sent. */
 export class UnlistedRedeemBatchError extends Error {
-  readonly stop = "unlisted";
   constructor(readonly departures: readonly string[]) {
     super(`Not sent: ${departures.join("; ")}.`);
     this.name = "UnlistedRedeemBatchError";

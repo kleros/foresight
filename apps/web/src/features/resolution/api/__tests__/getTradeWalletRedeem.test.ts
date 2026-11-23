@@ -133,6 +133,30 @@ describe("fetchTradeWalletRedeem", () => {
     expect(calls[2]!.to).toBe(childToken(CHILDREN[0]!, 1));
   });
 
+  it("reads each child's own three tokens, past a child market that is not deployed", async () => {
+    vi.mocked(fetchSessionResolution).mockResolvedValue({
+      ...resolution,
+      children: {
+        ...resolution.children,
+        2: {
+          deployed: true,
+          market: CHILDREN[2]!,
+          resolved: true,
+          invalid: false,
+          finalValue: 40,
+          payoutNumerators: [60n, 40n, 0n],
+          payoutDenominator: 100n,
+        },
+      },
+    });
+    balances.set(balanceKey(TRADE_WALLET, childToken(CHILDREN[2]!, 1)), 2n * WAD);
+
+    const plan = await fetchTradeWalletRedeem(client, request);
+
+    expect(plan.parts.map(({ market }) => market)).toEqual([CHILDREN[2]]);
+    expect(innerCalls(plan.tx!.data!)[0]!.to).toBe(childToken(CHILDREN[2]!, 1));
+  });
+
   it("lets a failed read reject, so nothing is planned", async () => {
     vi.mocked(fetchSessionResolution).mockRejectedValueOnce(new Error("node down"));
 

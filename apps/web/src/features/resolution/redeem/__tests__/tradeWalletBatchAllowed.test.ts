@@ -180,6 +180,10 @@ describe("a trade wallet redeem batch against the allow-list (oracle R8)", () =>
       calls: () => [plannedCalls()[1]!, plannedCalls()[0]!, ...plannedCalls().slice(2)],
     },
     { case: "an approve is left with no redeem", calls: () => plannedCalls().slice(0, 4) },
+    {
+      case: "an approve is for a later redeem than the next one",
+      calls: () => [plannedCalls()[0]!, plannedCalls()[2]!, plannedCalls()[1]!, ...plannedCalls().slice(3)],
+    },
     { case: "the batch is empty", calls: () => [] },
   ];
 
