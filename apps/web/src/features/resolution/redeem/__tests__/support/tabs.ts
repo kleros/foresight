@@ -163,7 +163,8 @@ type Run = ReturnType<typeof createRedeemRun>;
 export const runs: Run[] = [];
 
 export interface TabOptions {
-  script?: (index: number, tx: FlowTx) => PromptScript;
+  /** `unmined`: the prompt is approved and its send broadcast, which mines on `land()`. */
+  script?: (index: number, tx: FlowTx) => PromptScript | "unmined";
   atomic?: boolean;
   sendCalls?: "answer" | "unmined";
   sendCallsRefuse?: number;
@@ -183,7 +184,8 @@ export interface TabOptions {
 
 export function tab(world: World, opts: TabOptions = {}) {
   const storage = opts.storage ?? createMemoryStorage();
-  const sends = gateway(world.fake, OWNER, opts.script ? { script: opts.script } : {});
+  let decided: PromptScript = "sign";
+  const sends = gateway(world.fake, OWNER, { script: () => decided });
   const batch = wallet(world.fake, OWNER, {
     atomic: opts.atomic ?? false,
     ...(opts.sendCalls ? { sendCalls: opts.sendCalls } : {}),
@@ -197,6 +199,12 @@ export function tab(world: World, opts: TabOptions = {}) {
     sendTransaction: (tx, options) => {
       const error = opts.sendError?.(attempts++);
       if (error !== undefined) return Promise.reject(error);
+      const step = opts.script?.(sends.prompts.length, tx) ?? "sign";
+      if (step === "unmined") {
+        sends.prompts.push(tx);
+        return Promise.resolve(world.fake.broadcast(tx, OWNER, false).hash);
+      }
+      decided = step;
       return sends.port.sendTransaction(tx, options);
     },
     waitForReceipt: async (args) => {
