@@ -201,6 +201,19 @@ describe("a trade wallet redeem batch against the allow-list (oracle R8)", () =>
     ).toThrow(UnlistedRedeemBatchError);
   });
 
+  it("names an unbounded approve even when its redeem pulls that same amount", () => {
+    const calls = [
+      approveCall(parentTokens[0]!, LIST.gnosisRouter, maxUint256),
+      parentRedeem(SDAI, PARENT, [0n], [maxUint256]),
+    ];
+    expect(departures(calls)).toEqual(["call 0: approves an unbounded amount"]);
+  });
+
+  it("names an approve to a spender outside the allow-list", () => {
+    const calls = [approveCall(parentTokens[0]!, STRANGER, 3n * WAD), ...plannedCalls().slice(1)];
+    expect(departures(calls)).toContain(`call 0: approves ${STRANGER}`);
+  });
+
   it("stops a transaction that carries native value, or is not a batchExecute", () => {
     const tx = plan.tx!;
     expect(

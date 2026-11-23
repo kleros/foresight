@@ -78,9 +78,8 @@ const samePlan = (shown: RedeemPlan, fresh: RedeemPlan) =>
   shown.payout === fresh.payout;
 
 /**
- * Signs the batch of the plan shown when Redeem was pressed, then rereads balances and the list once the receipt is
- * in. Before the wallet opens, the plan is built again for the account connected then and must match the one shown
- * (R6), and its batch is decoded against the session's markets read on-chain (R8).
+ * Sends the shown plan's batch only if a fresh plan for the connected account matches it (R6) and its calls decode
+ * against the session's on-chain markets (R8).
  */
 export function useRedeemFromTradeWallet() {
   const queryClient = useQueryClient();
