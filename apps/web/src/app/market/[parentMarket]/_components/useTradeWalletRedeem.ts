@@ -40,7 +40,7 @@ export const NOT_SENT_COPY = "Not sent: this redeem does not match what Foresigh
 export const WAITING_REREAD_MS = 30_000;
 
 /** Under the funds prefix, so every run that invalidates the trade wallet's balances rereads the list too. */
-export const tradeWalletRedeemKey = (owner: Address | undefined, session: SessionKey | undefined) =>
+const tradeWalletRedeemKey = (owner: Address | undefined, session: SessionKey | undefined) =>
   [
     ...fundsKeyPrefix,
     DEFAULT_CHAIN_ID,
