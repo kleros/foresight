@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 
 import { useEstimateStore } from "@/features/predict/stores/estimateStore";
+import type { OptionResult } from "@/features/resolution/utils/sessionResults";
 import type { SessionStatus } from "@/features/sessions/types";
 
 import { OptionCard } from "@/app/market/[parentMarket]/_components/OptionCard";
@@ -20,6 +21,20 @@ const tokens = (name: string) => {
 };
 const position = params.has("up") || params.has("down") ? { up: tokens("up"), down: tokens("down") } : undefined;
 if (params.get("theme") === "dark") document.documentElement.classList.add("dark");
+/** `?result=` a resolved option's result: `final` (at `?final=`, read as `?finalText=`), `waiting`, `not-selected` or `invalid`. */
+const lower = number("lower", 0);
+const upper = number("upper", 100);
+const RESULTS: Record<string, OptionResult> = {
+  final: {
+    kind: "final",
+    text: params.get("finalText") ?? `${number("final", 62.5)} ${params.get("unit") ?? "%"}`,
+    share: (number("final", 62.5) - lower) / (upper - lower),
+  },
+  waiting: { kind: "waiting" },
+  "not-selected": { kind: "not-selected" },
+  invalid: { kind: "invalid", payouts: "Pays per token: UP 0, DOWN 0, INVALID 1" },
+};
+const result = RESULTS[params.get("result") ?? ""];
 useEstimateStore.setState({ estimates: params.has("value") ? { [PARENT]: { [MARKET]: number("value", 0) } } : {} });
 
 function Harness() {
@@ -32,8 +47,8 @@ function Harness() {
           name: params.get("name") ?? "Movie A",
           color: params.get("color") ?? "#7e1bd4",
           unit: params.get("unit") ?? "%",
-          lowerBound: number("lower", 0),
-          upperBound: number("upper", 100),
+          lowerBound: lower,
+          upperBound: upper,
           question: "What percentile score will Scooby assign to Movie A? (session #2)",
           upToken: null,
           downToken: null,
@@ -48,6 +63,7 @@ function Harness() {
         marketEstimate={params.get("market") === "none" ? undefined : number("market", 75)}
         isMarketPending={false}
         position={position}
+        result={result}
       />
     </div>
   );

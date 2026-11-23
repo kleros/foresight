@@ -32,8 +32,8 @@ export function SessionCard({ session }: { session: SessionSummary }) {
             <div className="border-b-klerosUIComponentsSecondaryBlue flex shrink-0 flex-col items-start gap-2 border-b pb-4">
               <h3 className="text-fs-accent text-base font-semibold">{session.name}</h3>
               {winners ? (
-                // takes the branch count's line as well, so three lines fit the card's fixed height at rest
-                <p className="text-fs-text-primary line-clamp-3 min-h-[2lh] text-sm leading-relaxed" title={winners}>
+                // takes the branch count's line as well, so four lines fit the card's fixed height at rest
+                <p className="text-fs-text-primary line-clamp-4 min-h-[2lh] text-sm leading-relaxed" title={winners}>
                   <span className="text-fs-text-secondary">Selected: </span>
                   <span className="font-semibold">{winners}</span>
                 </p>

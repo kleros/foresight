@@ -53,7 +53,7 @@ describe("sessionResults", () => {
     const results = sessionResults(parent([0, 1]), children, OPTIONS)!;
 
     expect(results.winners.map(({ name }) => name)).toEqual(["Option 0", "Option 1"]);
-    expect(results.options[market(1)]).toEqual({ kind: "final", value: 125, text: "125 $M", share: 0.25 });
+    expect(results.options[market(1)]).toEqual({ kind: "final", text: "125 $M", share: 0.25 });
     expect(results.options[market(2)]).toEqual({ kind: "waiting" });
     expect(results.options[market(3)]).toEqual({ kind: "not-selected" });
   });

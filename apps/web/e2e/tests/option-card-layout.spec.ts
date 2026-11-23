@@ -19,6 +19,8 @@ const CASES = {
   "a scale in millions at its top": "unit=%24M&lower=0&upper=5000000&market=3250000&value=5000000",
   "a position nearly all UP": "value=90&up=1000000&down=0.01",
   "a narrow scale": "unit=&lower=0&upper=1&market=0.5&value=0.45",
+  "a resolved result beside a long name":
+    "status=resolved&result=final&final=100&finalText=100%20%25%20or%20more&value=40&name=Movie%20A%2C%20the%20director's%20extended%20cut%20(2026)",
 };
 
 async function openCard(page: Page, query: string) {
@@ -45,6 +47,23 @@ for (const width of [320, 375, 1280]) {
         expect(overflow).toBe(0);
       });
     }
+
+    test("drops a result chip under a long name rather than crushing the name", async ({ page }) => {
+      for (const result of ["result=final&final=100&finalText=100%20%25%20or%20more", "result=waiting"]) {
+        await openCard(
+          page,
+          `status=resolved&${result}&name=Movie%20A%2C%20the%20director's%20extended%20cut%20(2026)`,
+        );
+        const toggle = (await page.locator("#root button[aria-expanded]").first().boundingBox())!;
+        const name = (await page.getByRole("heading", { level: 3 }).boundingBox())!;
+        const chip = (await page.locator("#root button[aria-expanded] .fs-status").boundingBox())!;
+
+        expect(name.width, `${result}: the name keeps its 10rem`).toBeGreaterThanOrEqual(160);
+        expect(chip.x + chip.width, `${result}: the chip inside the row`).toBeLessThanOrEqual(toggle.x + toggle.width);
+        const overlaps = chip.y < name.y + name.height && name.y < chip.y + chip.height && chip.x < name.x + name.width;
+        expect(overlaps, `${result}: the chip clear of the name`).toBe(false);
+      }
+    });
 
     test("keeps the position's worth and its help inside the card under a long unbroken option name", async ({
       page,

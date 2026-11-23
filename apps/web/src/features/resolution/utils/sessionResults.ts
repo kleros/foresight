@@ -12,7 +12,7 @@ export type ResultOption = OptionScale & { outcomeIndex: number };
 /** What a resolved session shows for one option. */
 export type OptionResult =
   /** `share` is the value's place on the option's scale, 0 to 1. */
-  | { kind: "final"; value: number; text: string; share: number }
+  | { kind: "final"; text: string; share: number }
   /** The parent picked it; its own market has not resolved. */
   | { kind: "waiting" }
   | { kind: "not-selected" }
@@ -43,7 +43,7 @@ function exactDigits(value: number): number {
   return MAX_DIGITS;
 }
 
-/** Three significant places, and more where fewer would round the value onto or past a bound. */
+/** Two places, three significant ones under 1, and more where fewer would round the value onto or past a bound. */
 function insideDigits(value: number, { lowerBound, upperBound }: Scale): number {
   const significant = value === 0 ? 2 : Math.max(2, Math.ceil(-Math.log10(Math.abs(value))) + 2);
   for (let digits = Math.min(significant, MAX_DIGITS); digits < MAX_DIGITS; digits++) {
@@ -54,7 +54,7 @@ function insideDigits(value: number, { lowerBound, upperBound }: Scale): number 
 }
 
 /** A bound in the scale's unit, with every place it was set with. */
-export const formatBound = (bound: number, unit: string | null) => formatEstimate(bound, unit, exactDigits(bound));
+const formatBound = (bound: number, unit: string | null) => formatEstimate(bound, unit, exactDigits(bound));
 
 /**
  * A child's answer: a payout all to UP or all to DOWN cannot tell the bound from anything past it, so it reads
@@ -100,7 +100,6 @@ function childResult(child: ChildResolution | undefined, option: ResultOption): 
   const share = range > 0 ? Math.min(1, Math.max(0, (child.finalValue - option.lowerBound) / range)) : 0;
   return {
     kind: "final",
-    value: child.finalValue,
     text: finalValueText(child.finalValue, child.payoutNumerators, option),
     share,
   };
