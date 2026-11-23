@@ -46,17 +46,12 @@ function poolRow(overrides: Partial<SessionChartQuery["Pool"][number]> = {}) {
   return {
     id: pools.up,
     childMarket_id: addresses.childMarkets[0],
-    outcomeIsToken0: true,
     underlyingPerOutcome: WAD["0.25"],
     updatedAt: "1756000100",
     swaps: [],
-    firstSwap: [],
     ...overrides,
   } satisfies SessionChartQuery["Pool"][number];
 }
-
-/** Algebra sqrt prices X96 for an outcome price of 0.25, with the outcome as token0 and as token1. */
-const SQRT_QUARTER = { token0: String(2n ** 95n), token1: String(2n ** 97n) } as const;
 
 describe("toSessionChart", () => {
   it("prices a swap as an estimate on the option's own scale", () => {
@@ -107,24 +102,6 @@ describe("toSessionChart", () => {
     const result = { Pool: [poolRow({ updatedAt: "1756000100", swaps: [swapRow({ timestamp: "1756000100" })] })] };
 
     expect(toSessionChart(result, [option()])[0]?.points).toHaveLength(1);
-  });
-
-  it("reads the seeded price off the first swap's price before, whichever side the outcome token is", () => {
-    const swaps = [swapRow({ underlyingPerOutcomeAfter: WAD["4"] })];
-    const asToken0 = { Pool: [poolRow({ swaps, firstSwap: [{ priceBefore: SQRT_QUARTER.token0 }] })] };
-    const asToken1 = {
-      Pool: [poolRow({ outcomeIsToken0: false, swaps, firstSwap: [{ priceBefore: SQRT_QUARTER.token1 }] })],
-    };
-
-    // a price of 0.25 on a 0..500 scale
-    expect(toSessionChart(asToken0, [option()])[0]?.seededValue).toBe(125);
-    expect(toSessionChart(asToken1, [option()])[0]?.seededValue).toBe(125);
-  });
-
-  it("has no seeded price for a pool that has not traded", () => {
-    const result = { Pool: [poolRow()] };
-
-    expect(toSessionChart(result, [option()])[0]?.seededValue).toBeUndefined();
   });
 
   it("keeps an option whose pool never priced, as a series with no points", () => {

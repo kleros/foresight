@@ -40,7 +40,7 @@ vi.mock("@/features/resolution/api/getSessionResolution", async (importOriginal)
   ...(await importOriginal<typeof import("@/features/resolution/api/getSessionResolution")>()),
   fetchSessionResolution: async () => ({
     parent: parentRead.resolved
-      ? { resolved: true, winningOutcomes: [0], invalid: false, payoutNumerators: [1n, 0n], payoutDenominator: 1n }
+      ? { resolved: true, winners: [0], invalid: false, payoutNumerators: [1n, 0n] }
       : { resolved: false },
     children: {},
   }),
