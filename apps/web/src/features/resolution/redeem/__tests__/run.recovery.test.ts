@@ -60,18 +60,24 @@ interface CallsStatusAnswer {
   status: number;
 }
 
-/** Storage whose writes throw while `full` is set, as a browser's localStorage does past its quota. */
-function quota() {
+interface Written {
+  snapshot?: { sends?: Record<string, unknown>; callsId?: string };
+}
+
+/** Storage that refuses the first write `refuses` matches, as a full localStorage does, and takes every other. */
+function refusesOnce(refuses: (run: Written) => boolean): FlowRunStorage {
   const storage = createMemoryStorage();
-  const state = { full: false };
-  const port: FlowRunStorage = {
+  let refused = false;
+  return {
     ...storage,
     setItem(key, value) {
-      if (state.full) throw new DOMException("The quota has been exceeded.", "QuotaExceededError");
+      if (!refused && refuses(JSON.parse(value) as Written)) {
+        refused = true;
+        throw new DOMException("The quota has been exceeded.", "QuotaExceededError");
+      }
       storage.setItem(key, value);
     },
   };
-  return { port, state };
 }
 
 function tab(
@@ -223,35 +229,31 @@ describe("createRedeemRun after a send that cannot land", () => {
 });
 
 describe("createRedeemRun when the send cannot be stored", () => {
-  it("one by one: stops as storage with no prompt, and the retry signs once storage takes writes", async () => {
+  it("one by one: stops as storage with no prompt, and the retry signs every call", async () => {
     const world = chain();
-    const storage = quota();
-    storage.state.full = true;
-    const { run, sends } = tab(world, { storage: storage.port });
+    const storage = refusesOnce((run) => Object.keys(run.snapshot?.sends ?? {}).length > 0);
+    const { run, sends } = tab(world, { storage });
 
     run.start();
     await settled(run);
     expect(progress(run)).toEqual({ stage: "halted", failure: { reason: "storage", retryable: true } });
     expect(sends.prompts).toEqual([]);
 
-    storage.state.full = false;
     run.retry();
     await vi.waitFor(() => expect(progress(run).stage).toBe("complete"), { timeout: 3_000 });
     expect(sends.prompts).toHaveLength(PLANNED.length);
   });
 
-  it("atomic: stops as storage with no batch sent, and the retry sends it once storage takes writes", async () => {
+  it("atomic: stops as storage with no batch sent, and the retry sends it", async () => {
     const world = chain();
-    const storage = quota();
-    storage.state.full = true;
-    const { run, batch } = tab(world, { storage: storage.port, atomic: true });
+    const storage = refusesOnce((run) => run.snapshot?.callsId !== undefined);
+    const { run, batch } = tab(world, { storage, atomic: true });
 
     run.start();
     await settled(run);
     expect(progress(run)).toEqual({ stage: "halted", failure: { reason: "storage", retryable: true } });
     expect(batch.sendCalls).toEqual([]);
 
-    storage.state.full = false;
     run.retry();
     await vi.waitFor(() => expect(progress(run).stage).toBe("complete"), { timeout: 3_000 });
     expect(batch.sendCalls).toHaveLength(1);
