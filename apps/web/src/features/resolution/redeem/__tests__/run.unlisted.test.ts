@@ -1,8 +1,8 @@
 import { encodeFunctionData, erc20Abi, maxUint256 } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { INPUT, newWorld, PLANNED, progress, runs, settled, stored, tab } from "./support/tabs";
 import { planWalletRedeem } from "../plan";
+import { INPUT, newWorld, PLANNED, progress, runs, settled, stored, tab } from "./support/tabs";
 
 vi.mock("../plan", async (importOriginal) => {
   const original = await importOriginal<typeof import("../plan")>();
