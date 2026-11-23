@@ -29,7 +29,8 @@ const FAILED = [300, 400, 500, 600];
 const UNKNOWN_BUNDLE = Object.assign(new Error("Unknown bundle id"), { code: 5730 });
 const INTERNAL = Object.assign(new Error("Internal JSON-RPC error."), { code: -32603 });
 
-const sendCallsOf = (requests: { method: string }[]) => requests.filter((each) => each.method === "wallet_sendCalls");
+const sendCallsOf = <T extends { method: string }>(requests: T[]) =>
+  requests.filter((each) => each.method === "wallet_sendCalls");
 
 /** An atomic run whose batch the wallet took and never answered, left in storage when its tab closed. */
 async function storedBatch(world: World) {
@@ -178,23 +179,29 @@ const statusCalls = (requests: { method: string }[]) =>
   requests.filter((each) => each.method === "wallet_getCallsStatus").length;
 
 describe("createRedeemRun polls a sent batch's status by EIP-5792 v2", () => {
-  it.each(PENDING)("status %i: keeps polling while confirming, and completes once the batch lands", async (code) => {
-    const world = newWorld();
-    const landed: { hash?: Hash } = {};
-    const { run, requests } = polled(world, () =>
-      Promise.resolve(
-        landed.hash ? { status: 200, receipts: [{ transactionHash: landed.hash }] } : { status: code, receipts: [] },
-      ),
-    );
+  it.each(PENDING)(
+    "status %i: keeps polling, even with a receipt, and completes once the batch lands",
+    async (code) => {
+      const world = newWorld();
+      const early = world.fake.broadcast({ to: OWNER, data: "0x" }, OWNER, true).hash;
+      const landed: { hash?: Hash } = {};
+      const { run, requests } = polled(world, () =>
+        Promise.resolve(
+          landed.hash
+            ? { status: 200, receipts: [{ transactionHash: landed.hash }] }
+            : { status: code, receipts: [{ transactionHash: early }] },
+        ),
+      );
 
-    run.start();
-    await vi.waitFor(() => expect(statusCalls(requests)).toBeGreaterThan(2));
-    expect(progress(run).stage).toBe("confirming");
+      run.start();
+      await vi.waitFor(() => expect(statusCalls(requests)).toBeGreaterThan(2));
+      expect(progress(run).stage).toBe("confirming");
 
-    landed.hash = world.fake.broadcast({ to: OWNER, data: "0x" }, OWNER, true).hash;
-    await reached(run, "complete");
-    expect(sendCallsOf(requests)).toHaveLength(1);
-  });
+      landed.hash = world.fake.broadcast({ to: OWNER, data: "0x" }, OWNER, true).hash;
+      await reached(run, "complete");
+      expect(sendCallsOf(requests)).toHaveLength(1);
+    },
+  );
 
   it.each(LANDED)("status %i with a receipt: completes", async (code) => {
     const world = newWorld();
