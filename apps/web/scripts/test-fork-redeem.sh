@@ -4,7 +4,7 @@
 # simulate-resolve, which the tests call, reaches the fork only at 127.0.0.1:8545.
 set -e
 cd "$(dirname "$0")/.."
-REGISTERED_SUITES="fork.resolution"
+REGISTERED_SUITES="fork.resolution fork.redeem.tradeWallet"
 export FORK_RPC_URL="${FORK_RPC_URL:-http://127.0.0.1:8545}"
 
 vitest="$(yarn bin vitest)"
