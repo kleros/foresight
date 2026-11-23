@@ -53,10 +53,25 @@ const readerMock = vi.mocked(fetchSessionResolution);
 const TITLE = "Dune: Part Three, director";
 const NAME = "Denis Villeneuve";
 const MARKET = addresses.childMarkets[0] as Address;
-/** The session closes at 1756900800; on a 0 to 500 $M scale the pool reads 250 then, and 400 after a later swap. */
+/** Unix seconds; the option's scale runs 0 to 500 $M. */
 const CLOSES_AT = 1756900800;
 
 let parent: ParentResolution;
+let pool: Record<string, unknown>;
+
+/** Seeded at 500, priced 250 when trading closed and 400 after a later swap. */
+const tradedPool = {
+  id: "0x00000000000000000000000000000000000000f1",
+  childMarket_id: MARKET.toLowerCase(),
+  outcomeIsToken0: true,
+  underlyingPerOutcome: "800000000000000000",
+  updatedAt: String(CLOSES_AT + 3600),
+  swaps: [
+    { underlyingPerOutcomeAfter: "500000000000000000", timestamp: String(CLOSES_AT - 3600) },
+    { underlyingPerOutcomeAfter: "800000000000000000", timestamp: String(CLOSES_AT + 3600) },
+  ],
+  firstSwap: [{ priceBefore: String(2n ** 96n) }],
+};
 
 async function answer(request: SessionResolutionRequest): Promise<SessionResolution> {
   return {
@@ -76,6 +91,7 @@ beforeEach(() => {
   readerMock.mockReset();
   readerMock.mockImplementation((_client, request) => answer(request));
   useEstimateStore.setState({ estimates: {} });
+  pool = tradedPool;
   const rows = [sessionChildRow({ id: MARKET, parentOutcomeIndex: "0", parentOutcome: NAME, displayName: NAME })];
   fetchMock.mockImplementation(async (document) => {
     if (queryName(document) === "SessionDetail") {
@@ -91,22 +107,7 @@ beforeEach(() => {
         ],
       };
     }
-    if (queryName(document) === "SessionChart") {
-      return {
-        Pool: [
-          {
-            id: "0x00000000000000000000000000000000000000f1",
-            childMarket_id: MARKET.toLowerCase(),
-            underlyingPerOutcome: "800000000000000000",
-            updatedAt: String(CLOSES_AT + 3600),
-            swaps: [
-              { underlyingPerOutcomeAfter: "500000000000000000", timestamp: String(CLOSES_AT - 3600) },
-              { underlyingPerOutcomeAfter: "800000000000000000", timestamp: String(CLOSES_AT + 3600) },
-            ],
-          },
-        ],
-      };
-    }
+    if (queryName(document) === "SessionChart") return { Pool: [pool] };
     return { Prediction: [], directSwaps: [], senderlessSwaps: [], Pool: [] };
   });
 });
@@ -125,12 +126,39 @@ async function renderPage() {
 
 describe("MarketPage compares a resolved option card with the price at close", () => {
   it("shows the pool's price when trading closed, not a trade after it", async () => {
-    parent = { resolved: true, invalid: false, winningOutcomes: [0], payoutNumerators: [1n, 0n], payoutDenominator: 1n };
+    parent = {
+      resolved: true,
+      invalid: false,
+      winningOutcomes: [0],
+      payoutNumerators: [1n, 0n],
+      payoutDenominator: 1n,
+    };
 
     await renderPage();
 
     await waitFor(() => expect(card(NAME)).toHaveTextContent("Waiting for result"));
     await waitFor(() => expect(within(card(NAME)).getByTestId("market-chip")).toHaveTextContent("250 $M"));
+  });
+
+  it("shows the seeded price when the pool's first swap came after close", async () => {
+    parent = {
+      resolved: true,
+      invalid: false,
+      winningOutcomes: [0],
+      payoutNumerators: [1n, 0n],
+      payoutDenominator: 1n,
+    };
+    // seeded at 0.25 (sqrt price 2^95 with the outcome as token0); the one swap, after close, moved it to 0.8
+    pool = {
+      ...tradedPool,
+      swaps: [{ underlyingPerOutcomeAfter: "800000000000000000", timestamp: String(CLOSES_AT + 3600) }],
+      firstSwap: [{ priceBefore: String(2n ** 95n) }],
+    };
+
+    await renderPage();
+
+    await waitFor(() => expect(card(NAME)).toHaveTextContent("Waiting for result"));
+    await waitFor(() => expect(within(card(NAME)).getByTestId("market-chip")).toHaveTextContent("125 $M"));
   });
 
   it("shows the latest price while the session is not resolved", async () => {

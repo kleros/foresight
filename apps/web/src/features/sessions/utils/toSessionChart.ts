@@ -4,8 +4,17 @@ import type { SessionChartQuery } from "@/lib/graphql/generated/graphql";
 
 import type { SessionChartData, SessionChartPoint, SessionOption } from "../types";
 
+const Q192 = 2n ** 192n;
+const WAD = 10n ** 18n;
+
 const toEstimate = (underlyingPerOutcome: string | null | undefined, option: SessionOption): number | undefined =>
   underlyingPerOutcome == null ? undefined : priceWadToEstimate(BigInt(underlyingPerOutcome), option);
+
+/** Underlying per whole outcome token at an Algebra sqrt price X96, 1e18-scaled, as the indexer stores it. */
+function priceAtSqrtPrice(sqrtPriceX96: bigint, outcomeIsToken0: boolean): bigint {
+  const ratio = sqrtPriceX96 * sqrtPriceX96;
+  return outcomeIsToken0 ? (ratio * WAD) / Q192 : (Q192 * WAD) / ratio;
+}
 
 export function toSessionChart(result: SessionChartQuery, options: SessionOption[]): SessionChartData {
   // Indexer ids are lowercase; only the caller's option addresses need normalising.
@@ -32,6 +41,13 @@ export function toSessionChart(result: SessionChartQuery, options: SessionOption
       points.push({ timestamp: Number(pool.updatedAt), value: current });
     }
 
+    // a swap overwrites the pool's price; the seed survives as the first swap's price before
+    const sqrtBefore = BigInt(pool?.firstSwap?.[0]?.priceBefore ?? 0);
+    const seededValue =
+      pool !== undefined && sqrtBefore > 0n
+        ? priceWadToEstimate(priceAtSqrtPrice(sqrtBefore, pool.outcomeIsToken0), option)
+        : undefined;
+
     data.push({
       option: {
         market: option.market,
@@ -42,6 +58,7 @@ export function toSessionChart(result: SessionChartQuery, options: SessionOption
         upperBound: option.upperBound,
       },
       points,
+      seededValue,
     });
   }
 

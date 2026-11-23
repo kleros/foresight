@@ -71,6 +71,8 @@ export interface SessionChartPoint {
 export interface SessionChartSeries {
   option: SessionChartOption;
   points: SessionChartPoint[];
+  /** Estimate the pool was seeded at, before its first swap; absent while it has not traded. */
+  seededValue?: number;
 }
 
 /** One series per option; an option whose pool never priced has no points. */
