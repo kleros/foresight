@@ -227,9 +227,12 @@ describe("createRedeemRun polls a sent batch's status by EIP-5792 v2", () => {
     expect(sendCallsOf(requests)).toHaveLength(1);
   });
 
-  it.each(FAILED)("status %i: halts as batch-failed, holding nothing", async (code) => {
+  it.each(FAILED)("status %i, even with a receipt: halts as batch-failed, holding nothing", async (code) => {
     const world = newWorld();
-    const { run, requests, storage } = polled(world, () => Promise.resolve({ status: code }));
+    const { hash } = world.fake.broadcast({ to: OWNER, data: "0x" }, OWNER, true);
+    const { run, requests, storage } = polled(world, () =>
+      Promise.resolve({ status: code, receipts: [{ transactionHash: hash }] }),
+    );
 
     run.start();
     await settled(run);

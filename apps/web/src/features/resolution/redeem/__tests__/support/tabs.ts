@@ -180,6 +180,8 @@ export interface TabOptions {
   ttlMs?: number;
   storeNow?: () => number;
   withLock?: (work: () => Promise<void>, signal: AbortSignal) => Promise<void>;
+  /** What the Redeem section showed; INPUT unless given. */
+  request?: WalletRedeemInput;
 }
 
 export function tab(world: World, opts: TabOptions = {}) {
@@ -235,7 +237,7 @@ export function tab(world: World, opts: TabOptions = {}) {
     flowId: "redeem-session-4",
     account: () => ("account" in opts ? opts.account : OWNER),
     chainId: () => opts.chainId ?? CHAIN_ID,
-    request: () => INPUT,
+    request: () => opts.request ?? INPUT,
     now: () => 1_700_000_000_000,
     pollMs: 5,
     ...(opts.withLock ? { withLock: opts.withLock } : {}),
