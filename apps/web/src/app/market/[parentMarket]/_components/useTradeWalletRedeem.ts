@@ -7,6 +7,7 @@ import { useAccount } from "wagmi";
 
 import type { ParentResolution } from "@/features/resolution/api/getSessionResolution";
 import { fetchTradeWalletRedeem, readTradeWalletRedeem } from "@/features/resolution/api/getTradeWalletRedeem";
+import { REDEEM_ALLOW_LIST } from "@/features/resolution/oracle/allowlist";
 import type { SessionKey } from "@/features/resolution/api/useSessionResolution";
 import type { RedeemPlan } from "@/features/resolution/redeem/plan";
 import { assertRedeemBatchAllowed, UnlistedRedeemError } from "@/features/resolution/redeem/tradeWalletBatchAllowed";
@@ -63,7 +64,8 @@ const request = (owner: Address, { sessionFactory, sessionId }: SessionKey) => (
  */
 export function useTradeWalletRedeem(session: SessionKey | undefined, parent: ParentResolution | Error | undefined) {
   const { address, chainId } = useAccount();
-  const owner = chainId === DEFAULT_CHAIN_ID ? address : undefined;
+  // read on and sent to DEFAULT_CHAIN_ID, as the trade wallet row is; a chain with no allow-list offers no redeem
+  const owner = chainId === DEFAULT_CHAIN_ID && REDEEM_ALLOW_LIST[DEFAULT_CHAIN_ID] ? address : undefined;
   const resolved = parent !== undefined && !(parent instanceof Error) && parent.resolved;
 
   const query = useQuery({
