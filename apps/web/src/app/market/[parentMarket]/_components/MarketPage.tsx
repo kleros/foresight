@@ -38,7 +38,6 @@ import { AdvancedSection } from "./AdvancedSection";
 import { OptionCard } from "./OptionCard";
 import { ParticipateSection } from "./ParticipateSection";
 import { PredictCard } from "./PredictCard";
-import { RedeemSection } from "./RedeemSection";
 import { resolutionRead } from "./resolutionRead";
 import { SessionHeader } from "./SessionHeader";
 import { toWalletMarket } from "./toWalletMarket";
@@ -57,8 +56,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
   const usdPrice = useSDaiUsdPrice(session.data?.collateralToken);
   const chart = useSessionChart(session.data ?? undefined);
   const positions = useOptionPositions(session.data ?? undefined);
-  const read = resolutionRead(session.data ?? undefined, sessionFactoryAddress());
-  const resolution = useSessionResolution(read);
+  const resolution = useSessionResolution(resolutionRead(session.data ?? undefined, sessionFactoryAddress()));
   useRenderAtClose(session.data?.closesAt);
   useEstimateHydration();
   const searchParams = useSearchParams();
@@ -204,11 +202,6 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
         />
         <TradeHistory session={detail} />
         {walletMarket ? <TradeWallet market={walletMarket} noun={optionNounSingular(detail.itemName)} /> : null}
-        <RedeemSection
-          session={status === "resolved" ? read : undefined}
-          parentMarket={detail.parentMarket}
-          options={detail.options}
-        />
         <AdvancedSection parentMarket={detail.parentMarket} />
         <LiquiditySection
           closed={addsClosed}

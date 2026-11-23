@@ -105,8 +105,6 @@ const S_DAI_ADAPTER_ADDRESSES: Record<number, Address> = { ...gnosis.savingsXDai
 
 export type SDaiDepositRoute = { sDai: Address; sDaiAdapter: Address };
 
-export const sDaiAddress = (chainId: number = DEFAULT_CHAIN_ID): Address | null => S_DAI_ADDRESSES[chainId] ?? null;
-
 /** Whether `collateral` is the chain's sDAI, adapter or none. */
 export function isSDai(collateral: Address, chainId: number = DEFAULT_CHAIN_ID): boolean {
   const sDai = S_DAI_ADDRESSES[chainId];
