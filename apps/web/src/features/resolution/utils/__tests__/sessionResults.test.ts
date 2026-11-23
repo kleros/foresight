@@ -90,6 +90,16 @@ describe("optionResult", () => {
     expect(optionResult(parent([1]), resolvedChild(down, up), wide)).toMatchObject({ kind: "final", text: reads });
   });
 
+  it.each([
+    { finalValue: 0.0012, reads: "0.0012" },
+    { finalValue: 100.4999, reads: "100.4999" },
+    { finalValue: 50.25, reads: "50.25" },
+  ])("on a wide scale with a fine bound reads $finalValue inside the bounds as $reads", ({ finalValue, reads }) => {
+    const wide = { ...option, unit: null, lowerBound: 0.001, upperBound: 100.5 };
+    const child = { ...resolvedChild(1n, 1n), finalValue };
+    expect(optionResult(parent([1]), child, wide)).toMatchObject({ kind: "final", text: reads });
+  });
+
   it("reads a final value on a scale whose range could not be read", () => {
     for (const [lowerBound, upperBound] of [
       [0, 0],

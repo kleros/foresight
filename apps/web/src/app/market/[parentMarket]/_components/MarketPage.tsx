@@ -119,13 +119,19 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
       ? "Could not read the pools. Reload in a moment."
       : undefined;
   // the pool's number is an unbounded float; held on each option's grid so "at the market" is exact
-  const latest = chart.data ? latestEstimates(chart.data) : {};
-  const marketEstimates = Object.fromEntries(
-    detail.options.flatMap((option) => {
-      const raw = latest[option.market.toLowerCase()];
-      return raw === undefined ? [] : [[option.market.toLowerCase(), snapEstimate(raw, option)]];
-    }),
-  ) as Record<string, number | undefined>;
+  const onGrid = (raw: Record<string, number>) =>
+    Object.fromEntries(
+      detail.options.flatMap((option) => {
+        const value = raw[option.market.toLowerCase()];
+        return value === undefined ? [] : [[option.market.toLowerCase(), snapEstimate(value, option)]];
+      }),
+    ) as Record<string, number | undefined>;
+  const marketEstimates = onGrid(chart.data ? latestEstimates(chart.data) : {});
+  // a resolved card compares the answer with the price at close, which later trades do not move
+  const cardEstimates =
+    status === "resolved" && chart.data && detail.closesAt
+      ? onGrid(latestEstimates(chart.data, Math.floor(detail.closesAt.getTime() / 1000)))
+      : marketEstimates;
 
   return (
     <PageColumn>
@@ -162,7 +168,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
             option={option}
             parentMarket={detail.parentMarket}
             status={status}
-            marketEstimate={marketEstimates[option.market.toLowerCase()]}
+            marketEstimate={cardEstimates[option.market.toLowerCase()]}
             isMarketPending={chart.isPending}
             isMarketUnavailable={chart.isError}
             position={positions[option.market.toLowerCase()]}

@@ -75,8 +75,20 @@ export function optionResult(
       ? `${formatEstimate(option.upperBound, option.unit, boundDigits(option.upperBound, digits))} or more`
       : up === 0n
         ? `${formatEstimate(option.lowerBound, option.unit, boundDigits(option.lowerBound, digits))} or less`
-        : formatEstimate(child.finalValue, option.unit, digits);
+        : formatEstimate(child.finalValue, option.unit, insideDigits(child.finalValue, option, digits));
   return { kind: "final", value: child.finalValue, text };
+}
+
+/** Fewest digits, from `digits` up to 20, that print a value inside the bounds as inside them. */
+function insideDigits(value: number, { lowerBound, upperBound }: OptionScale, digits: number): number {
+  if (!(lowerBound < value && value < upperBound)) return digits;
+  let shown = digits;
+  while (shown < 20) {
+    const printed = Number(value.toFixed(shown));
+    if (lowerBound < printed && printed < upperBound) break;
+    shown += 1;
+  }
+  return shown;
 }
 
 /** Fewest digits, from `digits` up to 20, that print `bound` exactly. */

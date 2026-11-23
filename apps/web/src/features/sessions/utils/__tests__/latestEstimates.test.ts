@@ -36,4 +36,21 @@ describe("latestEstimates", () => {
 
     expect(latestEstimates(data)).toEqual({});
   });
+
+  it("takes the newest point at or before a cutoff, leaving out an option with none by then", () => {
+    const data: SessionChartData = [
+      {
+        option: option(addresses.childMarkets[0]),
+        points: [
+          { timestamp: 10, value: 100 },
+          { timestamp: 20, value: 250 },
+          { timestamp: 30, value: 400 },
+        ],
+      },
+      { option: option(addresses.childMarkets[1]), points: [{ timestamp: 21, value: 280 }] },
+    ];
+
+    expect(latestEstimates(data, 20)).toEqual({ [addresses.childMarkets[0]]: 250 });
+    expect(latestEstimates(data, 25)).toEqual({ [addresses.childMarkets[0]]: 250, [addresses.childMarkets[1]]: 280 });
+  });
 });

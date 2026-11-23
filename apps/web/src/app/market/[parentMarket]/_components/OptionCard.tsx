@@ -136,7 +136,10 @@ function TitleRow({ option, isSet, result }: { option: SessionOption; isSet: boo
       ? { tone: "done" as const, label: `Final ${result.text}` }
       : result && RESULT_CHIP[result.kind];
   return (
-    <div className="flex min-w-0 flex-1 items-center justify-between gap-4">
+    <div
+      // a chip does not shrink, so it drops under a long name rather than crushing it
+      className={clsx("flex min-w-0 flex-1 items-center justify-between gap-x-4 gap-y-1.5", chip && "flex-wrap")}
+    >
       <div className="flex min-w-0 items-center gap-2">
         <span className="size-2 flex-none rounded-full" style={{ backgroundColor: option.color }} aria-hidden />
         <h3 className="text-fs-text-primary min-w-0 text-left font-semibold wrap-break-word">{option.name}</h3>
