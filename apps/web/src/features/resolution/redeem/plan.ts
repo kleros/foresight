@@ -157,3 +157,14 @@ export function planTradeWalletRedeem(input: TradeWalletRedeemInput): RedeemPlan
     tx: calls.length > 0 ? batchExecuteTx(executorAddress(factory, input.owner), calls) : null,
   };
 }
+
+export type WalletRedeemInput = TradeWalletRedeemInput;
+
+export interface WalletRedeemPlan extends Omit<RedeemPlan, "tx"> {
+  /** Sent from the connected account, in order; empty when nothing is redeemable. */
+  calls: FlowTx[];
+}
+
+export function planWalletRedeem(_input: WalletRedeemInput): WalletRedeemPlan {
+  throw new Error("not implemented");
+}
