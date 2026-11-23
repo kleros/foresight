@@ -40,6 +40,17 @@ export function RedeemSection({
 }) {
   const plan = useTradeWalletRedeem(session, parent);
   const redeem = useRedeemFromTradeWallet();
+  const owner = plan.owner;
+
+  if (!session || !owner) return null;
+  if (parent instanceof Error) {
+    return (
+      <Section>
+        <p className="type-label text-fs-text-secondary">Could not read this session&apos;s result.</p>
+      </Section>
+    );
+  }
+  if (!parent?.resolved) return null;
 
   if (plan.isError) {
     return (
@@ -52,8 +63,7 @@ export function RedeemSection({
     );
   }
   const data = plan.data;
-  const owner = plan.owner;
-  if (!session || !owner || !data || (data.parts.length === 0 && data.waiting.length === 0)) return null;
+  if (!data || (data.parts.length === 0 && data.waiting.length === 0)) return null;
 
   const nameOf = (market: Address) =>
     isAddressEqual(market, parentMarket)

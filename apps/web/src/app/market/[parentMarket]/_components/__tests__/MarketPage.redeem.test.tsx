@@ -13,6 +13,7 @@ import {
   type SessionResolutionRequest,
 } from "@/features/resolution/api/getSessionResolution";
 import { fetchTradeWalletRedeem } from "@/features/resolution/api/getTradeWalletRedeem";
+import { sessionResolutionKeys } from "@/features/resolution/api/useSessionResolution";
 import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
 
 import { fetchGraphql } from "@/lib/graphql/batcher";
@@ -130,6 +131,7 @@ async function renderPage() {
   await act(async () => {
     await Promise.all(readerMock.mock.results.map(({ value }) => value));
   });
+  return client;
 }
 
 describe("MarketPage's Redeem section", () => {
@@ -149,5 +151,24 @@ describe("MarketPage's Redeem section", () => {
 
     expect(screen.queryByRole("heading", { level: 2, name: "Redeem from your trade wallet" })).toBeNull();
     expect(redeemMock).not.toHaveBeenCalled();
+  });
+
+  it("withdraws a cached redeem when the parent's result cannot be read, then restores it after recovery", async () => {
+    const client = await renderPage();
+    expect(await screen.findByRole("button", { name: "Redeem" })).toBeEnabled();
+
+    readerMock.mockRejectedValue(new Error("RPC unavailable"));
+    await act(() => client.invalidateQueries({ queryKey: sessionResolutionKeys.all }));
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Redeem" })).toBeNull());
+    expect(screen.getByText("Could not read this session's result.")).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "What your trade wallet can redeem" })).toBeNull();
+    expect(screen.queryByText("3.000000000000000007 sDAI goes to your trade wallet.")).toBeNull();
+
+    readerMock.mockImplementation((_client, request) => answer(request));
+    await act(() => client.invalidateQueries({ queryKey: sessionResolutionKeys.all }));
+
+    expect(await screen.findByRole("button", { name: "Redeem" })).toBeEnabled();
+    expect(screen.queryByText("Could not read this session's result.")).toBeNull();
   });
 });
