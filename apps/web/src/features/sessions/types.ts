@@ -71,6 +71,8 @@ export interface SessionChartPoint {
 export interface SessionChartSeries {
   option: SessionChartOption;
   points: SessionChartPoint[];
+  /** The estimate the pool held before its first swap; undefined where it never priced. */
+  seededValue?: number;
 }
 
 /** One series per option; an option whose pool never priced has no points. */
@@ -188,6 +190,8 @@ export interface SessionSummary extends SessionCore {
   keyword: string;
   /** Whether the parent market has resolved; undefined while unread or where the read failed. */
   resolved?: boolean;
+  /** The parent's winning options by name, on a resolved session once they are read. */
+  winningOptionNames?: string[];
   /** True where the parent market's resolution could not be read. */
   resolutionUnknown?: boolean;
   /** Overrides the market page link, for sessions this indexer does not hold. */

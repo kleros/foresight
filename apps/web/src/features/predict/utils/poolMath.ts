@@ -1,4 +1,4 @@
-import { sqrtPriceAtTick } from "@/lib/swap/tickMath";
+import { priceFromSqrtPriceX96, sqrtPriceAtTick } from "@/lib/swap/tickMath";
 
 import type { PoolLiquidity } from "@/types/pool";
 
@@ -26,11 +26,7 @@ export function isqrt(value: bigint): bigint {
   return previous;
 }
 
-/** Underlying per whole outcome token, 1e18-scaled. The indexer stores this same value. */
-export function priceFromSqrtPriceX96(sqrtPriceX96: bigint, outcomeIsToken0: boolean): bigint {
-  const ratio = sqrtPriceX96 * sqrtPriceX96;
-  return outcomeIsToken0 ? (ratio * WAD) / Q192 : (Q192 * WAD) / ratio;
-}
+export { priceFromSqrtPriceX96 };
 
 export function sqrtPriceX96FromPrice(priceWad: bigint, outcomeIsToken0: boolean): bigint {
   if (priceWad <= 0n) throw new RangeError("a pool price must be above zero");

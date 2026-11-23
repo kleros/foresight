@@ -26,6 +26,8 @@ interface EstimateSliderProps {
   onClear: () => void;
   /** Set when the session as a whole cannot take estimates; shown in place of the hint. */
   lockedReason?: string;
+  /** The option's resolved answer: `share` is its place on the track, 0 to 1. Shown in place of the hint. */
+  finalValue?: { share: number; text: string };
 }
 
 const ESTIMATE_COLOR = { higher: "var(--fs-estimate-up)", lower: "var(--fs-estimate-down)" } as const;
@@ -59,6 +61,7 @@ export function EstimateSlider({
   onCommit,
   onClear,
   lockedReason,
+  finalValue,
 }: EstimateSliderProps) {
   const range = scale.upperBound - scale.lowerBound;
   // react-aria snaps a controlled value to the step, so the market's number is held on the same grid
@@ -220,6 +223,15 @@ export function EstimateSlider({
               onInvalid={say}
             />
           ) : null}
+          {finalValue ? (
+            <span
+              data-testid="final-value-marker"
+              aria-hidden
+              // across the library's track, which is centred in its 28px row; over the thumb's z-10
+              className="pointer-events-none absolute top-3.5 z-11 h-5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-(--fs-tone-success) ring-2 ring-(--fs-surface)"
+              style={{ left: `${finalValue.share * 100}%` }}
+            />
+          ) : null}
           {marketShare !== undefined ? (
             <div
               data-testid="market-pin"
@@ -306,7 +318,13 @@ export function EstimateSlider({
       <p className="type-label text-fs-text-secondary min-h-5">
         {/* mounted empty, so a screen reader hears the note when it arrives */}
         <span role="status">{note?.text}</span>
-        {note ? null : reason ? (
+        {note ? null : finalValue ? (
+          <span className="inline-flex flex-wrap items-center gap-x-1.5">
+            <span className="h-3 w-1 shrink-0 rounded-full bg-(--fs-tone-success)" aria-hidden />
+            <span className="text-fs-text-primary font-semibold">{`Result ${finalValue.text}`}</span>
+            {marketShare === undefined ? null : <span>The market pin is the price at close.</span>}
+          </span>
+        ) : reason ? (
           <span className={lockedReason ? "text-fs-tone-warning-text" : undefined}>{reason}</span>
         ) : isMarketPending ? (
           "Loading the market…"

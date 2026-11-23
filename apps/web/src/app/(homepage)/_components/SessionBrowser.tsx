@@ -6,6 +6,7 @@ import { Button, StandardPagination } from "@kleros/ui-components-library";
 
 import { sessionKey, useParentResolutions } from "@/features/resolution/api/useSessionResolution";
 import { useSessions } from "@/features/sessions/api/getSessions";
+import { useWinnerNames } from "@/features/sessions/api/getWinnerNames";
 import { SessionFilters } from "@/features/sessions/components/SessionFilters";
 import { SessionGrid } from "@/features/sessions/components/SessionGrid";
 import { SessionGridSkeleton } from "@/features/sessions/components/SessionGridSkeleton";
@@ -32,12 +33,20 @@ export function SessionBrowser() {
   const listed = data?.sessions ?? [];
   const sessionFactory = sessionFactoryAddress();
   const resolutions = useParentResolutions(listed.map((session) => sessionKey(session.id, sessionFactory)));
+  const winnerNames = useWinnerNames(
+    listed.map((session, index) => {
+      const parent = resolutions[index];
+      return parent && !(parent instanceof Error) && parent.resolved && parent.winningOutcomes.length > 0
+        ? { sessionId: session.id, winners: parent.winningOutcomes }
+        : undefined;
+    }),
+  );
   const sessions = listed.map((session, index) => {
     const parent = resolutions[index];
     if (parent === undefined) return session;
     return parent instanceof Error
       ? { ...session, resolutionUnknown: true }
-      : { ...session, resolved: parent.resolved };
+      : { ...session, resolved: parent.resolved, winningOptionNames: winnerNames[index] };
   });
   const filtered = isFiltered(filters);
 

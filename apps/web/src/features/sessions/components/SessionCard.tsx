@@ -20,6 +20,7 @@ import { resolutionOpened } from "../utils/toSessionDetail";
 
 export function SessionCard({ session }: { session: SessionSummary }) {
   const { closesAt } = session;
+  const winners = session.resolved && session.winningOptionNames?.length ? session.winningOptionNames.join(", ") : null;
 
   return (
     <Link className="fs-session-card" href={session.href ?? paths.market.getHref(session.parentMarket)}>
@@ -30,9 +31,17 @@ export function SessionCard({ session }: { session: SessionSummary }) {
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 pt-4.5">
             <div className="border-b-klerosUIComponentsSecondaryBlue flex shrink-0 flex-col items-start gap-2 border-b pb-4">
               <h3 className="text-fs-accent text-base font-semibold">{session.name}</h3>
-              <p className="text-fs-text-primary line-clamp-2 min-h-[2lh] text-sm leading-relaxed">
-                {session.description}
-              </p>
+              {winners ? (
+                // takes the branch count's line as well, so three lines fit the card's fixed height at rest
+                <p className="text-fs-text-primary line-clamp-3 min-h-[2lh] text-sm leading-relaxed" title={winners}>
+                  <span className="text-fs-text-secondary">Selected: </span>
+                  <span className="font-semibold">{winners}</span>
+                </p>
+              ) : (
+                <p className="text-fs-text-primary line-clamp-2 min-h-[2lh] text-sm leading-relaxed">
+                  {session.description}
+                </p>
+              )}
             </div>
 
             {session.resolutionUnknown ? (
@@ -41,12 +50,14 @@ export function SessionCard({ session }: { session: SessionSummary }) {
               </div>
             ) : null}
 
-            <div className="mt-4 flex shrink-0 items-center gap-2">
-              <TagIcon className="text-fs-accent size-4 shrink-0 [&_path]:fill-current" />
-              <span className="text-fs-accent text-sm font-semibold">
-                {session.branchCount} {session.branchNoun}
-              </span>
-            </div>
+            {winners ? null : (
+              <div className="mt-4 flex shrink-0 items-center gap-2">
+                <TagIcon className="text-fs-accent size-4 shrink-0 [&_path]:fill-current" />
+                <span className="text-fs-accent text-sm font-semibold">
+                  {session.branchCount} {session.branchNoun}
+                </span>
+              </div>
+            )}
 
             {closesAt ? (
               <div className="fs-session-card__reveal mt-2 flex shrink-0 flex-col gap-2">

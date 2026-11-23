@@ -15,11 +15,13 @@ import { EstimateCsvDialog } from "@/features/predict/components/EstimateCsvDial
 import { useEstimateHydration } from "@/features/predict/hooks/useEstimateHydration";
 import { snapEstimate } from "@/features/predict/utils/estimates";
 import { useSessionResolution } from "@/features/resolution/api/useSessionResolution";
+import { sessionResults } from "@/features/resolution/utils/sessionResults";
 import { usePoolBalances, useSDaiUsdPrice } from "@/features/sessions/api/getPoolBalances";
 import { useSession } from "@/features/sessions/api/getSession";
 import { useSessionChart } from "@/features/sessions/api/getSessionChart";
 import { sessionStatsKey, useSessionStats } from "@/features/sessions/api/getSessionStats";
 import { useRenderAtClose } from "@/features/sessions/hooks/useRenderAtClose";
+import { estimatesAt } from "@/features/sessions/utils/estimatesAt";
 import { latestEstimates } from "@/features/sessions/utils/latestEstimates";
 import { optionNoun, optionNounSingular } from "@/features/sessions/utils/optionNoun";
 import { resolutionOpened, sessionStatus } from "@/features/sessions/utils/toSessionDetail";
@@ -102,6 +104,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
   const detail = session.data;
   const now = new Date();
   const status = sessionStatus(detail, now, liquidity.hasLiquidity, resolution.parent);
+  const results = sessionResults(resolution.parent, resolution.children, detail.options);
   const { recheckParent } = resolution;
   const { hasLiquidity } = liquidity;
   const recheckStatus =
@@ -117,13 +120,19 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
       ? "Could not read the pools. Reload in a moment."
       : undefined;
   // the pool's number is an unbounded float; held on each option's grid so "at the market" is exact
-  const latest = chart.data ? latestEstimates(chart.data) : {};
-  const marketEstimates = Object.fromEntries(
-    detail.options.flatMap((option) => {
-      const raw = latest[option.market.toLowerCase()];
-      return raw === undefined ? [] : [[option.market.toLowerCase(), snapEstimate(raw, option)]];
-    }),
-  ) as Record<string, number | undefined>;
+  const onGrid = (raw: Record<string, number>) =>
+    Object.fromEntries(
+      detail.options.flatMap((option) => {
+        const value = raw[option.market.toLowerCase()];
+        return value === undefined ? [] : [[option.market.toLowerCase(), snapEstimate(value, option)]];
+      }),
+    ) as Record<string, number | undefined>;
+  const marketEstimates = onGrid(chart.data ? latestEstimates(chart.data) : {});
+  // a resolved card sets the answer against the price at the resolution date, where the chart ends
+  const cardEstimates =
+    results && chart.data && detail.closesAt
+      ? onGrid(estimatesAt(chart.data, Math.floor(detail.closesAt.getTime() / 1000)))
+      : marketEstimates;
 
   return (
     <PageColumn>
@@ -135,6 +144,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
         poolBalances={poolBalances.data}
         poolBalancesPending={poolBalances.isPending}
         usdPrice={usdPrice.data}
+        results={results}
       />
       {liquidity.hasLiquidity === false && !addsClosed ? (
         <LiquidityBanner reason={addLiquidityReason} onAdd={() => setAddingLiquidity(true)} />
@@ -159,11 +169,12 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
             option={option}
             parentMarket={detail.parentMarket}
             status={status}
-            marketEstimate={marketEstimates[option.market.toLowerCase()]}
+            marketEstimate={cardEstimates[option.market.toLowerCase()]}
             isMarketPending={chart.isPending}
             isMarketUnavailable={chart.isError}
             position={positions[option.market.toLowerCase()]}
             collateralDecimals={detail.collateralDecimals ?? undefined}
+            result={results?.options[option.market.toLowerCase()]}
           />
         ))}
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">

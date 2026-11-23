@@ -17,11 +17,15 @@ const SESSION_CHART = graphql(`
     Pool(where: { childMarket: { session_id: { _eq: $sessionId } }, outcomeIndex: { _eq: $upOutcome } }) {
       id
       childMarket_id
+      outcomeIsToken0
       underlyingPerOutcome
       updatedAt
       swaps(order_by: [{ timestamp: asc }, { logIndex: asc }]) {
         underlyingPerOutcomeAfter
         timestamp
+      }
+      firstSwap: swaps(order_by: [{ timestamp: asc }, { logIndex: asc }], limit: 1) {
+        priceBefore
       }
     }
   }

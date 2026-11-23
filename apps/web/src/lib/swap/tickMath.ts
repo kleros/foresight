@@ -1,6 +1,14 @@
 /** Tick and sqrt-price conversions, exact to the pool's own TickMath. */
 
 const MAX_UINT256 = 2n ** 256n - 1n;
+const Q192 = 2n ** 192n;
+const WAD = 10n ** 18n;
+
+/** Underlying per whole outcome token, 1e18-scaled. The indexer stores this same value. */
+export function priceFromSqrtPriceX96(sqrtPriceX96: bigint, outcomeIsToken0: boolean): bigint {
+  const ratio = sqrtPriceX96 * sqrtPriceX96;
+  return outcomeIsToken0 ? (ratio * WAD) / Q192 : (Q192 * WAD) / ratio;
+}
 
 /** Algebra's TickMath.getSqrtRatioAtTick, which Algebra copies from Uniswap v3. */
 const TICK_RATIOS = [
