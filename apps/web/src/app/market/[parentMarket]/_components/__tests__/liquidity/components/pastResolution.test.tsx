@@ -34,10 +34,16 @@ vi.mock("@/lib/web3/public-client", () => ({
     return current.world.client;
   },
 }));
-/* The parent market reads as unresolved. */
+/* The parent market reads as unresolved unless a test resolves it. */
+const parentRead = vi.hoisted(() => ({ resolved: false }));
 vi.mock("@/features/resolution/api/getSessionResolution", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/resolution/api/getSessionResolution")>()),
-  fetchSessionResolution: async () => ({ parent: { resolved: false }, children: {} }),
+  fetchSessionResolution: async () => ({
+    parent: parentRead.resolved
+      ? { resolved: true, winners: [0], invalid: false, payoutNumerators: [1n, 0n] }
+      : { resolved: false },
+    children: {},
+  }),
 }));
 vi.mock("@/config/chains", async (importOriginal) => {
   const { gnosis } = await import("viem/chains");
@@ -134,6 +140,7 @@ const disabled = (element: HTMLElement) =>
   element.hasAttribute("disabled") || element.getAttribute("aria-disabled") === "true";
 
 beforeEach(() => {
+  parentRead.resolved = false;
   fetchMock.mockReset();
   useEstimateStore.setState({ estimates: {} });
   current.account = { address: owner, chainId: 100, isConnected: true, status: "connected" };
@@ -226,5 +233,15 @@ describe("the market page past the resolution date", () => {
     await waitFor(() => expect(screen.getByTestId("chart-end")).toHaveTextContent(PAST_CLOSE), { timeout: 5000 });
     expect(addControls()).toEqual([]);
     expect(screen.queryByText("Trading has closed.")).toBeNull();
+  });
+});
+
+describe("the market page once the parent resolved", () => {
+  it("offers no Add liquidity when the indexer has no resolution date and the pools are empty", async () => {
+    parentRead.resolved = true;
+    await show(drained(), PAST_CLOSE, { openingTime: null });
+
+    await waitFor(() => expect(screen.getAllByText("Resolved").length).toBeGreaterThan(0), { timeout: 5000 });
+    expect(addControls()).toEqual([]);
   });
 });

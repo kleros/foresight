@@ -324,9 +324,11 @@ export function PredictRunner({ session, status, recheckStatus, selected, onClos
 
   // the form's own prices and credits quote matter only to a press that starts a new run
   const startsNew = !moved && !canRetry && !recovered && !pendingHash;
-  // once a run is going its own state is the story, not what the wallet is doing now
+  // once a run is going its own state is the story, except why no further prediction can start
   const shownNotice = isRunning
-    ? undefined
+    ? stopsSends(status)
+      ? blockedBy
+      : undefined
     : notice({
         blockedBy,
         owner,

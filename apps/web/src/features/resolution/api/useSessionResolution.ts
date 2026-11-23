@@ -32,6 +32,8 @@ export function sessionKey(id: string, sessionFactory: Address | null): SessionK
 
 /** How often, in ms, a read that has not settled on resolved is made again. */
 const REREAD_MS = 30_000;
+/** How soon, in ms, a failed parent read is made again. */
+const REREAD_AFTER_FAILURE_MS = 10_000;
 
 /** bigint is not JSON, which the query key hash needs. */
 const sessionPart = ({ sessionFactory, sessionId }: SessionKey) => [sessionFactory.toLowerCase(), String(sessionId)];
@@ -77,7 +79,12 @@ export function parentResolutionQuery(session: SessionKey | undefined) {
       : skipToken,
     staleTime: STALE_TIME.live,
     refetchOnWindowFocus: false,
-    refetchInterval: (query) => (isResolvedParent(query.state.data) ? false : REREAD_MS),
+    refetchInterval: (query) =>
+      isResolvedParent(query.state.data)
+        ? false
+        : query.state.data instanceof Error
+          ? REREAD_AFTER_FAILURE_MS
+          : REREAD_MS,
   });
 }
 
@@ -101,10 +108,19 @@ export function useSessionResolution(read: SessionResolutionRead | undefined): S
     refetchInterval: (query) => (allChildrenResolved(query.state.data) ? false : REREAD_MS),
   });
 
+  const fetchParent = (session: SessionKey) =>
+    queryClient.fetchQuery({ ...parentResolutionQuery(session), staleTime: 0 });
+
   return {
     parent: parent.data,
     children: children.data,
-    recheckParent: read ? () => queryClient.fetchQuery({ ...parentResolutionQuery(read), staleTime: 0 }) : undefined,
+    // one transient failure must not refuse a send partway through a run
+    recheckParent: read
+      ? async () => {
+          const first = await fetchParent(read);
+          return first instanceof Error ? fetchParent(read) : first;
+        }
+      : undefined,
   };
 }
 

@@ -91,17 +91,43 @@ describe("useSessionResolution's re-read of an open page", () => {
     expect(parentCalls()).toHaveLength(2);
   });
 
-  it("re-reads a failed parent at 30 s too", async () => {
+  it("re-reads a failed parent after 10 s, sooner than an unresolved one", async () => {
     fetchMock.mockRejectedValue(new Error("HTTP request failed"));
     const { result } = mount();
     await advance(1);
     expect(result.current.parent).toBeInstanceOf(Error);
     const after = parentCalls().length;
 
-    await advance(28_000);
+    await advance(9_000);
     expect(parentCalls()).toHaveLength(after);
-    await advance(2_500);
+    await advance(1_500);
     expect(parentCalls()).toHaveLength(after + 1);
+  });
+
+  it("recheckParent reads once more when the first read fails, and returns the second answer", async () => {
+    let calls = 0;
+    fetchMock.mockImplementation(async (_client, request) => {
+      if (isParentOnly(request) && ++calls === 2) throw new Error("HTTP request failed");
+      return { parent: UNRESOLVED, children: isParentOnly(request) ? {} : childAnswer };
+    });
+    const { result } = mount();
+    await advance(1);
+    const before = parentCalls().length;
+
+    const answer = await act(() => result.current.recheckParent!());
+
+    expect(answer).toEqual(UNRESOLVED);
+    expect(parentCalls()).toHaveLength(before + 2);
+  });
+
+  it("recheckParent returns the Error when both reads fail", async () => {
+    const { result } = mount();
+    await advance(1);
+    fetchMock.mockRejectedValue(new Error("HTTP request failed"));
+
+    const answer = await act(() => result.current.recheckParent!());
+
+    expect(answer).toBeInstanceOf(Error);
   });
 
   it("reads a resolved parent no more", async () => {

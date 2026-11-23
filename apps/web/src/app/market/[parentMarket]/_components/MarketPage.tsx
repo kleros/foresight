@@ -106,8 +106,8 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
   const { hasLiquidity } = liquidity;
   const recheckStatus =
     recheckParent && (async () => sessionStatus(detail, new Date(), hasLiquidity, await recheckParent()));
-  // trading can outlast the resolution date; adding liquidity cannot (L7)
-  const addsClosed = resolutionOpened(detail.closesAt, now);
+  // trading can outlast the resolution date; adding liquidity cannot (L7), nor outlast the parent's resolution
+  const addsClosed = status === "resolved" || resolutionOpened(detail.closesAt, now);
   if (isAddingLiquidity === "link") setAddingLiquidity(!addsClosed);
   const noun = optionNoun(detail.itemNamePlural);
   const walletMarket = toWalletMarket(detail);
