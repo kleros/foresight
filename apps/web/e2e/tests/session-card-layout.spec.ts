@@ -12,9 +12,13 @@ test.afterAll(async () => {
   await harness?.close();
 });
 
+const TWO = "winners=Scaling%20with%20blobs|Account%20abstraction%20today";
+
+/** An icon makes the footer 20px taller than the deployer address does, leaving less room above it. */
 const CASES = {
-  "two winners": "winners=Scaling%20with%20blobs|Account%20abstraction%20today",
-  "three winners": "winners=Scaling%20with%20blobs|Account%20abstraction%20today|Privacy%20pools",
+  "two winners": TWO,
+  "two winners above an icon": `${TWO}&icon`,
+  "three winners above an icon": `${TWO}|Privacy%20pools&icon`,
 };
 
 for (const width of [375, 1280]) {
