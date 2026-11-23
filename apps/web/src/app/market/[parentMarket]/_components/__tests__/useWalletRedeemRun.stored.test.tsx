@@ -3,8 +3,9 @@ import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import type { Address } from "viem";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { sharedLocks } from "@/features/resolution/redeem/__tests__/support/locks";
 import { OWNER, plannerInput } from "@/features/resolution/redeem/__tests__/support/session";
 import { planWalletRedeem } from "@/features/resolution/redeem/plan";
 import { redeemRunStore } from "@/features/resolution/redeem/store";
@@ -45,8 +46,13 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 );
 
 beforeEach(() => {
+  Object.defineProperty(navigator, "locks", { configurable: true, value: sharedLocks().locks });
   window.localStorage.clear();
   storeRun();
+});
+
+afterEach(() => {
+  Reflect.deleteProperty(navigator, "locks");
 });
 
 describe("useWalletRedeemRun over this browser's stored runs", () => {

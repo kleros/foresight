@@ -27,6 +27,7 @@ import {
 } from "@/lib/web3/walletAnswers";
 
 import { conditionalRouterAbi } from "./abi";
+import { RedeemLockError } from "./lock";
 import { planWalletRedeem, type RedeemHolding, type WalletRedeemInput } from "./plan";
 import { redeemCallsDepartures, type RedeemScope } from "./tradeWalletBatchAllowed";
 import { REDEEM_ALLOW_LIST } from "../oracle/allowlist";
@@ -227,12 +228,16 @@ export function createRedeemRun(args: {
   now?: () => number;
   /** How often a sent batch's status is asked, in ms. */
   pollMs?: number;
+  /** Browser callers serialize every storage mutation and send across tabs. */
+  withLock?: (work: () => Promise<void>, signal: AbortSignal) => Promise<void>;
 }): RedeemRun {
   const pollMs = args.pollMs ?? 2_000;
   const listeners = new Set<() => void>();
+  const lifetime = new AbortController();
 
   let failure: RedeemProgress["failure"];
-  let retryFailed: (() => void) | undefined;
+  let retryFailed: (() => void | Promise<void>) | undefined;
+  let acquiring = false;
   let preparing = false;
   let recovering = false;
   let reviewing = false;
@@ -247,7 +252,7 @@ export function createRedeemRun(args: {
   /** The send error the wallet answered without opening a prompt, read when the orchestrator classifies it. */
   let refused: unknown;
 
-  // Compare-and-swap over the stored run, so a tab whose copy is stale can neither prompt nor overwrite a send.
+  // A run restored before another tab held the lock must reread its state before carrying on.
   const base = args.store;
   const mark = (flowId: string) => encodeState(base.load(flowId));
   /** The stored run as this run last read or wrote it; unset until it first reads. */
@@ -492,7 +497,7 @@ export function createRedeemRun(args: {
 
   function stage(): RedeemProgress["stage"] {
     if (failure) return "halted";
-    if (recovering || discarding) return "confirming";
+    if (acquiring || recovering || discarding) return "confirming";
     if (reviewing) return "review";
     const current = run();
     if (!current) return preparing ? "signing" : "idle";
@@ -518,13 +523,14 @@ export function createRedeemRun(args: {
     for (const listener of listeners) listener();
   }
 
-  function report(reason: RedeemFailureReason | undefined, retry?: () => void) {
+  function report(reason: RedeemFailureReason | undefined, retry?: () => void | Promise<void>) {
     failure = reason === undefined ? undefined : { reason, retryable: Boolean(retry) };
     retryFailed = reason === undefined ? undefined : retry;
     notify();
   }
 
-  function stop(error: unknown, retry: () => void) {
+  function stop(error: unknown, retry: () => void | Promise<void>) {
+    if (error instanceof RedeemLockError) error = new RunStop(error.reason, true);
     if (!(error instanceof RunStop)) {
       report(classifyTxError(error), retry);
       return;
@@ -532,8 +538,8 @@ export function createRedeemRun(args: {
     report(error.reason, error.retryable ? retry : undefined);
   }
 
-  function detached(work: () => Promise<void>): () => void {
-    const action = () => void work().catch((error: unknown) => stop(error, action));
+  function detached(work: () => Promise<void>): () => Promise<void> {
+    const action = () => work().catch((error: unknown) => stop(error, action));
     return action;
   }
 
@@ -598,7 +604,7 @@ export function createRedeemRun(args: {
     if (disposed) return;
     // another tab may have stored a run since the press
     if (store.load(args.flowId)) {
-      recoverRun();
+      await recoverRun();
       return;
     }
     const snapshot: RedeemSnapshot = { request, atomic, sends: {} };
@@ -616,7 +622,7 @@ export function createRedeemRun(args: {
   };
 
   /** Loads the stored run for review, signing nothing; only the account and chain that started it may restore it. */
-  function recoverRun() {
+  async function recoverRun() {
     const stored = store.load<RedeemSnapshot, RedeemCtx>(args.flowId);
     if (!stored) {
       if (run()) orchestrator.trash();
@@ -636,7 +642,7 @@ export function createRedeemRun(args: {
     report(undefined);
     recovering = true;
     notify();
-    detached(async () => {
+    await detached(async () => {
       try {
         orchestrator.restore({ flowId: args.flowId, steps: stepsFor(stored.snapshot) });
         const found = await orchestrator.reconcileInFlight();
@@ -649,7 +655,7 @@ export function createRedeemRun(args: {
     })();
   }
 
-  const busy = () => disposed || preparing || recovering || discarding;
+  const busy = () => disposed || acquiring || preparing || recovering || discarding;
 
   /** Whether a send of `stored` is broadcast or has landed; resume, not a discard, must settle it. */
   async function mayHaveLanded({ snapshot, ctx, steps }: StoredRun) {
@@ -688,36 +694,35 @@ export function createRedeemRun(args: {
     report(undefined);
   }
 
-  return {
+  const actions = {
     start() {
       if (busy() || orchestrator.getStatus() === "running") return;
       const stored = store.load<RedeemSnapshot, RedeemCtx>(args.flowId);
       // a stored run that may still land is settled by resume, never replaced
       if (stored && (mayStillLand(stored) || !ownedHere(stored))) {
-        recoverRun();
-        return;
+        return recoverRun();
       }
       drop(stored);
-      startRun();
+      return startRun();
     },
 
     recover() {
       if (busy() || orchestrator.getStatus() === "running") return;
-      recoverRun();
+      return recoverRun();
     },
 
     resume() {
       if (!reviewing || busy()) return;
       reviewing = false;
       report(undefined);
-      resumeRun();
+      return resumeRun();
     },
 
     retry() {
       const again = retryFailed;
       if (!again || busy()) return;
       report(undefined);
-      again();
+      return again();
     },
 
     reset() {
@@ -728,7 +733,9 @@ export function createRedeemRun(args: {
     },
 
     async discard() {
-      if (busy() || orchestrator.getStatus() === "running" || !(failure || reviewing)) return;
+      const status = orchestrator.getStatus();
+      const canDiscard = failure || reviewing || status === "paused" || status === "failed";
+      if (busy() || status === "running" || !canDiscard) return;
       const stored = store.load<RedeemSnapshot, RedeemCtx>(args.flowId);
       if (!stored) {
         drop(null);
@@ -758,8 +765,7 @@ export function createRedeemRun(args: {
       }
       if (disposed) return;
       if (!inSync()) {
-        recoverRun();
-        return;
+        return recoverRun();
       }
       if (landing) {
         report("pending", resumeRun);
@@ -781,10 +787,45 @@ export function createRedeemRun(args: {
       reviewing = true;
       report(undefined);
     },
+  };
+
+  function locked(action: () => void | Promise<void>): () => Promise<void> {
+    const attempt = async () => {
+      if (busy() || orchestrator.getStatus() === "running") return;
+      const retry = action === actions.retry ? retryFailed : action;
+      try {
+        if (!args.withLock) {
+          await action();
+          return;
+        }
+        acquiring = true;
+        notify();
+        await args.withLock(async () => {
+          acquiring = false;
+          if (!disposed) await action();
+        }, lifetime.signal);
+      } catch (error) {
+        if (!disposed) stop(error, retry ?? actions.recover);
+      } finally {
+        acquiring = false;
+        if (!disposed) notify();
+      }
+    };
+    return attempt;
+  }
+
+  return {
+    start: locked(actions.start),
+    recover: locked(actions.recover),
+    resume: locked(actions.resume),
+    retry: locked(actions.retry),
+    reset: locked(actions.reset),
+    discard: locked(actions.discard),
 
     dispose() {
       disposed = true;
       orchestrator.dispose();
+      lifetime.abort();
     },
 
     getProgress: () => cached,

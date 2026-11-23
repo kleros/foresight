@@ -178,6 +178,7 @@ export interface TabOptions {
   reader?: Partial<RedeemReader>;
   ttlMs?: number;
   storeNow?: () => number;
+  withLock?: (work: () => Promise<void>, signal: AbortSignal) => Promise<void>;
 }
 
 export function tab(world: World, opts: TabOptions = {}) {
@@ -229,6 +230,7 @@ export function tab(world: World, opts: TabOptions = {}) {
     request: () => INPUT,
     now: () => 1_700_000_000_000,
     pollMs: 5,
+    ...(opts.withLock ? { withLock: opts.withLock } : {}),
   });
   runs.push(run);
   return { run, sends, batch, storage, requests };

@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import type { DocumentNode, OperationDefinitionNode } from "graphql";
 import type { Address } from "viem";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useSessionLiquidity } from "@/features/liquidity/hooks/useSessionLiquidity";
 import {
@@ -14,6 +14,7 @@ import {
   type SessionResolutionRequest,
 } from "@/features/resolution/api/getSessionResolution";
 import { fetchWalletRedeemInput } from "@/features/resolution/api/getWalletRedeem";
+import { sharedLocks } from "@/features/resolution/redeem/__tests__/support/locks";
 import { plannerInput } from "@/features/resolution/redeem/__tests__/support/session";
 import { planWalletRedeem } from "@/features/resolution/redeem/plan";
 import { sessionChildRow, sessionDetailColumns } from "@/features/sessions/utils/__tests__/fixtures";
@@ -102,6 +103,7 @@ const queryName = (document: DocumentNode) =>
 const INPUT = { ...plannerInput({ owner: OWNER, childBalances: [] }), parentMarket: addresses.parentMarket };
 
 beforeEach(() => {
+  Object.defineProperty(navigator, "locks", { configurable: true, value: sharedLocks().locks });
   window.localStorage.clear();
   chain.parent = WON;
   readerMock.mockReset();
@@ -123,6 +125,10 @@ beforeEach(() => {
     }
     return { Prediction: [], directSwaps: [], senderlessSwaps: [], Pool: [] };
   });
+});
+
+afterEach(() => {
+  Reflect.deleteProperty(navigator, "locks");
 });
 
 async function renderPage() {

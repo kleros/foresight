@@ -12,6 +12,7 @@ import type { ParentResolution } from "@/features/resolution/api/getSessionResol
 import { fetchWalletRedeemInput } from "@/features/resolution/api/getWalletRedeem";
 import type { SessionKey } from "@/features/resolution/api/useSessionResolution";
 import { REDEEM_ALLOW_LIST } from "@/features/resolution/oracle/allowlist";
+import { createRedeemLock } from "@/features/resolution/redeem/lock";
 import { planWalletRedeem, type WalletRedeemInput, type WalletRedeemPlan } from "@/features/resolution/redeem/plan";
 import { createRedeemReader } from "@/features/resolution/redeem/reader";
 import { createRedeemRun, type RedeemProgress, type RedeemRun } from "@/features/resolution/redeem/run";
@@ -110,6 +111,7 @@ export function useWalletRedeemRun(session: SessionKey | undefined): WalletRedee
   useEffect(() => {
     if (!address || factory === undefined || sessionId === undefined || !REDEEM_ALLOW_LIST[DEFAULT_CHAIN_ID]) return;
     const owner = address;
+    const flowId = walletRedeemFlowId({ sessionFactory: factory, sessionId }, owner);
     const next = createRedeemRun({
       gateway: createViemTxGateway({
         client: publicClient,
@@ -124,7 +126,8 @@ export function useWalletRedeemRun(session: SessionKey | undefined): WalletRedee
       },
       reader: createRedeemReader(publicClient),
       store: redeemRunStore(),
-      flowId: walletRedeemFlowId({ sessionFactory: factory, sessionId }, owner),
+      flowId,
+      withLock: createRedeemLock(flowId, navigator.locks),
       account: () => account.current,
       chainId: () => chain.current ?? 0,
       request: () => {
