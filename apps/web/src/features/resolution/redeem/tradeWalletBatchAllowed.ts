@@ -5,8 +5,8 @@ import { executorAddress } from "@/lib/trade-executor/executor";
 
 import { gnosisRouterAbi, tradeExecutorAbi, tradeExecutorFactoryAddress } from "@/config/contracts";
 
-import { REDEEM_ALLOW_LIST } from "../oracle/allowlist";
 import { conditionalRouterAbi } from "./plan";
+import { REDEEM_ALLOW_LIST } from "../oracle/allowlist";
 
 /** The session's markets and tokens as read on-chain, which a redeem batch may name and nothing else. */
 export interface RedeemScope {
@@ -119,9 +119,7 @@ export function tradeWalletBatchDepartures(args: {
         if (!same(market, scope.parentMarket)) out.push(`${where}: names market ${market}`);
         if (indexes.length !== amounts.length) out.push(`${where}: indexes and amounts differ in length`);
         if (!ascending(indexes.map(Number))) out.push(`${where}: indexes ${indexes.join(",")} are not ascending`);
-        indexes.forEach((index, at) =>
-          pull(where, scope.parentTokens[Number(index)], list.gnosisRouter, amounts[at]),
-        );
+        indexes.forEach((index, at) => pull(where, scope.parentTokens[Number(index)], list.gnosisRouter, amounts[at]));
       } else if (entry.target === "conditionalRouter") {
         const [collateral, market, indexes, parentIndexes, amounts] = decodeFunctionData({
           abi: conditionalRouterAbi,
@@ -140,9 +138,7 @@ export function tradeWalletBatchDepartures(args: {
             out.push(`${where}: outcome indexes ${indexes.join(",")} are not drawn from 1, 0, 2 in that order`);
           }
           if (indexes.length !== amounts.length) out.push(`${where}: indexes and amounts differ in length`);
-          indexes.forEach((index, at) =>
-            pull(where, child.tokens[Number(index)], list.conditionalRouter, amounts[at]),
-          );
+          indexes.forEach((index, at) => pull(where, child.tokens[Number(index)], list.conditionalRouter, amounts[at]));
         }
       }
     } catch {
