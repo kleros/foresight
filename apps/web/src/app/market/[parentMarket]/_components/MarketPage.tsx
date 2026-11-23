@@ -44,6 +44,8 @@ import { SessionHeader } from "./SessionHeader";
 import { toWalletMarket } from "./toWalletMarket";
 import { TradeHistory } from "./TradeHistory";
 import { useOptionPositions } from "./useOptionPositions";
+import { walletRedeemKeyPrefix } from "./useWalletRedeem";
+import { WalletRedeemSection } from "./WalletRedeemSection";
 
 const SessionChart = dynamic(() => import("@/features/sessions/components/SessionChart").then((m) => m.SessionChart), {
   ssr: false,
@@ -73,8 +75,8 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
     closesAt: session.data?.closesAt ?? null,
     isReady: session.data?.setupComplete ?? false,
     // the header's Liquidity reads pool balances keyed under the stats; a seed may deploy the trade wallet, and any
-    // run may change the trade wallet's token balances
-    alsoReread: [sessionStatsKey(session.data?.id), executorKeyPrefix, fundsKeyPrefix],
+    // run may change the trade wallet's and the wallet's token balances
+    alsoReread: [sessionStatsKey(session.data?.id), executorKeyPrefix, fundsKeyPrefix, walletRedeemKeyPrefix],
     tradeWallet: tradeWallet.data,
     tradeWalletUnread: tradeWallet.isError && tradeWallet.data === undefined,
     rereadTradeWallet: () => void tradeWallet.refetch(),
@@ -205,6 +207,12 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
         <TradeHistory session={detail} />
         {walletMarket ? <TradeWallet market={walletMarket} noun={optionNounSingular(detail.itemName)} /> : null}
         <RedeemSection
+          session={read}
+          parent={resolution.parent}
+          parentMarket={detail.parentMarket}
+          options={detail.options}
+        />
+        <WalletRedeemSection
           session={read}
           parent={resolution.parent}
           parentMarket={detail.parentMarket}

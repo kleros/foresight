@@ -1,5 +1,6 @@
 import type { Address, PublicClient } from "viem";
 
+import { readRedeemInput } from "./getTradeWalletRedeem";
 import type { WalletRedeemInput } from "../redeem/plan";
 
 export interface WalletRedeemRequest {
@@ -9,9 +10,10 @@ export interface WalletRedeemRequest {
   sessionId: bigint;
 }
 
-export function fetchWalletRedeemInput(
-  _client: PublicClient,
-  _request: WalletRedeemRequest,
+/** The session's resolution, its markets' `wrappedOutcome` tokens and `owner`'s own balances, read on-chain. */
+export async function fetchWalletRedeemInput(
+  client: PublicClient,
+  request: WalletRedeemRequest,
 ): Promise<WalletRedeemInput> {
-  throw new Error("not implemented");
+  return (await readRedeemInput(client, request, request.owner)).input;
 }
