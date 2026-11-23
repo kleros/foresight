@@ -130,13 +130,17 @@ describe("a trade wallet redeem batch checked before the wallet opens (oracle R2
       data: encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [STRANGER, A] }),
     };
     expect(naming(departures(batch([...VALID, transfer])), "is not allowed")).toHaveLength(1);
-    expect(naming(departures(batch([...VALID, approve(STRANGER, LIST.gnosisRouter, 1n)])), "is not allowed")).toHaveLength(1);
+    expect(
+      naming(departures(batch([...VALID, approve(STRANGER, LIST.gnosisRouter, 1n)])), "is not allowed"),
+    ).toHaveLength(1);
   });
 
   it("refuses each redeem sent to the other router", () => {
     const parentAtConditional = { ...redeemPositions([0n], [A]), to: LIST.conditionalRouter };
     const childAtSeer = redeemChild(0, [1n, 0n], [B, C], { to: LIST.gnosisRouter });
-    expect(naming(withParent(approve(parentToken(0), LIST.gnosisRouter, A), parentAtConditional), "is not allowed")).toHaveLength(1);
+    expect(
+      naming(withParent(approve(parentToken(0), LIST.gnosisRouter, A), parentAtConditional), "is not allowed"),
+    ).toHaveLength(1);
     expect(naming(withChild(...VALID.slice(2, 4), childAtSeer), "is not allowed")).toHaveLength(1);
   });
 
@@ -147,7 +151,10 @@ describe("a trade wallet redeem batch checked before the wallet opens (oracle R2
     });
 
     it("refuses an unbounded approve, even when the redeem pulls that much", () => {
-      const lines = withParent(approve(parentToken(0), LIST.gnosisRouter, maxUint256), redeemPositions([0n], [maxUint256]));
+      const lines = withParent(
+        approve(parentToken(0), LIST.gnosisRouter, maxUint256),
+        redeemPositions([0n], [maxUint256]),
+      );
       expect(naming(lines, `approves ${maxUint256}`)).toHaveLength(1);
     });
 
@@ -177,7 +184,9 @@ describe("a trade wallet redeem batch checked before the wallet opens (oracle R2
     const approved = approve(parentToken(0), LIST.gnosisRouter, A);
 
     it("refuses collateral other than sDAI", () => {
-      expect(naming(withParent(approved, redeemPositions([0n], [A], { collateral: STRANGER })), "names collateral")).toHaveLength(1);
+      expect(
+        naming(withParent(approved, redeemPositions([0n], [A], { collateral: STRANGER })), "names collateral"),
+      ).toHaveLength(1);
     });
 
     it("refuses a market other than the session's parent", () => {
@@ -190,7 +199,11 @@ describe("a trade wallet redeem batch checked before the wallet opens (oracle R2
     });
 
     it("refuses an index named twice", () => {
-      const lines = withParent(approved, approve(parentToken(0), LIST.gnosisRouter, A), redeemPositions([0n, 0n], [A, A]));
+      const lines = withParent(
+        approved,
+        approve(parentToken(0), LIST.gnosisRouter, A),
+        redeemPositions([0n, 0n], [A, A]),
+      );
       expect(naming(lines, "twice")).toHaveLength(1);
     });
 

@@ -12,7 +12,6 @@ import { formatDisplayAmount } from "@/utils/amount";
 
 import { useRedeemFromTradeWallet, useTradeWalletRedeem } from "./useTradeWalletRedeem";
 
-
 const SDAI_DECIMALS = 18;
 
 /** Every decimal, so the shown payout is what the trade wallet receives to the wei. */

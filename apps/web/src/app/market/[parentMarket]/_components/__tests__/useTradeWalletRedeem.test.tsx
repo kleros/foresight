@@ -15,7 +15,9 @@ import {
   TWO_WINNERS,
   unresolvedChild,
   valuedChild,
+  OTHER_OWNER,
   OWNER,
+  PARENT_BALANCES,
   WAD,
 } from "@/features/resolution/redeem/__tests__/support/session";
 import type { RedeemPlan } from "@/features/resolution/redeem/plan";
@@ -205,6 +207,35 @@ describe("a redeem run", () => {
     expect(repriced.payout).not.toBe(shown.payout);
     readMock.mockResolvedValue({ plan: repriced, scope: SCOPE });
     fetchMock.mockResolvedValue(repriced);
+
+    act(() => result.current.run.mutate({ shown, owner: OWNER, session: SESSION }));
+
+    await waitFor(() => expect(result.current.run.error).toBeInstanceOf(RedeemPlanChangedError));
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it("sends nothing when a fresh read redeems 1 wei less for the same payouts", async () => {
+    const { result, shown } = await shownList();
+    const [first, ...rest] = PARENT_BALANCES;
+    const dust = planFor({ parentBalances: [first! - 1n, ...rest] });
+    expect(dust.parts).toEqual(shown.parts);
+    expect(dust.tx!.data).not.toBe(shown.tx!.data);
+    readMock.mockResolvedValue({ plan: dust, scope: SCOPE });
+    fetchMock.mockResolvedValue(dust);
+
+    act(() => result.current.run.mutate({ shown, owner: OWNER, session: SESSION }));
+
+    await waitFor(() => expect(result.current.run.error).toBeInstanceOf(RedeemPlanChangedError));
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it("sends nothing when the shown list was read for another account", async () => {
+    const { result, shown } = await shownList(planFor({ owner: OTHER_OWNER }));
+    const fresh = planFor({ owner: OWNER });
+    expect(fresh.parts).toEqual(shown.parts);
+    expect(fresh.tx!.data).toBe(shown.tx!.data);
+    readMock.mockResolvedValue({ plan: fresh, scope: SCOPE });
+    fetchMock.mockResolvedValue(fresh);
 
     act(() => result.current.run.mutate({ shown, owner: OWNER, session: SESSION }));
 

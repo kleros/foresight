@@ -7,8 +7,8 @@ import { useAccount } from "wagmi";
 
 import type { ParentResolution } from "@/features/resolution/api/getSessionResolution";
 import { fetchTradeWalletRedeem, readTradeWalletRedeem } from "@/features/resolution/api/getTradeWalletRedeem";
-import { REDEEM_ALLOW_LIST } from "@/features/resolution/oracle/allowlist";
 import type { SessionKey } from "@/features/resolution/api/useSessionResolution";
+import { REDEEM_ALLOW_LIST } from "@/features/resolution/oracle/allowlist";
 import type { RedeemPlan } from "@/features/resolution/redeem/plan";
 import { assertRedeemBatchAllowed, UnlistedRedeemError } from "@/features/resolution/redeem/tradeWalletBatchAllowed";
 import { fundsKeyPrefix } from "@/features/trade-executor/api/getFunds";
@@ -21,7 +21,6 @@ import { STALE_TIME } from "@/lib/query";
 import { publicClient } from "@/lib/web3/public-client";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
-
 
 /** What the trade wallet can redeem changed after it was shown (oracle R6), so nothing is sent. */
 export class RedeemPlanChangedError extends Error {
@@ -71,9 +70,7 @@ export function useTradeWalletRedeem(session: SessionKey | undefined, parent: Pa
   const query = useQuery({
     queryKey: tradeWalletRedeemKey(owner, session),
     queryFn:
-      owner && session && resolved
-        ? () => fetchTradeWalletRedeem(publicClient, request(owner, session))
-        : skipToken,
+      owner && session && resolved ? () => fetchTradeWalletRedeem(publicClient, request(owner, session)) : skipToken,
     staleTime: STALE_TIME.balance,
     refetchInterval: (current) => (current.state.data?.waiting.length ? WAITING_REREAD_MS : false),
   });

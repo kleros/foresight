@@ -80,7 +80,10 @@ describe("the Redeem section", () => {
 
   it("lists a held option still waiting for its result, without a button when nothing else redeems", () => {
     const plan = planFor({
-      resolution: { ...TWO_WINNERS, children: { 0: valuedChild(0, 42n), 1: unresolvedChild(1), 2: unresolvedChild(2) } },
+      resolution: {
+        ...TWO_WINNERS,
+        children: { 0: valuedChild(0, 42n), 1: unresolvedChild(1), 2: unresolvedChild(2) },
+      },
       parentBalances: [0n, 0n, 0n, 0n],
       childBalances: [[], [1n, 0n, 0n], []],
     });

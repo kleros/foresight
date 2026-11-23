@@ -149,4 +149,3 @@ export const redeemChild = (
     args: [collateral, market, indexes, parentIndexes, amounts],
   }),
 });
-
