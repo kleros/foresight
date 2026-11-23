@@ -27,7 +27,12 @@ import {
   valuedChild,
 } from "./support/session";
 import type { ChildResolution } from "../../api/getSessionResolution";
-import { assertRedeemBatchAllowed, redeemBatchDepartures, UnlistedRedeemError } from "../tradeWalletBatchAllowed";
+import {
+  assertRedeemBatchAllowed,
+  redeemBatchDepartures,
+  redeemCallsDepartures,
+  UnlistedRedeemError,
+} from "../tradeWalletBatchAllowed";
 
 const A = 5n * 10n ** 18n + 1n;
 const B = 4n * 10n ** 18n;
@@ -271,5 +276,25 @@ describe("a trade wallet redeem batch checked before the wallet opens (oracle R2
     expect(redeemBatchDepartures({ tx: batch(VALID), chainId: 1, account: OWNER, scope: SCOPE })).toEqual([
       "no redeem allow-list for chain 1",
     ]);
+  });
+});
+
+describe("wallet redeem calls checked before the wallet opens (oracle R2 to R4, R8)", () => {
+  const callsDepartures = (calls: FlowTx[]) => redeemCallsDepartures({ calls, chainId: CHAIN_ID, scope: SCOPE });
+
+  it("passes the calls a valid trade wallet batch holds, sent one by one", () => {
+    expect(callsDepartures(VALID)).toEqual([]);
+  });
+
+  it("names a call that carries native value", () => {
+    const calls: FlowTx[] = VALID.map((call, index) => (index === 1 ? { ...call, value: 1n } : call));
+
+    expect(naming(callsDepartures(calls), "carries 1 native")).toHaveLength(1);
+  });
+
+  it("names an unbounded approve", () => {
+    const calls = [approve(parentToken(0), LIST.gnosisRouter, maxUint256), ...VALID.slice(1)];
+
+    expect(naming(callsDepartures(calls), `approves ${maxUint256}`)).toHaveLength(1);
   });
 });
