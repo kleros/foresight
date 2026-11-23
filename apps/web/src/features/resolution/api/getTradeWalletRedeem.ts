@@ -5,13 +5,7 @@ import { executorAddress } from "@/lib/trade-executor/executor";
 import { sDaiAddress, sessionFactoryAbi, tradeExecutorFactoryAddress } from "@/config/contracts";
 
 import { fetchSessionResolution } from "./getSessionResolution";
-import {
-  CHILD_SLOTS,
-  planTradeWalletRedeem,
-  type RedeemHolding,
-  type RedeemPlan,
-  type TradeWalletRedeemInput,
-} from "../redeem/plan";
+import { CHILD_SLOTS, planTradeWalletRedeem, type RedeemHolding, type RedeemPlan } from "../redeem/plan";
 import type { RedeemScope } from "../redeem/tradeWalletBatchAllowed";
 
 const MARKET_ABI = parseAbi([
@@ -77,24 +71,27 @@ export async function fetchRedeemScope(
   };
 }
 
-/** The session's resolution, its tokens and `holder`'s balances of them, and the scope they were read against. */
-export async function readRedeemInput(
+/** The plan and the scope it was read against, from one set of reads. */
+export async function readTradeWalletRedeem(
   client: PublicClient,
   request: TradeWalletRedeemRequest,
-  holder: Address,
-): Promise<{ input: TradeWalletRedeemInput; scope: RedeemScope }> {
+): Promise<{ plan: RedeemPlan; scope: RedeemScope }> {
   const { chainId, owner, sessionFactory, sessionId } = request;
+  const factory = tradeExecutorFactoryAddress(chainId);
+  if (!factory) throw new Error(`Redeem is not available on chain ${chainId}.`);
+
   const [scope, resolution] = await Promise.all([
     fetchRedeemScope(client, request),
     fetchSessionResolution(client, { sessionFactory, sessionId }),
   ]);
   const tokens = [...scope.parentTokens, ...Object.values(scope.children).flatMap((child) => child!.tokens)];
+  const tradeWallet = executorAddress(factory, owner);
   const balances = (await client.multicall({
     contracts: tokens.map((token) => ({
       address: token,
       abi: erc20Abi,
       functionName: "balanceOf" as const,
-      args: [holder] as const,
+      args: [tradeWallet] as const,
     })),
     allowFailure: false,
     batchSize: 0,
@@ -102,7 +99,7 @@ export async function readRedeemInput(
   const balanceOf = new Map(tokens.map((token, position) => [token.toLowerCase(), balances[position]!]));
   const held = (token: Address): RedeemHolding => ({ token, balance: balanceOf.get(token.toLowerCase())! });
 
-  const input: TradeWalletRedeemInput = {
+  const plan = planTradeWalletRedeem({
     chainId,
     owner,
     collateral: scope.collateral,
@@ -112,19 +109,8 @@ export async function readRedeemInput(
     childTokens: Object.fromEntries(
       Object.entries(scope.children).map(([option, child]) => [option, child!.tokens.map(held)]),
     ),
-  };
-  return { input, scope };
-}
-
-/** The plan and the scope it was read against, from one set of reads. */
-export async function readTradeWalletRedeem(
-  client: PublicClient,
-  request: TradeWalletRedeemRequest,
-): Promise<{ plan: RedeemPlan; scope: RedeemScope }> {
-  const factory = tradeExecutorFactoryAddress(request.chainId);
-  if (!factory) throw new Error(`Redeem is not available on chain ${request.chainId}.`);
-  const { input, scope } = await readRedeemInput(client, request, executorAddress(factory, request.owner));
-  return { plan: planTradeWalletRedeem(input), scope };
+  });
+  return { plan, scope };
 }
 
 /** Reads the session's resolution, tokens and the owner's trade wallet balances on-chain, then plans the redeem. */

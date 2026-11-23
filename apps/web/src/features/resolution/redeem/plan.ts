@@ -27,7 +27,7 @@ export interface TradeWalletRedeemInput {
   collateral: Address;
   parentMarket: Address;
   resolution: SessionResolution;
-  /** The parent's `wrappedOutcome(i)`, options then INVALID, with the redeeming wallet's balance. */
+  /** The parent's `wrappedOutcome(i)`, options then INVALID, with the trade wallet's balance. */
   parentTokens: RedeemHolding[];
   /** Keyed by parent outcome index: the child's `wrappedOutcome(0..2)`, [DOWN, UP, INVALID]. */
   childTokens: Partial<Record<number, RedeemHolding[]>>;
@@ -42,7 +42,7 @@ export interface RedeemPart {
 export interface RedeemPlan {
   parts: RedeemPart[];
   /**
-   * Parent outcome indexes whose option won, whose child has not resolved, and in whose child the redeeming wallet
+   * Parent outcome indexes whose option won, whose child has not resolved, and in whose child the trade wallet
    * holds a token.
    */
   waiting: number[];
@@ -72,12 +72,13 @@ function paying(holdings: RedeemHolding[], numerators: bigint[], denominator: bi
 
 const sum = (values: bigint[]) => values.reduce((total, each) => total + each, 0n);
 
-/** What the holder can redeem now (oracle R1 to R5), and the approve and redeem calls that redeem it, in order. */
-function planRedeemCalls(input: TradeWalletRedeemInput): Omit<RedeemPlan, "tx"> & { calls: ExecutorCall[] } {
+/** What the trade wallet can redeem now (oracle R1 to R5), and the one batch that redeems it into the trade wallet. */
+export function planTradeWalletRedeem(input: TradeWalletRedeemInput): RedeemPlan {
   const { parent, children } = input.resolution;
-  if (!parent.resolved) return { parts: [], waiting: [], payout: 0n, calls: [] };
+  if (!parent.resolved) return { parts: [], waiting: [], payout: 0n, tx: null };
   const list = REDEEM_ALLOW_LIST[input.chainId];
-  if (!list) throw new Error(`Redeem is not available on chain ${input.chainId}.`);
+  const factory = tradeExecutorFactoryAddress(input.chainId);
+  if (!list || !factory) throw new Error(`Redeem is not available on chain ${input.chainId}.`);
   if (input.parentTokens.length !== parent.payoutNumerators.length) {
     throw new Error(
       `The parent has ${parent.payoutNumerators.length} outcomes but ${input.parentTokens.length} token balances.`,
@@ -149,19 +150,14 @@ function planRedeemCalls(input: TradeWalletRedeemInput): Omit<RedeemPlan, "tx"> 
     );
   }
 
-  return { parts, waiting, payout: sum(parts.map(({ payout }) => payout)), calls };
+  return {
+    parts,
+    waiting,
+    payout: sum(parts.map(({ payout }) => payout)),
+    tx: calls.length > 0 ? batchExecuteTx(executorAddress(factory, input.owner), calls) : null,
+  };
 }
 
-/** What the trade wallet can redeem now (oracle R1 to R5), and the one batch that redeems it into the trade wallet. */
-export function planTradeWalletRedeem(input: TradeWalletRedeemInput): RedeemPlan {
-  const { calls, ...plan } = planRedeemCalls(input);
-  if (!input.resolution.parent.resolved) return { ...plan, tx: null };
-  const factory = tradeExecutorFactoryAddress(input.chainId);
-  if (!factory) throw new Error(`Redeem is not available on chain ${input.chainId}.`);
-  return { ...plan, tx: calls.length > 0 ? batchExecuteTx(executorAddress(factory, input.owner), calls) : null };
-}
-
-/** `owner` is the connected account and every balance its own. */
 export type WalletRedeemInput = TradeWalletRedeemInput;
 
 export interface WalletRedeemPlan extends Omit<RedeemPlan, "tx"> {
@@ -169,7 +165,6 @@ export interface WalletRedeemPlan extends Omit<RedeemPlan, "tx"> {
   calls: FlowTx[];
 }
 
-/** What the connected account can redeem now: the trade wallet batch's calls, each sent from the account itself. */
-export function planWalletRedeem(input: WalletRedeemInput): WalletRedeemPlan {
-  return planRedeemCalls(input);
+export function planWalletRedeem(_input: WalletRedeemInput): WalletRedeemPlan {
+  throw new Error("not implemented");
 }

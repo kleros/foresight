@@ -15,7 +15,6 @@ const WEB_ROOT = path.resolve(import.meta.dirname, "../../../../..");
 const SCRIPT = path.join(WEB_ROOT, "scripts/test-fork-redeem.sh");
 const REDEEM_FILE = "src/features/resolution/redeem/__tests__/predict.fork.redeem.tradeWallet.test.ts";
 const RESOLUTION_FILE = "src/features/resolution/api/__tests__/predict.fork.resolution.test.ts";
-const WALLET_REDEEM_FILE = "src/features/resolution/redeem/__tests__/predict.fork.redeem.connectedWallet.test.ts";
 
 const STUB_VITEST = `
 const fs = require("node:fs");
@@ -65,7 +64,7 @@ function runScript(options: { report: string; files?: string[]; exit?: number; a
     env: {
       ...env,
       PATH: `${stubs}${path.delimiter}${env.PATH}`,
-      STUB_FILES: JSON.stringify(options.files ?? [REDEEM_FILE, RESOLUTION_FILE, WALLET_REDEEM_FILE]),
+      STUB_FILES: JSON.stringify(options.files ?? [REDEEM_FILE, RESOLUTION_FILE]),
       STUB_REPORT: options.report,
       STUB_EXIT: String(options.exit ?? 0),
       STUB_ARGS: argsFile,
@@ -84,11 +83,7 @@ function runScript(options: { report: string; files?: string[]; exit?: number; a
   return { status: result.status, stderr: result.stderr, runs };
 }
 
-const ALL_PASSED = report({
-  [REDEEM_FILE]: ["passed", "passed"],
-  [RESOLUTION_FILE]: ["passed"],
-  [WALLET_REDEEM_FILE]: ["passed"],
-});
+const ALL_PASSED = report({ [REDEEM_FILE]: ["passed", "passed"], [RESOLUTION_FILE]: ["passed"] });
 
 describe("A9 the fork script, against a stand-in vitest", () => {
   it("runs vitest once over exactly the registered suites, the redeem suite among them, with no test filter", () => {
