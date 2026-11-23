@@ -1,8 +1,9 @@
+import { encodeFunctionData, erc20Abi, getAddress } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { planWalletRedeem } from "../plan";
 import { redeemCallsDepartures } from "../tradeWalletBatchAllowed";
-import { INPUT, newWorld, progress, runs, settled, stored, tab } from "./support/tabs";
+import { INPUT, newWorld, PLANNED, progress, REDEEM_AT, runs, settled, stored, tab } from "./support/tabs";
 
 vi.mock("../plan", async (importOriginal) => {
   const original = await importOriginal<typeof import("../plan")>();
@@ -55,5 +56,31 @@ describe("createRedeemRun R8 stops on a single departing call", () => {
     expect(sends.prompts).toEqual([]);
     expect(requests.filter((each) => each.method === "wallet_sendCalls")).toEqual([]);
     expect(stored(storage)).toBeNull();
+  });
+});
+
+describe("createRedeemRun R8 scopes a request to its deployed child markets", () => {
+  it("stops as unlisted on an approve of a token of a child market not deployed", async () => {
+    const token = getAddress(`0x${"d2".padEnd(40, "0")}`);
+    const request = {
+      ...INPUT,
+      resolution: { ...INPUT.resolution, children: { ...INPUT.resolution.children, 2: { deployed: false as const } } },
+      childTokens: { ...INPUT.childTokens, 2: [{ token, balance: 5n }] },
+    };
+    const real = planWalletRedeem(INPUT);
+    const router = PLANNED[REDEEM_AT[1]!]!.to;
+    const approve = {
+      to: token,
+      data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [router, 5n] }),
+    };
+    vi.mocked(planWalletRedeem).mockReturnValue({ ...real, calls: [approve, ...real.calls] });
+    const world = newWorld();
+    const { run, sends } = tab(world, { request });
+
+    run.start();
+    await settled(run);
+
+    expect(progress(run).failure).toEqual({ reason: "unlisted", retryable: false });
+    expect(sends.prompts).toEqual([]);
   });
 });

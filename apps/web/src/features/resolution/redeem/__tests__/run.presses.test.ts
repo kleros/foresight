@@ -5,6 +5,7 @@ import {
   newWorld,
   OTHER,
   OWNER,
+  PLANNED,
   progress,
   reached,
   recovered,
@@ -139,6 +140,28 @@ describe("createRedeemRun ignores presses that do not apply", () => {
 
     expect(progress(next.run).failure?.reason).toBe("reverted");
     expect(next.sends.prompts).toEqual([]);
+  });
+
+  it("discards a reload that found the stored send reverted, and resume asks for that call again", async () => {
+    const world = newWorld();
+    const first = tab(world, { script: (index) => (index === AT ? "unmined" : "sign") });
+    first.run.start();
+    await vi.waitFor(() => expect(first.sends.prompts).toHaveLength(AT + 1));
+    await tick();
+    const left = copyStorage(first.storage);
+    first.run.dispose();
+    const hash = world.fake.broadcasts[AT]!.hash;
+    world.reverts.add(hash);
+    world.fake.land();
+    const next = await recovered(world, left);
+    expect(progress(next.run).failure?.reason).toBe("reverted");
+
+    await next.run.discard();
+    expect(progress(next.run)).toEqual({ stage: "review" });
+    next.run.resume();
+    await reached(next.run, "complete");
+
+    expect(next.sends.prompts).toHaveLength(PLANNED.length - AT);
   });
 
   it("leaves the stored run alone when discard is pressed on a completed run", async () => {
