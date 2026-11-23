@@ -233,7 +233,7 @@ export function tab(world: World, opts: TabOptions = {}) {
       ...(opts.storeNow ? { now: opts.storeNow } : {}),
     }),
     flowId: "redeem-session-4",
-    account: () => opts.account ?? OWNER,
+    account: () => ("account" in opts ? opts.account : OWNER),
     chainId: () => opts.chainId ?? CHAIN_ID,
     request: () => INPUT,
     now: () => 1_700_000_000_000,
