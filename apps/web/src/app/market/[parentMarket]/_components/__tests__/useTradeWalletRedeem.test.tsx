@@ -13,7 +13,7 @@ import { fundsKeyPrefix } from "@/features/trade-executor/api/getFunds";
 
 import { errorToast } from "@/utils/toast";
 
-import { useRedeemFromTradeWallet } from "../useTradeWalletRedeem";
+import { useRedeemFromTradeWallet, useTradeWalletRedeem } from "../useTradeWalletRedeem";
 
 vi.mock("@/config/chains", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/config/chains")>()),
@@ -25,6 +25,7 @@ vi.mock("@wagmi/core", () => ({
   waitForTransactionReceipt: vi.fn(),
 }));
 vi.mock("@/lib/web3/wagmi", () => ({ wagmiConfig: {} }));
+vi.mock("wagmi", () => ({ useAccount: () => ({ address: OWNER, chainId: 100 }) }));
 vi.mock("@/lib/web3/public-client", () => ({ publicClient: {} }));
 vi.mock("@/utils/toast", () => ({ infoToast: vi.fn(), successToast: vi.fn(), errorToast: vi.fn() }));
 vi.mock("@/features/resolution/api/getTradeWalletRedeem", () => ({
@@ -207,5 +208,23 @@ describe("sending a trade wallet redeem", () => {
     await act(() => result.current.mutateAsync({ plan: planFor(OWNER), session: SESSION }).catch(() => undefined));
 
     expect(invalidate).toHaveBeenCalledWith({ queryKey: fundsKeyPrefix });
+  });
+
+  it("A5 rereads the shown list after the run, so a second Redeem offers nothing", async () => {
+    vi.mocked(fetchTradeWalletRedeem).mockImplementation(async (_client, { owner }) =>
+      planFor(owner, vi.mocked(sendTransaction).mock.calls.length > 0 ? 0n : 3n * WAD),
+    );
+    const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => ({ list: useTradeWalletRedeem(SESSION), run: useRedeemFromTradeWallet() }), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.list.data?.payout).toBe(planFor(OWNER).payout));
+
+    await act(() => result.current.run.mutateAsync({ plan: result.current.list.data!, session: SESSION }));
+
+    await waitFor(() => expect(result.current.list.data).toMatchObject({ parts: [], payout: 0n, tx: null }));
   });
 });

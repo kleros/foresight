@@ -157,6 +157,28 @@ describe("fetchTradeWalletRedeem", () => {
     expect(innerCalls(plan.tx!.data!)[0]!.to).toBe(childToken(CHILDREN[2]!, 1));
   });
 
+  it("A7 plans the parent INVALID holding when the parent resolved INVALID", async () => {
+    vi.mocked(fetchSessionResolution).mockResolvedValue({
+      parent: {
+        resolved: true,
+        invalid: true,
+        winningOutcomes: [],
+        payoutNumerators: [0n, 0n, 0n, 1n],
+        payoutDenominator: 1n,
+      },
+      children: { 0: { deployed: false }, 1: { deployed: false }, 2: { deployed: false } },
+    });
+    balances.set(balanceKey(TRADE_WALLET, parentToken(3)), 3n * WAD);
+
+    const plan = await fetchTradeWalletRedeem(client, request);
+
+    expect(plan.parts).toEqual([{ market: PARENT, payout: 3n * WAD }]);
+    const calls = innerCalls(plan.tx!.data!);
+    expect(calls[0]!.to).toBe(parentToken(3));
+    const redeem = decodeFunctionData({ abi: gnosisRouterAbi, data: calls[1]!.data });
+    expect(redeem.args).toEqual([sDaiAddress(CHAIN_ID), PARENT, [3n], [3n * WAD]]);
+  });
+
   it("lets a failed read reject, so nothing is planned", async () => {
     vi.mocked(fetchSessionResolution).mockRejectedValueOnce(new Error("node down"));
 
