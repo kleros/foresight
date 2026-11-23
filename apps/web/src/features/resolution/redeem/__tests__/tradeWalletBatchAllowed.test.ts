@@ -214,6 +214,25 @@ describe("a trade wallet redeem batch against the allow-list (oracle R8)", () =>
     expect(departures(calls)).toContain(`call 0: approves ${STRANGER}`);
   });
 
+  it.each([
+    {
+      router: "Seer router",
+      calls: [
+        approveCall(parentTokens[0]!, LIST.gnosisRouter, 3n * WAD),
+        parentRedeem(SDAI, PARENT, [0n], [3n * WAD, 3n * WAD]),
+      ],
+    },
+    {
+      router: "conditional router",
+      calls: [
+        approveCall(childTokens[0]![1]!, LIST.conditionalRouter, 2n * WAD),
+        childRedeem(SDAI, CHILD[0]!, [1n], [0n], [2n * WAD, 2n * WAD]),
+      ],
+    },
+  ])("names a $router redeem that carries more amounts than indexes", ({ calls }) => {
+    expect(departures(calls)).toEqual(["call 1: indexes and amounts differ in length"]);
+  });
+
   it("stops a transaction that carries native value, or is not a batchExecute", () => {
     const tx = plan.tx!;
     expect(

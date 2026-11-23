@@ -103,11 +103,15 @@ function renderPage() {
   );
 }
 
+/** Columns the next render's session row overrides. */
+let detailRow: Partial<typeof sessionDetailColumns> = {};
+
 beforeEach(() => {
   fetchMock.mockReset();
   readerMock.mockReset();
   redeemMock.mockReset();
   redeemMock.mockResolvedValue(PLAN);
+  detailRow = {};
   fetchMock.mockImplementation(async (document) => {
     if (queryName(document) === "SessionDetail") {
       const children = [
@@ -118,7 +122,9 @@ beforeEach(() => {
           displayName: OPTION.name,
         }),
       ];
-      return { Session: [{ ...sessionDetailColumns, outcomeCount: "1", deployedChildCount: "1", children }] };
+      return {
+        Session: [{ ...sessionDetailColumns, outcomeCount: "1", deployedChildCount: "1", ...detailRow, children }],
+      };
     }
     return { Prediction: [], directSwaps: [], senderlessSwaps: [], Pool: [] };
   });
@@ -148,6 +154,30 @@ describe("MarketPage's Redeem section", () => {
 
     await screen.findByRole("heading", { level: 1, name: TITLE });
     await waitFor(() => expect(readerMock).toHaveBeenCalled());
+    expect(redeemMock).not.toHaveBeenCalled();
+    expect(screen.queryByRole("region", { name: "Redeem from your trade wallet" })).toBeNull();
+  });
+
+  it("reads nothing and shows no section while the session is still being set up", async () => {
+    answer({ resolved: false });
+    detailRow = { completedAt: "0" };
+
+    renderPage();
+
+    await screen.findByText("Setting up");
+    await waitFor(() => expect(readerMock).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(redeemMock).not.toHaveBeenCalled();
+    expect(screen.queryByRole("region", { name: "Redeem from your trade wallet" })).toBeNull();
+  });
+
+  it("reads nothing and shows no section while the parent's resolution cannot be read", async () => {
+    readerMock.mockRejectedValue(new Error("node down"));
+
+    renderPage();
+
+    await screen.findByText("Status unknown");
+    await new Promise((resolve) => setTimeout(resolve, 50));
     expect(redeemMock).not.toHaveBeenCalled();
     expect(screen.queryByRole("region", { name: "Redeem from your trade wallet" })).toBeNull();
   });
