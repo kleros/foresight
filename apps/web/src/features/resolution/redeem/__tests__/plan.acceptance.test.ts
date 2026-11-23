@@ -496,7 +496,7 @@ describe("A2 a winner whose child has not resolved", () => {
     expect(plan.waiting).toEqual([1]);
   });
 
-  it("lists a waiting winner that holds no child tokens, and plans the other winner's child", () => {
+  it("does not list a waiting winner that holds no child tokens, and plans the other winner's child", () => {
     const plan = planTradeWalletRedeem(
       input({
         ...spec,
@@ -506,7 +506,7 @@ describe("A2 a winner whose child has not resolved", () => {
     );
     const byMarket = redeemed(innerCalls(plan.tx!));
 
-    expect(plan.waiting).toEqual([0]);
+    expect(plan.waiting).toEqual([]);
     expect(byMarket.has(childMarket(1).toLowerCase())).toBe(true);
     expect(byMarket.has(childMarket(0).toLowerCase())).toBe(false);
   });
