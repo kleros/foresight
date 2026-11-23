@@ -551,10 +551,11 @@ export function createRedeemRun(args: {
   }
 
   orchestrator.subscribe(notify);
-  // a reverted or cancelled send can no longer land, so its step may be asked for again
+  // a cancelled or reverted send can no longer land, so its step may be asked for again
   orchestrator.on("step:failed", ({ stepId, error }) => {
-    if (error.cause === "cancelled" || error.cause === "reverted") forget(stepId);
+    if (error.cause === "cancelled") forget(stepId);
   });
+  // a revert found on reload is announced by flow:failed alone
   orchestrator.on("flow:failed", ({ error }) => {
     if (error.cause === "reverted") forget(error.stepId);
     halt(false);

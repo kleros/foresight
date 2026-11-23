@@ -469,6 +469,25 @@ describe("createRedeemRun across two live tabs on one storage", () => {
     expect(progress(b.run).stage).toBe("halted");
   });
 
+  it("a tab resumed after another tab moved the run on loads it again for review, asking nothing", async () => {
+    const world = newWorld();
+    const storage = await rejectedRun(world);
+    const a = tab(world, { storage, script: () => "hang" });
+    const b = tab(world, { storage });
+    a.run.recover();
+    b.run.recover();
+    await reached(a.run, "review");
+    await reached(b.run, "review");
+    a.run.resume();
+    await a.sends.held();
+
+    b.run.resume();
+    await settled(b.run);
+
+    expect(progress(b.run)).toEqual({ stage: "review", holdsSend: true });
+    expect(b.sends.prompts).toEqual([]);
+  });
+
   it("a tab whose stored run another tab changed stops as elsewhere before its next prompt", async () => {
     const world = newWorld();
     const storage = createMemoryStorage();
