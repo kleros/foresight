@@ -72,13 +72,19 @@ function paying(holdings: RedeemHolding[], numerators: bigint[], denominator: bi
 
 const sum = (values: bigint[]) => values.reduce((total, each) => total + each, 0n);
 
-/** What the trade wallet can redeem now (oracle R1 to R5), and the one batch that redeems it into the trade wallet. */
-export function planTradeWalletRedeem(input: TradeWalletRedeemInput): RedeemPlan {
+interface PlannedCalls {
+  parts: RedeemPart[];
+  waiting: number[];
+  /** Approve and redeem calls, in order, as the holder of the balances sends them. */
+  calls: ExecutorCall[];
+}
+
+/** What the holder of `input`'s balances can redeem now (oracle R1 to R5), and the calls that redeem it. */
+function planRedeemCalls(input: TradeWalletRedeemInput): PlannedCalls {
   const { parent, children } = input.resolution;
-  if (!parent.resolved) return { parts: [], waiting: [], payout: 0n, tx: null };
+  if (!parent.resolved) return { parts: [], waiting: [], calls: [] };
   const list = REDEEM_ALLOW_LIST[input.chainId];
-  const factory = tradeExecutorFactoryAddress(input.chainId);
-  if (!list || !factory) throw new Error(`Redeem is not available on chain ${input.chainId}.`);
+  if (!list) throw new Error(`Redeem is not available on chain ${input.chainId}.`);
   if (input.parentTokens.length !== parent.payoutNumerators.length) {
     throw new Error(
       `The parent has ${parent.payoutNumerators.length} outcomes but ${input.parentTokens.length} token balances.`,
@@ -150,6 +156,16 @@ export function planTradeWalletRedeem(input: TradeWalletRedeemInput): RedeemPlan
     );
   }
 
+  return { parts, waiting, calls };
+}
+
+/** What the trade wallet can redeem now (oracle R1 to R5), and the one batch that redeems it into the trade wallet. */
+export function planTradeWalletRedeem(input: TradeWalletRedeemInput): RedeemPlan {
+  if (!input.resolution.parent.resolved) return { parts: [], waiting: [], payout: 0n, tx: null };
+  const factory = tradeExecutorFactoryAddress(input.chainId);
+  if (!REDEEM_ALLOW_LIST[input.chainId] || !factory)
+    throw new Error(`Redeem is not available on chain ${input.chainId}.`);
+  const { parts, waiting, calls } = planRedeemCalls(input);
   return {
     parts,
     waiting,
@@ -165,6 +181,13 @@ export interface WalletRedeemPlan extends Omit<RedeemPlan, "tx"> {
   calls: FlowTx[];
 }
 
-export function planWalletRedeem(_input: WalletRedeemInput): WalletRedeemPlan {
-  throw new Error("not implemented");
+/** What the connected wallet can redeem now: the trade wallet planner's calls, sent from the wallet itself. */
+export function planWalletRedeem(input: WalletRedeemInput): WalletRedeemPlan {
+  const { parts, waiting, calls } = planRedeemCalls(input);
+  return {
+    parts,
+    waiting,
+    payout: sum(parts.map(({ payout }) => payout)),
+    calls: calls.map(({ to, data }) => ({ to, data })),
+  };
 }

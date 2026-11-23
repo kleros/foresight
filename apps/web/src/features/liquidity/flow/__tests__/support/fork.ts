@@ -18,10 +18,11 @@ import {
 import { gnosis } from "viem/chains";
 import { afterAll, afterEach, beforeAll, beforeEach, expect } from "vitest";
 
+import { readSentWithNonce } from "@/lib/web3/sentWithNonce";
+
 import { minedHash, revertedOnChain } from "./reverted";
 import { decode, movedSqrtPrice, sortPair } from "./session";
 import { LIQUIDITY_ALLOW_LIST } from "../../../oracle/allowlist";
-import { readSentWithNonce } from "../../../run/sentWithNonce";
 import type {
   LiquidityProgress,
   LiquidityReader,

@@ -1,6 +1,14 @@
-import { isAddressEqual, type Address, type PublicClient } from "viem";
+import { isAddressEqual, type Address, type Hash, type Hex, type PublicClient } from "viem";
 
-import type { SentWithNonce } from "../types";
+/**
+ * An account's send at one nonce: mined with its call, broadcast, unused, or `taken` (mined before the block
+ * looked from, or a contract creation).
+ */
+export type SentWithNonce =
+  | { status: "mined"; hash: Hash; to: Address; input: Hex; value: bigint }
+  | { status: "pending" }
+  | { status: "none" }
+  | { status: "taken" };
 
 /** `owner`'s mined and broadcast transaction counts. */
 export const nonceCounts = (client: PublicClient, owner: Address) =>
@@ -9,7 +17,7 @@ export const nonceCounts = (client: PublicClient, owner: Address) =>
     client.getTransactionCount({ address: owner, blockTag: "pending" }),
   ]);
 
-/** What took `owner`'s `nonce`, looked for from block `fromBlock` on (LiquidityReader.sentWithNonce). */
+/** What took `owner`'s `nonce`, looked for from block `fromBlock` on. */
 export async function readSentWithNonce(
   client: PublicClient,
   { owner, nonce, fromBlock }: { owner: Address; nonce: number; fromBlock: bigint },

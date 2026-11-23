@@ -23,9 +23,17 @@ import {
   zeroAddress,
   type Address,
   type Hash,
-  type Hex,
   type TransactionReceipt,
 } from "viem";
+
+import {
+  answeredWithoutPrompt,
+  errorCode,
+  sameCall,
+  sleep,
+  UNKNOWN_BUNDLE,
+  walletConnectRejection,
+} from "@/lib/web3/walletAnswers";
 
 import { assertListed, UnlistedTxError } from "../flow/allowed";
 import { LIQUIDITY_ALLOW_LIST } from "../oracle/allowlist";
@@ -45,9 +53,6 @@ import { MAY_LAND } from "../types";
 import { plannedSteps as planned, rowsOf, type RunRow } from "./rows";
 
 export const BATCH = "batch";
-
-/** EIP-5792's error for a batch id the wallet does not know. */
-const UNKNOWN_BUNDLE = 5730;
 
 const TRANSFER_ABI = parseAbi(["event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)"]);
 
@@ -123,10 +128,6 @@ const poolKey = (pool: PoolState) =>
     ? "missing"
     : `${pool.status}:${pool.sqrtPriceX96}:${pool.tickSpacing}:${pool.status === "live" ? pool.liquidity : ""}`;
 
-/** Whether a mined call is `tx`, by target, calldata and native value. */
-const sameCall = (mined: { to: Address; input: Hex; value: bigint }, tx: FlowTx) =>
-  isAddressEqual(mined.to, tx.to) && mined.input === (tx.data ?? "0x") && mined.value === (tx.value ?? 0n);
-
 const onPair = (left: PoolLeft, a: Address, b: Address) =>
   (isAddressEqual(left.token0, a) && isAddressEqual(left.token1, b)) ||
   (isAddressEqual(left.token0, b) && isAddressEqual(left.token1, a));
@@ -153,39 +154,6 @@ function mintedTokenId(receipt: TransactionReceipt, positionManager: Address): b
   }
   return undefined;
 }
-
-const errorCode = (error: unknown) =>
-  typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
-
-/**
- * Wallet answers to a send request that leave no prompt open and nothing signed: EIP-1193 unauthorized and
- * unsupported method, JSON-RPC method not found and invalid params, EIP-1474 execution reverted, and EIP-5792's
- * refusals that create no bundle (5700, 5710, 5740, 5750, 5760). Not a disconnect (4900, 4901), after which the
- * wallet may have signed, nor 5720, a duplicate id the wallet already holds.
- */
-const NO_PROMPT_CODES: ReadonlySet<unknown> = new Set([4100, 4200, -32601, -32602, 3, 5700, 5710, 5740, 5750, 5760]);
-
-/** WalletConnect's USER_REJECTED, the code its relay answers a declined request with. */
-const WALLETCONNECT_USER_REJECTED = 5000;
-
-const walletConnectRejection = (error: unknown) =>
-  inChain(error, (link) => errorCode(link) === WALLETCONNECT_USER_REJECTED);
-
-function inChain(error: unknown, test: (link: unknown) => boolean): boolean {
-  for (let link = error, depth = 0; link && depth < 8; depth += 1) {
-    if (test(link)) return true;
-    link = typeof link === "object" ? (link as { cause?: unknown }).cause : undefined;
-  }
-  return false;
-}
-
-const answeredWithoutPrompt = (error: unknown) => inChain(error, (link) => NO_PROMPT_CODES.has(errorCode(link)));
-
-const sleep = (ms: number, signal?: AbortSignal) =>
-  new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, ms);
-    signal?.addEventListener("abort", () => (clearTimeout(timer), resolve()), { once: true });
-  });
 
 /** Drives one liquidity run (seed, add, remove or merge) from the connected wallet, under adapter `liquidity-flow`. */
 export function createLiquidityRun(args: {

@@ -71,6 +71,22 @@ export function redeemBatchDepartures(args: {
   if (selectorOf(data) !== batch.selector) return [...out, `${selectorOf(data)} is not ${batch.name}`];
   const [calls] = decodeFunctionData({ abi: BATCH_ABI, data }).args;
   if (calls.length === 0) out.push("batches no calls");
+  return [...out, ...redeemCallsDepartures({ calls, chainId, scope })];
+}
+
+/**
+ * Every way `calls`, run in order by one holder, depart from the approve and redeem calls the oracle allows (R2 to
+ * R4); empty when they keep to them.
+ */
+export function redeemCallsDepartures(args: {
+  calls: readonly { to: Address; data?: Hex; value?: bigint }[];
+  chainId: number;
+  scope: RedeemScope;
+}): string[] {
+  const { calls, chainId, scope } = args;
+  const list = REDEEM_ALLOW_LIST[chainId];
+  if (!list) return [`no redeem allow-list for chain ${chainId}`];
+  const out: string[] = [];
 
   const approvals: Approval[] = [];
   /** Uses up the earlier approve of exactly `amount` of `token` to `router`, or says it is missing. */
@@ -83,8 +99,10 @@ export function redeemBatchDepartures(args: {
   };
 
   const sessionTokens = [...scope.parentTokens, ...Object.values(scope.children).flatMap((child) => child!.tokens)];
-  calls.forEach(({ to, data: inner }, position) => {
+  calls.forEach(({ to, data: raw, value }, position) => {
     const at = `call ${position}`;
+    const inner = raw ?? "0x";
+    if ((value ?? 0n) !== 0n) out.push(`${at}: carries ${value} native`);
     const target: Target | null = same(to, list.gnosisRouter)
       ? "gnosisRouter"
       : same(to, list.conditionalRouter)

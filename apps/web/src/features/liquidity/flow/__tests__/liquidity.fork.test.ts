@@ -22,6 +22,7 @@ import { gnosis } from "viem/chains";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { tickAtSqrtPrice } from "@/lib/swap/tickMath";
+import { readSentWithNonce } from "@/lib/web3/sentWithNonce";
 
 import { minedHash, revertedOnChain } from "./support/reverted";
 import { decode, leftoverOf, movedSqrtPrice, sortPair, userSqrtPrice } from "./support/session";
@@ -34,7 +35,6 @@ import {
   NEW_POOL_TICK_SPACING,
   SEED_PRICE_TOLERANCE_TICKS,
 } from "../../oracle/tolerances";
-import { readSentWithNonce } from "../../run/sentWithNonce";
 import type {
   LiquidityProgress,
   LiquidityReader,

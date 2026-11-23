@@ -1,5 +1,7 @@
 import type { FlowTx } from "@foresight/tx-orchestrator";
-import type { Address, Hash, Hex } from "viem";
+import type { Address } from "viem";
+
+import type { SentWithNonce } from "@/lib/web3/sentWithNonce";
 
 /** One child market of a session: its parent outcome `O` and the child's three outcome tokens. */
 export interface LiquidityBranchTokens {
@@ -198,15 +200,7 @@ export interface LiquidityReader {
   sentWithNonce(args: { owner: Address; nonce: number; fromBlock: bigint }): Promise<SentWithNonce>;
 }
 
-/**
- * An account's send at one nonce: mined with its call, broadcast, unused, or `taken` (mined before the block
- * looked from, or a contract creation).
- */
-export type SentWithNonce =
-  | { status: "mined"; hash: Hash; to: Address; input: Hex; value: bigint }
-  | { status: "pending" }
-  | { status: "none" }
-  | { status: "taken" };
+export type { SentWithNonce };
 
 /** Why a run halted: the orchestrator's own causes, then the liquidity run's. */
 export type LiquidityFailureReason =
