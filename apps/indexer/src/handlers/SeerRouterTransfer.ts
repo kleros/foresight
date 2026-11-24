@@ -16,8 +16,8 @@ indexer.onEvent(
     if (!pull && !answer) return;
 
     const [account, router] = pull ? [from, to] : [to, from];
-    // a trade wallet's transfers are its own handler's, which keeps its ledger in step
-    if ((await context.Executor.get(account)) !== undefined || context.isPreload) return;
+    const tradeWallet = (await context.Executor.get(account)) !== undefined;
+    if (context.isPreload) return;
 
     const move = {
       account,
@@ -27,7 +27,7 @@ indexer.onEvent(
       hash: event.transaction.hash,
       logIndex: event.logIndex,
       block: event.block,
-      tradeWallet: false,
+      tradeWallet,
     };
     await (pull ? notePull : noteReturn)(context, move);
   },

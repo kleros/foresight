@@ -2,8 +2,7 @@ import { indexer } from "envio";
 
 import { positionId, predictionId, transferId } from "../utils/ids";
 import { creditMove } from "../utils/ledger";
-import { notePull, noteReturn } from "../utils/redeem";
-import { CONDITIONAL_ROUTER, isRouter } from "../utils/routers";
+import { CONDITIONAL_ROUTER } from "../utils/routers";
 import { isAvailable } from "../utils/unavailable";
 
 const blankPrediction = (
@@ -50,30 +49,12 @@ indexer.onEvent(
   async ({ event, context }) => {
     const { value } = event.params;
     const [from, to] = [event.params.from.toLowerCase(), event.params.to.toLowerCase()];
-    if (from === to) {
+    if (from === to || value === 0n) {
       return;
     }
 
     const token = event.srcAddress.toLowerCase();
     const hash = event.transaction.hash;
-    const routerMove = (account: string, router: string) => ({
-      account,
-      router,
-      token,
-      value,
-      hash,
-      logIndex: event.logIndex,
-      block: event.block,
-      tradeWallet: true,
-    });
-
-    if (value === 0n) {
-      // a redeem that pays nothing still settles the tokens it pulled
-      if (isRouter(from) && (await context.Executor.get(to)) !== undefined && !context.isPreload) {
-        await noteReturn(context, routerMove(to, from));
-      }
-      return;
-    }
     const [sender, recipient, knownToken] = await Promise.all([
       context.Executor.get(from),
       context.Executor.get(to),
@@ -151,9 +132,6 @@ indexer.onEvent(
         blockNumber: BigInt(event.block.number),
         predicted,
       });
-      if (isRouter(counterparty)) {
-        await (amount < 0n ? notePull : noteReturn)(context, routerMove(executor, counterparty));
-      }
 
       const balance = (moved?.balance ?? 0n) + amount;
 

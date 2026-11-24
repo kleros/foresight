@@ -378,6 +378,40 @@ describe("splitting a payout", () => {
     }
   });
 
+  it("pays a redeem only the tokens pulled since the router last answered with tokens", async (t) => {
+    const indexer = createTestIndexer();
+    await seedSession(indexer, [OPTION_A, OPTION_B]);
+    await run(indexer, [
+      executorDeployed(OTHER_OWNER, EXECUTOR),
+      ...tx(hashOf(1), [
+        // sets minted at option 0's child, then option 1's parent tokens redeemed, through the same router
+        ...childSplitLogs(EXECUTOR, OPTION_A, 20n, BLOCK + 10),
+        ...parentRedeemLogs(EXECUTOR, [{ token: OTHER_UNDERLYING, amount: 30n }], 30n),
+      ]),
+    ]);
+
+    t.expect(await redeemRows(indexer)).toEqual([[SESSION_ID, null, 1n, 30n]]);
+    t.expect(await indexer.RedeemPull.getAll()).toEqual([]);
+  });
+
+  it("keeps no pull for a router's own wrapping, which mints from and burns to the zero address", async (t) => {
+    const zero = "0x0000000000000000000000000000000000000000";
+    const indexer = createTestIndexer();
+    await seedSession(indexer, [OPTION_A, OPTION_B]);
+    await run(
+      indexer,
+      tx(hashOf(1), [
+        transfer(SDAI, OWNER, GNOSIS_ROUTER, 10n, BLOCK + 10),
+        ...PARENT_TOKENS.flatMap((token) => [
+          transfer(token, zero, GNOSIS_ROUTER, 10n, BLOCK + 10),
+          transfer(token, GNOSIS_ROUTER, OWNER, 10n, BLOCK + 10),
+        ]),
+      ]),
+    );
+
+    t.expect(await indexer.RedeemPull.getAll()).toEqual([]);
+  });
+
   it("pays an account only the tokens it sent the router", async (t) => {
     const indexer = createTestIndexer();
     await seedSession(indexer, [OPTION_A, OPTION_B]);
