@@ -120,6 +120,7 @@ type Transfer {
 
   blockNumber: BigInt!
   timestamp: BigInt!
+  logIndex: Int!
   transactionHash: String! @index
 }
 

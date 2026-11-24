@@ -67,11 +67,76 @@ async function placesOf(context: EvmOnEventContext, router: string, token: strin
   );
 }
 
+const sum = (values: bigint[]) => values.reduce((total, value) => total + value, 0n);
+
+const bySessionId = (a: string, b: string) => (BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0);
+
+/** `total` split by `weights`, floored, the last positive weight taking the remainder so the shares add up. */
+function splitBy(total: bigint, weights: bigint[]): bigint[] {
+  const whole = sum(weights);
+  let last = weights.length - 1;
+  while (last > 0 && weights[last] === 0n) last--;
+  let given = 0n;
+  return weights.map((weight, index) => {
+    const share = index === last ? total - given : (total * weight) / whole;
+    given += share;
+    return share;
+  });
+}
+
+/** One move of a token in or out of an account, as its `Transfer` row holds it. */
+export interface LedgerMove {
+  transactionHash: string;
+  blockNumber: bigint;
+  logIndex: number;
+  /** Negative leaving the account. */
+  amount: bigint;
+}
+
+const inChainOrder = (a: LedgerMove, b: LedgerMove) =>
+  a.blockNumber === b.blockNumber ? a.logIndex - b.logIndex : a.blockNumber < b.blockNumber ? -1 : 1;
+
 /**
- * `account`'s net holdings of `token` in each session it predicted in: its trade wallet's transfers of the token in
- * the transactions that predicted in that session, transaction `hash` left out.
+ * The holdings of one token in each of `sessions` (sorted by id), replayed in chain order from `held`: a transaction
+ * that predicted in some of them (`sessionsOfTx`) moves theirs, split evenly; any other moves the holders pro rata by
+ * what they hold.
  */
-async function holdingsBySession(context: EvmOnEventContext, account: string, token: string, hash: string) {
+export function replayHoldings(
+  moves: LedgerMove[],
+  sessionsOfTx: ReadonlyMap<string, ReadonlySet<string>>,
+  sessions: readonly string[],
+  held = new Map<string, bigint>(),
+) {
+  const nets = new Map<string, bigint>();
+  for (const move of [...moves].sort(inChainOrder)) {
+    nets.set(move.transactionHash, (nets.get(move.transactionHash) ?? 0n) + move.amount);
+  }
+
+  for (const [tx, net] of nets) {
+    const own = [...(sessionsOfTx.get(tx) ?? [])].filter((session) => sessions.includes(session)).sort(bySessionId);
+    const holders = own.length > 0 ? own : sessions.filter((session) => (held.get(session) ?? 0n) > 0n);
+    if (holders.length === 0) continue;
+    const weights = own.length > 0 ? own.map(() => 1n) : holders.map((session) => held.get(session)!);
+    // an outflow beyond what the holders hold empties them
+    const moved = own.length === 0 && -net > sum(weights) ? -sum(weights) : net;
+    splitBy(moved, weights).forEach((share, index) => {
+      held.set(holders[index]!, (held.get(holders[index]!) ?? 0n) + share);
+    });
+  }
+  return held;
+}
+
+/**
+ * `account`'s holdings of `token` in each of `sessions` (sorted by id), transaction `hash` left out. A session the
+ * account predicted in has an entry, even at zero.
+ */
+async function holdingsBySession(
+  context: EvmOnEventContext,
+  account: string,
+  token: string,
+  hash: string,
+  sessions: string[],
+) {
   const [predictions, transfers] = await Promise.all([
     context.Prediction.getWhere({ executor_id: { _eq: account } }),
     context.Transfer.getWhere({ executor_id: { _eq: account }, token: { _eq: token } }),
@@ -84,31 +149,18 @@ async function holdingsBySession(context: EvmOnEventContext, account: string, to
   const sessionsOfTx = new Map<string, Set<string>>();
   for (const prediction of predictions) {
     const session = sessionOf.get(prediction.childMarket_id);
-    if (prediction.transactionHash === hash || session === undefined) continue;
+    if (prediction.transactionHash === hash || session === undefined || !sessions.includes(session)) continue;
     held.set(session, 0n);
-    const sessions = sessionsOfTx.get(prediction.transactionHash) ?? new Set();
-    sessionsOfTx.set(prediction.transactionHash, sessions.add(session));
+    const own = sessionsOfTx.get(prediction.transactionHash) ?? new Set();
+    sessionsOfTx.set(prediction.transactionHash, own.add(session));
   }
 
-  for (const transfer of transfers) {
-    for (const session of sessionsOfTx.get(transfer.transactionHash) ?? []) {
-      held.set(session, (held.get(session) ?? 0n) + transfer.amount);
-    }
-  }
-  return held;
-}
-
-/** `total` split by `weights`, floored, the last positive weight taking the remainder so the shares add up. */
-function splitBy(total: bigint, weights: bigint[]): bigint[] {
-  const sum = weights.reduce((acc, weight) => acc + weight, 0n);
-  let last = weights.length - 1;
-  while (last > 0 && weights[last] === 0n) last--;
-  let given = 0n;
-  return weights.map((weight, index) => {
-    const share = index === last ? total - given : (total * weight) / sum;
-    given += share;
-    return share;
-  });
+  return replayHoldings(
+    transfers.filter((transfer) => transfer.transactionHash !== hash),
+    sessionsOfTx,
+    sessions,
+    held,
+  );
 }
 
 /**
@@ -118,20 +170,52 @@ function splitBy(total: bigint, weights: bigint[]): bigint[] {
 async function attribute(context: EvmOnEventContext, places: Place[], moved: Moved) {
   if (places.length < 2) return places.map((place) => ({ place, amount: moved.value }));
 
-  const held = await holdingsBySession(context, moved.from, moved.token, moved.event.transaction.hash);
-  const weights = places.map((place) => {
+  const sorted = [...places].sort((a, b) => bySessionId(a.session_id, b.session_id));
+  const held = await holdingsBySession(
+    context,
+    moved.from,
+    moved.token,
+    moved.event.transaction.hash,
+    sorted.map((place) => place.session_id),
+  );
+  const weights = sorted.map((place) => {
     const net = held.get(place.session_id) ?? 0n;
     return net > 0n ? net : 0n;
   });
   if (weights.some((weight) => weight > 0n)) {
     const shares = splitBy(moved.value, weights);
-    return places.map((place, index) => ({ place, amount: shares[index]! })).filter(({ amount }) => amount > 0n);
+    return sorted.map((place, index) => ({ place, amount: shares[index]! })).filter(({ amount }) => amount > 0n);
   }
-  const predicted = places.filter((place) => held.has(place.session_id));
-  const [lowest] = [...(predicted.length > 0 ? predicted : places)].sort((a, b) =>
-    BigInt(a.session_id) < BigInt(b.session_id) ? -1 : 1,
-  );
-  return [{ place: lowest!, amount: moved.value }];
+  const predicted = sorted.filter((place) => held.has(place.session_id));
+  return [{ place: (predicted.length > 0 ? predicted : sorted)[0]!, amount: moved.value }];
+}
+
+/**
+ * Each pull's part of one payout from Seer's router. A Seer categorical parent pays each winning outcome 1/k, floored
+ * per token, so the k up to `options` whose floors add up to the payout prices each token; failing one, the tokens
+ * split it by amount. A token pulled for several sessions splits its part by their amounts.
+ */
+function parentShares(value: bigint, pulls: RedeemPull[], options: bigint): bigint[] {
+  const tokens = [...new Set(pulls.map((pull) => pull.token))];
+  const pullsOf = tokens.map((token) => pulls.filter((pull) => pull.token === token));
+  const amounts = pullsOf.map((own) => sum(own.map((pull) => pull.amount)));
+  let paid = splitBy(value, amounts);
+  for (let k = 1n; k <= options; k++) {
+    const floors = amounts.map((amount) => amount / k);
+    if (sum(floors) === value) {
+      paid = floors;
+      break;
+    }
+  }
+
+  const shares = new Map<RedeemPull, bigint>();
+  pullsOf.forEach((own, index) => {
+    splitBy(
+      paid[index]!,
+      own.map((pull) => pull.amount),
+    ).forEach((share, at) => shares.set(own[at]!, share));
+  });
+  return pulls.map((pull) => shares.get(pull)!);
 }
 
 /** A session token entering a router: held until the router's sDAI payout in the same transaction. */
@@ -169,7 +253,9 @@ async function notePayout({ context, event, token, from, to, value }: Moved) {
   const outcomeCount = new Map(
     sessions.flatMap((session) => (session?.collateralToken === token ? [[session.id, session.outcomeCount]] : [])),
   );
-  const parts = pulls.filter((pull) => outcomeCount.has(pull.session_id));
+  const parts = pulls
+    .filter((pull) => outcomeCount.has(pull.session_id))
+    .sort((a, b) => bySessionId(a.session_id, b.session_id) || a.token.localeCompare(b.token));
   const owners =
     from === CONDITIONAL_ROUTER
       ? await Promise.all([...new Set(parts.map((pull) => pull.token))].map((each) => context.Token.get(each)))
@@ -180,11 +266,17 @@ async function notePayout({ context, event, token, from, to, value }: Moved) {
   const isInvalid = (pull: RedeemPull) => pull.parentOutcomeIndex === outcomeCount.get(pull.session_id);
   if (from === GNOSIS_ROUTER && parts.some(isInvalid) && !parts.every(isInvalid)) return;
 
-  // the indexer has no payout numerators, so one payout splits over its outcomes by the amounts pulled
-  const shares = splitBy(
-    value,
-    parts.map((pull) => pull.amount),
+  const options = sessions.reduce(
+    (most, session) => (session && session.outcomeCount > most ? session.outcomeCount : most),
+    0n,
   );
+  const shares =
+    from === GNOSIS_ROUTER
+      ? parentShares(value, parts, options)
+      : splitBy(
+          value,
+          parts.map((pull) => pull.amount),
+        );
   const rows = new Map<string, { pull: RedeemPull; payout: bigint }>();
   parts.forEach((pull, index) => {
     const key = `${pull.session_id}-${pull.parentOutcomeIndex}`;
