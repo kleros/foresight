@@ -129,10 +129,17 @@ const elsewhere = () => [
 ];
 const elsewhereRedeems = () => [redeem("8", 0, 999n, null), redeem("7", 0, 555n, null, STRANGER)];
 
+/** Every response the indexer gave since the last serve(), as the web read received it. */
+let responses: unknown[] = [];
+
 function serve(tables: Tables) {
   const fake = createFakeIndexer(tables);
-  vi.mocked(fetchGraphql).mockImplementation((async (document: DocumentNode, variables?: Record<string, unknown>) =>
-    fake.answer(document, variables)) as typeof fetchGraphql);
+  responses = [];
+  vi.mocked(fetchGraphql).mockImplementation((async (document: DocumentNode, variables?: Record<string, unknown>) => {
+    const response = await fake.answer(document, variables);
+    responses.push(response);
+    return response;
+  }) as typeof fetchGraphql);
 }
 
 const read = (sessionId = 7n) => fetchRealisedPnl({} as PublicClient, { ...REQUEST, sessionId });
@@ -157,6 +164,16 @@ describe("fetchRealisedPnl", () => {
     expect(result.options[0]).toEqual({ status: "settled", cost: 150n, payout: 300n, pnl: 150n });
     expect(result.options[1]).toEqual({ status: "settled", cost: 150n, payout: 0n, pnl: -150n });
     expect(result.session).toEqual({ cost: 300n, payout: 300n, pnl: 0n, waiting: [] });
+  });
+
+  it("asks the indexer for this trade wallet's redeems only", async () => {
+    serve({ SessionMove: predicted(), Redeem: [...elsewhereRedeems(), redeem("7", 0, 160n, null)] });
+
+    await read();
+
+    const rows = responses.flatMap((response) => (response as { Redeem?: { account: string }[] }).Redeem ?? []);
+    expect(rows).toHaveLength(1);
+    expect(rows.every((row) => row.account === TRADE_WALLET)).toBe(true);
   });
 
   it("reads the same after the redeem, from the payouts indexed for this session", async () => {

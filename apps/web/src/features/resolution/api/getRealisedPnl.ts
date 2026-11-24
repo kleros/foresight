@@ -18,7 +18,7 @@ const REALISED_PNL = graphql(`
       cost
       transactionHash
     }
-    Redeem(where: { session_id: { _eq: $sessionId } }) {
+    Redeem(where: { session_id: { _eq: $sessionId }, account: { _eq: $account } }) {
       account
       childMarket_id
       parentOutcomeIndex
