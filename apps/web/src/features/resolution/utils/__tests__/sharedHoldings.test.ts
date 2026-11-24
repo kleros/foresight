@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { sessionShare, type ParentMove } from "../sharedHoldings";
 
-/** One parent token sessions 7 and 8 share; the same moves as the indexer's replayHoldings tests. */
+/** One parent token sessions 7 and 8 share; the first two cases replay the indexer's replayHoldings moves. */
 const TOKEN = "0xe000000000000000000000000000000000000000";
 const sessionsOf = new Map([[TOKEN, ["8", "7"]]]);
 
@@ -76,6 +76,43 @@ describe("sessionShare", () => {
     ).toEqual({
       7: { held: 143n, splits: [150n, -125n] },
       8: { held: 87n, splits: [151n, -76n] },
+    });
+  });
+
+  it("empties the holders on an outflow beyond what they hold", () => {
+    const moves = [
+      move("0xe0", 1n, 0, 500n),
+      move("0xb1", 2n, 0, 100n),
+      move("0xe1", 3n, 0, -400n),
+      move("0xb2", 4n, 0, 100n),
+      move("0xb3", 5n, 0, 100n),
+    ];
+    const predictedIn = predicted([
+      ["0xb1", ["7"]],
+      ["0xb2", ["7"]],
+      ["0xb3", ["8"]],
+    ]);
+
+    // 7 holds 100 before the 400 leave and 100 after them, beside 8's 100
+    expect(shares(moves, predictedIn, 400n)).toEqual({
+      7: { held: 200n, splits: [] },
+      8: { held: 200n, splits: [] },
+    });
+  });
+
+  it("files a balance and a split that no session predicted in under the lowest session", () => {
+    expect(shares([move("0xe0", 1n, 0, 100n)], predicted([]), 100n, [["0xe0", 100n]])).toEqual({
+      7: { held: 100n, splits: [100n] },
+      8: { held: 0n, splits: [0n] },
+    });
+  });
+
+  it("charges a split made before any session held the token where its balance is filed", () => {
+    const moves = [move("0xe0", 1n, 0, 100n), move("0xb1", 2n, 0, -50n)];
+
+    expect(shares(moves, predicted([["0xb1", ["8"]]]), 50n, [["0xe0", 100n]])).toEqual({
+      7: { held: 0n, splits: [0n] },
+      8: { held: 50n, splits: [100n] },
     });
   });
 

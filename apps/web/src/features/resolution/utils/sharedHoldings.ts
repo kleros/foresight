@@ -83,9 +83,9 @@ function redeemShare(balance: bigint, held: Map<string, bigint>, sessions: reado
 }
 
 /**
- * `session`'s split deposits and parent token balances when other sessions share its parent tokens. A deposit made
- * by a prediction is its sessions', split evenly; any other goes pro rata by how the replay moved each session's
- * tokens in that transaction. A balance is the part the indexer would file under `session` were it redeemed now.
+ * `session`'s split deposits and parent token balances when other sessions share its parent tokens. A balance is the
+ * part the indexer would file under `session` were it redeemed now. A deposit made by a prediction is its sessions',
+ * split evenly; any other goes by how the replay moved each session's tokens in it, else as the balances are filed.
  */
 export function sessionShare(
   session: string,
@@ -109,21 +109,35 @@ export function sessionShare(
   );
 
   const all = [...new Set(replays.flatMap(({ sessions }) => sessions))].sort(bySessionId);
+  const holding = all.map((each) =>
+    sum(
+      replays.map(({ held }) => {
+        const net = held.get(each) ?? 0n;
+        return net > 0n ? net : 0n;
+      }),
+    ),
+  );
+  const predicted = all.filter((each) => replays.some(({ held }) => held.has(each)));
+  const fallback = (predicted.length > 0 ? predicted : all)[0];
+  const unmoved = holding.some((weight) => weight > 0n) ? holding : all.map((each) => (each === fallback ? 1n : 0n));
+
   const splits = deposits.map((deposit) => {
     const own = [...(predictedIn.get(deposit.transactionHash) ?? [])].filter((each) => all.includes(each));
+    const moved = all.map((each) =>
+      sum(
+        replays.map(({ moved }) => {
+          const share = moved.get(deposit.transactionHash)?.get(each) ?? 0n;
+          return share < 0n ? -share : share;
+        }),
+      ),
+    );
     const weights =
       own.length > 0
         ? all.map((each) => (own.includes(each) ? 1n : 0n))
-        : all.map((each) =>
-            sum(
-              replays.map(({ moved }) => {
-                const share = moved.get(deposit.transactionHash)?.get(each) ?? 0n;
-                return share < 0n ? -share : share;
-              }),
-            ),
-          );
-    const amount = weights.some((weight) => weight > 0n) ? splitBy(deposit.amount, weights)[all.indexOf(session)]! : 0n;
-    return { ...deposit, amount };
+        : moved.some((weight) => weight > 0n)
+          ? moved
+          : unmoved;
+    return { ...deposit, amount: splitBy(deposit.amount, weights)[all.indexOf(session)]! };
   });
   return { splits, parent };
 }
