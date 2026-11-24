@@ -75,17 +75,6 @@ indexer.onEvent({ contract: "SessionFactory", event: "ParentMarketDeployed" }, a
     transactionHash: event.transaction.hash,
   });
 
-  const sessionId = event.params.sessionId.toString();
-  [...market.outcomeTokens, market.invalidToken ?? undefined].forEach((token, index) => {
-    if (!isAvailable(token)) return;
-    context.ParentOutcomeToken.set({
-      id: `${sessionId}-${index}`,
-      token,
-      session_id: sessionId,
-      parentOutcomeIndex: BigInt(index),
-    });
-  });
-
   // An absolute set from the event, so any replay lands on the same number.
   // Ids start at zero, so the newest counts them all.
   context.SessionCounter.set({

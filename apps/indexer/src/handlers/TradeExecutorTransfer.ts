@@ -136,7 +136,6 @@ indexer.onEvent(
         counterparty,
         blockNumber: BigInt(event.block.number),
         timestamp: BigInt(event.block.timestamp),
-        logIndex: event.logIndex,
         transactionHash: hash,
       });
 
