@@ -5,3 +5,6 @@ export const CONDITIONAL_ROUTER = "0x774284d5cdfec3a0a0ebc7283ad4d5b33013c29c";
 export const SEER_ROUTERS = [GNOSIS_ROUTER, CONDITIONAL_ROUTER] as const;
 
 export const isRouter = (address: string) => (SEER_ROUTERS as readonly string[]).includes(address);
+
+/** Every ERC-20 transfer into or out of Seer's routers: a connected wallet's redeem shows only there. */
+export const ROUTER_TRANSFERS = { params: [{ from: [...SEER_ROUTERS] }, { to: [...SEER_ROUTERS] }] };

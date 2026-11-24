@@ -116,7 +116,8 @@ export async function noteReturn(context: EvmOnEventContext, move: RouterMove) {
   for (const pull of pulls) context.RedeemPull.deleteUnsafe(pull.id);
   if (returnedToken) return;
 
-  const as = move.router === GNOSIS_ROUTER && (await isMerge(context, pulls, sessions, move.value)) ? "merge" : "redeem";
+  const as =
+    move.router === GNOSIS_ROUTER && (await isMerge(context, pulls, sessions, move.value)) ? "merge" : "redeem";
   const shares: Parts | undefined = move.tradeWallet
     ? await settlePulls(
         context,
@@ -132,8 +133,9 @@ export async function noteReturn(context: EvmOnEventContext, move: RouterMove) {
   pulls.forEach((pull, index) => {
     const places = placed[index]!;
     // a connected wallet keeps no ledger: a shared token is the earliest session's, as its Token row is
-    const bySession = shares?.get(pull.logIndex) ?? new Map([[places[0]!.session, pull.amount]]);
-    for (const [sessionId, amount] of bySession) {
+    const bySession = shares?.get(pull.logIndex) ?? new Map([[places[0]!.session, -pull.amount]]);
+    for (const [sessionId, moved] of bySession) {
+      const amount = -moved;
       const place: TokenPlace | undefined = places.find((each) => each.session === sessionId);
       const session = sessions.find((each) => each.id === sessionId);
       if (place === undefined || session === undefined) continue;
@@ -151,7 +153,13 @@ export async function noteReturn(context: EvmOnEventContext, move: RouterMove) {
 
   const ordered = [...parts.entries()];
   if (ordered.length === 0) return;
-  const payouts = allocate(move.value, await payoutWeights(context, ordered.map(([, part]) => part)));
+  const payouts = allocate(
+    move.value,
+    await payoutWeights(
+      context,
+      ordered.map(([, part]) => part),
+    ),
+  );
   ordered.forEach(([key, part], index) => {
     context.Redeem.set({
       id: `${move.hash}-${move.logIndex}-${move.account}-${key}`,

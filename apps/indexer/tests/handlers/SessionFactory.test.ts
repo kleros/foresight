@@ -11,6 +11,7 @@ import { abi as seerMarketAbi } from "../../abis/SeerMarket";
 import { abi as seerMarketFactoryAbi } from "../../abis/SeerMarketFactory";
 import { abi as sessionFactoryViewsAbi } from "../../abis/SessionFactoryViews";
 import { BLOCK } from "../support/harness";
+import { resolved } from "../support/ledger";
 
 const readableAbi = [...seerMarketAbi, ...erc20Abi, ...seerMarketFactoryAbi, ...sessionFactoryViewsAbi];
 
@@ -353,6 +354,62 @@ describe("SessionFactory indexing", () => {
     const session = await indexer.Session.getOrThrow("0");
     t.expect(session.invalidToken).toBeUndefined();
     t.expect(session.outcomes).toEqual(OUTCOMES);
+  });
+
+  it("indexes each session's parent tokens, INVALID included, and every market's condition", async (t) => {
+    const indexer = createTestIndexer();
+    const [parent, sibling, child] = [
+      "0x00000000000000000000000000000000000c0de0",
+      "0x00000000000000000000000000000000000c0de1",
+      "0x00000000000000000000000000000000000c0de2",
+    ] as const;
+    const [parentCondition, childCondition] = [`0x${"ab".repeat(32)}`, `0x${"cd".repeat(32)}`];
+    marketReads[parent] = { ...marketReads[PARENT_MARKET], conditionId: parentCondition };
+    // a later parent asking the same question shares its condition
+    marketReads[sibling] = { ...marketReads[PARENT_MARKET], conditionId: parentCondition };
+    marketReads[child] = {
+      ...childReads(CHILD_0_DOWN, CHILD_0_UP, PARENT_OUTCOME_0, CHILD_0_INVALID),
+      conditionId: childCondition,
+    };
+
+    await indexer.process({
+      chains: {
+        31337: {
+          simulate: [
+            parentDeployed(BLOCK, EXAMPLE_METADATA_URI, 0n, parent),
+            childDeployed(BLOCK, 0, child),
+            resolved(parentCondition, [0n, 1n, 0n], BLOCK + 1),
+            parentDeployed(BLOCK + 2, EXAMPLE_METADATA_URI, 1n, sibling),
+          ],
+        },
+      },
+    });
+
+    const tokens = (await indexer.ParentOutcomeToken.getAll())
+      .map((row) => [row.session_id, row.token, row.parentOutcomeIndex, row.invalid])
+      .sort((a, b) => String(a).localeCompare(String(b)));
+    t.expect(tokens).toEqual(
+      ["0", "1"].flatMap((session) => [
+        [session, PARENT_INVALID, 2n, true],
+        [session, PARENT_OUTCOME_0, 0n, false],
+        [session, PARENT_OUTCOME_1, 1n, false],
+      ]),
+    );
+    t.expect(await indexer.MarketCondition.get(parent)).toEqual({
+      id: parent,
+      conditionId: parentCondition,
+      payoutNumerators: [0n, 1n, 0n],
+    });
+    t.expect(await indexer.MarketCondition.get(sibling)).toEqual({
+      id: sibling,
+      conditionId: parentCondition,
+      payoutNumerators: [0n, 1n, 0n],
+    });
+    t.expect(await indexer.MarketCondition.get(child)).toEqual({
+      id: child,
+      conditionId: childCondition,
+      payoutNumerators: [],
+    });
   });
 
   it("indexes a market that cannot be read, rather than dropping the session", async (t) => {

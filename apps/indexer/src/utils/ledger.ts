@@ -37,7 +37,7 @@ interface SharedMove {
   redeemed: boolean;
 }
 
-/** Each split move's part per session, keyed by log index. */
+/** Each move's part per session, keyed by log index; a pull's parts are what left the account, so negative. */
 export type Parts = Map<number, Map<string, bigint>>;
 
 const moveId = (hash: string, logIndex: number, account: string, session: string) =>
@@ -209,7 +209,10 @@ export async function settlePulls(
   const pulled = new Set(logIndexes);
   const invalid = new Map<string, boolean>();
   for (const token of new Set(rows.filter((row) => pulled.has(row.logIndex)).map((row) => row.token))) {
-    invalid.set(token, (await placesOf(context, token)).every((place) => place.invalid));
+    invalid.set(
+      token,
+      (await placesOf(context, token)).every((place) => place.invalid),
+    );
   }
 
   const settled = rows.map((row): SessionMove => {

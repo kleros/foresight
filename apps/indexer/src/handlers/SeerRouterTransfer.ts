@@ -1,12 +1,9 @@
 import { indexer } from "envio";
 
 import { notePull, noteReturn } from "../utils/redeem";
-import { isRouter, SEER_ROUTERS } from "../utils/routers";
+import { isRouter, ROUTER_TRANSFERS } from "../utils/routers";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-
-/** Every ERC-20 transfer into or out of Seer's routers: a connected wallet's redeem shows only there. */
-export const ROUTER_TRANSFERS = { params: [{ from: [...SEER_ROUTERS] }, { to: [...SEER_ROUTERS] }] };
 
 // A registration of its own: the trade wallets' `where` names the executors, these name the routers.
 indexer.onEvent(
