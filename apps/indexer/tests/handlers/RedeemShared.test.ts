@@ -127,6 +127,19 @@ describe("a redeem of a parent token two sessions share", () => {
     ]);
   });
 
+  it("files it under the session the trade wallet predicted in when no session holds it on net", async (t) => {
+    const indexer = await indexed([
+      transfer(UNDERLYING, OWNER, EXECUTOR, 200n, BLOCK + 1),
+      ...[
+        transfer(UNDERLYING, EXECUTOR, POOL, 100n, BLOCK + 2),
+        transfer(LATER_UP, POOL, EXECUTOR, 150n, BLOCK + 2),
+      ].map((log) => inTx(TRADE_TX, log)),
+      ...parentRedeemLogs(EXECUTOR, [{ token: UNDERLYING, amount: 100n }], 100n).map((log) => inTx(REDEEM_TX, log)),
+    ]);
+
+    t.expect(await payouts(indexer)).toEqual([[LATER_SESSION, null, 0n, 100n]]);
+  });
+
   it("files a connected wallet's redeem, which no prediction places, under the earlier session", async (t) => {
     const indexer = await indexed(
       parentRedeemLogs(OWNER, [{ token: UNDERLYING, amount: 50n }], 50n).map((log) => inTx(REDEEM_TX, log)),

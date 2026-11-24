@@ -68,8 +68,8 @@ async function placesOf(context: EvmOnEventContext, router: string, token: strin
 }
 
 /**
- * `account`'s net holdings of `token` per session: its trade wallet's transfers of the token in the transactions
- * that predicted in that session, transaction `hash` left out.
+ * `account`'s net holdings of `token` in each session it predicted in: its trade wallet's transfers of the token in
+ * the transactions that predicted in that session, transaction `hash` left out.
  */
 async function holdingsBySession(context: EvmOnEventContext, account: string, token: string, hash: string) {
   const [predictions, transfers] = await Promise.all([
@@ -80,15 +80,16 @@ async function holdingsBySession(context: EvmOnEventContext, account: string, to
   const children = await Promise.all(markets.map((id) => context.ChildMarket.get(id)));
   const sessionOf = new Map(markets.map((id, index) => [id, children[index]?.session_id]));
 
+  const held = new Map<string, bigint>();
   const sessionsOfTx = new Map<string, Set<string>>();
   for (const prediction of predictions) {
     const session = sessionOf.get(prediction.childMarket_id);
     if (prediction.transactionHash === hash || session === undefined) continue;
+    held.set(session, 0n);
     const sessions = sessionsOfTx.get(prediction.transactionHash) ?? new Set();
     sessionsOfTx.set(prediction.transactionHash, sessions.add(session));
   }
 
-  const held = new Map<string, bigint>();
   for (const transfer of transfers) {
     for (const session of sessionsOfTx.get(transfer.transactionHash) ?? []) {
       held.set(session, (held.get(session) ?? 0n) + transfer.amount);
@@ -97,20 +98,22 @@ async function holdingsBySession(context: EvmOnEventContext, account: string, to
   return held;
 }
 
-/** `total` split by `weights`, floored, the last share taking the remainder so the shares add up to `total`. */
+/** `total` split by `weights`, floored, the last positive weight taking the remainder so the shares add up. */
 function splitBy(total: bigint, weights: bigint[]): bigint[] {
   const sum = weights.reduce((acc, weight) => acc + weight, 0n);
+  let last = weights.length - 1;
+  while (last > 0 && weights[last] === 0n) last--;
   let given = 0n;
   return weights.map((weight, index) => {
-    const share = index === weights.length - 1 ? total - given : (total * weight) / sum;
+    const share = index === last ? total - given : (total * weight) / sum;
     given += share;
     return share;
   });
 }
 
 /**
- * Each session's part of `amount` when `places` name several: pro rata by the account's net holdings of the token
- * in each, else wholly the lowest session id.
+ * Each session's part of the pulled amount when `places` name several: pro rata by the account's net holdings of the
+ * token in each, else wholly the lowest session id among those it predicted in, else among all.
  */
 async function attribute(context: EvmOnEventContext, places: Place[], moved: Moved) {
   if (places.length < 2) return places.map((place) => ({ place, amount: moved.value }));
@@ -124,7 +127,10 @@ async function attribute(context: EvmOnEventContext, places: Place[], moved: Mov
     const shares = splitBy(moved.value, weights);
     return places.map((place, index) => ({ place, amount: shares[index]! })).filter(({ amount }) => amount > 0n);
   }
-  const [lowest] = [...places].sort((a, b) => (BigInt(a.session_id) < BigInt(b.session_id) ? -1 : 1));
+  const predicted = places.filter((place) => held.has(place.session_id));
+  const [lowest] = [...(predicted.length > 0 ? predicted : places)].sort((a, b) =>
+    BigInt(a.session_id) < BigInt(b.session_id) ? -1 : 1,
+  );
   return [{ place: lowest!, amount: moved.value }];
 }
 
@@ -149,10 +155,9 @@ async function notePull(moved: Moved) {
 }
 
 /**
- * The session's collateral leaving a router for an account that sent it tokens in this transaction: one `Redeem`
- * row per session and redeemed outcome, the payout split by the amounts pulled. At Seer's router, pulls naming the
- * parent's INVALID beside an option are read as a merge, on the premise that a resolved parent pays INVALID only
- * alone.
+ * The session's collateral leaving a router for an account that sent it tokens in this transaction: one `Redeem` row
+ * per session and outcome. At Seer's router, INVALID pulled beside an option is a merge, since a resolved parent pays
+ * INVALID only alone.
  */
 async function notePayout({ context, event, token, from, to, value }: Moved) {
   const hash = event.transaction.hash;
