@@ -1,6 +1,9 @@
 import { indexer } from "envio";
 
 import { positionId, predictionId, transferId } from "../utils/ids";
+import { creditMove } from "../utils/ledger";
+import { notePull, noteReturn } from "../utils/redeem";
+import { CONDITIONAL_ROUTER, isRouter } from "../utils/routers";
 import { isAvailable } from "../utils/unavailable";
 
 const blankPrediction = (
@@ -47,12 +50,30 @@ indexer.onEvent(
   async ({ event, context }) => {
     const { value } = event.params;
     const [from, to] = [event.params.from.toLowerCase(), event.params.to.toLowerCase()];
-    if (from === to || value === 0n) {
+    if (from === to) {
       return;
     }
 
     const token = event.srcAddress.toLowerCase();
     const hash = event.transaction.hash;
+    const routerMove = (account: string, router: string) => ({
+      account,
+      router,
+      token,
+      value,
+      hash,
+      logIndex: event.logIndex,
+      block: event.block,
+      tradeWallet: true,
+    });
+
+    if (value === 0n) {
+      // a redeem that pays nothing still settles the tokens it pulled
+      if (isRouter(from) && (await context.Executor.get(to)) !== undefined && !context.isPreload) {
+        await noteReturn(context, routerMove(to, from));
+      }
+      return;
+    }
     const [sender, recipient, knownToken] = await Promise.all([
       context.Executor.get(from),
       context.Executor.get(to),
@@ -80,7 +101,8 @@ indexer.onEvent(
       sides.map(async (side) => {
         const moved = await context.Position.get(positionId(side.executor, token));
 
-        if (market !== undefined) {
+        // the conditional router only redeems, so its pulls are not a prediction
+        if (market !== undefined && side.counterparty !== CONDITIONAL_ROUTER) {
           const [previous, legs, pools, down, up, underlying] = await Promise.all([
             context.Prediction.get(predictionId(hash, side.executor, market.id)),
             context.Transfer.getWhere({ transactionHash: { _eq: hash }, token: { _eq: market.underlyingToken } }),
@@ -118,6 +140,21 @@ indexer.onEvent(
 
     for (const loaded of loadedSides) {
       const { executor, amount, counterparty, moved } = loaded;
+      const predicted = loaded.kind === "outcome" ? loaded.market.session_id : undefined;
+      await creditMove(context, {
+        account: executor,
+        token,
+        amount,
+        counterparty,
+        hash,
+        logIndex: event.logIndex,
+        blockNumber: BigInt(event.block.number),
+        predicted,
+      });
+      if (isRouter(counterparty)) {
+        await (amount < 0n ? notePull : noteReturn)(context, routerMove(executor, counterparty));
+      }
+
       const balance = (moved?.balance ?? 0n) + amount;
 
       context.Position.set({

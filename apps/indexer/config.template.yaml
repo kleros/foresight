@@ -18,6 +18,12 @@ contracts:
     events:
       - event: Transfer(address indexed from, address indexed to, uint256 value)
 
+  ## Gnosis' ConditionalTokens, which Seer's markets resolve through. Its payouts split a redeem's sDAI between the
+  ## outcomes and sessions it paid; the handler keeps only the conditions of a session's markets.
+  - name: ConditionalTokens
+    events:
+      - event: ConditionResolution(bytes32 indexed conditionId, address indexed oracle, bytes32 indexed questionId, uint256 outcomeSlotCount, uint256[] payoutNumerators)
+
   ## Swapr v3 on Gnosis. Pool creations are rare, so all of them are followed and the handlers
   ## keep only the pools whose tokens belong to a market we know.
   - name: AlgebraFactory
@@ -54,6 +60,9 @@ chains:
       - name: AlgebraFactory
         address:
           - "0xA0864cCA6E114013AB0e27cbd5B6f4c8947da766"
+      - name: ConditionalTokens
+        address:
+          - "0xCeAfDD6bc0bEF976fdCd1112955828E00543c0Ce"
   - id: 100
     start_block: _PLACEHOLDER_
     contracts:
@@ -66,3 +75,6 @@ chains:
       - name: AlgebraFactory
         address:
           - "0xA0864cCA6E114013AB0e27cbd5B6f4c8947da766"
+      - name: ConditionalTokens
+        address:
+          - "0xCeAfDD6bc0bEF976fdCd1112955828E00543c0Ce"

@@ -1,6 +1,7 @@
 import { indexer } from "envio";
 
 import { ipfsPath } from "../utils";
+import { noteCondition } from "../utils/conditions";
 import { fetchChildMarket } from "../utils/contracts/fetchChildMarket";
 import { fetchCollateral } from "../utils/contracts/fetchCollateral";
 import { fetchOpeningTime } from "../utils/contracts/fetchOpeningTime";
@@ -74,6 +75,19 @@ indexer.onEvent({ contract: "SessionFactory", event: "ParentMarketDeployed" }, a
     ]),
     transactionHash: event.transaction.hash,
   });
+
+  const sessionId = event.params.sessionId.toString();
+  [...market.outcomeTokens, market.invalidToken ?? UNAVAILABLE].forEach((token, index) => {
+    if (!isAvailable(token)) return;
+    context.ParentOutcomeToken.set({
+      id: `${sessionId}-${token}`,
+      token,
+      session_id: sessionId,
+      parentOutcomeIndex: BigInt(index),
+      invalid: index === outcomeCount,
+    });
+  });
+  await noteCondition(context, event.chainId, event.params.parentMarket);
 
   // An absolute set from the event, so any replay lands on the same number.
   // Ids start at zero, so the newest counts them all.
@@ -152,6 +166,8 @@ indexer.onEvent({ contract: "SessionFactory", event: "ChildMarketDeployed" }, as
     keyword: keywordOf([market.marketName, display?.displayName]),
     transactionHash: event.transaction.hash,
   });
+
+  await noteCondition(context, event.chainId, childMarket);
 
   const deployedChildCount = session.deployedChildCount + 1n;
 

@@ -15,6 +15,9 @@ contracts:
   - name: TradeExecutor
     events:
       - event: Transfer(address indexed from, address indexed to, uint256 value)
+  - name: ConditionalTokens
+    events:
+      - event: ConditionResolution(bytes32 indexed conditionId, address indexed oracle, bytes32 indexed questionId, uint256 outcomeSlotCount, uint256[] payoutNumerators)
   - name: AlgebraFactory
     events:
       - event: Pool(address indexed token0, address indexed token1, address pool)
@@ -41,3 +44,6 @@ chains:
       - name: AlgebraFactory
         address:
           - "0xA0864cCA6E114013AB0e27cbd5B6f4c8947da766"
+      - name: ConditionalTokens
+        address:
+          - "0xCeAfDD6bc0bEF976fdCd1112955828E00543c0Ce"
