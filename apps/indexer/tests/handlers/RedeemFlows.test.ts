@@ -19,6 +19,7 @@ import {
 } from "../support/harness";
 import {
   childRedeemLogs,
+  CONDITIONAL_ROUTER,
   GNOSIS_ROUTER,
   inTx,
   PARENT_INVALID,
@@ -137,6 +138,45 @@ describe("router flows that are not a redeem", () => {
     );
 
     t.expect(await indexer.Redeem.getAll()).toEqual([]);
+  });
+});
+
+describe("payouts that share a transaction", () => {
+  const rows = async (indexer: Awaited<ReturnType<typeof indexed>>) =>
+    (await indexer.Redeem.getAll())
+      .map((row) => [row.account, row.childMarket_id ?? null, row.parentOutcomeIndex, row.payout] as const)
+      .sort(([a, , i], [b, , j]) => a.localeCompare(b) || Number(i - j));
+
+  it("pays each account only for the tokens it sent the router", async (t) => {
+    const indexer = await indexed(
+      [
+        transfer(UNDERLYING, EXECUTOR, GNOSIS_ROUTER, 50n),
+        transfer(OTHER_UNDERLYING, OWNER, GNOSIS_ROUTER, 30n),
+        transfer(SDAI, GNOSIS_ROUTER, EXECUTOR, 50n),
+        transfer(SDAI, GNOSIS_ROUTER, OWNER, 30n),
+      ].map((log) => inTx(REDEEM_TX, log)),
+    );
+
+    t.expect(await rows(indexer)).toEqual([
+      [EXECUTOR, null, 0n, 50n],
+      [OWNER, null, 1n, 30n],
+    ]);
+  });
+
+  it("pays each router's payout against only the tokens sent to that router", async (t) => {
+    const indexer = await indexed(
+      [
+        transfer(UP, EXECUTOR, CONDITIONAL_ROUTER, 30n),
+        transfer(OTHER_UNDERLYING, EXECUTOR, GNOSIS_ROUTER, 40n),
+        transfer(SDAI, GNOSIS_ROUTER, EXECUTOR, 40n),
+        transfer(SDAI, CONDITIONAL_ROUTER, EXECUTOR, 27n),
+      ].map((log) => inTx(REDEEM_TX, log)),
+    );
+
+    t.expect(await rows(indexer)).toEqual([
+      [EXECUTOR, CHILD_MARKET, 0n, 27n],
+      [EXECUTOR, null, 1n, 40n],
+    ]);
   });
 });
 

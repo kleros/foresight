@@ -10,7 +10,8 @@ import { abi as erc20Abi } from "../../abis/Erc20";
 import { abi as seerMarketAbi } from "../../abis/SeerMarket";
 import { abi as seerMarketFactoryAbi } from "../../abis/SeerMarketFactory";
 import { abi as sessionFactoryViewsAbi } from "../../abis/SessionFactoryViews";
-import { BLOCK } from "../support/harness";
+import { BLOCK, transfer } from "../support/harness";
+import { GNOSIS_ROUTER } from "../support/redeem";
 
 const readableAbi = [...seerMarketAbi, ...erc20Abi, ...seerMarketFactoryAbi, ...sessionFactoryViewsAbi];
 
@@ -174,7 +175,7 @@ const childDeployed = (block: number, outcomeIndex: number, childMarket: Address
   },
 });
 
-type Simulated = ReturnType<typeof parentDeployed> | ReturnType<typeof childDeployed>;
+type Simulated = ReturnType<typeof parentDeployed> | ReturnType<typeof childDeployed> | ReturnType<typeof transfer>;
 
 const indexEvents = (indexer: ReturnType<typeof createTestIndexer>, simulate: Simulated[]) =>
   indexer.process({ chains: { 31337: { simulate } } });
@@ -309,6 +310,41 @@ describe("SessionFactory indexing", () => {
 
     t.expect((await indexer.Session.getOrThrow("1")).outcomeTokens).toEqual([PARENT_OUTCOME_0, PARENT_OUTCOME_1]);
     t.expect(await indexer.Token.getAll()).toHaveLength(2);
+  });
+
+  it("records each session's parent outcome tokens, INVALID last, for a session sharing them", async (t) => {
+    const indexer = createTestIndexer();
+    const twin = "0x00000000000000000000000000000000000dace1" as const;
+    marketReads[twin] = marketReads[PARENT_MARKET]!;
+
+    await indexEvents(indexer, [parentDeployed(BLOCK), parentDeployed(BLOCK + 1, EXAMPLE_METADATA_URI, 1n, twin)]);
+
+    const rows = (await indexer.ParentOutcomeToken.getAll())
+      .map((row) => [row.session_id, row.parentOutcomeIndex, row.token] as const)
+      .sort(([a, i], [b, j]) => a.localeCompare(b) || Number(i - j));
+    t.expect(rows).toEqual(
+      ["0", "1"].flatMap((session) => [
+        [session, 0n, PARENT_OUTCOME_0],
+        [session, 1n, PARENT_OUTCOME_1],
+        [session, 2n, PARENT_INVALID],
+      ]),
+    );
+  });
+
+  it("records a parent outcome redeem in a session whose children are not deployed yet", async (t) => {
+    const indexer = createTestIndexer();
+    const holder = "0x0000000000000000000000000000000000000e01" as const;
+
+    await indexEvents(indexer, [
+      parentDeployed(BLOCK),
+      transfer(PARENT_OUTCOME_1, holder, GNOSIS_ROUTER, 50n, BLOCK + 10),
+      transfer(COLLATERAL, GNOSIS_ROUTER, holder, 45n, BLOCK + 10),
+    ]);
+
+    const rows = await indexer.Redeem.getAll();
+    t.expect(
+      rows.map((row) => [row.account, row.session_id, row.childMarket_id, row.parentOutcomeIndex, row.payout]),
+    ).toEqual([[holder, "0", undefined, 1n, 45n]]);
   });
 
   it("keeps a child's tokens with the child that registered them first", async (t) => {

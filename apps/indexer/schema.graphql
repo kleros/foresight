@@ -284,10 +284,11 @@ A session token an account sent one of Seer's routers, held until that router pa
 transaction, which makes it part of a redeem. A later pull of the token in another transaction replaces the row.
 """
 type RedeemPull {
-  "account-router-token"
+  "account-router-token-session"
   id: ID!
   account: String!
   router: String!
+  token: String!
   session: Session!
 
   "null for a parent outcome token"
@@ -296,6 +297,21 @@ type RedeemPull {
   "the parent's INVALID is outcomeCount"
   parentOutcomeIndex: BigInt!
 
+  "the part of the pulled tokens this session is credited with"
   amount: BigInt!
   transactionHash: String! @index
+}
+
+"""
+One parent outcome token of one session, INVALID included. Seer gives every parent asking the same question the same
+tokens, so one token can have a row per session.
+"""
+type ParentOutcomeToken {
+  "sessionId-parentOutcomeIndex"
+  id: ID!
+  token: String! @index
+  session: Session! @index
+
+  "the parent's INVALID is outcomeCount"
+  parentOutcomeIndex: BigInt!
 }
