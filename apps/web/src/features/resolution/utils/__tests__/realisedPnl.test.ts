@@ -23,13 +23,12 @@ const base = (resolution: SessionResolution, parent: bigint[]): RealisedPnlInput
 
 describe("realisedPnl", () => {
   it("settles a winning option whose child was never deployed from its parent tokens", () => {
-    const result = realisedPnl(
-      base({ parent: resolvedParent([1n, 0n, 0n], 1n), children: { 0: { deployed: false }, 1: { deployed: false } } }, [
-        300n,
-        300n,
-        300n,
-      ]),
+    const input = base(
+      { parent: resolvedParent([1n, 0n, 0n], 1n), children: { 0: { deployed: false }, 1: { deployed: false } } },
+      [300n, 300n, 300n],
     );
+    // balances of a child that does not exist pay nothing and keep nothing waiting
+    const result = realisedPnl({ ...input, holdings: { ...input.holdings, children: { 0: [0n, 50n, 0n] } } });
 
     expect(result.options[0]).toEqual({ status: "settled", cost: 150n, payout: 300n, pnl: 150n });
     expect(result.session.waiting).toEqual([]);

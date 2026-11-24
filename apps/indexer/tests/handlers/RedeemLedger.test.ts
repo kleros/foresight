@@ -212,6 +212,25 @@ describe("sessions sharing parent tokens", () => {
     ]);
   });
 
+  it("splits a shared redeem by holdings even when the batch also redeems one session's own child", async (t) => {
+    const indexer = await twoSessions([OPTION_8A]);
+    await run(indexer, [
+      executorDeployed(OWNER, EXECUTOR),
+      ...tx(hashOf(1), predictLogs(EXECUTOR, 300n, OPTION_A, 100n)),
+      ...tx(hashOf(2), predictLogs(EXECUTOR, 100n, OPTION_8A, 40n)),
+      ...tx(hashOf(3), [
+        ...childRedeemLogs(EXECUTOR, OPTION_8A, { up: 40n }, 40n),
+        ...parentRedeemLogs(EXECUTOR, [{ token: OTHER_UNDERLYING, amount: 400n }], 400n),
+      ]),
+    ]);
+
+    t.expect(await redeemRows(indexer)).toEqual([
+      [SESSION_ID, null, 1n, 300n],
+      [SESSION_8, OPTION_8A.market, 0n, 40n],
+      [SESSION_8, null, 1n, 100n],
+    ]);
+  });
+
   it("weighs a later redeem without the sets a session merged away", async (t) => {
     const indexer = await twoSessions([OPTION_8A, OPTION_8B]);
     await run(indexer, [
@@ -230,7 +249,10 @@ describe("sessions sharing parent tokens", () => {
 });
 
 describe("sessions sharing a child", () => {
-  it("credits a child trade to the session its prediction is filed under, and nothing to the other", async (t) => {
+  it.for([
+    ["the parent token leaves before the child token arrives", [0, 1]],
+    ["the child token arrives before the parent token leaves", [1, 0]],
+  ] as const)("credits a child trade to the session its prediction is filed under when %s", async ([, order], t) => {
     const indexer = await twoSessions([OPTION_8A_SHARED]);
     await seedConditions(indexer, {
       [PARENT_MARKET]: PARENT_CONDITION,
@@ -240,10 +262,16 @@ describe("sessions sharing a child", () => {
     });
     await run(indexer, [
       executorDeployed(OWNER, EXECUTOR),
-      ...tx(hashOf(1), [
-        transfer(UNDERLYING, EXECUTOR, POOL_ADDRESS, 40n, BLOCK + 2),
-        transfer(UP, POOL_ADDRESS, EXECUTOR, 80n, BLOCK + 2),
-      ]),
+      ...tx(
+        hashOf(1),
+        order.map(
+          (leg) =>
+            [
+              transfer(UNDERLYING, EXECUTOR, POOL_ADDRESS, 40n, BLOCK + 2),
+              transfer(UP, POOL_ADDRESS, EXECUTOR, 80n, BLOCK + 2),
+            ][leg]!,
+        ),
+      ),
       resolved(PARENT_CONDITION, [1n, 0n, 0n]),
       resolved(CHILD_CONDITION, [1n, 3n, 0n], BLOCK + 6),
       ...tx(hashOf(2), childRedeemLogs(EXECUTOR, OPTION_A, { up: 80n }, 60n)),
