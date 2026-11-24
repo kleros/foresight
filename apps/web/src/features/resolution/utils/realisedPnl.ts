@@ -42,8 +42,76 @@ export interface RealisedPnl {
   session: { cost: bigint; payout: bigint; pnl: bigint; waiting: number[] };
 }
 
-/** Realised P&L in sDAI per option and for the session, from the trade wallet's splits, holdings and redeems. */
+const sum = (values: readonly bigint[]) => values.reduce((total, value) => total + value, 0n);
+
+/** Oracle R5. */
+const floorPay = (amount: bigint, numerator: bigint, denominator: bigint) => (amount * numerator) / denominator;
+
+/** `total` in `count` equal parts; the first `|total| mod count` parts take one more unit, so the parts add up. */
+function equalParts(total: bigint, count: number): bigint[] {
+  const magnitude = total < 0n ? -total : total;
+  const [base, extra] = [magnitude / BigInt(count), magnitude % BigInt(count)];
+  return Array.from({ length: count }, (_, index) => {
+    const part = base + (BigInt(index) < extra ? 1n : 0n);
+    return total < 0n ? -part : part;
+  });
+}
+
+/**
+ * Realised P&L in sDAI per option and for the session, from the trade wallet's splits, holdings and redeems.
+ *
+ * Each option costs an equal part of every split (spec D16). It is paid what its redeems paid, plus what its parent
+ * tokens and child tokens still held pay now (oracle R5), plus an equal part of the parent INVALID token's payout,
+ * which every split minted beside the options. An option whose parent outcome pays while its child holds tokens and
+ * has not resolved is waiting.
+ */
 export function realisedPnl(input: RealisedPnlInput): RealisedPnl {
-  void input;
-  throw new Error("not implemented");
+  const options = input.holdings.parent.length - 1;
+  const costs = equalParts(sum(input.splits.map(({ amount }) => amount)), options);
+  const account = input.account.toLowerCase();
+  const redeemed = (index: number) =>
+    sum(
+      input.redeems
+        .filter((row) => row.account.toLowerCase() === account && row.parentOutcomeIndex === BigInt(index))
+        .map(({ payout }) => payout),
+    );
+
+  const { parent, children } = input.resolution;
+  const result: RealisedPnl = { options: {}, session: { cost: 0n, payout: 0n, pnl: 0n, waiting: [] } };
+  if (!parent.resolved) {
+    costs.forEach((cost, index) => (result.options[index] = { status: "waiting", cost }));
+    result.session.waiting = costs.map((_, index) => index);
+    return result;
+  }
+
+  const { payoutNumerators, payoutDenominator } = parent;
+  const held = (index: number) => floorPay(input.holdings.parent[index]!, payoutNumerators[index]!, payoutDenominator);
+  const invalidParts = equalParts(redeemed(options) + held(options), options);
+
+  for (let index = 0; index < options; index++) {
+    const cost = costs[index]!;
+    const numerator = payoutNumerators[index]!;
+    const child = children[index];
+    const childHeld = input.holdings.children[index] ?? [];
+    if (numerator > 0n && child?.deployed && !child.resolved && childHeld.some((balance) => balance > 0n)) {
+      result.options[index] = { status: "waiting", cost };
+      result.session.waiting.push(index);
+      continue;
+    }
+
+    let payout = redeemed(index) + held(index) + invalidParts[index]!;
+    if (numerator > 0n && child?.deployed && child.resolved) {
+      const parentTokens = sum(
+        childHeld.map((balance, slot) =>
+          floorPay(balance, child.payoutNumerators[slot] ?? 0n, child.payoutDenominator),
+        ),
+      );
+      payout += floorPay(parentTokens, numerator, payoutDenominator);
+    }
+    result.options[index] = { status: "settled", cost, payout, pnl: payout - cost };
+    result.session.cost += cost;
+    result.session.payout += payout;
+  }
+  result.session.pnl = result.session.payout - result.session.cost;
+  return result;
 }
