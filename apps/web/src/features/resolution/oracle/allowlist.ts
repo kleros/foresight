@@ -13,7 +13,7 @@ export interface RedeemAllowList {
    * target only of a redeem from the connected account's own trade wallet.
    */
   calls: {
-    target: "sessionToken" | "gnosisRouter" | "conditionalRouter" | "tradeWallet";
+    target: "sessionToken" | "gnosisRouter" | "conditionalRouter" | "tradeWallet" | "collateral";
     selector: Hex;
     name: string;
     spender?: RedeemSpender[];
@@ -37,6 +37,8 @@ export const REDEEM_ALLOW_LIST: Record<number, RedeemAllowList> = {
         selector: "0x865955a0",
         name: "redeemPositions(address,address,uint256[],uint256[])",
       },
+      // only the last call of a trade wallet batch, to its on-chain owner(), for exactly the payout (R3)
+      { target: "collateral", selector: "0xa9059cbb", name: "transfer(address,uint256)" },
       {
         target: "conditionalRouter",
         selector: "0xc3eba97a",
