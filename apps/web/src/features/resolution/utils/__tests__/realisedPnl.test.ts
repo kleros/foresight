@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { SessionResolution } from "../../api/getSessionResolution";
+import type { ChildResolution, SessionResolution } from "../../api/getSessionResolution";
 import { realisedPnl, type RealisedPnlInput } from "../realisedPnl";
 
 const TRADE_WALLET = "0x00000000000000000000000000000000000000e1";
@@ -80,4 +80,60 @@ describe("realisedPnl", () => {
 
     expect(result.options[0]).toMatchObject({ payout: 300n });
   });
+
+  // option 0 holds 100 parent tokens and, when held, 50 UP of its child; UP pays 0.7 once the child resolves
+  const CHILD_RESOLVED: ChildResolution = {
+    deployed: true,
+    market: "0x00000000000000000000000000000000000000c0",
+    resolved: true,
+    invalid: false,
+    finalValue: 70,
+    payoutNumerators: [3n, 7n, 0n],
+    payoutDenominator: 10n,
+  };
+  const childOf = (deployed: boolean, resolved: boolean): ChildResolution =>
+    !deployed
+      ? { deployed: false }
+      : resolved
+        ? CHILD_RESOLVED
+        : { deployed: true, market: CHILD_RESOLVED.market, resolved: false };
+  const waiting = { status: "waiting", cost: 150n } as const;
+  const settled = (payout: bigint) => ({ status: "settled", cost: 150n, payout, pnl: payout - 150n }) as const;
+
+  // [paying, child deployed, child resolved, child tokens held]; an undeployed child has no resolution to read
+  it.for([
+    [true, true, false, true, waiting],
+    [true, true, false, false, settled(100n)],
+    [true, true, true, true, settled(135n)],
+    [true, true, true, false, settled(100n)],
+    [true, false, false, true, settled(100n)],
+    [true, false, false, false, settled(100n)],
+    [true, false, true, true, settled(100n)],
+    [true, false, true, false, settled(100n)],
+    [false, true, false, true, settled(0n)],
+    [false, true, false, false, settled(0n)],
+    [false, true, true, true, settled(0n)],
+    [false, true, true, false, settled(0n)],
+    [false, false, false, true, settled(0n)],
+    [false, false, false, false, settled(0n)],
+    [false, false, true, true, settled(0n)],
+    [false, false, true, false, settled(0n)],
+  ] as const)(
+    "reads an option paying %s, child deployed %s, resolved %s, tokens held %s as %o",
+    ([paying, deployed, resolved, held, expected]) => {
+      const result = realisedPnl({
+        ...base(
+          {
+            parent: resolvedParent(paying ? [1n, 0n, 0n] : [0n, 1n, 0n], 1n),
+            children: { 0: childOf(deployed, resolved), 1: { deployed: false } },
+          },
+          [100n, 0n, 0n],
+        ),
+        holdings: { parent: [100n, 0n, 0n], children: { 0: held ? [0n, 50n, 0n] : [0n, 0n, 0n] } },
+      });
+
+      expect(result.options[0]).toEqual(expected);
+      expect(result.session.waiting).toEqual(expected.status === "waiting" ? [0] : []);
+    },
+  );
 });
