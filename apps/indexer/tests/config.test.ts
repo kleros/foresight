@@ -32,6 +32,35 @@ const eventLine = (config: string, name: string) =>
 
 const TEMPLATE = readFileSync(path.join(ROOT, "config.template.yaml"), "utf8");
 
+/** Each chain's contracts and their `address` entries, read off the `chains:` block by indentation. */
+function chainAddresses(config: string): Map<number, Map<string, string[]>> {
+  const chains = new Map<number, Map<string, string[]>>();
+  const lines = config.split("\n").filter((line) => line.trim() !== "" && !line.trim().startsWith("#"));
+  const start = lines.findIndex((line) => line === "chains:");
+  let contracts: Map<string, string[]> | undefined;
+  let contract: string | undefined;
+  let addresses: string[] | undefined;
+  for (const line of start === -1 ? [] : lines.slice(start + 1)) {
+    const trimmed = line.trim();
+    const chainId = /^- id: (\d+)$/.exec(trimmed)?.[1];
+    const name = /^- name: (\S+)$/.exec(trimmed)?.[1];
+    const address = /^- "?(0x[0-9a-fA-F]{40}|_PLACEHOLDER_)"?$/.exec(trimmed)?.[1];
+    if (chainId !== undefined) chains.set(Number(chainId), (contracts = new Map()));
+    if (name !== undefined) contract = name;
+    if (trimmed === "address:" && contract !== undefined) contracts?.set(contract, (addresses = []));
+    else if (address !== undefined && addresses) addresses.push(address);
+    else addresses = undefined;
+  }
+  return chains;
+}
+
+/** `scripts/update.sh`'s networks: the generated config and the template chain block it renders. */
+const GENERATED = [
+  ["config.localhost.yaml", 31337],
+  ["config.gnosis.yaml", 100],
+  ["config.gnosis-fork.yaml", 100],
+] as const;
+
 describe("indexer configs", () => {
   it("has the template and a generated config to check", ({ expect }) => {
     expect(CONFIGS).toContain("config.template.yaml");
@@ -53,4 +82,15 @@ describe("indexer configs", () => {
       expect(eventLine(config, event)).toBe(eventLine(TEMPLATE, event));
     },
   );
+
+  it.for(GENERATED)("keeps every address the template spells out in %s", ([name, chainId], { expect }) => {
+    const template = chainAddresses(TEMPLATE).get(chainId);
+    const generated = chainAddresses(readFileSync(path.join(ROOT, name), "utf8")).get(chainId);
+    const external = [...(template ?? [])].filter(([, addresses]) => !addresses.includes("_PLACEHOLDER_"));
+
+    expect(external.map(([contract]) => contract)).toEqual(
+      expect.arrayContaining(["AlgebraFactory", "ConditionalTokens"]),
+    );
+    for (const [contract, addresses] of external) expect(generated?.get(contract), contract).toEqual(addresses);
+  });
 });
