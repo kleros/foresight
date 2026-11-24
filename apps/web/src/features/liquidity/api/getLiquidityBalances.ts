@@ -47,9 +47,12 @@ export async function fetchLiquidityBalances(
   };
 }
 
+/** Every read of a wallet's session token balances; a run that moves those tokens rereads them. */
+export const liquidityBalancesKeyPrefix = [...liquidityKeyPrefix, "balances"] as const;
+
 export function useLiquidityBalances(session: LiquiditySession | undefined, owner: Address | undefined) {
   return useQuery({
-    queryKey: [...liquidityKeyPrefix, "balances", session?.parentMarket.toLowerCase(), owner?.toLowerCase()],
+    queryKey: [...liquidityBalancesKeyPrefix, session?.parentMarket.toLowerCase(), owner?.toLowerCase()],
     queryFn: session && owner ? () => fetchLiquidityBalances(publicClient, { session, owner }) : skipToken,
     staleTime: STALE_TIME.live,
   });

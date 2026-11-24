@@ -8,6 +8,7 @@ import { getConnectorClient, sendTransaction } from "@wagmi/core";
 import type { Address } from "viem";
 import { useAccount } from "wagmi";
 
+import { liquidityBalancesKeyPrefix } from "@/features/liquidity/api/getLiquidityBalances";
 import type { ParentResolution } from "@/features/resolution/api/getSessionResolution";
 import { fetchWalletRedeemInput } from "@/features/resolution/api/getWalletRedeem";
 import type { SessionKey } from "@/features/resolution/api/useSessionResolution";
@@ -152,9 +153,10 @@ export function useWalletRedeemRun(session: SessionKey | undefined): WalletRedee
 
   const stage = progress?.stage;
   useEffect(() => {
-    // a halted run may have redeemed parts before it stopped
+    // a halted run may have redeemed parts before it stopped; the liquidity balances offer Merge of the same tokens
     if (stage === "complete" || stage === "halted") {
       void queryClient.invalidateQueries({ queryKey: walletRedeemKeyPrefix });
+      void queryClient.invalidateQueries({ queryKey: liquidityBalancesKeyPrefix });
     }
   }, [stage, queryClient]);
 
