@@ -75,13 +75,12 @@ async function payoutWeights(context: EvmOnEventContext, parts: Part[]): Promise
 }
 
 /**
- * Whether sDAI from Seer's router for these parent tokens returns a merge rather than pays a redeem: the parent is
- * known unresolved; or, with no resolution indexed, the pulls are a whole set of equal amounts paid back in full.
+ * Whether sDAI from Seer's router for these parent tokens returns a merge rather than pays a redeem. A resolved parent
+ * pays a redeem; otherwise only a merge returns sDAI, for a whole set of equal amounts paid back in full.
  */
 async function isMerge(context: EvmOnEventContext, pulls: RedeemPull[], sessions: Session[], value: bigint) {
   const conditions = await Promise.all(sessions.map((session) => context.MarketCondition.get(session.parentMarket)));
-  const known = conditions.filter((condition) => condition !== undefined);
-  if (known.length > 0) return known.every((condition) => condition.payoutNumerators.length === 0);
+  if (conditions.some((condition) => condition !== undefined && condition.payoutNumerators.length > 0)) return false;
 
   const tokens = new Set(pulls.map((pull) => pull.token));
   return (

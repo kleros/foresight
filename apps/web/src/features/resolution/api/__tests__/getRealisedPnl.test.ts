@@ -2,7 +2,6 @@ import type { DocumentNode } from "graphql";
 import type { Address, PublicClient } from "viem";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-
 import { fetchGraphql } from "@/lib/graphql/batcher";
 import { executorAddress } from "@/lib/trade-executor/executor";
 
@@ -176,6 +175,30 @@ describe("fetchRealisedPnl", () => {
     const after = await read();
 
     expect(after).toEqual(before);
+  });
+
+  it("reads an option whose market resolved INVALID at its INVALID payout less cost", async () => {
+    vi.mocked(fetchSessionResolution).mockResolvedValue({
+      ...RESOLUTION,
+      children: {
+        ...RESOLUTION.children,
+        0: {
+          deployed: true,
+          market: CHILD_0.market,
+          resolved: true,
+          invalid: true,
+          finalValue: null,
+          payoutNumerators: [0n, 0n, 1n],
+          payoutDenominator: 1n,
+        },
+      },
+    });
+    serve({ SessionMove: [...predicted(), ...elsewhere()], Redeem: elsewhereRedeems() });
+
+    const result = await read();
+
+    // 160 parent tokens pay 160, the child's 200 INVALID pay 200, UP pays nothing
+    expect(result.options[0]).toEqual({ status: "settled", cost: 150n, payout: 360n, pnl: 210n });
   });
 
   it("reads nothing for a session sharing the tokens that this trade wallet never held through", async () => {

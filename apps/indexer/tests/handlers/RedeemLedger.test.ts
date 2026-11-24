@@ -180,6 +180,39 @@ describe("a trade wallet's ledger", () => {
   });
 });
 
+describe("a redeem before its resolution is indexed", () => {
+  it("records a parent redeem whose condition the indexer has not seen resolve", async (t) => {
+    const indexer = createTestIndexer();
+    await seedSession(indexer, [OPTION_A, OPTION_B]);
+    await seedConditions(indexer, { [PARENT_MARKET]: PARENT_CONDITION });
+    await run(indexer, tx(hashOf(1), parentRedeemLogs(OWNER, [{ token: UNDERLYING, amount: 50n }], 50n)));
+
+    t.expect(await redeemRows(indexer)).toEqual([[SESSION_ID, null, 0n, 50n]]);
+  });
+});
+
+describe("a payout sent on to the owner", () => {
+  it("leaves the ledger as a redeem that keeps the sDAI in the trade wallet", async (t) => {
+    const ledgers = [];
+    for (const sentOn of [false, true]) {
+      const indexer = createTestIndexer();
+      await seedSession(indexer, [OPTION_A, OPTION_B]);
+      await run(indexer, [
+        executorDeployed(OWNER, EXECUTOR),
+        ...tx(hashOf(1), predictLogs(EXECUTOR, 300n, OPTION_A, 100n)),
+        ...tx(hashOf(2), [
+          ...parentRedeemLogs(EXECUTOR, [{ token: UNDERLYING, amount: 200n }], 200n),
+          ...(sentOn ? [transfer(SDAI, EXECUTOR, OWNER, 200n, BLOCK + 10)] : []),
+        ]),
+      ]);
+      ledgers.push(ledgerOf(await indexer.SessionMove.getAll()));
+    }
+
+    t.expect(ledgers[1]).toEqual(ledgers[0]);
+    t.expect(ledgers[0]!.costs).toEqual({ [SESSION_ID]: 300n });
+  });
+});
+
 describe("sessions sharing parent tokens", () => {
   it("credits the shared tokens to the session the transaction predicts in, and its redeem to it", async (t) => {
     const indexer = await twoSessions([OPTION_8A]);
