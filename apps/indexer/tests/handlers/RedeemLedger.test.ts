@@ -82,6 +82,8 @@ const OPTION_8B: RedeemOption = {
 const OPTION_8A_SHARED: RedeemOption = { ...OPTION_A, market: "0x0000000000000000000000000000000000000c82" };
 
 const PARENT_TOKENS = [UNDERLYING, OTHER_UNDERLYING, PARENT_INVALID] as const;
+/** A token that is neither the session's collateral nor a session token, standing in for WXDAI. */
+const NOT_COLLATERAL = "0x0000000000000000000000000000000000000e9d";
 const CHILD_CONDITION = `0x${"c1".repeat(32)}`;
 
 type Indexer = ReturnType<typeof createTestIndexer>;
@@ -279,6 +281,12 @@ describe("sessions sharing parent tokens", () => {
     t.expect(ledgerOf(await indexer.SessionMove.getAll()).costs).toEqual({ [SESSION_ID]: 100n, [SESSION_8]: 100n });
     t.expect(await redeemRows(indexer)).toEqual([[SESSION_8, null, 0n, 100n]]);
   });
+  it("files a connected wallet's redeem of a shared token under the earliest session", async (t) => {
+    const indexer = await twoSessions([OPTION_8A]);
+    await run(indexer, tx(hashOf(1), parentRedeemLogs(OWNER, [{ token: UNDERLYING, amount: 50n }], 50n)));
+
+    t.expect(await redeemRows(indexer)).toEqual([[SESSION_ID, null, 0n, 50n]]);
+  });
 });
 
 describe("sessions sharing a child", () => {
@@ -443,6 +451,25 @@ describe("splitting a payout", () => {
     );
 
     t.expect(await indexer.RedeemPull.getAll()).toEqual([]);
+  });
+
+  it.for([
+    ["a trade wallet", EXECUTOR],
+    ["a connected wallet", OWNER],
+  ] as const)("pays %s's redeem only from the session's collateral", async ([, holder], t) => {
+    const indexer = createTestIndexer();
+    await seedSession(indexer, [OPTION_A, OPTION_B]);
+    await run(indexer, [
+      executorDeployed(OTHER_OWNER, EXECUTOR),
+      ...tx(hashOf(1), [
+        transfer(UNDERLYING, holder, GNOSIS_ROUTER, 50n, BLOCK + 10),
+        transfer(NOT_COLLATERAL, GNOSIS_ROUTER, holder, 7n, BLOCK + 10),
+        transfer(SDAI, GNOSIS_ROUTER, holder, 50n, BLOCK + 10),
+      ]),
+    ]);
+
+    const rows = (await indexer.Redeem.getAll()).map((row) => [row.account, row.parentOutcomeIndex, row.payout]);
+    t.expect(rows).toEqual([[holder, 0n, 50n]]);
   });
 
   it("pays an account only the tokens it sent the router", async (t) => {
