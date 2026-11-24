@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { isUserRejection } from "@foresight/tx-orchestrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import { connect, createConfig, custom, disconnect, injected } from "@wagmi/core";
@@ -9,13 +10,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OWNER } from "@/features/resolution/redeem/__tests__/support/session";
 import { createRedeemRun } from "@/features/resolution/redeem/run";
 
-import { answeredWithoutPrompt } from "@/lib/web3/walletAnswers";
+import { answeredWithoutPrompt, refusedAsBatch, walletConnectRejection } from "@/lib/web3/walletAnswers";
 
 import { useWalletRedeemRun } from "../useWalletRedeem";
 
 /** An EIP-1193 provider of one account on gnosis that answers wallet_getCapabilities as `answer` gives. */
 const provider = vi.hoisted(() => {
-  const answer = { capabilities: {} as unknown, accounts: [] as string[] };
+  const answer = { capabilities: {} as unknown, accounts: [] as string[], sendCallsCode: 4200 };
   const request = vi.fn(async ({ method }: { method: string; params?: unknown }): Promise<unknown> => {
     switch (method) {
       case "eth_chainId":
@@ -27,6 +28,8 @@ const provider = vi.hoisted(() => {
         return [{ parentCapability: "eth_accounts" }];
       case "wallet_getCapabilities":
         return answer.capabilities;
+      case "wallet_sendCalls":
+        throw Object.assign(new Error("The wallet refused the request."), { code: answer.sendCallsCode });
       default:
         throw Object.assign(new Error(`Unexpected ${method}`), { code: 4200 });
     }
@@ -61,6 +64,7 @@ let client: QueryClient;
 
 beforeEach(async () => {
   provider.answer.accounts = [OWNER];
+  provider.answer.sendCallsCode = 4200;
   wagmi = createConfig({
     chains: [gnosis],
     connectors: [injected({ target: () => ({ id: "test", name: "Test", provider: provider as never }) })],
@@ -118,4 +122,21 @@ describe("useWalletRedeemRun's wallet", () => {
 
     await expect(asked).rejects.toSatisfy(answeredWithoutPrompt);
   });
+
+  it.each([5700, 5710, 5740, 5750, 5760])(
+    "passes on a batch refused with %i as a refusal of the batch, not a decline",
+    async (code) => {
+      provider.answer.sendCallsCode = code;
+      renderHook(() => useWalletRedeemRun(SESSION), { wrapper });
+      await waitFor(() => expect(createRedeemRun).toHaveBeenCalled());
+      const [args] = vi.mocked(createRedeemRun).mock.calls[0]!;
+
+      const error = await args.wallet.request({ method: "wallet_sendCalls", params: [{}] }).catch((each) => each);
+
+      expect(refusedAsBatch(error)).toBe(true);
+      expect(answeredWithoutPrompt(error)).toBe(true);
+      expect(isUserRejection(error)).toBe(false);
+      expect(walletConnectRejection(error)).toBe(false);
+    },
+  );
 });
