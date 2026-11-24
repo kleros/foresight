@@ -90,6 +90,8 @@ export interface RedeemWallet {
 export interface RedeemRun {
   start(): void;
   recover(): void;
+  /** Shows a run stored by an earlier visit; does nothing when none is stored or another tab holds it. */
+  restore(): void;
   resume(): void;
   retry(): void;
   /** Forgets a stopped run unless it holds a send that may still land. */
@@ -105,6 +107,8 @@ export interface RedeemRun {
 }
 
 const BATCH = "batch";
+/** Wait before a refused mount-time restore asks for the lock once more, in ms. */
+const RESTORE_RETRY_MS = 250;
 const callStep = (index: number) => `call:${index}`;
 
 /** A send asked of the wallet: the transaction built for it, the account's next nonce, and the head block before. */
@@ -831,7 +835,7 @@ export function createRedeemRun(args: {
     },
   };
 
-  function locked(action: () => void | Promise<void>): () => Promise<void> {
+  function locked(action: () => void | Promise<void>, onElsewhere?: () => void): () => Promise<void> {
     const attempt = async () => {
       if (busy() || orchestrator.getStatus() === "running") return;
       const retry = action === actions.retry ? retryFailed : action;
@@ -847,6 +851,10 @@ export function createRedeemRun(args: {
           if (!disposed) await action();
         }, lifetime.signal);
       } catch (error) {
+        if (onElsewhere && error instanceof RedeemLockError && error.reason === "elsewhere") {
+          onElsewhere();
+          return;
+        }
         if (!disposed) stop(error, retry ?? actions.recover);
       } finally {
         acquiring = false;
@@ -859,6 +867,20 @@ export function createRedeemRun(args: {
   return {
     start: locked(actions.start),
     recover: locked(actions.recover),
+    restore() {
+      if (!store.load(args.flowId)) return;
+      let refused = false;
+      const quietRecover = locked(actions.recover, () => {
+        refused = true;
+      });
+      // a remount in the same page releases the lock a moment after the next mount asks for it
+      void quietRecover().then(() => {
+        if (!refused || disposed) return;
+        setTimeout(() => {
+          if (!disposed && store.load(args.flowId)) void quietRecover();
+        }, RESTORE_RETRY_MS);
+      });
+    },
     resume: locked(actions.resume),
     retry: locked(actions.retry),
     reset: locked(actions.reset),

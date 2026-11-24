@@ -32,6 +32,7 @@ function fakeDriver() {
   const driver = {
     start: vi.fn(),
     recover: vi.fn(),
+    restore: vi.fn(),
     resume: vi.fn(),
     retry: vi.fn(),
     reset: vi.fn(),
@@ -65,7 +66,7 @@ describe("useWalletRedeemRun", () => {
   it("loads a run stored by an earlier visit on mount, for review", () => {
     renderHook(() => useWalletRedeemRun(SESSION), { wrapper });
 
-    expect(fake.driver.recover).toHaveBeenCalledTimes(1);
+    expect(fake.driver.restore).toHaveBeenCalledTimes(1);
   });
 
   it("keeps one stored run per session and account", () => {

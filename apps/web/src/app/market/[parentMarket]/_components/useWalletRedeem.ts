@@ -138,7 +138,7 @@ export function useWalletRedeemRun(session: SessionKey | undefined): WalletRedee
     });
     setDriver(next);
     // a run stored by an earlier visit shows for review rather than waiting for the next press to take its place
-    next.recover();
+    next.restore();
     return () => {
       next.dispose();
       setDriver(null);

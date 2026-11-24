@@ -21,6 +21,7 @@ vi.mock("@/features/resolution/redeem/run", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/resolution/redeem/run")>()),
   createRedeemRun: vi.fn(() => ({
     recover: vi.fn(),
+    restore: vi.fn(),
     dispose: vi.fn(),
     subscribe: () => () => {},
     getProgress: () => null,

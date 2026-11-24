@@ -44,6 +44,7 @@ function fakeDriver() {
   const driver = {
     start: vi.fn(),
     recover: vi.fn(),
+    restore: vi.fn(),
     resume: vi.fn(),
     retry: vi.fn(),
     reset: vi.fn(),

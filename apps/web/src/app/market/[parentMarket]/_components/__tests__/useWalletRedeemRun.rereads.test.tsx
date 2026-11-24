@@ -32,6 +32,7 @@ function fakeDriver() {
   const driver = {
     start: vi.fn(),
     recover: vi.fn(),
+    restore: vi.fn(),
     resume: vi.fn(),
     retry: vi.fn(),
     reset: vi.fn(),
@@ -102,7 +103,7 @@ describe("useWalletRedeemRun rereads the wallet's list", () => {
 describe("useWalletRedeemRun under StrictMode", () => {
   const strict = ({ children }: { children: ReactNode }) => <StrictMode>{wrapper({ children })}</StrictMode>;
 
-  it("shows a run stored by an earlier visit for review, recovering on the driver it keeps", () => {
+  it("shows a run stored by an earlier visit for review, restoring on the driver it keeps", () => {
     const built: ReturnType<typeof fakeDriver>[] = [];
     vi.mocked(createRedeemRun).mockImplementation(() => {
       const next = fakeDriver();
@@ -114,7 +115,7 @@ describe("useWalletRedeemRun under StrictMode", () => {
 
     const kept = built.filter((each) => each.driver.dispose.mock.calls.length === 0);
     expect(kept).toHaveLength(1);
-    expect(kept[0]!.driver.recover).toHaveBeenCalledTimes(1);
+    expect(kept[0]!.driver.restore).toHaveBeenCalledTimes(1);
   });
 
   it("acts on resume on the driver it keeps", () => {
