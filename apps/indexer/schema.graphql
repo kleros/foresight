@@ -256,3 +256,25 @@ type Swap {
   logIndex: Int!
   transactionHash: String! @index
 }
+
+"One account's redeem of one market's tokens for sDAI, in one transaction."
+type Redeem {
+  id: ID!
+
+  "the trade wallet or connected wallet that held the redeemed tokens, lowercase"
+  account: String! @index
+  session: Session! @index
+
+  "the child market redeemed through the conditional router; null for parent outcome tokens redeemed through Seer's router"
+  childMarket: ChildMarket @index
+
+  "the parent outcome the redeemed tokens belong to; the parent's INVALID is outcomeCount"
+  parentOutcomeIndex: BigInt!
+
+  "sDAI paid to the account, base units"
+  payout: BigInt!
+
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  transactionHash: String! @index
+}
