@@ -9,9 +9,16 @@ import { gnosisRouterAddresses, tradeExecutorFactoryAddress } from "@/config/con
 import { fetchSessionResolution } from "./getSessionResolution";
 import { fetchRedeemScope, type TradeWalletRedeemRequest } from "./getTradeWalletRedeem";
 import { realisedPnl, splitDeposits, type RealisedPnl, type RedeemRow } from "../utils/realisedPnl";
+import { sessionShare } from "../utils/sharedHoldings";
 
 const REALISED_PNL = graphql(`
-  query RealisedPnl($sessionId: String!, $account: String!, $tokens: [String!]!, $routers: [String!]!) {
+  query RealisedPnl(
+    $sessionId: String!
+    $account: String!
+    $tokens: [String!]!
+    $parentTokens: [String!]!
+    $routers: [String!]!
+  ) {
     Redeem(where: { session_id: { _eq: $sessionId }, account: { _eq: $account } }) {
       account
       childMarket_id
@@ -30,6 +37,23 @@ const REALISED_PNL = graphql(`
       transactionHash
       token
       amount
+    }
+    parentMoves: Transfer(where: { executor_id: { _eq: $account }, token: { _in: $parentTokens } }) {
+      transactionHash
+      token
+      amount
+      blockNumber
+      logIndex
+    }
+    Prediction(where: { executor_id: { _eq: $account }, childMarket: { underlyingToken: { _in: $parentTokens } } }) {
+      transactionHash
+      childMarket {
+        session_id
+      }
+    }
+    ParentOutcomeToken(where: { token: { _in: $parentTokens } }) {
+      token
+      session_id
     }
     Position(where: { executor_id: { _eq: $account }, token: { _in: $tokens } }) {
       token
@@ -52,11 +76,14 @@ export async function fetchRealisedPnl(client: PublicClient, request: TradeWalle
   ]);
   const children = Object.entries(scope.children).map(([option, child]) => [option, child!.tokens] as const);
   const tokens = [scope.collateral, ...scope.parentTokens, ...children.flatMap(([, each]) => each)];
+  const sessionId = String(request.sessionId);
+  const parentTokens = scope.parentTokens.map((token) => token.toLowerCase());
 
   const result = await fetchGraphql(REALISED_PNL, {
-    sessionId: String(request.sessionId),
+    sessionId,
     account,
     tokens: tokens.map((token) => token.toLowerCase()),
+    parentTokens,
     routers: gnosisRouterAddresses().map((router) => router.toLowerCase()),
   });
   const balances = new Map(result.Position.map((row) => [row.token.toLowerCase(), BigInt(row.balance)]));
@@ -68,21 +95,54 @@ export async function fetchRealisedPnl(client: PublicClient, request: TradeWalle
     payout: BigInt(row.payout),
     transactionHash: row.transactionHash,
   });
-  const redeems = result.Redeem.map(redeemRow);
   const transfers = result.Transfer.map((row) => ({ ...row, amount: BigInt(row.amount) }));
+  // a parent redeem of tokens sessions share pays one sDAI transfer that its Redeem rows split across them
+  const deposits = splitDeposits(transfers, result.accountRedeems.map(redeemRow), {
+    collateral: scope.collateral,
+    parentTokens: scope.parentTokens,
+  });
+
+  const sessionsOf = new Map<string, string[]>();
+  for (const row of result.ParentOutcomeToken) {
+    const token = row.token.toLowerCase();
+    sessionsOf.set(token, [...(sessionsOf.get(token) ?? []), row.session_id]);
+  }
+  const shared = parentTokens.some((token) => sessionsOf.get(token)?.some((each) => each !== sessionId));
+  const predictedIn = new Map<string, Set<string>>();
+  for (const row of result.Prediction) {
+    if (!row.childMarket) continue;
+    predictedIn.set(
+      row.transactionHash,
+      (predictedIn.get(row.transactionHash) ?? new Set()).add(row.childMarket.session_id),
+    );
+  }
+  const { splits, parent } = shared
+    ? sessionShare(
+        sessionId,
+        {
+          sessionsOf,
+          predictedIn,
+          moves: result.parentMoves.map((row) => ({
+            transactionHash: row.transactionHash,
+            token: row.token.toLowerCase(),
+            amount: BigInt(row.amount),
+            blockNumber: BigInt(row.blockNumber),
+            logIndex: row.logIndex,
+          })),
+        },
+        { deposits, balances },
+        parentTokens,
+      )
+    : { splits: deposits, parent: scope.parentTokens.map(held) };
 
   return realisedPnl({
     account,
     resolution,
-    // a parent redeem of tokens sessions share pays one sDAI transfer that its Redeem rows split across them
-    splits: splitDeposits(transfers, result.accountRedeems.map(redeemRow), {
-      collateral: scope.collateral,
-      parentTokens: scope.parentTokens,
-    }),
+    splits,
     holdings: {
-      parent: scope.parentTokens.map(held),
+      parent,
       children: Object.fromEntries(children.map(([option, each]) => [option, each.map(held)])),
     },
-    redeems,
+    redeems: result.Redeem.map(redeemRow),
   });
 }
