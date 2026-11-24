@@ -23,7 +23,7 @@ type Session {
   outcomeTokens: [String!]!
 
   "the parent's INVALID outcome token"
-  invalidToken: String
+  invalidToken: String @index
 
   "the seer factory's collateral"
   collateralToken: String
@@ -82,7 +82,7 @@ type ChildMarket {
   upToken: String! @index
 
   "burnt alongside DOWN and UP when a set is merged back; the router takes the whole partition"
-  invalidToken: String!
+  invalidToken: String! @index
 
   underlyingToken: String! @index
 
@@ -276,5 +276,26 @@ type Redeem {
 
   blockNumber: BigInt!
   timestamp: BigInt!
+  transactionHash: String! @index
+}
+
+"""
+A session token an account sent one of Seer's routers, held until that router pays the account sDAI in the same
+transaction, which makes it part of a redeem. A later pull of the token in another transaction replaces the row.
+"""
+type RedeemPull {
+  "account-router-token"
+  id: ID!
+  account: String!
+  router: String!
+  session: Session!
+
+  "null for a parent outcome token"
+  childMarket: ChildMarket
+
+  "the parent's INVALID is outcomeCount"
+  parentOutcomeIndex: BigInt!
+
+  amount: BigInt!
   transactionHash: String! @index
 }
