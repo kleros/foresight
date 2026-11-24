@@ -81,6 +81,23 @@ describe("createRedeemRun when the wallet refuses the atomic batch before taking
     expect(timesBroadcast(world.fake, PLANNED)).toEqual(PLANNED.map(() => 1));
   });
 
+  it("asks for no batch after a reload and Start over, since the stored run names the refusal", async () => {
+    const world = newWorld();
+    const first = tab(world, { atomic: true, sendCallsRefuse: 5750 });
+    first.run.start();
+    await settled(first.run);
+    first.run.dispose();
+
+    const next = await recovered(world, first.storage, { atomic: true });
+    next.run.reset();
+    await reached(next.run, "idle");
+    next.run.start();
+    await reached(next.run, "complete");
+
+    expect(sendCallsOf(next.requests)).toHaveLength(0);
+    expect(timesBroadcast(world.fake, PLANNED)).toEqual(PLANNED.map(() => 1));
+  });
+
   it("stays on the batch it stored when the switch cannot be saved, and switches on Try again once it can", async () => {
     const world = newWorld();
     const { storage, refusing } = refusingStorage('"batchRefused":true');
