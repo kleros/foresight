@@ -5,13 +5,10 @@ import { GNOSIS_ROUTER } from "./routers";
 import { placesOf } from "./sessionTokens";
 
 /**
- * The per-session ledger of a trade wallet's session tokens (`SessionMove`). A token only one session holds is
- * credited to it. A token several sessions share is split, per move:
- * - a redeem's pull: pro rata by the account's holdings of the token in each session before the transaction;
- * - any other move in a transaction that names sessions (by a prediction, or by a token only one session holds):
- *   evenly between the named sessions the token belongs to;
- * - otherwise pro rata by holdings, and evenly when no session holds any.
- * A transaction's later logs can name a session, so each of its logs splits all its shared moves again.
+ * A trade wallet's session tokens, credited per session (`SessionMove`). A token several sessions share is split per
+ * move: a redeem's pull pro rata by holdings before the transaction (spec D17); another move evenly between the
+ * sessions its transaction names by a prediction or a token only one session holds; else pro rata by holdings, or
+ * evenly when no session holds it.
  */
 
 export interface LedgerMove {
@@ -89,7 +86,7 @@ async function holdingsBefore(context: EvmOnEventContext, account: string, token
   return held;
 }
 
-/** Splits every shared move of the transaction again and writes its rows; returns each one's parts. */
+/** Splits every shared move of the transaction again, since a later log can name its session; returns the parts. */
 async function split(
   context: EvmOnEventContext,
   account: string,

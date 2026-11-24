@@ -13,7 +13,7 @@ export interface TokenPlace {
   invalid: boolean;
 }
 
-export const bySessionId = (a: string, b: string) => (BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0);
+const bySessionId = (a: string, b: string) => (BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0);
 
 /**
  * Every session `token` belongs to, one place each, in session id order. Seer gives sessions asking the same question

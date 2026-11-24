@@ -132,7 +132,7 @@ export async function noteReturn(context: EvmOnEventContext, move: RouterMove) {
   const parts = new Map<string, Part>();
   pulls.forEach((pull, index) => {
     const places = placed[index]!;
-    // a connected wallet keeps no ledger: a shared token is the earliest session's, as its Token row is
+    // a connected wallet keeps no ledger, so a shared token goes to the earliest session, which keeps its Token row
     const bySession = shares?.get(pull.logIndex) ?? new Map([[places[0]!.session, -pull.amount]]);
     for (const [sessionId, moved] of bySession) {
       const amount = -moved;

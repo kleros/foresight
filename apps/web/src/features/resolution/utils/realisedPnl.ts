@@ -58,12 +58,8 @@ function equalParts(total: bigint, count: number): bigint[] {
 }
 
 /**
- * Realised P&L in sDAI per option and for the session, from the trade wallet's splits, holdings and redeems.
- *
- * Each option costs an equal part of every split (spec D16). It is paid what its redeems paid, plus what its parent
- * tokens and child tokens still held pay now (oracle R5), plus an equal part of the parent INVALID token's payout,
- * which every split minted beside the options. An option whose parent outcome pays while its child holds tokens and
- * has not resolved is waiting.
+ * Realised P&L in sDAI per option and for the session (spec D16): each option costs an equal part of every split and
+ * is paid its redeems, what its held tokens pay now (oracle R5) and an equal part of the parent INVALID payout.
  */
 export function realisedPnl(input: RealisedPnlInput): RealisedPnl {
   const options = input.holdings.parent.length - 1;
