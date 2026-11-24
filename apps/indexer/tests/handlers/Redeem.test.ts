@@ -100,7 +100,6 @@ const batchRows = (account: string) => [
     payout: 27n,
     transactionHash: REDEEM_TX,
   },
-  { account, session: SESSION_ID, childMarket: null, parentOutcomeIndex: 1n, payout: 40n, transactionHash: REDEEM_TX },
   {
     account,
     session: SESSION_ID,
@@ -109,6 +108,7 @@ const batchRows = (account: string) => [
     payout: 9n,
     transactionHash: REDEEM_TX,
   },
+  { account, session: SESSION_ID, childMarket: null, parentOutcomeIndex: 1n, payout: 40n, transactionHash: REDEEM_TX },
 ];
 
 describe("A1: a trade wallet redeem is recorded", () => {
