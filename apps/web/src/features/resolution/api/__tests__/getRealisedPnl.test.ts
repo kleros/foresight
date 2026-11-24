@@ -1,3 +1,4 @@
+import { print } from "graphql";
 import type { Address, PublicClient } from "viem";
 import { describe, expect, it, vi } from "vitest";
 
@@ -39,6 +40,9 @@ describe("fetchRealisedPnl", () => {
       Redeem: [
         { account: WALLET, childMarket_id: null, parentOutcomeIndex: "0", payout: "50", transactionHash: "0xa1" },
       ],
+      accountRedeems: [
+        { account: WALLET, childMarket_id: null, parentOutcomeIndex: "0", payout: "50", transactionHash: "0xa1" },
+      ],
       Transfer: [
         { transactionHash: "0xb1", token: lower(SDAI), amount: "-600" },
         ...SCOPE.parentTokens.map((token) => ({ transactionHash: "0xb1", token: lower(token), amount: "600" })),
@@ -62,7 +66,12 @@ describe("fetchRealisedPnl", () => {
     });
     expect(result.session).toEqual({ cost: 600n, payout: 121n, pnl: -479n, waiting: [] });
 
-    const [, variables] = vi.mocked(fetchGraphql).mock.calls[0]!;
+    const [document, variables] = vi.mocked(fetchGraphql).mock.calls[0]!;
+    const query = print(document);
+    expect(query).toContain("Redeem(where: {session_id: {_eq: $sessionId}, account: {_eq: $account}})");
+    expect(query).toContain(
+      "Transfer(\n    where: {executor_id: {_eq: $account}, token: {_in: $tokens}, counterparty: {_in: $routers}}\n  )",
+    );
     expect(variables).toMatchObject({
       sessionId: "7",
       account: WALLET,
@@ -71,5 +80,41 @@ describe("fetchRealisedPnl", () => {
     expect(variables?.tokens).toEqual(
       [SDAI, ...SCOPE.parentTokens, ...Object.values(SCOPE.children).flatMap((child) => child!.tokens)].map(lower),
     );
+  });
+  it("adds back a parent redeem's payout that its rows split with another session sharing the tokens", async () => {
+    vi.mocked(fetchRedeemScope).mockResolvedValue(SCOPE);
+    vi.mocked(fetchSessionResolution).mockResolvedValue(TWO_WINNERS);
+    const split = [
+      { transactionHash: "0xb1", token: lower(SDAI), amount: "-600" },
+      ...SCOPE.parentTokens.map((token) => ({ transactionHash: "0xb1", token: lower(token), amount: "600" })),
+    ];
+    const row = (payout: string) => ({
+      account: WALLET,
+      childMarket_id: null,
+      parentOutcomeIndex: "0",
+      payout,
+      transactionHash: "0xa1",
+    });
+    // one 400 sDAI payout for option 0's parent tokens, 100 of it this session's and 300 another's
+    const [mine, theirs] = [row("100"), row("300")];
+    const read = async (redeemed: boolean) => {
+      vi.mocked(fetchGraphql).mockResolvedValueOnce({
+        Redeem: redeemed ? [mine] : [],
+        accountRedeems: redeemed ? [mine, theirs] : [],
+        Transfer: redeemed
+          ? [
+              ...split,
+              { transactionHash: "0xa1", token: lower(parentToken(0)), amount: "-400" },
+              { transactionHash: "0xa1", token: lower(SDAI), amount: "400" },
+            ]
+          : split,
+        Position: [],
+      });
+      return (await fetchRealisedPnl({} as PublicClient, REQUEST)).options;
+    };
+
+    const costs = (options: Awaited<ReturnType<typeof read>>) => Object.values(options).map((option) => option.cost);
+    expect(costs(await read(true))).toEqual([200n, 200n, 200n]);
+    expect(costs(await read(true))).toEqual(costs(await read(false)));
   });
 });

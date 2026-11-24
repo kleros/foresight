@@ -19,6 +19,13 @@ const REALISED_PNL = graphql(`
       payout
       transactionHash
     }
+    accountRedeems: Redeem(where: { account: { _eq: $account } }) {
+      account
+      childMarket_id
+      parentOutcomeIndex
+      payout
+      transactionHash
+    }
     Transfer(where: { executor_id: { _eq: $account }, token: { _in: $tokens }, counterparty: { _in: $routers } }) {
       transactionHash
       token
@@ -54,19 +61,24 @@ export async function fetchRealisedPnl(client: PublicClient, request: TradeWalle
   });
   const balances = new Map(result.Position.map((row) => [row.token.toLowerCase(), BigInt(row.balance)]));
   const held = (token: Address) => balances.get(token.toLowerCase()) ?? 0n;
-  const redeems: RedeemRow[] = result.Redeem.map((row) => ({
+  const redeemRow = (row: (typeof result.Redeem)[number]): RedeemRow => ({
     account: row.account,
     childMarket_id: row.childMarket_id ?? null,
     parentOutcomeIndex: BigInt(row.parentOutcomeIndex),
     payout: BigInt(row.payout),
     transactionHash: row.transactionHash,
-  }));
+  });
+  const redeems = result.Redeem.map(redeemRow);
   const transfers = result.Transfer.map((row) => ({ ...row, amount: BigInt(row.amount) }));
 
   return realisedPnl({
     account,
     resolution,
-    splits: splitDeposits(transfers, redeems, { collateral: scope.collateral, parentTokens: scope.parentTokens }),
+    // a parent redeem of tokens sessions share pays one sDAI transfer that its Redeem rows split across them
+    splits: splitDeposits(transfers, result.accountRedeems.map(redeemRow), {
+      collateral: scope.collateral,
+      parentTokens: scope.parentTokens,
+    }),
     holdings: {
       parent: scope.parentTokens.map(held),
       children: Object.fromEntries(children.map(([option, each]) => [option, each.map(held)])),

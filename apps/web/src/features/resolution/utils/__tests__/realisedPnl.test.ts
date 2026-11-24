@@ -31,6 +31,27 @@ describe("realisedPnl beyond the acceptance cases", () => {
     expect(result.session).toEqual({ cost: 0n, payout: 0n, pnl: 0n, waiting: [0, 1] });
   });
 
+  it("settles a winning option whose child was never deployed from its parent tokens alone", () => {
+    const resolution: SessionResolution = {
+      parent: {
+        resolved: true,
+        invalid: false,
+        winningOutcomes: [0],
+        payoutNumerators: [1n, 0n, 0n],
+        payoutDenominator: 1n,
+      },
+      children: { 0: { deployed: false }, 1: { deployed: false } },
+    };
+
+    const result = realisedPnl(base(resolution, [200n]));
+
+    expect(result.options).toEqual({
+      0: { status: "settled", cost: 100n, payout: 100n, pnl: 0n },
+      1: { status: "settled", cost: 100n, payout: 0n, pnl: -100n },
+    });
+    expect(result.session.waiting).toEqual([]);
+  });
+
   it("shares the parent's INVALID payout evenly over the options, held and redeemed alike", () => {
     const resolution: SessionResolution = {
       parent: {
