@@ -39,6 +39,8 @@ const FAILURE_COPY: Record<RedeemFailureReason, string> = {
   "batch-unknown":
     "Your wallet cannot report the redeem it was sent. Reject it in your wallet if it is open, then start over.",
   "batch-failed": "Your wallet reports the redeem did not go through.",
+  "batch-refused":
+    "Your wallet cannot send the redeem in one transaction. Try again to sign it one transaction at a time.",
 };
 
 function statusText(progress: RedeemProgress): string | undefined {

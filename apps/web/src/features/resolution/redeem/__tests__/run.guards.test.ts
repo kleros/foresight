@@ -202,18 +202,19 @@ describe("createRedeemRun lets go of a send the wallet answered without a prompt
     expect(stored(storage)?.sends).toEqual(["call:0"]);
   });
 
-  it("atomic: code 5700 halts as wallet, and the retry sends one more batch", async () => {
+  it("atomic: code 5700 halts as batch-refused, and the retry signs each call one by one, once", async () => {
     const world = newWorld();
-    const { run, batch } = tab(world, { atomic: true, sendCallsRefuse: 5700 });
+    const { run, batch, sends } = tab(world, { atomic: true, sendCallsRefuse: 5700 });
 
     run.start();
     await settled(run);
-    expect(progress(run).failure).toEqual({ reason: "wallet", retryable: true });
+    expect(progress(run).failure).toEqual({ reason: "batch-refused", retryable: true });
 
     run.retry();
     await vi.waitFor(() => expect(progress(run).stage).toBe("complete"), { timeout: 3_000 });
-    expect(batch.sendCalls).toHaveLength(2);
-    expect(world.fake.broadcasts.filter((sent) => sent.mined)).toHaveLength(1);
+    expect(batch.sendCalls).toHaveLength(1);
+    expect(sends.prompts.map(callOf)).toEqual(PLANNED.map(callOf));
+    expect(timesBroadcast(world.fake, PLANNED)).toEqual(PLANNED.map(() => 1));
   });
 });
 

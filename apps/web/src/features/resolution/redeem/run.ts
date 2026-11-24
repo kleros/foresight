@@ -20,6 +20,7 @@ import type { SentWithNonce } from "@/lib/web3/sentWithNonce";
 import {
   answeredWithoutPrompt,
   errorCode,
+  refusedAsBatch,
   sameCall,
   sleep,
   UNKNOWN_BUNDLE,
@@ -60,7 +61,9 @@ export type RedeemFailureReason =
   /** The wallet cannot report a sent batch, so it is never sent again, only discarded. */
   | "batch-unknown"
   /** The wallet reports the batch did not land. */
-  | "batch-failed";
+  | "batch-failed"
+  /** The wallet refused the batch before taking it, so the run now signs the same calls one by one. */
+  | "batch-refused";
 
 export interface RedeemProgress {
   stage: "idle" | "signing" | "confirming" | "review" | "halted" | "complete";
@@ -115,6 +118,8 @@ interface RedeemSnapshot {
   /** What the Redeem section showed; every build re-plans from it. */
   request: WalletRedeemInput;
   atomic: boolean;
+  /** The wallet refused this run's batch, so a run started over from it signs one by one too. */
+  batchRefused?: true;
   sends: Record<string, SendRecord>;
   /** The id of the batch asked of the wallet; while set, the batch is never asked for again. */
   callsId?: string;
@@ -251,6 +256,10 @@ export function createRedeemRun(args: {
   let batchSent = false;
   /** The send error the wallet answered without opening a prompt, read when the orchestrator classifies it. */
   let refused: unknown;
+  /** `refused` is the wallet refusing the batch itself. */
+  let refusedBatch = false;
+  /** A batch of this run or one before it was refused, so a new run asks for none. */
+  let oneByOne = false;
 
   // A run restored before another tab held the lock must reread its state before carrying on.
   const base = args.store;
@@ -466,6 +475,7 @@ export function createRedeemRun(args: {
         else if (asking && answeredWithoutPrompt(error)) {
           forget(asking);
           refused = error;
+          refusedBatch = asking === BATCH && refusedAsBatch(error);
         }
         throw error;
       } finally {
@@ -481,8 +491,10 @@ export function createRedeemRun(args: {
     now: args.now,
     classifyError: (error) => {
       if (error instanceof StorageWriteError) error = new RunStop(inSync() ? "storage" : "elsewhere", true);
-      if (error !== undefined && error === refused) error = new RunStop("wallet", true);
+      if (error !== undefined && error === refused)
+        error = new RunStop(refusedBatch ? "batch-refused" : "wallet", true);
       refused = undefined;
+      refusedBatch = false;
       // the shared classifier knows no WalletConnect codes, so a decline whose wording it misses would not retry
       if (walletConnectRejection(error)) return "rejected";
       if (error instanceof RunStop) {
@@ -547,9 +559,34 @@ export function createRedeemRun(args: {
   /** Carries the run on, or, when another tab changed it since, loads it again for review. */
   const resumeRun = () => (run() && inSync() ? driveOn() : recoverRun());
 
+  /** Swaps the refused batch for its calls one by one, stored before the stop is shown, and halts for Try again. */
+  function signOneByOne() {
+    const current = run();
+    if (!current) return;
+    oneByOne = true;
+    try {
+      // steps first: a stored run whose snapshot is not atomic restores only with its one-by-one steps
+      orchestrator.replacePending(sequentialSteps(current.snapshot));
+      durably((prev) => {
+        const { callsId: _id, ...rest } = prev;
+        return { ...rest, atomic: false, batchRefused: true };
+      });
+    } catch (error) {
+      if (run()) orchestrator.replacePending([batchStep]);
+      const elsewhere = error instanceof StorageWriteError && !inSync();
+      report(elsewhere ? "elsewhere" : "storage", elsewhere ? recoverRun : signOneByOne);
+      return;
+    }
+    report("batch-refused", resumeRun);
+  }
+
   function halt(paused: boolean) {
     const raised = stopped;
     stopped = undefined;
+    if (raised?.reason === "batch-refused") {
+      signOneByOne();
+      return;
+    }
     const current = run();
     const cause = current?.status === "paused" || current?.status === "failed" ? current.error?.cause : undefined;
     if (raised) stop(raised, resumeRun);
@@ -568,11 +605,10 @@ export function createRedeemRun(args: {
   });
   orchestrator.on("flow:paused", () => halt(true));
 
-  function stepsFor(snapshot: RedeemSnapshot) {
-    return snapshot.atomic
-      ? [batchStep]
-      : planWalletRedeem(snapshot.request).calls.map((_, index) => sequentialStep(index));
-  }
+  const sequentialSteps = (snapshot: Readonly<RedeemSnapshot>) =>
+    planWalletRedeem(snapshot.request).calls.map((_, index) => sequentialStep(index));
+
+  const stepsFor = (snapshot: RedeemSnapshot) => (snapshot.atomic ? [batchStep] : sequentialSteps(snapshot));
 
   /** Whether the wallet reports atomic batching for `chainId` (EIP-5792 v2); anything else signs one by one. */
   async function atomicReady(account: Address, chainId: number) {
@@ -597,7 +633,7 @@ export function createRedeemRun(args: {
     let atomic: boolean;
     try {
       checked = checkedCalls(request);
-      atomic = await atomicReady(checked.account, request.chainId);
+      atomic = !oneByOne && (await atomicReady(checked.account, request.chainId));
     } finally {
       preparing = false;
     }
@@ -607,7 +643,12 @@ export function createRedeemRun(args: {
       await recoverRun();
       return;
     }
-    const snapshot: RedeemSnapshot = { request, atomic, sends: {} };
+    const snapshot: RedeemSnapshot = {
+      request,
+      atomic,
+      ...(oneByOne ? { batchRefused: true as const } : {}),
+      sends: {},
+    };
     await orchestrator.start({
       flowId: args.flowId,
       snapshot,
@@ -638,6 +679,7 @@ export function createRedeemRun(args: {
       report("wrong-chain", recoverRun);
       return;
     }
+    if (stored.snapshot.batchRefused) oneByOne = true;
     reviewing = false;
     report(undefined);
     recovering = true;

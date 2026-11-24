@@ -33,6 +33,11 @@ export const walletConnectRejection = (error: unknown) =>
 
 export const answeredWithoutPrompt = (error: unknown) => inChain(error, (link) => NO_PROMPT_CODES.has(errorCode(link)));
 
+/** EIP-5792's refusals of a batch the wallet cannot send as asked; the same calls can still be sent one by one. */
+const BATCH_REFUSAL_CODES: ReadonlySet<unknown> = new Set([5700, 5710, 5740, 5750, 5760]);
+
+export const refusedAsBatch = (error: unknown) => inChain(error, (link) => BATCH_REFUSAL_CODES.has(errorCode(link)));
+
 /** Whether a mined call is `tx`, by target, calldata and native value. */
 export const sameCall = (mined: { to: Address; input: Hex; value: bigint }, tx: FlowTx) =>
   isAddressEqual(mined.to, tx.to) && mined.input === (tx.data ?? "0x") && mined.value === (tx.value ?? 0n);

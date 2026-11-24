@@ -122,19 +122,32 @@ describe("createRedeemRun when the wallet answers a prompt with an error", () =>
 });
 
 describe("createRedeemRun when the wallet answers wallet_sendCalls with an error (L9)", () => {
-  it.each([4200, 5700, 5710, 5740, 5750, 5760])(
-    "asks again for a batch refused with %i, which creates no bundle, and it lands once",
+  it("asks again for a batch refused with 4200, which creates no bundle, and it lands once", async () => {
+    const world = newWorld();
+    const { run, batch } = tab(world, { atomic: true, sendCallsRefuse: 4200 });
+    run.start();
+    await settled(run);
+    expect(progress(run).failure).toEqual({ reason: "wallet", retryable: true });
+
+    run.retry();
+    await reached(run, "complete");
+    expect(batch.sendCalls).toHaveLength(2);
+    expect(world.fake.broadcasts).toHaveLength(1);
+  });
+
+  it.each([5700, 5710, 5740, 5750, 5760])(
+    "signs one by one after a batch refused with %i, which creates no bundle, each call once",
     async (code) => {
       const world = newWorld();
       const { run, batch } = tab(world, { atomic: true, sendCallsRefuse: code });
       run.start();
       await settled(run);
-      expect(progress(run).failure).toEqual({ reason: "wallet", retryable: true });
+      expect(progress(run).failure).toEqual({ reason: "batch-refused", retryable: true });
 
       run.retry();
       await reached(run, "complete");
-      expect(batch.sendCalls).toHaveLength(2);
-      expect(world.fake.broadcasts).toHaveLength(1);
+      expect(batch.sendCalls).toHaveLength(1);
+      expect(timesBroadcast(world.fake, PLANNED)).toEqual(PLANNED.map(() => 1));
     },
   );
 
