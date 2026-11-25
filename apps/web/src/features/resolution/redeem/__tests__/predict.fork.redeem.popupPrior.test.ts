@@ -20,11 +20,8 @@ import {
 import { gnosis } from "viem/chains";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-/**
- * Oracle R3 and A8 for a trade wallet that already holds sDAI, on a plain gnosis fork node, run through
- * `apps/web/scripts/test-fork-redeem.sh`. `batchExecute` checks no balance, so a ticked transfer above what the
- * redeem pays is paid out of that sDAI; the guard's exact amount is what keeps it there.
- */
+/** Oracle R3 and A8 for a trade wallet already holding sDAI; run by `apps/web/scripts/test-fork-redeem.sh`.
+ * `batchExecute` checks no balance, so only the guard's exact amount keeps that sDAI in place. */
 const FORK_RPC_URL = process.env.FORK_RPC_URL;
 const HARDHAT_FORK_URL = "http://127.0.0.1:8545";
 const SETUP_TIMEOUT_MS = 900_000;
