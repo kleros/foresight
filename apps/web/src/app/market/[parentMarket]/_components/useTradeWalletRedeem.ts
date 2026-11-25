@@ -174,11 +174,10 @@ export function useRedeemFromTradeWallet() {
       if (error instanceof RedeemPlanChangedError) errorToast(error.message);
       else if (error instanceof UnlistedRedeemError) errorToast(NOT_SENT_COPY);
     },
-    // returned, so the run stays pending until the list is read again
-    onSettled: () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: fundsKeyPrefix }),
-        queryClient.invalidateQueries({ queryKey: realisedPnlKeyPrefix }),
-      ]),
+    // the funds read is returned, so the run stays pending until the list is read again; the indexer's P&L read is not
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: realisedPnlKeyPrefix });
+      return queryClient.invalidateQueries({ queryKey: fundsKeyPrefix });
+    },
   });
 }

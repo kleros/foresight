@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { sendTransaction } from "@wagmi/core";
 import { decodeFunctionData, erc20Abi, getAddress, type Address } from "viem";
@@ -131,18 +131,31 @@ describe("a ticked redeem run", () => {
     }
   });
 
-  it("reads the realised P&L again after the run", async () => {
+  it("reads the realised P&L again after the run, without waiting for that read to settle", async () => {
     readMock.mockResolvedValue(freshRead(ONCHAIN_OWNER));
     const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-    const invalidate = vi.spyOn(client, "invalidateQueries");
-    const result = setup(client);
+    const pnlRead = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockReturnValue(new Promise(() => {}));
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(
+      () => {
+        useQuery({ queryKey: [...realisedPnlKeyPrefix, "session"], queryFn: pnlRead });
+        return useRedeemFromTradeWallet();
+      },
+      { wrapper },
+    );
+    await waitFor(() => expect(pnlRead).toHaveBeenCalledTimes(1));
 
     await act(() =>
       result.current.mutateAsync({ shown: planFor(), owner: OWNER, session: SESSION, payTo: ONCHAIN_OWNER }),
     );
 
     expect(sendMock).toHaveBeenCalledTimes(1);
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: realisedPnlKeyPrefix });
+    expect(pnlRead).toHaveBeenCalledTimes(2);
   });
 
   it("sends nothing when the trade wallet's owner on-chain is not the one shown", async () => {
