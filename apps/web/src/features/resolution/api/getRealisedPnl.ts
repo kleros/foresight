@@ -60,11 +60,14 @@ export async function fetchRealisedPnl(client: PublicClient, request: RealisedPn
       splits.set(row.transactionHash, (splits.get(row.transactionHash) ?? 0n) + BigInt(row.cost));
   }
   const balanceOf = (token: Address) => balances.get(token.toLowerCase()) ?? 0n;
+  // a session's cost is never below zero, so neither is an option's equal part of it
+  const deposits = [...splits].map(([transactionHash, amount]): SplitDeposit => ({ transactionHash, amount }));
+  const charged = deposits.reduce((total, { amount }) => total + amount, 0n) < 0n ? [] : deposits;
 
   return realisedPnl({
     account,
     resolution,
-    splits: [...splits].map(([transactionHash, amount]): SplitDeposit => ({ transactionHash, amount })),
+    splits: charged,
     holdings: {
       parent: scope.parentTokens.map(balanceOf),
       children: Object.fromEntries(

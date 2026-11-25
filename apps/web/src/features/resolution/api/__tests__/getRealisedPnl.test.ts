@@ -246,6 +246,18 @@ describe("fetchRealisedPnl", () => {
     expect(result.session.cost).toBe(470n);
   });
 
+  it("never reads a session's or an option's cost below zero", async () => {
+    serve({
+      SessionMove: [...predicted(), move("7", INVALID, -500n, { cost: -500n, tx: "0xe9" })],
+      Redeem: [],
+    });
+
+    const result = await read();
+
+    expect(result.session.cost).toBe(0n);
+    expect(Object.values(result.options).map((option) => option.cost)).toEqual([0n, 0n]);
+  });
+
   it("charges each split once, a merge's negative cost included", async () => {
     serve({
       SessionMove: [
