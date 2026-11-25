@@ -60,7 +60,7 @@ describe("the Redeem popup's connected wallet", () => {
     });
     walletList({ data: waiting });
     const { unmount } = renderPopup();
-    expect(screen.queryByRole("button", { name: "Redeem" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Redeem( |$)/ })).toBeNull();
     unmount();
 
     tradeList({ data: planFor() });
@@ -73,7 +73,7 @@ describe("the Redeem popup's connected wallet", () => {
     walletList({ data: NOTHING_IN_WALLET() });
     renderPopup();
 
-    expect(screen.queryByRole("button", { name: "Redeem" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Redeem( |$)/ })).toBeNull();
   });
 
   it("is hidden before the parent resolved and with no account on the redeem chain", () => {
@@ -107,7 +107,7 @@ describe("the Redeem popup's connected wallet", () => {
     walletRun({ stage: "review" });
     renderPopup();
 
-    fireEvent.click(within(openPopup()).getByRole("button", { name: "Continue redeem" }));
+    fireEvent.click(within(openPopup()).getByRole("button", { name: "Resume" }));
     expect(handle.resume).toHaveBeenCalled();
   });
 
@@ -159,7 +159,7 @@ describe("the Redeem popup's connected wallet", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Back" }));
 
     expect(handle.discard).not.toHaveBeenCalled();
-    expect(within(dialog).getByRole("button", { name: "Continue redeem" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Resume" })).toBeInTheDocument();
   });
 
   it("shows the payout only on the wallet's rows, where the trade wallet's same option shows its P&L (spec D16)", () => {

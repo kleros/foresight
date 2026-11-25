@@ -40,23 +40,23 @@ const tradeRows = (dialog: HTMLElement) =>
   within(within(dialog).getByRole("list", { name: "Trade wallet" })).getAllByRole("listitem");
 
 describe("the Redeem popup's trade wallet", () => {
-  it("lists each part's payout to the wei and redeems the shown list for the owner on one press", () => {
+  it("lists each part's payout to the cent and redeems the shown list for the owner on one press", () => {
     const plan = planFor();
     tradeList({ data: plan });
     renderPopup();
     const dialog = openPopup();
 
     expect(tradeRows(dialog).map((row) => row.textContent)).toEqual([
-      "Winning outcome tokens5.499999999999999998 sDAI",
-      "Denis Villeneuve1.999999999641975311 sDAI",
-      "Greta Gerwig1.499999999639506172 sDAI",
+      "Winning outcome tokens5.49 sDAI",
+      "Denis Villeneuve1.99 sDAI",
+      "Greta Gerwig1.49 sDAI",
     ]);
     expect(plan.parts.map((part) => part.payout)).toEqual([
       5_499_999_999_999_999_998n,
       1_999_999_999_641_975_311n,
       1_499_999_999_639_506_172n,
     ]);
-    expect(within(dialog).getByText("8.999999999281481481 sDAI goes to your trade wallet.")).toBeInTheDocument();
+    expect(within(dialog).getByText("8.99 sDAI goes to your trade wallet.")).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Redeem" }));
     expect(mutateAsync).toHaveBeenCalledWith({ shown: plan, owner: OWNER, session: SESSION, payTo: undefined });
@@ -70,7 +70,7 @@ describe("the Redeem popup's trade wallet", () => {
     const dialog = openPopup();
 
     fireEvent.click(within(dialog).getByRole("checkbox"));
-    expect(within(dialog).getByText(`8.999999999281481481 sDAI goes to ${ONCHAIN_OWNER}.`)).toBeInTheDocument();
+    expect(dialog).toHaveTextContent(`8.99 sDAI goes to ${ONCHAIN_OWNER}.`);
     fireEvent.click(within(dialog).getByRole("button", { name: "Redeem" }));
 
     expect(mutateAsync).toHaveBeenCalledWith({ shown: plan, owner: OWNER, session: SESSION, payTo: ONCHAIN_OWNER });
@@ -85,7 +85,7 @@ describe("the Redeem popup's trade wallet", () => {
 
     fireEvent.click(within(dialog).getByRole("checkbox"));
     fireEvent.click(within(dialog).getByRole("checkbox"));
-    expect(within(dialog).getByText("8.999999999281481481 sDAI goes to your trade wallet.")).toBeInTheDocument();
+    expect(within(dialog).getByText("8.99 sDAI goes to your trade wallet.")).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Redeem" }));
     expect(mutateAsync).toHaveBeenLastCalledWith({ shown: plan, owner: OWNER, session: SESSION, payTo: undefined });
 
@@ -119,14 +119,14 @@ describe("the Redeem popup's trade wallet", () => {
     tradeList({ data: plan });
     renderPopup();
 
-    expect(screen.queryByRole("button", { name: "Redeem" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Redeem( |$)/ })).toBeNull();
   });
 
   it("disables Redeem while a run is pending and while the list is read again", () => {
     tradeList({ data: planFor() });
     tradeRun(true);
     const { unmount } = renderPopup();
-    expect(within(openPopup()).getByRole("button", { name: "Redeeming…" })).toBeDisabled();
+    expect(within(openPopup()).getByRole("button", { name: "Checking…" })).toBeDisabled();
     unmount();
 
     tradeList({ data: planFor(), isFetching: true });

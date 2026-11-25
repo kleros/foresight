@@ -41,22 +41,39 @@ export const NOTHING_IN_WALLET = () => walletRead({ parentBalances: [0n, 0n, 0n,
 export const tradeRefetch = vi.fn();
 export const walletRefetch = vi.fn();
 export const mutateAsync = vi.fn(async () => ({ status: "success" }));
+export const tradeReset = vi.fn();
 export const handle = { start: vi.fn(), resume: vi.fn(), retry: vi.fn(), reset: vi.fn(), discard: vi.fn() };
 
-export function tradeList(state: { data?: RedeemPlan; isError?: boolean; isFetching?: boolean; owner?: Address }) {
+export function tradeList(state: {
+  data?: RedeemPlan;
+  isError?: boolean;
+  isFetching?: boolean;
+  owner?: Address;
+  /** An account is connected on another chain than redeem reads and sends on. */
+  isWrongChain?: boolean;
+}) {
   vi.mocked(useTradeWalletRedeem).mockReturnValue({
     data: state.data,
     isError: state.isError ?? false,
     isFetching: state.isFetching ?? false,
     owner: "owner" in state ? state.owner : OWNER,
+    isWrongChain: state.isWrongChain ?? false,
     refetch: tradeRefetch,
   } as unknown as ReturnType<typeof useTradeWalletRedeem>);
 }
 
-export function tradeRun(isPending = false) {
-  vi.mocked(useRedeemFromTradeWallet).mockReturnValue({ mutateAsync, isPending } as unknown as ReturnType<
-    typeof useRedeemFromTradeWallet
-  >);
+type TradeRunState = Partial<Pick<ReturnType<typeof useRedeemFromTradeWallet>, "isPending" | "stage" | "failure">>;
+
+/** The trade wallet's send: pending or not, or with the stage it is at and the failure it stopped on. */
+export function tradeRun(state: boolean | TradeRunState = false) {
+  const { isPending = false, stage, failure } = typeof state === "boolean" ? { isPending: state } : state;
+  vi.mocked(useRedeemFromTradeWallet).mockReturnValue({
+    mutateAsync,
+    isPending,
+    stage,
+    failure,
+    reset: tradeReset,
+  } as unknown as ReturnType<typeof useRedeemFromTradeWallet>);
 }
 
 /** `owner()` of the trade wallet as the box reads it; called with whether the box is ticked. */
@@ -120,8 +137,11 @@ export const popup = (props: { parent?: ParentResolution | Error; pnl?: Realised
 
 export const renderPopup = (props: Parameters<typeof popup>[0] = {}) => render(popup(props));
 
+/** The page's Redeem button, labelled with the amount both wallets redeem: `Redeem 4.90 sDAI`. */
+export const TRIGGER = /^Redeem( |$)/;
+
 /** Presses the page's Redeem button and returns the dialog it opens. */
 export function openPopup(): HTMLElement {
-  fireEvent.click(screen.getByRole("button", { name: "Redeem" }));
+  fireEvent.click(screen.getByRole("button", { name: TRIGGER }));
   return screen.getByRole("dialog");
 }

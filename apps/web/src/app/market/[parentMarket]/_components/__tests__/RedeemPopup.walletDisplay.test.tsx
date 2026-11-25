@@ -10,8 +10,6 @@ import {
   valuedChild,
 } from "@/features/resolution/redeem/__tests__/support/session";
 
-import { formatDisplayAmount } from "@/utils/amount";
-
 import { RedeemPopup } from "../RedeemPopup";
 import type { WalletRedeemRead } from "../useWalletRedeem";
 import { handle, openPopup, resetHooks, SESSION, walletList, walletRead } from "./support/redeemPopup";
@@ -30,7 +28,11 @@ const OPTIONS = [
   { market: childMarket(1), outcomeIndex: 1, name: "Greta Gerwig" },
 ];
 
-const sDai = (value: bigint) => `${formatDisplayAmount(value, 18, 18)} sDAI`;
+/** sDAI base units cut to cents, as the popup shows a payout. */
+const sDai = (value: bigint) => {
+  const hundredths = value / 10n ** 16n;
+  return `${(hundredths / 100n).toLocaleString("en-US")}.${String(hundredths % 100n).padStart(2, "0")} sDAI`;
+};
 
 function renderAndOpen() {
   render(

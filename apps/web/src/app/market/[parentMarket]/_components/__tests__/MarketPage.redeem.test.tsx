@@ -139,11 +139,11 @@ describe("MarketPage's Redeem popup, for the trade wallet", () => {
   it("lists what the connected account's trade wallet can redeem once the parent has resolved", async () => {
     await renderPage();
 
-    const button = await screen.findByRole("button", { name: "Redeem" });
+    const button = await screen.findByRole("button", { name: "Redeem 3.00 sDAI" });
     expect(button).toBeEnabled();
     await userEvent.click(button);
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText("3.000000000000000007 sDAI goes to your trade wallet.")).toBeInTheDocument();
+    expect(within(dialog).getByText("3.00 sDAI goes to your trade wallet.")).toBeInTheDocument();
     expect(redeemMock).toHaveBeenCalledTimes(1);
     expect(redeemMock.mock.calls[0]![1]).toMatchObject({ chainId: 100, owner: OWNER, sessionFactory: FACTORY });
   });
@@ -153,26 +153,26 @@ describe("MarketPage's Redeem popup, for the trade wallet", () => {
     await renderPage();
     await act(async () => {});
 
-    expect(screen.queryByRole("button", { name: "Redeem" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Redeem( |$)/ })).toBeNull();
     expect(redeemMock).not.toHaveBeenCalled();
   });
 
   it("withdraws a cached redeem when the parent's result cannot be read, then restores it after recovery", async () => {
     const client = await renderPage();
-    expect(await screen.findByRole("button", { name: "Redeem" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "Redeem 3.00 sDAI" })).toBeEnabled();
 
     readerMock.mockRejectedValue(new Error("RPC unavailable"));
     await act(() => client.invalidateQueries({ queryKey: sessionResolutionKeys.all }));
 
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Redeem" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("button", { name: /^Redeem( |$)/ })).toBeNull());
     expect(screen.getByText("Could not read this session's result.")).toBeInTheDocument();
     expect(screen.queryByRole("list", { name: "Trade wallet" })).toBeNull();
-    expect(screen.queryByText("3.000000000000000007 sDAI goes to your trade wallet.")).toBeNull();
+    expect(screen.queryByText("3.00 sDAI goes to your trade wallet.")).toBeNull();
 
     readerMock.mockImplementation((_client, request) => answer(request));
     await act(() => client.invalidateQueries({ queryKey: sessionResolutionKeys.all }));
 
-    expect(await screen.findByRole("button", { name: "Redeem" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "Redeem 3.00 sDAI" })).toBeEnabled();
     expect(screen.queryByText("Could not read this session's result.")).toBeNull();
   });
 });

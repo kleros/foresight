@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { skipToken, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { sendTransaction } from "@wagmi/core";
 import { isAddressEqual, type Address } from "viem";
@@ -15,9 +17,11 @@ import type { RedeemPlan } from "@/features/resolution/redeem/plan";
 import { assertRedeemBatchAllowed, UnlistedRedeemError } from "@/features/resolution/redeem/tradeWalletBatchAllowed";
 import { fundsKeyPrefix } from "@/features/trade-executor/api/getFunds";
 
+import type { PopupStatusLine } from "@/components/ui/StatusGlyph";
+
 import { errorToast } from "@/utils/toast";
 import { FEE_ONLY_OUT_OF_FUNDS_COPY } from "@/utils/txErrorText";
-import { wrapWithToast } from "@/utils/wrapWithToast";
+import { SENT_COPY, txErrorCopy, wrapWithToast } from "@/utils/wrapWithToast";
 
 import { STALE_TIME } from "@/lib/query";
 import { executorAddress } from "@/lib/trade-executor/executor";
@@ -81,7 +85,10 @@ export function useTradeWalletRedeem(session: SessionKey | undefined, parent: Pa
     staleTime: STALE_TIME.balance,
     refetchInterval: (current) => (current.state.data?.waiting.length ? WAITING_REREAD_MS : false),
   });
-  return { ...query, owner };
+  // an account on another chain still gets the Redeem control, as a prompt to switch
+  const isWrongChain =
+    address !== undefined && chainId !== DEFAULT_CHAIN_ID && Boolean(REDEEM_ALLOW_LIST[DEFAULT_CHAIN_ID]);
+  return { ...query, owner, isWrongChain };
 }
 
 /** `owner()` of `owner`'s trade wallet, read on-chain while `enabled`; the pay-to-owner box shows it. */
@@ -149,6 +156,18 @@ async function toOwner({ shown, owner, session }: RedeemRunArgs, payTo: Address)
   return plan.tx!;
 }
 
+/** Where the trade wallet's send is: reading the plan again, waiting on the wallet, or waiting on the chain. */
+export type TradeRedeemStage = "checking" | "signing" | "confirming";
+
+/** Why the trade wallet's send stopped, in the popup's status words, from the stage it stopped at. */
+export function tradeRedeemFailure(error: unknown, stage: TradeRedeemStage | undefined): PopupStatusLine {
+  if (error instanceof RedeemPlanChangedError) return { text: error.message, tone: "warning" };
+  if (error instanceof UnlistedRedeemError) return { text: NOT_SENT_COPY, tone: "error" };
+  if (stage === "checking") return { text: READ_FAILED_COPY, tone: "error" };
+  const text = txErrorCopy(error, stage === "confirming", FEE_ONLY_OUT_OF_FUNDS_COPY);
+  return { text, tone: text === SENT_COPY ? "warning" : "error" };
+}
+
 /**
  * Sends the shown plan's batch from `owner` only if a fresh read plans the same calls and payouts (R6) and the batch
  * keeps to the allow-list against the session's on-chain markets (R8); with `payTo`, the batch also pays the payout
@@ -156,16 +175,28 @@ async function toOwner({ shown, owner, session }: RedeemRunArgs, payTo: Address)
  */
 export function useRedeemFromTradeWallet() {
   const queryClient = useQueryClient();
+  const [stage, setStage] = useState<TradeRedeemStage | undefined>(undefined);
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: async (args: RedeemRunArgs) => {
       const { owner } = args;
+      setStage("checking");
       const tx = args.payTo ? await toOwner(args, args.payTo) : await intoTradeWallet(args);
       const config = await loadWagmiConfig();
+      setStage("signing");
       return wrapWithToast(
         config,
         // wagmi refuses to send when the connected account or chain differs from these
-        () => sendTransaction(config, { account: owner, chainId: DEFAULT_CHAIN_ID, to: tx.to, data: tx.data }),
+        async () => {
+          const hash = await sendTransaction(config, {
+            account: owner,
+            chainId: DEFAULT_CHAIN_ID,
+            to: tx.to,
+            data: tx.data,
+          });
+          setStage("confirming");
+          return hash;
+        },
         FEE_ONLY_OUT_OF_FUNDS_COPY,
       );
     },
@@ -180,4 +211,9 @@ export function useRedeemFromTradeWallet() {
       return queryClient.invalidateQueries({ queryKey: fundsKeyPrefix });
     },
   });
+  return {
+    ...mutation,
+    stage: mutation.isPending || mutation.isError ? stage : undefined,
+    failure: mutation.isError ? tradeRedeemFailure(mutation.error, stage) : undefined,
+  };
 }

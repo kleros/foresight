@@ -162,6 +162,16 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
         usdPrice={usdPrice.data}
         results={results}
         pnl={pnl?.session}
+        redeem={
+          <RedeemPopup
+            session={read}
+            parent={resolution.parent}
+            parentMarket={detail.parentMarket}
+            options={detail.options}
+            pnl={pnl}
+            noun={noun}
+          />
+        }
       />
       {liquidity.hasLiquidity === false && !addsClosed ? (
         <LiquidityBanner reason={addLiquidityReason} onAdd={() => setAddingLiquidity(true)} />
@@ -220,14 +230,6 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
         />
         <TradeHistory session={detail} />
         {walletMarket ? <TradeWallet market={walletMarket} noun={optionNounSingular(detail.itemName)} /> : null}
-        <RedeemPopup
-          session={read}
-          parent={resolution.parent}
-          parentMarket={detail.parentMarket}
-          options={detail.options}
-          pnl={pnl}
-          noun={noun}
-        />
         <AdvancedSection parentMarket={detail.parentMarket} />
         <LiquiditySection
           closed={addsClosed}

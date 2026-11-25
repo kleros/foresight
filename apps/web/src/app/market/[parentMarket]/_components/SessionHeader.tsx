@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState, type RefObject } from "react";
+import { useCallback, useRef, useState, type ReactNode, type RefObject } from "react";
 
 import { AlertMessage } from "@kleros/ui-components-library";
 import clsx from "clsx";
@@ -54,6 +54,7 @@ export function SessionHeader({
   usdPrice,
   results,
   pnl,
+  redeem,
 }: {
   session: SessionDetail;
   status: SessionStatus;
@@ -67,6 +68,8 @@ export function SessionHeader({
   results?: SessionResults<SessionOption>;
   /** The visitor's realised P&L in the session; undefined where there is none to show. */
   pnl?: RealisedPnl["session"];
+  /** The Redeem control, beside the P&L (spec D18); it may render nothing. */
+  redeem?: ReactNode;
 }) {
   // a gateway that cannot serve an image leaves the gradient and no icon, not a broken image
   const [heroFailed, setHeroFailed] = useState(false);
@@ -164,27 +167,26 @@ export function SessionHeader({
           {session.description ? (
             <p className="text-fs-text-secondary text-sm leading-relaxed">{session.description}</p>
           ) : null}
-          {results?.invalidPayouts || pnl ? (
-            <>
-              <div className="border-fs-border border-t pt-3" />
-              {results?.invalidPayouts ? (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                  <StatusChip tone="attention" label="Invalid" />
-                  <span className="type-caption text-fs-text-secondary">{results.invalidPayouts}</span>
-                </div>
-              ) : null}
-              {pnl ? (
-                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-                  <PnlFigure value={pnl.pnl} />
-                  {pnl.waiting.length > 0 ? (
-                    <span className="type-caption text-fs-text-secondary">
-                      Excludes {optionNoun(session.itemNamePlural)} waiting for their result.
-                    </span>
-                  ) : null}
-                </div>
-              ) : null}
-            </>
-          ) : null}
+          {/* hidden while empty, as it is when the Redeem control renders nothing and there is no P&L */}
+          <div className="border-fs-border flex flex-wrap items-center gap-x-4 gap-y-2 border-t pt-3 empty:hidden">
+            {results?.invalidPayouts ? (
+              <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1.5">
+                <StatusChip tone="attention" label="Invalid" />
+                <span className="type-caption text-fs-text-secondary">{results.invalidPayouts}</span>
+              </div>
+            ) : null}
+            {pnl ? (
+              <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                <PnlFigure value={pnl.pnl} />
+                {pnl.waiting.length > 0 ? (
+                  <span className="type-caption text-fs-text-secondary">
+                    Excludes {optionNoun(session.itemNamePlural)} waiting for their result.
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+            {redeem}
+          </div>
           {session.blocks.length > 0 ? (
             <>
               <div className="border-fs-border border-t pt-3" />

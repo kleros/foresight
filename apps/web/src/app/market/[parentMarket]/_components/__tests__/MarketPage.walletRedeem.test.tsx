@@ -151,7 +151,7 @@ describe("MarketPage's Redeem popup, for the connected wallet", () => {
   it("lists what the connected wallet itself can redeem once the parent has resolved", async () => {
     await renderPage();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Redeem" }));
+    await userEvent.click(await screen.findByRole("button", { name: /^Redeem( |$)/ }));
     const dialog = await screen.findByRole("dialog");
     const list = within(dialog).getByRole("list", { name: "Your wallet" });
     const payout = planWalletRedeem(INPUT).payout;
@@ -172,7 +172,7 @@ describe("MarketPage's Redeem popup, for the connected wallet", () => {
     await renderPage();
     await act(async () => {});
 
-    expect(screen.queryByRole("button", { name: "Redeem" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Redeem( |$)/ })).toBeNull();
     expect(walletMock).not.toHaveBeenCalled();
   });
 

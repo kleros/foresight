@@ -35,7 +35,7 @@ import { MarketPage } from "../MarketPage";
 /**
  * Spec D11 and D12: one Redeem button opens a popup that lists both wallets' redeemable parts and redeems both.
  * Handles these tests name:
- * - the page's button is a `button` named exactly "Redeem"; the popup is a `dialog`, closed by its "Close" button;
+ * - the page's button is a `button` named "Redeem", then the amount it redeems (spec D18); the popup is a `dialog`, closed by its "Close" button;
  * - in the popup each wallet's parts and waiting options are the `listitem`s of a `list` named by its wallet:
  *   /trade wallet/i for the trade wallet, /(your|connected) wallet/i (without "trade") for the connected wallet;
  *   a child part's row names its option;
@@ -265,7 +265,8 @@ async function renderPage() {
   return { reread };
 }
 
-const redeemButtons = () => screen.queryAllByRole("button", { name: "Redeem" });
+/** The page's Redeem button, labelled with the amount: `Redeem 15.75 sDAI`. */
+const redeemButtons = () => screen.queryAllByRole("button", { name: /^Redeem( |$)/ });
 /** `hidden`, since an open popup hides the page behind it from the accessibility tree. */
 const header = () =>
   screen.getByRole("heading", { level: 1, name: TITLE, hidden: true }).closest("header") as HTMLElement;
@@ -340,6 +341,20 @@ describe("MarketPage A1 one Redeem button once anything is redeemable, and no Re
 
     expect(redeemButtons()).toHaveLength(0);
     expectNoRedeemSection();
+  });
+});
+
+describe("MarketPage A12 the Redeem button sits in the session header beside the P&L (spec D18)", () => {
+  it("labels the header's button with what both wallets redeem, and puts no Redeem lower on the page", async () => {
+    await renderPage();
+
+    await waitFor(() => expect(redeemButtons()).toHaveLength(1));
+    const trigger = within(header()).getByRole("button", { name: "Redeem 15.75 sDAI" });
+    // the P&L and the button are items of one row
+    const pnl = within(header()).getByText("+2.50 sDAI").closest("div")!;
+    expect(pnl.parentElement).toBe(trigger.closest("div")!.parentElement);
+    const predict = screen.getByRole("heading", { name: "Place your estimates" });
+    expect(predict.compareDocumentPosition(trigger) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
   });
 });
 

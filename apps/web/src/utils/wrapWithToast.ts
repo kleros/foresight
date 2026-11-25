@@ -13,7 +13,7 @@ const TX_ERROR_TOAST: Record<ReturnType<typeof classifyTxError>, string> = {
 };
 
 /** Once a hash is back the transaction is out there and may still land. */
-const SENT_COPY = "Sent, not confirmed yet. Check your wallet before trying again.";
+export const SENT_COPY = "Sent, not confirmed yet. Check your wallet before trying again.";
 
 /** wagmi throws once a mined transaction reverts, so only a network failure leaves it pending. */
 function afterSendCopy(error: unknown): string {
@@ -29,6 +29,10 @@ function errorCopy(error: unknown, outOfFunds: string): string {
   if (REVERTS.test(text)) return TX_ERROR_TOAST.unknown;
   return TX_ERROR_TOAST[cause];
 }
+
+/** What a failed send says, before the wallet returned a hash or after (`sent`), in the toast's words. */
+export const txErrorCopy = (error: unknown, sent: boolean, outOfFunds: string = OUT_OF_FUNDS_COPY) =>
+  sent ? afterSendCopy(error) : errorCopy(error, outOfFunds);
 
 /**
  * Runs one transaction with a toast at each stage: the wallet prompt, then confirmed, failed or refused.
@@ -48,7 +52,7 @@ export async function wrapWithToast(
     hash = await send();
     receipt = await waitForTransactionReceipt(config, { hash });
   } catch (error) {
-    errorToast(hash ? afterSendCopy(error) : errorCopy(error, outOfFunds));
+    errorToast(txErrorCopy(error, hash !== undefined, outOfFunds));
     throw error;
   }
 
