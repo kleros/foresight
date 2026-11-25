@@ -44,6 +44,7 @@ import { SessionHeader } from "./SessionHeader";
 import { toWalletMarket } from "./toWalletMarket";
 import { TradeHistory } from "./TradeHistory";
 import { useOptionPositions } from "./useOptionPositions";
+import { traded, useRealisedPnl } from "./useRealisedPnl";
 import { walletRedeemKeyPrefix } from "./useWalletRedeem";
 import { WalletRedeemSection } from "./WalletRedeemSection";
 
@@ -61,6 +62,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
   const positions = useOptionPositions(session.data ?? undefined);
   const read = resolutionRead(session.data ?? undefined, sessionFactoryAddress());
   const resolution = useSessionResolution(read);
+  const pnl = useRealisedPnl(read, resolution.parent);
   useRenderAtClose(session.data?.closesAt);
   useEstimateHydration();
   const searchParams = useSearchParams();
@@ -137,6 +139,10 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
     results && chart.data && detail.closesAt
       ? onGrid(estimatesAt(chart.data, Math.floor(detail.closesAt.getTime() / 1000)))
       : marketEstimates;
+  const optionPnl = (outcomeIndex: number) => {
+    const option = pnl?.options[outcomeIndex];
+    return option?.status === "settled" && traded(option) ? option.pnl : undefined;
+  };
 
   return (
     <PageColumn>
@@ -149,6 +155,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
         poolBalancesPending={poolBalances.isPending}
         usdPrice={usdPrice.data}
         results={results}
+        pnl={pnl?.session}
       />
       {liquidity.hasLiquidity === false && !addsClosed ? (
         <LiquidityBanner reason={addLiquidityReason} onAdd={() => setAddingLiquidity(true)} />
@@ -179,6 +186,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
             position={positions[option.market.toLowerCase()]}
             collateralDecimals={detail.collateralDecimals ?? undefined}
             result={results?.options[option.market.toLowerCase()]}
+            pnl={optionPnl(option.outcomeIndex)}
           />
         ))}
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">

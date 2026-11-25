@@ -5,7 +5,9 @@ import { useCallback, useRef, useState, type RefObject } from "react";
 import { AlertMessage } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
-import type { OptionResult, SessionResults } from "@/features/resolution/utils/sessionResults";
+import { PnlFigure } from "@/features/resolution/components/PnlFigure";
+import type { RealisedPnl } from "@/features/resolution/utils/realisedPnl";
+import type { SessionResults } from "@/features/resolution/utils/sessionResults";
 import { DisplayBlocks } from "@/features/sessions/components/DisplayBlocks";
 import {
   approxCollateral,
@@ -22,6 +24,7 @@ import type {
   SessionStatus,
 } from "@/features/sessions/types";
 import { bannerStyle } from "@/features/sessions/utils/bannerStyle";
+import { optionNoun } from "@/features/sessions/utils/optionNoun";
 import { sessionMetrics } from "@/features/sessions/utils/sessionMetrics";
 import { statusChip } from "@/features/sessions/utils/statusChip";
 import { resolutionOpened } from "@/features/sessions/utils/toSessionDetail";
@@ -50,6 +53,7 @@ export function SessionHeader({
   poolBalancesPending,
   usdPrice,
   results,
+  pnl,
 }: {
   session: SessionDetail;
   status: SessionStatus;
@@ -61,6 +65,8 @@ export function SessionHeader({
   usdPrice: number | undefined;
   /** The session's results once its parent resolved. */
   results?: SessionResults<SessionOption>;
+  /** The visitor's realised P&L in the session; undefined where there is none to show. */
+  pnl?: RealisedPnl["session"];
 }) {
   // a gateway that cannot serve an image leaves the gradient and no icon, not a broken image
   const [heroFailed, setHeroFailed] = useState(false);
@@ -158,10 +164,25 @@ export function SessionHeader({
           {session.description ? (
             <p className="text-fs-text-secondary text-sm leading-relaxed">{session.description}</p>
           ) : null}
-          {results ? (
+          {results?.invalidPayouts || pnl ? (
             <>
               <div className="border-fs-border border-t pt-3" />
-              <ResultsSummary results={results} />
+              {results?.invalidPayouts ? (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <StatusChip tone="attention" label="Invalid" />
+                  <span className="type-caption text-fs-text-secondary">{results.invalidPayouts}</span>
+                </div>
+              ) : null}
+              {pnl ? (
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                  <PnlFigure value={pnl.pnl} />
+                  {pnl.waiting.length > 0 ? (
+                    <span className="type-caption text-fs-text-secondary">
+                      Excludes {optionNoun(session.itemNamePlural)} waiting for their result.
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
             </>
           ) : null}
           {session.blocks.length > 0 ? (
@@ -188,62 +209,5 @@ export function SessionHeader({
         </p>
       )}
     </header>
-  );
-}
-
-/** A winner's answer as the header lists it; null while its read is out. */
-function winnerAnswer(result: OptionResult | undefined): string | null {
-  switch (result?.kind) {
-    case "final":
-      return result.text;
-    case "waiting":
-      return "Waiting for result";
-    case "invalid":
-      return "Invalid";
-    case "unread":
-      return "Result unknown";
-    default:
-      return null;
-  }
-}
-
-function ResultsSummary({ results }: { results: SessionResults<SessionOption> }) {
-  if (results.invalidPayouts !== null) {
-    return (
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <StatusChip tone="attention" label="Invalid" />
-        <span className="type-caption text-fs-text-secondary">{results.invalidPayouts}</span>
-      </div>
-    );
-  }
-  if (results.winners.length === 0) return null;
-  return (
-    <div className="flex flex-col gap-2">
-      <span className="type-label text-fs-text-secondary">
-        {results.winners.length > 1 ? "Selected options" : "Selected option"}
-      </span>
-      <ul className="flex flex-col gap-1.5">
-        {results.winners.map((option) => {
-          const answer = winnerAnswer(results.options[option.market.toLowerCase()]);
-          return (
-            <li key={option.market} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 text-sm">
-              <span className="flex min-w-0 items-center gap-2">
-                <span
-                  className="size-2 flex-none self-center rounded-full"
-                  style={{ backgroundColor: option.color }}
-                  aria-hidden
-                />
-                <span className="text-fs-text-primary min-w-0 font-semibold wrap-break-word">{option.name}</span>
-              </span>
-              {answer === null ? (
-                <span className="fs-skeleton h-4 w-16" aria-busy />
-              ) : (
-                <span className="text-fs-text-primary tabular-nums">{answer}</span>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
   );
 }

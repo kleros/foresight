@@ -35,6 +35,8 @@ const RESULTS: Record<string, OptionResult> = {
   invalid: { kind: "invalid", payouts: "Pays per token: UP 0, DOWN 0, INVALID 1" },
 };
 const result = RESULTS[params.get("result") ?? ""];
+/** `?pnl=` a realised P&L in sDAI cents. */
+const pnl = params.has("pnl") ? BigInt(params.get("pnl")!) * 10n ** 16n : undefined;
 useEstimateStore.setState({ estimates: params.has("value") ? { [PARENT]: { [MARKET]: number("value", 0) } } : {} });
 
 function Harness() {
@@ -64,6 +66,7 @@ function Harness() {
         isMarketPending={false}
         position={position}
         result={result}
+        pnl={pnl}
       />
     </div>
   );

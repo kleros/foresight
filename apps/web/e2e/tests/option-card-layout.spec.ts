@@ -21,6 +21,8 @@ const CASES = {
   "a narrow scale": "unit=&lower=0&upper=1&market=0.5&value=0.45",
   "a resolved result beside a long name":
     "status=resolved&result=final&final=100&finalText=100%20%25%20or%20more&value=40&name=Movie%20A%2C%20the%20director's%20extended%20cut%20(2026)",
+  "a resolved result and a large loss beside a long name":
+    "status=resolved&result=final&final=100&finalText=100%20%25%20or%20more&pnl=-123456789&name=Movie%20A%2C%20the%20director's%20extended%20cut%20(2026)",
 };
 
 async function openCard(page: Page, query: string) {
@@ -48,20 +50,24 @@ for (const width of [320, 375, 1280]) {
       });
     }
 
-    test("drops a result chip under a long name rather than crushing the name", async ({ page }) => {
-      for (const result of ["result=final&final=100&finalText=100%20%25%20or%20more", "result=waiting"]) {
+    test("drops a result label under a long name rather than crushing the name", async ({ page }) => {
+      for (const [result, label] of [
+        ["result=final&final=100&finalText=100%20%25%20or%20more", "Result 100 % or more"],
+        ["result=waiting", "Waiting for result"],
+      ] as const) {
         await openCard(
           page,
           `status=resolved&${result}&name=Movie%20A%2C%20the%20director's%20extended%20cut%20(2026)`,
         );
-        const toggle = (await page.locator("#root button[aria-expanded]").first().boundingBox())!;
+        const toggle = page.locator("#root button[aria-expanded]").first();
+        const row = (await toggle.boundingBox())!;
         const name = (await page.getByRole("heading", { level: 3 }).boundingBox())!;
-        const chip = (await page.locator("#root button[aria-expanded] .fs-status").boundingBox())!;
+        const text = (await toggle.getByText(label, { exact: true }).boundingBox())!;
 
         expect(name.width, `${result}: the name keeps its 10rem`).toBeGreaterThanOrEqual(160);
-        expect(chip.x + chip.width, `${result}: the chip inside the row`).toBeLessThanOrEqual(toggle.x + toggle.width);
-        const overlaps = chip.y < name.y + name.height && name.y < chip.y + chip.height && chip.x < name.x + name.width;
-        expect(overlaps, `${result}: the chip clear of the name`).toBe(false);
+        expect(text.x + text.width, `${result}: the label inside the row`).toBeLessThanOrEqual(row.x + row.width);
+        const overlaps = text.y < name.y + name.height && name.y < text.y + text.height && text.x < name.x + name.width;
+        expect(overlaps, `${result}: the label clear of the name`).toBe(false);
       }
     });
 
