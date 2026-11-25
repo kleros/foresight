@@ -118,7 +118,9 @@ describe("the Redeem popup's footer once the connected wallet's run stops (F2, F
 
     const outsideFooter = within(dialog)
       .getAllByRole("button")
-      .filter((button) => !footerOf(dialog).contains(button) && button.getAttribute("aria-label") !== "Close");
+      .filter((button) => !footerOf(dialog).contains(button) && button.getAttribute("aria-label") !== "Close")
+      // a row's help icon is a tooltip trigger, not a Kleros button
+      .filter((button) => !button.getAttribute("aria-label")?.startsWith("About "));
     expect(outsideFooter.map((button) => button.textContent)).toEqual([]);
   });
 });

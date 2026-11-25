@@ -5,7 +5,7 @@ import { PositionRow } from "@/features/predict/components/PositionRow";
 import { useEstimate, useEstimateStore } from "@/features/predict/stores/estimateStore";
 import { estimateDirection } from "@/features/predict/utils/estimates";
 import type { OptionPosition } from "@/features/predict/utils/position";
-import { PnlFigure } from "@/features/resolution/components/PnlFigure";
+import { PnlFlow, type PnlFigures } from "@/features/resolution/components/PnlFigure";
 import type { OptionResult } from "@/features/resolution/utils/sessionResults";
 import { DisplayBlocks } from "@/features/sessions/components/DisplayBlocks";
 import type { SessionOption, SessionStatus } from "@/features/sessions/types";
@@ -31,8 +31,8 @@ interface OptionCardProps {
   collateralDecimals?: number;
   /** The option's result once the session resolved. */
   result?: OptionResult;
-  /** The visitor's realised P&L in the option, in sDAI base units; undefined where there is none to show. */
-  pnl?: bigint;
+  /** The visitor's realised P&L in the option; undefined where there is none to show. */
+  pnl?: PnlFigures;
 }
 
 interface ResultLabel {
@@ -161,7 +161,7 @@ function TitleRow({
   option: SessionOption;
   isSet: boolean;
   label: ResultLabel | null;
-  pnl: bigint | undefined;
+  pnl: PnlFigures | undefined;
   /** A not-selected option: its name in the secondary text tone and its swatch faded, its P&L at full tone. */
   isMuted: boolean;
 }) {
@@ -185,7 +185,7 @@ function TitleRow({
         {label ? <span className={clsx("text-sm", label.className)}>{label.text}</span> : null}
       </div>
       {pnl !== undefined ? (
-        <PnlFigure value={pnl} />
+        <PnlFlow cost={pnl.cost} payout={pnl.payout} pnl={pnl.pnl} />
       ) : label ? null : isSet ? (
         <CheckCircle
           className="text-fs-tone-success-text size-4 shrink-0 [&_path]:fill-current"

@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
-import { PnlFigure, signedSdai } from "../PnlFigure";
+import { PnlFigure, PnlFlow, pnlSentence, signedSdai } from "../PnlFigure";
 
 const CENT = 10n ** 16n;
 
@@ -49,5 +49,61 @@ describe("PnlFigure", () => {
 
     expect(screen.getByText(signedSdai(value))).toHaveClass(tone);
     expect(screen.getByText("P&L:")).toBeInTheDocument();
+  });
+});
+
+describe("PnlFigure arrow (spec D21)", () => {
+  it.each([
+    [725n * CENT, "up"],
+    [-475n * CENT, "down"],
+    [0n, null],
+    [CENT - 1n, null],
+    [-(CENT - 1n), null],
+  ])("marks %s base units with arrow %s", (value, arrow) => {
+    const { container } = render(<PnlFigure value={value} />);
+
+    const marks = container.querySelectorAll("[data-arrow]");
+    expect(marks).toHaveLength(arrow ? 1 : 0);
+    if (arrow) {
+      expect(marks[0]).toHaveAttribute("data-arrow", arrow);
+      expect(marks[0]).toHaveAttribute("aria-hidden", "true");
+    }
+  });
+});
+
+describe("pnlSentence", () => {
+  it.each([
+    [200n * CENT, 323n * CENT, 123n * CENT, "Put in 2.00 sDAI, back 3.23 sDAI, profit 1.23 sDAI"],
+    [500n * CENT, 175n * CENT, -325n * CENT, "Put in 5.00 sDAI, back 1.75 sDAI, loss 3.25 sDAI"],
+    [CENT, CENT, 0n, "Put in 0.01 sDAI, back 0.01 sDAI, no profit or loss"],
+    [CENT, CENT - 1n, -1n, "Put in 0.01 sDAI, back 0.00 sDAI, no profit or loss"],
+  ])("reads cost %s, payout %s, pnl %s as one sentence", (cost, payout, pnl, sentence) => {
+    expect(pnlSentence({ cost, payout, pnl })).toBe(sentence);
+  });
+});
+
+describe("PnlFlow (spec D21)", () => {
+  const figures = { cost: 200n * CENT, payout: 323n * CENT, pnl: 123n * CENT };
+
+  it("shows what went in, an arrow, what came back, then the signed P&L", () => {
+    const { container } = render(<PnlFlow {...figures} />);
+    const shown = container.querySelector("[aria-hidden=true]")!;
+
+    expect(shown).toHaveTextContent(/^2\.00 sDAI→3\.23 sDAIP&L:\+1\.23 sDAI$/);
+    expect(screen.getByText("+1.23 sDAI")).toHaveClass("text-fs-tone-success-text");
+  });
+
+  it("gives screen readers one sentence and hides the drawn figures from them", () => {
+    render(<PnlFlow {...figures} />);
+
+    expect(screen.getByText("Put in 2.00 sDAI, back 3.23 sDAI, profit 1.23 sDAI")).toHaveClass("sr-only");
+    expect(screen.getByText("+1.23 sDAI").closest("[aria-hidden=true]")).not.toBeNull();
+  });
+
+  it("tones a loss red with a down arrow", () => {
+    const { container } = render(<PnlFlow cost={500n * CENT} payout={175n * CENT} pnl={-325n * CENT} />);
+
+    expect(screen.getByText("-3.25 sDAI")).toHaveClass("text-fs-tone-error-text");
+    expect(container.querySelector("[data-arrow]")).toHaveAttribute("data-arrow", "down");
   });
 });

@@ -1,6 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import type { PnlFigures } from "@/features/resolution/components/PnlFigure";
 import type { OptionResult } from "@/features/resolution/utils/sessionResults";
 import type { SessionOption } from "@/features/sessions/types";
 
@@ -24,7 +25,7 @@ const option: SessionOption = {
   blocks: [],
 };
 
-function renderCard(result: OptionResult, pnl?: bigint) {
+function renderCard(result: OptionResult, pnl?: PnlFigures) {
   render(
     <OptionCard
       option={option}
@@ -50,7 +51,10 @@ describe("OptionCard on a resolved session", () => {
   });
 
   it("mutes a losing option's name with the theme's secondary text, its P&L kept at full tone (F3, F6, F29)", () => {
-    const { card, toggle } = renderCard({ kind: "not-selected" }, -5n * 10n ** 18n);
+    const { card, toggle } = renderCard(
+      { kind: "not-selected" },
+      { cost: 5n * 10n ** 18n, payout: 0n, pnl: -5n * 10n ** 18n },
+    );
 
     expect(toggle).toHaveTextContent("Not selected");
     for (let at: HTMLElement | null = toggle; at; at = at.parentElement) expect(at.className).not.toMatch(/opacity/);

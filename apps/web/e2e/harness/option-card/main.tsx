@@ -39,8 +39,14 @@ const RESULTS: Record<string, OptionResult> = {
   "session-invalid": { kind: "invalid" },
 };
 const result = RESULTS[params.get("result") ?? ""];
-/** `?pnl=` a realised P&L in sDAI cents. */
-const pnl = params.has("pnl") ? BigInt(params.get("pnl")!) * 10n ** 16n : undefined;
+/** `?pnl=` a realised P&L and `?cost=` what went in, in sDAI cents; cost defaults to what a loss lost. */
+const pnlValue = params.has("pnl") ? BigInt(params.get("pnl")!) * 10n ** 16n : undefined;
+const cost = params.has("cost")
+  ? BigInt(params.get("cost")!) * 10n ** 16n
+  : pnlValue !== undefined && pnlValue < 0n
+    ? -pnlValue
+    : 0n;
+const pnl = pnlValue === undefined ? undefined : { cost, payout: cost + pnlValue, pnl: pnlValue };
 useEstimateStore.setState({ estimates: params.has("value") ? { [PARENT]: { [MARKET]: number("value", 0) } } : {} });
 
 function Harness() {

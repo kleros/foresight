@@ -1,5 +1,8 @@
 import clsx from "clsx";
 
+import ArrowDown from "@/assets/svg/long-arrow-down.svg";
+import ArrowUp from "@/assets/svg/long-arrow-up.svg";
+
 import { formatDisplayAmount } from "@/utils/amount";
 
 const CENT = 10n ** 16n;
@@ -27,12 +30,48 @@ const TONE: Record<Sign, string> = {
   [-1]: "text-fs-tone-error-text",
 };
 
-/** A realised P&L in sDAI base units, beside its label. */
+/** A realised P&L in sDAI base units, beside its label, with an up or down arrow for a gain or a loss. */
 export function PnlFigure({ value }: { value: bigint }) {
+  const sign = signOf(value);
+  const Arrow = sign > 0 ? ArrowUp : sign < 0 ? ArrowDown : null;
   return (
     <span className="inline-flex shrink-0 items-baseline gap-1.5 text-sm whitespace-nowrap">
       <span className="text-fs-text-secondary">P&L:</span>
-      <span className={clsx("font-semibold tabular-nums", TONE[signOf(value)])}>{signedSdai(value)}</span>
+      <span className={clsx("font-semibold tabular-nums", TONE[sign])}>{signedSdai(value)}</span>
+      {Arrow ? (
+        <Arrow
+          data-arrow={sign > 0 ? "up" : "down"}
+          aria-hidden
+          className={clsx("size-3 shrink-0 self-center [&_path]:fill-current", TONE[sign])}
+        />
+      ) : null}
+    </span>
+  );
+}
+
+/** sDAI base units. */
+export type PnlFigures = { cost: bigint; payout: bigint; pnl: bigint };
+
+/** What a screen reader hears for a P&L flow: `Put in 2.00 sDAI, back 3.23 sDAI, profit 1.23 sDAI`. */
+export function pnlSentence({ cost, payout, pnl }: PnlFigures): string {
+  const sign = signOf(pnl);
+  const result = sign > 0 ? `profit ${shownSdai(pnl)}` : sign < 0 ? `loss ${shownSdai(-pnl)}` : "no profit or loss";
+  return `Put in ${shownSdai(cost)}, back ${shownSdai(payout)}, ${result}`;
+}
+
+/** What went in and what came back (spec D21), then the signed P&L; read to screen readers as one sentence. */
+export function PnlFlow(figures: PnlFigures) {
+  return (
+    <span className="min-w-0 text-sm">
+      <span className="sr-only">{pnlSentence(figures)}</span>
+      <span aria-hidden className="inline-flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <span className="text-fs-text-secondary whitespace-nowrap tabular-nums">
+          {shownSdai(figures.cost)}
+          <span className="px-1">→</span>
+          {shownSdai(figures.payout)}
+        </span>
+        <PnlFigure value={figures.pnl} />
+      </span>
     </span>
   );
 }

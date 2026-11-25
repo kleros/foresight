@@ -147,7 +147,7 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
       : marketEstimates;
   const optionPnl = (outcomeIndex: number) => {
     const option = pnl?.options[outcomeIndex];
-    return option?.status === "settled" && traded(option) ? option.pnl : undefined;
+    return option?.status === "settled" && traded(option) ? option : undefined;
   };
 
   return (

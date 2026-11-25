@@ -5,7 +5,7 @@ import { useCallback, useRef, useState, type ReactNode, type RefObject } from "r
 import { AlertMessage } from "@kleros/ui-components-library";
 import clsx from "clsx";
 
-import { PnlFigure } from "@/features/resolution/components/PnlFigure";
+import { PnlFlow } from "@/features/resolution/components/PnlFigure";
 import type { RealisedPnl } from "@/features/resolution/utils/realisedPnl";
 import type { SessionResults } from "@/features/resolution/utils/sessionResults";
 import { DisplayBlocks } from "@/features/sessions/components/DisplayBlocks";
@@ -177,7 +177,7 @@ export function SessionHeader({
             ) : null}
             {pnl ? (
               <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
-                <PnlFigure value={pnl.pnl} />
+                <PnlFlow cost={pnl.cost} payout={pnl.payout} pnl={pnl.pnl} />
                 {pnl.waiting.length > 0 ? (
                   <span className="type-caption text-fs-text-secondary">
                     Excludes {optionNoun(session.itemNamePlural)} waiting for their result.

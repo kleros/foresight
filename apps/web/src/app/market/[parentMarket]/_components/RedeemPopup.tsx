@@ -8,7 +8,7 @@ import { isAddressEqual, type Address } from "viem";
 
 import type { ParentResolution } from "@/features/resolution/api/getSessionResolution";
 import type { SessionKey } from "@/features/resolution/api/useSessionResolution";
-import { PnlFigure, shownSdai } from "@/features/resolution/components/PnlFigure";
+import { PnlFigure, PnlFlow, shownSdai } from "@/features/resolution/components/PnlFigure";
 import type { RedeemPart } from "@/features/resolution/redeem/plan";
 import type { RedeemFailureReason, RedeemProgress } from "@/features/resolution/redeem/run";
 import type { RealisedPnl } from "@/features/resolution/utils/realisedPnl";
@@ -19,6 +19,7 @@ import { PopupButton } from "@/components/ui/PopupButton";
 import { ScrollFade } from "@/components/ui/ScrollFade";
 import { StatusCallout } from "@/components/ui/StatusCallout";
 import type { PopupStatusLine } from "@/components/ui/StatusGlyph";
+import WithHelpTooltip from "@/components/ui/WithHelpTooltip";
 import EnsureChain from "@/components/wallet/EnsureChain";
 
 import {
@@ -31,6 +32,8 @@ import { useWalletRedeem, useWalletRedeemRun, type WalletRedeemRunHandle } from 
 
 const CENT = 10n ** 16n;
 const UNREAD_COPY = "Could not read this session's result.";
+const WINNING_TOKENS_HELP =
+  "Outcome tokens of this session's selected options, held directly, not inside an option's own market. Each pays out by the session's result.";
 
 export const START_OVER_WARNING =
   "Reject any redeem prompt still open in your wallet first. Starting over lets go of it, and a new redeem asks again.";
@@ -374,14 +377,15 @@ export function RedeemPopup({
                 </>
               )}
               {pnl ? (
-                <div className="rounded-fs-panel bg-fs-popup-panel flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-4 py-3">
-                  <span className="text-fs-popup-text text-sm font-semibold">This session</span>
-                  <PnlFigure value={pnl.session.pnl} />
+                <div className="rounded-fs-panel bg-fs-popup-panel flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 px-4 py-3">
                   {pnl.session.waiting.length > 0 ? (
-                    <span className="text-fs-popup-text-2 w-full text-xs leading-4">
-                      Excludes {noun} waiting for their result.
-                    </span>
-                  ) : null}
+                    <WithHelpTooltip label="About this total" tooltipMsg={`Excludes ${noun} waiting for their result.`}>
+                      <span className="text-fs-popup-text text-sm font-semibold">This session</span>
+                    </WithHelpTooltip>
+                  ) : (
+                    <span className="text-fs-popup-text text-sm font-semibold">This session</span>
+                  )}
+                  <PnlFlow cost={pnl.session.cost} payout={pnl.session.payout} pnl={pnl.session.pnl} />
                 </div>
               ) : null}
             </div>
@@ -417,12 +421,18 @@ export function RedeemPopup({
 /** A part's payout to the cent; dust under a cent is named rather than shown as 0.00. */
 const payoutText = (value: bigint) => (value > 0n && value < CENT ? "less than 0.01 sDAI" : shownSdai(value));
 
-const partName = (market: Address, parentMarket: Address, options: RedeemOption[], isInvalid: boolean) =>
+/** A part's row name, with the help its tooltip gives where the name alone does not say what it is. */
+const partName = (
+  market: Address,
+  parentMarket: Address,
+  options: RedeemOption[],
+  isInvalid: boolean,
+): { name: string; help?: string } =>
   isAddressEqual(market, parentMarket)
     ? isInvalid
-      ? "Refund (session invalid)"
-      : "Winning outcome tokens"
-    : (options.find((option) => isAddressEqual(option.market, market))?.name ?? market);
+      ? { name: "Refund (session invalid)" }
+      : { name: "Winning outcome tokens", help: WINNING_TOKENS_HELP }
+    : { name: options.find((option) => isAddressEqual(option.market, market))?.name ?? market };
 
 /** Where a ticked box sent the trade wallet's payout: the owner's address, broken only within itself. */
 function Destination({ to, own }: { to?: Address; own: string }) {
@@ -471,7 +481,7 @@ function WalletParts({
   label: string;
   parts: RedeemPart[];
   waiting: number[];
-  nameOf: (market: Address) => string;
+  nameOf: (market: Address) => { name: string; help?: string };
   /** Absent for the connected wallet, whose parts show their payout only (spec D16). */
   pnl?: RealisedPnl;
   options: RedeemOption[];
@@ -491,13 +501,20 @@ function WalletParts({
       <ul aria-labelledby={id} className="grid grid-cols-[minmax(0,1fr)_auto] divide-y divide-(--fs-popup-line)">
         {parts.map((part) => {
           const figure = pnlOf(part.market);
+          const { name, help } = nameOf(part.market);
           return (
             <li
               key={part.market}
               className="col-span-2 grid grid-cols-subgrid items-baseline gap-x-4 gap-y-0.5 py-2.5 text-sm"
             >
               <span className="text-fs-popup-text row-span-2 min-w-0 font-semibold wrap-anywhere">
-                {nameOf(part.market)}
+                {help ? (
+                  <WithHelpTooltip label={`About ${name.toLowerCase()}`} tooltipMsg={help}>
+                    <span>{name}</span>
+                  </WithHelpTooltip>
+                ) : (
+                  name
+                )}
               </span>
               <span className="text-fs-popup-text col-start-2 text-right whitespace-nowrap tabular-nums">
                 {payoutText(part.payout)}
