@@ -240,6 +240,8 @@ export function RedeemPopup({
   };
 
   const open = () => {
+    // a redeem that finished while the popup was closed has already reported its total to the page
+    if (succeeded) setReceipt(null);
     setPayOwner(false);
     if (!tradeRun.isPending) tradeRun.reset();
     setOpen(true);

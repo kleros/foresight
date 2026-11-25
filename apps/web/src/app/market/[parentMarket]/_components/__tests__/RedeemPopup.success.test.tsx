@@ -120,4 +120,22 @@ describe("the Redeem popup after a redeem (F11, F26, F31)", () => {
     expect(within(dialog).queryByText(/^Redeemed/)).toBeNull();
     expect(within(dialog).getByRole("button", { name: "Redeem" })).toBeEnabled();
   });
+
+  it("opens again on the list when the redeem finished after it was closed", async () => {
+    tradeList({ data: NOTHING });
+    const { rerender } = render(popup());
+    let dialog = openPopup();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Redeem" }));
+    await vi.waitFor(() => expect(handle.start).toHaveBeenCalled());
+    walletRun({ stage: "confirming" });
+    rerender(popup());
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    walletRun({ stage: "complete" });
+    rerender(popup());
+
+    dialog = openPopup();
+    expect(within(dialog).queryAllByText(/^Redeemed/)).toEqual([]);
+    expect(within(dialog).getByRole("button", { name: "Redeem" })).toBeEnabled();
+  });
 });
