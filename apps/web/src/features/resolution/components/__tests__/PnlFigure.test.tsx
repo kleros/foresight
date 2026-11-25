@@ -7,7 +7,7 @@ import { PnlFigure, signedSdai } from "../PnlFigure";
 const CENT = 10n ** 16n;
 
 describe("signedSdai", () => {
-  it("reads back as the value cut toward zero to whole cents, with its sign", () => {
+  it("reads back as the value cut toward zero to whole cents, signed as those cents are", () => {
     fc.assert(
       fc.property(fc.bigInt({ min: -(10n ** 30n), max: 10n ** 30n }), (value) => {
         const match = /^([+-]?)([\d,]+)\.(\d{2}) sDAI$/.exec(signedSdai(value));
@@ -16,7 +16,8 @@ describe("signedSdai", () => {
         const magnitude = value < 0n ? -value : value;
 
         expect(BigInt(whole!.replaceAll(",", "")) * 100n + BigInt(cents!)).toBe(magnitude / CENT);
-        expect(sign).toBe(value > 0n ? "+" : value < 0n ? "-" : "");
+        const shown = magnitude / CENT;
+        expect(sign).toBe(shown === 0n ? "" : value > 0n ? "+" : "-");
       }),
     );
   });
@@ -27,6 +28,10 @@ describe("signedSdai", () => {
     [50n * CENT, "+0.50 sDAI"],
     [123_456_700n * CENT, "+1,234,567.00 sDAI"],
     [0n, "0.00 sDAI"],
+    [-1n, "0.00 sDAI"],
+    [CENT - 1n, "0.00 sDAI"],
+    [-(CENT - 1n), "0.00 sDAI"],
+    [-CENT, "-0.01 sDAI"],
   ])("shows %s base units as %s", (value, shown) => {
     expect(signedSdai(value)).toBe(shown);
   });
@@ -37,6 +42,8 @@ describe("PnlFigure", () => {
     [725n * CENT, "text-fs-tone-success-text"],
     [-475n * CENT, "text-fs-tone-error-text"],
     [0n, "text-fs-text-primary"],
+    [-1n, "text-fs-text-primary"],
+    [3n, "text-fs-text-primary"],
   ])("tones %s base units with %s", (value, tone) => {
     render(<PnlFigure value={value} />);
 
