@@ -45,6 +45,7 @@ import { toWalletMarket } from "./toWalletMarket";
 import { TradeHistory } from "./TradeHistory";
 import { useOptionPositions } from "./useOptionPositions";
 import { traded, useRealisedPnl } from "./useRealisedPnl";
+import { realisedPnlKeyPrefix } from "./useTradeWalletRedeem";
 import { walletRedeemKeyPrefix } from "./useWalletRedeem";
 
 const SessionChart = dynamic(() => import("@/features/sessions/components/SessionChart").then((m) => m.SessionChart), {
@@ -75,9 +76,15 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
     branches: session.data?.options.map(({ market, outcomeIndex, name }) => ({ market, outcomeIndex, name })) ?? [],
     closesAt: session.data?.closesAt ?? null,
     isReady: session.data?.setupComplete ?? false,
-    // the header's Liquidity reads pool balances keyed under the stats; a seed may deploy the trade wallet, and any
-    // run may change the trade wallet's or the wallet's token balances
-    alsoReread: [sessionStatsKey(session.data?.id), executorKeyPrefix, fundsKeyPrefix, walletRedeemKeyPrefix],
+    // the header's Liquidity reads pool balances keyed under the stats; a seed may deploy the trade wallet, any run
+    // may change the trade wallet's or the wallet's token balances, and a remove credits tokens to the realised P&L
+    alsoReread: [
+      sessionStatsKey(session.data?.id),
+      executorKeyPrefix,
+      fundsKeyPrefix,
+      walletRedeemKeyPrefix,
+      realisedPnlKeyPrefix,
+    ],
     tradeWallet: tradeWallet.data,
     tradeWalletUnread: tradeWallet.isError && tradeWallet.data === undefined,
     rereadTradeWallet: () => void tradeWallet.refetch(),

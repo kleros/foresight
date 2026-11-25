@@ -25,6 +25,7 @@ import { fetchGraphql } from "@/lib/graphql/batcher";
 import { addresses } from "@/testing/fixtures";
 
 import { MarketPage } from "../MarketPage";
+import { realisedPnlKeyPrefix } from "../useTradeWalletRedeem";
 import { walletRedeemKeyPrefix } from "../useWalletRedeem";
 
 const OWNER = "0x1a01000000000000000000000000000000000000" as Address;
@@ -180,5 +181,12 @@ describe("MarketPage's Redeem popup, for the connected wallet", () => {
 
     const reread = vi.mocked(useSessionLiquidity).mock.calls.at(-1)![0].alsoReread;
     expect(reread).toContainEqual(walletRedeemKeyPrefix);
+  });
+
+  it("rereads the realised P&L after every liquidity run, since a Remove returns tokens at no cost (F38)", async () => {
+    await renderPage();
+
+    const reread = vi.mocked(useSessionLiquidity).mock.calls.at(-1)![0].alsoReread;
+    expect(reread).toContainEqual(realisedPnlKeyPrefix);
   });
 });
