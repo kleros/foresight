@@ -318,7 +318,7 @@ type SessionMove {
   "this session's part of the move, positive into the trade wallet"
   amount: BigInt!
 
-  "sDAI this part adds to the session's cost: the parent INVALID tokens a split mints, negative where a merge burns them"
+  "sDAI this part adds to the session's cost: the parent INVALID tokens a prediction's split mints, negative where a merge burns them"
   cost: BigInt!
 
   "the token belongs to more than one session"
@@ -340,6 +340,18 @@ type RedeemPull {
   router: String!
   token: String!
   amount: BigInt!
+  logIndex: Int!
+  transactionHash: String! @index
+}
+
+"""
+Parent INVALID tokens Seer's router minted to a trade wallet that are not cost yet: they become cost once the same
+transaction pays the router the session's collateral or makes a prediction.
+"""
+type SplitMint {
+  "transactionHash-logIndex-account"
+  id: ID!
+  account: String!
   logIndex: Int!
   transactionHash: String! @index
 }

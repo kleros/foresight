@@ -119,28 +119,33 @@ describe("the router filter", () => {
 });
 
 describe("a trade wallet's ledger", () => {
-  it("charges a split at the parent tokens it mints, whether sDAI or credits paid it", async (t) => {
+  it("charges a prediction's split whether sDAI or credits paid it, and not a liquidity seed's split", async (t) => {
     const indexer = createTestIndexer();
     await seedSession(indexer, [OPTION_A, OPTION_B]);
+    // the router splits xDAI the wallet sent as value, so no sDAI leaves the wallet
+    const xdaiSplit = (amount: bigint, block: number) =>
+      PARENT_TOKENS.map((token) => transfer(token, GNOSIS_ROUTER, EXECUTOR, amount, block));
     await run(indexer, [
       executorDeployed(OWNER, EXECUTOR),
       ...tx(hashOf(1), predictLogs(EXECUTOR, 300n, OPTION_A, 100n)),
-      // credits: the router splits xDAI the wallet sent as value, so no sDAI leaves the wallet
-      ...tx(
-        hashOf(2),
-        PARENT_TOKENS.map((token) => transfer(token, GNOSIS_ROUTER, EXECUTOR, 50n, BLOCK + 3)),
-      ),
+      // credits: an xDAI split, then sets minted at option 1's child in the same batch
+      ...tx(hashOf(2), [...xdaiSplit(50n, BLOCK + 3), ...childSplitLogs(EXECUTOR, OPTION_B, 20n, BLOCK + 3)]),
+      // a liquidity seed's parent split, its own transaction before the pools are seeded
+      ...tx(hashOf(3), xdaiSplit(70n, BLOCK + 4)),
     ]);
 
     const { balances, costs } = ledgerOf(await indexer.SessionMove.getAll());
     t.expect(costs).toEqual({ [SESSION_ID]: 350n });
     t.expect(balances[SESSION_ID]).toEqual({
-      [UNDERLYING]: 250n,
-      [OTHER_UNDERLYING]: 350n,
-      [PARENT_INVALID]: 350n,
+      [UNDERLYING]: 320n,
+      [OTHER_UNDERLYING]: 400n,
+      [PARENT_INVALID]: 420n,
       [DOWN]: 100n,
       [UP]: 100n,
       [OPTION_A.invalid]: 100n,
+      [OTHER_DOWN]: 20n,
+      [OTHER_UP]: 20n,
+      [OPTION_B.invalid]: 20n,
     });
   });
 

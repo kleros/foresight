@@ -151,15 +151,68 @@ async function split(
   return parts;
 }
 
+/**
+ * Whether the transaction pays for a prediction: it trades an option, or pays the router a session's collateral. A
+ * liquidity seed's xDAI split runs in a transaction of its own and does neither.
+ */
+async function fundsPrediction(context: EvmOnEventContext, move: LedgerMove, sessions: readonly string[]) {
+  if (move.predicted !== undefined || (await predictedSessions(context, move.account, move.hash)).length > 0) {
+    return true;
+  }
+  const collaterals = new Set(
+    (await Promise.all(sessions.map((id) => context.Session.get(id)))).flatMap((session) =>
+      session?.collateralToken === undefined ? [] : [session.collateralToken.toLowerCase()],
+    ),
+  );
+  const transfers = await context.Transfer.getWhere({ transactionHash: { _eq: move.hash } });
+  return transfers.some(
+    (row) =>
+      row.executor_id === move.account &&
+      row.counterparty === GNOSIS_ROUTER &&
+      row.amount < 0n &&
+      collaterals.has(row.token),
+  );
+}
+
 /** Credits a trade wallet's move of a session token to the sessions holding it. */
 export async function creditMove(context: EvmOnEventContext, move: LedgerMove) {
   const places = await placesOf(context, move.token);
   if (places.length === 0) return;
 
   // a split mints every parent token, the INVALID one included, from the sDAI or xDAI it was paid
-  const costly = move.amount > 0n && move.counterparty === GNOSIS_ROUTER && places.every((place) => place.invalid);
-  const rows = await txRows(context, move.account, move.hash);
+  const minted = move.amount > 0n && move.counterparty === GNOSIS_ROUTER && places.every((place) => place.invalid);
+  const pending = (await context.SplitMint.getWhere({ transactionHash: { _eq: move.hash } })).filter(
+    (row) => row.account === move.account,
+  );
+  const funded =
+    (minted || pending.length > 0) &&
+    (await fundsPrediction(
+      context,
+      move,
+      places.map((place) => place.session),
+    ));
+  const costly = minted && funded;
+  if (minted && !funded) {
+    context.SplitMint.set({
+      id: `${move.hash}-${move.logIndex}-${move.account}`,
+      account: move.account,
+      logIndex: move.logIndex,
+      transactionHash: move.hash,
+    });
+  }
+
+  // mints this transaction made before it showed what paid for them
+  const promoted = new Set(funded ? pending.map((row) => row.logIndex) : []);
+  for (const row of pending) if (promoted.has(row.logIndex)) context.SplitMint.deleteUnsafe(row.id);
+  const rows = (await txRows(context, move.account, move.hash)).map((row) =>
+    promoted.has(row.logIndex) && !row.shared ? { ...row, cost: row.amount } : row,
+  );
+  for (const row of rows) if (promoted.has(row.logIndex) && !row.shared) context.SessionMove.set(row);
   const moves = sharedMoves(rows);
+  for (const logIndex of promoted) {
+    const shared = moves.get(logIndex);
+    if (shared) moves.set(logIndex, { ...shared, costly: true });
+  }
 
   if (places.length === 1) {
     const row: SessionMove = {
