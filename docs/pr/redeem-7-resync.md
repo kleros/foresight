@@ -14,13 +14,15 @@ New entities:
 | `ResolvedCondition` | Every ConditionalTokens resolution, keyed by condition id. |
 | `SessionMove` | A trade wallet's move of a session token, credited per session, with the sDAI cost it adds. |
 | `RedeemPull` | A session token sent to one of Seer's routers, waiting for the router's answer in the same transaction. |
-| `SplitMint` | A parent INVALID mint that is not cost until its transaction shows it pays for a prediction. |
+| `PoolWithdrawal` | A pool's Burn in a transaction, so tokens the pool sends a trade wallet later in it count as a liquidity withdrawal. |
+| `UncostedHolding` | Per trade wallet and session, the weight of tokens back from liquidity positions, which carry no cost. |
 
 Changed fields: `Session.invalidToken` and `ChildMarket.invalidToken` gain `@index`.
 
 ## Config change (`config.template.yaml` and the three generated configs)
 
 - New contract `ConditionalTokens` (0xCeAfDD6bc0bEF976fdCd1112955828E00543c0Ce) with `ConditionResolution` and `PayoutRedemption`; the handler keeps only `PayoutRedemption` events whose redeemer is one of Seer's two routers.
+- In code, AlgebraPool `Mint` now takes the cost a trade wallet's deposited tokens carried off its session cost, and `Burn` marks the withdrawal its tokens come back from.
 - In code, a second wildcard `TradeExecutor.Transfer` registration (`src/handlers/SeerRouterTransfer.ts`) follows every ERC-20 transfer into or out of Seer's routers.
 
 ## What Harman runs
@@ -42,5 +44,5 @@ yarn codegen:local     # afterwards, so check-types sees the 31337 types again
 ## Known limits after the resync
 
 - A condition that resolved before `start_block` is not in `ResolvedCondition`; a market on it gets no numerators, and its redeems split by token count.
-- A trade wallet's liquidity seed paid in sDAI still counts as prediction cost; only the xDAI seed (`splitFromBase`) is left out.
-- A merge of sets that were never cost still lowers the session's cost.
+- Cost leaving with a merge or a liquidity deposit is the session's cost times the tokens' share of its holdings by weight (parent outcome token 2, a child's DOWN or UP 1, INVALID 0), so it is exact while every set cost the same and an average once trades have moved the holdings.
+- A seed's leftovers that stay in the trade wallet keep their part of the seed's split as cost.
