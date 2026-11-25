@@ -46,7 +46,7 @@ const cost = params.has("cost")
   : pnlValue !== undefined && pnlValue < 0n
     ? -pnlValue
     : 0n;
-const pnl = pnlValue === undefined ? undefined : { cost, payout: cost + pnlValue, pnl: pnlValue };
+const pnl = pnlValue === undefined ? undefined : { cost, payout: cost + pnlValue };
 useEstimateStore.setState({ estimates: params.has("value") ? { [PARENT]: { [MARKET]: number("value", 0) } } : {} });
 
 function Harness() {

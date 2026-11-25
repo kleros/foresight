@@ -31,7 +31,8 @@ describe("SessionHeader P&L (spec D21)", () => {
   it("shows what went in and what came back, then the signed P&L", () => {
     const header = renderHeader({ cost: 200n * CENT, payout: 323n * CENT, pnl: 123n * CENT, waiting: [] });
 
-    expect(header).toHaveTextContent("2.00 sDAI→3.23 sDAIP&L:+1.23 sDAI");
+    expect(header).toHaveTextContent("2.00 sDAI→3.23 sDAI+1.23 sDAI");
+    expect(header).not.toHaveTextContent("P&L");
     expect(screen.getByText("Put in 2.00 sDAI, back 3.23 sDAI, profit 1.23 sDAI")).toHaveClass("sr-only");
   });
 });

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import type { OptionResult, SessionResults } from "@/features/resolution/utils/sessionResults";
@@ -52,8 +52,10 @@ function renderHeader(results: SessionResults<SessionOption>) {
 
 const final = (text: string): OptionResult => ({ kind: "final", text, share: 0.5 });
 
-describe("SessionHeader A2 on a resolved session shows its status, not a list of selected options", () => {
-  it("one winner: Resolved, and no Selected option list naming it or its answer", () => {
+describe("SessionHeader A2 on a resolved session answers its question with the results (spec D20)", () => {
+  const answers = (header: HTMLElement) => within(header).getByRole("list", { name: "Results" });
+
+  it("one winner: Resolved, and under the question the winner with its answer", () => {
     const header = renderHeader({
       invalidPayouts: null,
       winners: [VILLENEUVE],
@@ -62,11 +64,12 @@ describe("SessionHeader A2 on a resolved session shows its status, not a list of
 
     expect(header).toHaveTextContent("Resolved");
     expect(header).not.toHaveTextContent(/Selected options?/);
-    expect(header).not.toHaveTextContent(VILLENEUVE.name);
-    expect(header).not.toHaveTextContent("312.5 $M");
+    expect(within(answers(header)).getByRole("listitem")).toHaveTextContent(`${VILLENEUVE.name}312.5 $M`);
+    const question = within(header).getByRole("heading", { level: 2 });
+    expect(question.compareDocumentPosition(answers(header)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("two winners: Resolved, and no Selected options list naming either", () => {
+  it("two winners: Resolved, and each winner with its answer or Waiting for result", () => {
     const header = renderHeader({
       invalidPayouts: null,
       winners: [VILLENEUVE, GERWIG],
@@ -78,9 +81,11 @@ describe("SessionHeader A2 on a resolved session shows its status, not a list of
 
     expect(header).toHaveTextContent("Resolved");
     expect(header).not.toHaveTextContent(/Selected options?/);
-    for (const winner of [VILLENEUVE, GERWIG]) expect(header).not.toHaveTextContent(winner.name);
-    expect(header).not.toHaveTextContent("312.5 $M");
-    expect(header).not.toHaveTextContent("Waiting for result");
+    expect(
+      within(answers(header))
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual([`${VILLENEUVE.name}312.5 $M`, `${GERWIG.name}Waiting for result`]);
   });
 
   it("a winner whose answer is still being read leaves no list and no placeholder for it", () => {

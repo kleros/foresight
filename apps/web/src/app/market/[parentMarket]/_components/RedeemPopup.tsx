@@ -8,7 +8,7 @@ import { isAddressEqual, type Address } from "viem";
 
 import type { ParentResolution } from "@/features/resolution/api/getSessionResolution";
 import type { SessionKey } from "@/features/resolution/api/useSessionResolution";
-import { PnlFigure, PnlFlow, shownSdai } from "@/features/resolution/components/PnlFigure";
+import { PnlFigure, PnlFlow, shownPnl, shownSdai } from "@/features/resolution/components/PnlFigure";
 import type { RedeemPart } from "@/features/resolution/redeem/plan";
 import type { RedeemFailureReason, RedeemProgress } from "@/features/resolution/redeem/run";
 import type { RealisedPnl } from "@/features/resolution/utils/realisedPnl";
@@ -385,7 +385,7 @@ export function RedeemPopup({
                   ) : (
                     <span className="text-fs-popup-text text-sm font-semibold">This session</span>
                   )}
-                  <PnlFlow cost={pnl.session.cost} payout={pnl.session.payout} pnl={pnl.session.pnl} />
+                  <PnlFlow cost={pnl.session.cost} payout={pnl.session.payout} />
                 </div>
               ) : null}
             </div>
@@ -490,7 +490,7 @@ function WalletParts({
   const pnlOf = (market: Address) => {
     const option = options.find((each) => isAddressEqual(each.market, market));
     const figure = option ? pnl?.options[option.outcomeIndex] : undefined;
-    return figure?.status === "settled" ? figure.pnl : undefined;
+    return figure?.status === "settled" ? shownPnl(figure.cost, figure.payout) : undefined;
   };
   return (
     <section className="rounded-fs-panel bg-fs-popup-panel px-4 py-1">
@@ -509,7 +509,7 @@ function WalletParts({
             >
               <span className="text-fs-popup-text row-span-2 min-w-0 font-semibold wrap-anywhere">
                 {help ? (
-                  <WithHelpTooltip label={`About ${name.toLowerCase()}`} tooltipMsg={help}>
+                  <WithHelpTooltip label={`About ${name.toLowerCase()}`} tooltipMsg={help} place="bottom">
                     <span>{name}</span>
                   </WithHelpTooltip>
                 ) : (

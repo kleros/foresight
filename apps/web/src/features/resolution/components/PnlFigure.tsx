@@ -30,13 +30,12 @@ const TONE: Record<Sign, string> = {
   [-1]: "text-fs-tone-error-text",
 };
 
-/** A realised P&L in sDAI base units, beside its label, with an up or down arrow for a gain or a loss. */
-export function PnlFigure({ value }: { value: bigint }) {
+/** The signed amount and its arrow, drawn only: hidden from screen readers, which read `pnlWord` instead. */
+function PnlMark({ value }: { value: bigint }) {
   const sign = signOf(value);
   const Arrow = sign > 0 ? ArrowUp : sign < 0 ? ArrowDown : null;
   return (
-    <span className="inline-flex shrink-0 items-baseline gap-1.5 text-sm whitespace-nowrap">
-      <span className="text-fs-text-secondary">P&L:</span>
+    <span aria-hidden className="inline-flex shrink-0 items-baseline gap-1.5 text-sm whitespace-nowrap">
       <span className={clsx("font-semibold tabular-nums", TONE[sign])}>{signedSdai(value)}</span>
       {Arrow ? (
         <Arrow
@@ -49,17 +48,36 @@ export function PnlFigure({ value }: { value: bigint }) {
   );
 }
 
-/** sDAI base units. */
-export type PnlFigures = { cost: bigint; payout: bigint; pnl: bigint };
-
-/** What a screen reader hears for a P&L flow: `Put in 2.00 sDAI, back 3.23 sDAI, profit 1.23 sDAI`. */
-export function pnlSentence({ cost, payout, pnl }: PnlFigures): string {
-  const sign = signOf(pnl);
-  const result = sign > 0 ? `profit ${shownSdai(pnl)}` : sign < 0 ? `loss ${shownSdai(-pnl)}` : "no profit or loss";
-  return `Put in ${shownSdai(cost)}, back ${shownSdai(payout)}, ${result}`;
+/** A P&L as a screen reader hears it: `profit 1.23 sDAI`, `loss 0.75 sDAI` or `no profit or loss`. */
+export function pnlWord(value: bigint): string {
+  const sign = signOf(value);
+  return sign > 0 ? `profit ${shownSdai(value)}` : sign < 0 ? `loss ${shownSdai(-value)}` : "no profit or loss";
 }
 
-/** What went in and what came back (spec D21), then the signed P&L; read to screen readers as one sentence. */
+/** A P&L in sDAI base units, signed and toned, with an up or down arrow for a gain or a loss. */
+export function PnlFigure({ value }: { value: bigint }) {
+  return (
+    <span className="inline-flex shrink-0">
+      <span className="sr-only">{pnlWord(value)}</span>
+      <PnlMark value={value} />
+    </span>
+  );
+}
+
+/** sDAI base units. */
+export type PnlFigures = { cost: bigint; payout: bigint };
+
+const cut = (value: bigint) => value - (value % CENT);
+
+/** The shown payout less the shown cost, so the P&L is the difference of the two figures beside it (spec D21). */
+export const shownPnl = (cost: bigint, payout: bigint): bigint => cut(payout) - cut(cost);
+
+/** What a screen reader hears for a P&L flow: `Put in 2.00 sDAI, back 3.23 sDAI, profit 1.23 sDAI`. */
+export function pnlSentence({ cost, payout }: PnlFigures): string {
+  return `Put in ${shownSdai(cost)}, back ${shownSdai(payout)}, ${pnlWord(shownPnl(cost, payout))}`;
+}
+
+/** What went in and what came back (spec D21), then their difference; read to screen readers as one sentence. */
 export function PnlFlow(figures: PnlFigures) {
   return (
     <span className="min-w-0 text-sm">
@@ -70,7 +88,7 @@ export function PnlFlow(figures: PnlFigures) {
           <span className="px-1">→</span>
           {shownSdai(figures.payout)}
         </span>
-        <PnlFigure value={figures.pnl} />
+        <PnlMark value={shownPnl(figures.cost, figures.payout)} />
       </span>
     </span>
   );

@@ -70,7 +70,7 @@ describe("the Redeem popup after a redeem (F11, F26, F31)", () => {
     expect(status).toHaveTextContent("Redeemed");
     expect(dialog).toHaveTextContent(`${cents(TRADE.payout)} from your trade wallet, to your trade wallet`);
     expect(dialog).toHaveTextContent(`${cents(WALLET.plan.payout)} from your wallet, to your wallet`);
-    expect(dialog).toHaveTextContent("P&L:+2.00 sDAI");
+    expect(dialog).toHaveTextContent("+2.00 sDAI");
     expect(dialog).not.toHaveTextContent("Nothing left to redeem");
     expect(dialog.contains(document.activeElement)).toBe(true);
   });

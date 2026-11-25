@@ -27,7 +27,7 @@ import { MarketPage } from "../MarketPage";
 
 /**
  * Spec D13: the page shows redeem-7's realised P&L (`fetchRealisedPnl`) as a session total in the header and per
- * option on its card. Handles these tests name: the header total sits beside a "P&L" label; a negative figure
+ * option on its card. Handles these tests name: a P&L is read out with "profit" or "loss" (spec D21); a negative figure
  * carries a minus sign (`-` or `−`); amounts are sDAI with two decimals.
  * A visitor "never held anything" when the read returns zero cost and zero payout for the session and every option.
  */
@@ -238,12 +238,14 @@ function card(name: string): HTMLElement {
 const MINUS = "[-−]\\s*";
 const negative = (amount: string) => new RegExp(`${MINUS}${amount.replace(".", "\\.")}`);
 const positive = (amount: string) => new RegExp(`(^|[^-−\\d.])\\+?\\s*${amount.replace(".", "\\.")}`);
+/** How a shown P&L is read out (spec D21). */
+const PNL_WORD = /profit|loss/;
 
 describe("MarketPage A3 the header shows the session's P&L total in sDAI for a visitor with a position", () => {
   it("a gain reads as a positive total in sDAI", async () => {
     await renderPage();
 
-    await waitFor(() => expect(header()).toHaveTextContent(/P&L/));
+    await waitFor(() => expect(header()).toHaveTextContent(PNL_WORD));
     expect(header()).toHaveTextContent(positive("3.05"));
     expect(header()).not.toHaveTextContent(negative("3.05"));
     expect(header()).toHaveTextContent(/sDAI/);
@@ -254,21 +256,21 @@ describe("MarketPage A3 the header shows the session's P&L total in sDAI for a v
 
     await renderPage();
 
-    await waitFor(() => expect(header()).toHaveTextContent(/P&L/));
+    await waitFor(() => expect(header()).toHaveTextContent(PNL_WORD));
     expect(header()).toHaveTextContent(negative("3.25"));
     expect(header()).toHaveTextContent(/sDAI/);
   });
 
   it("a visitor who never held anything sees no P&L", async () => {
     const { reread } = await renderPage();
-    await waitFor(() => expect(header()).toHaveTextContent(/P&L/));
+    await waitFor(() => expect(header()).toHaveTextContent(PNL_WORD));
 
     pnlMock.mockResolvedValue(NEVER_HELD);
     await reread();
 
-    await waitFor(() => expect(header()).not.toHaveTextContent(/P&L/));
+    await waitFor(() => expect(header()).not.toHaveTextContent(PNL_WORD));
     expect(header()).toHaveTextContent("Resolved");
-    for (const { name } of OPTIONS) expect(card(name)).not.toHaveTextContent(/sDAI|P&L/);
+    for (const { name } of OPTIONS) expect(card(name)).not.toHaveTextContent(/sDAI|profit|loss/);
   });
 
   it("a visitor with no wallet connected sees no P&L", async () => {
@@ -277,8 +279,8 @@ describe("MarketPage A3 the header shows the session's P&L total in sDAI for a v
     await renderPage();
 
     expect(header()).toHaveTextContent("Resolved");
-    expect(header()).not.toHaveTextContent(/P&L/);
-    for (const { name } of OPTIONS) expect(card(name)).not.toHaveTextContent(/sDAI|P&L/);
+    expect(header()).not.toHaveTextContent(PNL_WORD);
+    for (const { name } of OPTIONS) expect(card(name)).not.toHaveTextContent(/sDAI|profit|loss/);
   });
 });
 
@@ -305,7 +307,7 @@ describe("MarketPage A4 each option card shows that option's P&L", () => {
     await renderPage();
 
     await waitFor(() => expect(card(VILLENEUVE.name)).toHaveTextContent(positive("7.25")));
-    expect(card(NOLAN.name)).not.toHaveTextContent(/sDAI|P&L/);
+    expect(card(NOLAN.name)).not.toHaveTextContent(/sDAI|profit|loss/);
   });
 });
 
@@ -317,20 +319,20 @@ describe("MarketPage A5 an option waiting for its result shows no resolved P&L",
     await renderPage();
 
     await waitFor(() => expect(card(GERWIG.name)).toHaveTextContent("Waiting for result"));
-    await waitFor(() => expect(header()).toHaveTextContent(/P&L/));
+    await waitFor(() => expect(header()).toHaveTextContent(PNL_WORD));
     expect(header()).toHaveTextContent(positive("2.45"));
     expect(header()).toHaveTextContent(/exclud.*waiting|waiting.*exclud/i);
 
     expect(card(VILLENEUVE.name)).toHaveTextContent(positive("7.25"));
     // its cost may show; a signed figure would read as a resolved P&L
     expect(card(GERWIG.name)).not.toHaveTextContent(negative("3.50"));
-    expect(card(GERWIG.name)).not.toHaveTextContent(/P&L:?\s*[-−+]?\s*\d/);
+    expect(card(GERWIG.name)).not.toHaveTextContent(PNL_WORD);
   });
 
   it("with no option waiting, the header total says nothing about excluding any", async () => {
     await renderPage();
 
-    await waitFor(() => expect(header()).toHaveTextContent(/P&L/));
+    await waitFor(() => expect(header()).toHaveTextContent(PNL_WORD));
     expect(header()).not.toHaveTextContent(/exclud/i);
   });
 });
@@ -358,7 +360,7 @@ describe("MarketPage A6 the P&L still shows after a redeem", () => {
     await waitFor(() => expect(within(card(VILLENEUVE.name)).queryByTestId("position-held")).toBeNull());
     await waitFor(() => expect(screen.queryByRole("button", { name: /^Redeem( |$)/ })).toBeNull());
     expect(header()).toHaveTextContent(positive("3.05"));
-    expect(header()).toHaveTextContent(/P&L/);
+    expect(header()).toHaveTextContent(PNL_WORD);
     expect(card(VILLENEUVE.name)).toHaveTextContent(positive("7.25"));
     expect(card(NOLAN.name)).toHaveTextContent(negative("4.75"));
   });

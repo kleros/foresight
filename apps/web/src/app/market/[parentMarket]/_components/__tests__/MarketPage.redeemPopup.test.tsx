@@ -39,7 +39,7 @@ import { MarketPage } from "../MarketPage";
  * - in the popup each wallet's parts and waiting options are the `listitem`s of a `list` named by its wallet:
  *   /trade wallet/i for the trade wallet, /(your|connected) wallet/i (without "trade") for the connected wallet;
  *   a child part's row names its option;
- * - P&L reads as redeem-8's figures do: a "P&L" label beside a signed sDAI amount with two decimals;
+ * - P&L reads as a signed sDAI amount with two decimals, read out with "profit" or "loss" (spec D21);
  * - the pay-to-owner box is the popup's one `checkbox`; the owner address is the trade wallet's `owner()`, read
  *   through `publicClient` (`readContract` or `multicall`), shown in full.
  */
@@ -302,6 +302,8 @@ function row(list: HTMLElement, text: string | RegExp) {
 
 const MINUS = "[-−]\\s*";
 const negative = (amount: string) => new RegExp(`${MINUS}${amount.replace(".", "\\.")}`);
+/** How a shown P&L is read out (spec D21). */
+const PNL_WORD = /profit|loss/;
 const positive = (amount: string) => new RegExp(`(^|[^-−\\d.])\\+?\\s*${amount.replace(".", "\\.")}`);
 /** `amount` in sDAI at any number of decimals: "1.5" matches "1.50 sDAI", "2" matches "2 sDAI" and "2.00 sDAI". */
 function sdai(amount: string) {
@@ -366,7 +368,7 @@ describe("MarketPage A2 the popup lists both wallets' parts with payout and P&L,
     const trade = tradeList(dialog);
     const villeneuve = row(trade, VILLENEUVE.name);
     expect(villeneuve).toHaveTextContent(sdai("12.25"));
-    expect(villeneuve).toHaveTextContent(/P&L/);
+    expect(villeneuve).toHaveTextContent(PNL_WORD);
     expect(villeneuve).toHaveTextContent(positive("7.25"));
     expect(row(trade, sdai("1.5"))).toBeInTheDocument();
     expect(row(trade, GERWIG.name)).toHaveTextContent("Waiting for result");
@@ -374,10 +376,10 @@ describe("MarketPage A2 the popup lists both wallets' parts with payout and P&L,
 
     const connected = connectedList(dialog);
     const walletRow = row(connected, sdai("2"));
-    expect(walletRow).not.toHaveTextContent(/P&L/);
+    expect(walletRow).not.toHaveTextContent(PNL_WORD);
     expect(connected).not.toHaveTextContent("12.25");
 
-    expect(dialog).toHaveTextContent(/P&L/);
+    expect(dialog).toHaveTextContent(PNL_WORD);
     expect(dialog).toHaveTextContent(positive("2.50"));
     expect(dialog).not.toHaveTextContent(negative("2.50"));
   });
@@ -423,7 +425,7 @@ describe("MarketPage A11 P&L still shows in the popup and the header after the r
       const { reread } = await renderPage();
       const dialog = await openPopup();
       if (tick) await userEvent.click(within(dialog).getByRole("checkbox"));
-      await waitFor(() => expect(header()).toHaveTextContent(/P&L/));
+      await waitFor(() => expect(header()).toHaveTextContent(PNL_WORD));
       expect(header()).toHaveTextContent(positive("2.50"));
 
       // redeemed: both wallets hold nothing left to redeem, and redeem-7's read takes the payouts it indexed
@@ -436,9 +438,9 @@ describe("MarketPage A11 P&L still shows in the popup and the header after the r
       await waitFor(() => expect(pnlMock.mock.calls.length).toBeGreaterThan(readsBefore));
       await waitFor(() => expect(tradeMock.mock.results.length).toBeGreaterThan(1));
       const open = screen.getByRole("dialog");
-      expect(open).toHaveTextContent(/P&L/);
+      expect(open).toHaveTextContent(PNL_WORD);
       expect(open).toHaveTextContent(positive("2.50"));
-      expect(header()).toHaveTextContent(/P&L/);
+      expect(header()).toHaveTextContent(PNL_WORD);
       expect(header()).toHaveTextContent(positive("2.50"));
     });
   }

@@ -185,7 +185,7 @@ function TitleRow({
         {label ? <span className={clsx("text-sm", label.className)}>{label.text}</span> : null}
       </div>
       {pnl !== undefined ? (
-        <PnlFlow cost={pnl.cost} payout={pnl.payout} pnl={pnl.pnl} />
+        <PnlFlow cost={pnl.cost} payout={pnl.payout} />
       ) : label ? null : isSet ? (
         <CheckCircle
           className="text-fs-tone-success-text size-4 shrink-0 [&_path]:fill-current"

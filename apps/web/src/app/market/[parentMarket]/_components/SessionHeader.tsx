@@ -7,7 +7,7 @@ import clsx from "clsx";
 
 import { PnlFlow } from "@/features/resolution/components/PnlFigure";
 import type { RealisedPnl } from "@/features/resolution/utils/realisedPnl";
-import type { SessionResults } from "@/features/resolution/utils/sessionResults";
+import type { OptionResult, SessionResults } from "@/features/resolution/utils/sessionResults";
 import { DisplayBlocks } from "@/features/sessions/components/DisplayBlocks";
 import {
   approxCollateral,
@@ -164,20 +164,15 @@ export function SessionHeader({
             {explorer ? <ExternalLink href={explorer}>{shortenAddress(session.parentMarket)}</ExternalLink> : null}
           </div>
           <h2 className="text-fs-text-primary text-lg font-semibold text-pretty">{session.question}</h2>
+          {results ? <Answers results={results} /> : null}
           {session.description ? (
             <p className="text-fs-text-secondary text-sm leading-relaxed">{session.description}</p>
           ) : null}
           {/* hidden while empty, as it is when the Redeem control renders nothing and there is no P&L */}
           <div className="border-fs-border flex flex-wrap items-center gap-x-4 gap-y-2 border-t pt-3 empty:hidden">
-            {results?.invalidPayouts ? (
-              <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1.5">
-                <StatusChip tone="attention" label="Invalid" />
-                <span className="type-caption text-fs-text-secondary">{results.invalidPayouts}</span>
-              </div>
-            ) : null}
             {pnl ? (
               <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
-                <PnlFlow cost={pnl.cost} payout={pnl.payout} pnl={pnl.pnl} />
+                <PnlFlow cost={pnl.cost} payout={pnl.payout} />
                 {pnl.waiting.length > 0 ? (
                   <span className="type-caption text-fs-text-secondary">
                     Excludes {optionNoun(session.itemNamePlural)} waiting for their result.
@@ -211,5 +206,47 @@ export function SessionHeader({
         </p>
       )}
     </header>
+  );
+}
+
+/** A winner's answer under the question; null while its read is out. */
+function answerOf(result: OptionResult | undefined): { text: string; className: string } | null {
+  switch (result?.kind) {
+    case "final":
+      return { text: result.text, className: "text-fs-tone-success-text font-semibold" };
+    case "waiting":
+      return { text: "Waiting for result", className: "text-fs-text-secondary" };
+    case "invalid":
+      return { text: "Invalid", className: "text-fs-tone-warning-text" };
+    case "unread":
+      return { text: "Result unknown", className: "text-fs-tone-warning-text" };
+    default:
+      return null;
+  }
+}
+
+/** The session's results read as the question's answer (spec D20): each winner and its value, or Invalid. */
+function Answers({ results }: { results: SessionResults<SessionOption> }) {
+  const items = results.winners.flatMap((option) => {
+    const answer = answerOf(results.options[option.market.toLowerCase()]);
+    return answer ? [{ option, answer }] : [];
+  });
+  if (results.invalidPayouts === null && items.length === 0) return null;
+  return (
+    <ul aria-label="Results" className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm">
+      {results.invalidPayouts !== null ? (
+        <li className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <StatusChip tone="attention" label="Invalid" />
+          <span className="type-caption text-fs-text-secondary">{results.invalidPayouts}</span>
+        </li>
+      ) : null}
+      {items.map(({ option, answer }) => (
+        <li key={option.market} className="flex min-w-0 items-center gap-2">
+          <span className="size-2 flex-none rounded-full" style={{ backgroundColor: option.color }} aria-hidden />
+          <span className="text-fs-text-primary min-w-0 wrap-break-word">{option.name}</span>
+          <span className={clsx("whitespace-nowrap tabular-nums", answer.className)}>{answer.text}</span>
+        </li>
+      ))}
+    </ul>
   );
 }

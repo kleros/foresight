@@ -176,8 +176,9 @@ describe("the Redeem popup's connected wallet", () => {
       within(within(dialog).getByRole("list", { name: list }))
         .getAllByRole("listitem")
         .find((row) => row.textContent?.includes("Denis Villeneuve"))!;
-    expect(rowOf("Trade wallet")).toHaveTextContent("P&L:+2.00 sDAI");
-    expect(rowOf("Your wallet")).not.toHaveTextContent("P&L");
+    expect(rowOf("Trade wallet")).toHaveTextContent("+2.00 sDAI");
+    expect(rowOf("Trade wallet")).toHaveTextContent("profit 2.00 sDAI");
+    expect(rowOf("Your wallet")).not.toHaveTextContent(/profit|loss|\+/);
   });
 
   it("pays a resolved winner's child part as the planner does", () => {

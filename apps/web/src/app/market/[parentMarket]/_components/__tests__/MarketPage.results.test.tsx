@@ -227,7 +227,7 @@ beforeEach(() => {
 });
 
 describe("MarketPage A1 shows a resolved session's results in the header and on each option card", () => {
-  it("winner resolved: the header reads Resolved with no list of winners (D14); its card shows the final value beside the estimate and the price at close", async () => {
+  it("winner resolved: the header reads Resolved with each winner's answer (D20); its card shows the final value beside the estimate and the price at close", async () => {
     useEstimateStore.getState().setEstimate(PARENT, VILLENEUVE.market, VISITOR_ESTIMATE);
     chain.children = { 0: resolvedChild(VILLENEUVE.market, 312.5), 1: resolvedChild(GERWIG.market, 125) };
 
@@ -236,9 +236,9 @@ describe("MarketPage A1 shows a resolved session's results in the header and on 
     await waitFor(() => expect(marker(VILLENEUVE.name)).not.toBeNull());
     expect(header()).toHaveTextContent("Resolved");
     expect(header()).not.toHaveTextContent(/Selected options?/);
-    for (const winner of [VILLENEUVE, GERWIG]) expect(header()).not.toHaveTextContent(winner.name);
-    expect(header()).not.toHaveTextContent("312.5 $M");
-    expect(header()).not.toHaveTextContent("125 $M");
+    for (const winner of [VILLENEUVE, GERWIG]) expect(header()).toHaveTextContent(winner.name);
+    expect(header()).toHaveTextContent(`${VILLENEUVE.name}312.5 $M`);
+    expect(header()).toHaveTextContent(`${GERWIG.name}125 $M`);
 
     const villeneuve = card(VILLENEUVE.name);
     expect(villeneuve).toHaveTextContent("312.5 $M");
@@ -249,7 +249,7 @@ describe("MarketPage A1 shows a resolved session's results in the header and on 
     expect(marker(GERWIG.name)).not.toBeNull();
   });
 
-  it("winner waiting: its card reads Waiting for result, with no final value, and the header lists no winner", async () => {
+  it("winner waiting: its card reads Waiting for result, with no final value, and the header marks it waiting", async () => {
     chain.children = { 0: resolvedChild(VILLENEUVE.market, 312.5) };
 
     await renderPage();
@@ -257,8 +257,8 @@ describe("MarketPage A1 shows a resolved session's results in the header and on 
     await waitFor(() => expect(card(GERWIG.name)).toHaveTextContent("Waiting for result"));
     expect(marker(GERWIG.name)).toBeNull();
     expect(card(GERWIG.name)).not.toHaveTextContent("Not selected");
-    expect(header()).not.toHaveTextContent(GERWIG.name);
-    expect(header()).not.toHaveTextContent(VILLENEUVE.name);
+    expect(header()).toHaveTextContent(`${GERWIG.name}Waiting for result`);
+    expect(header()).toHaveTextContent(`${VILLENEUVE.name}312.5 $M`);
     expect(card(VILLENEUVE.name)).not.toHaveTextContent("Waiting for result");
   });
 

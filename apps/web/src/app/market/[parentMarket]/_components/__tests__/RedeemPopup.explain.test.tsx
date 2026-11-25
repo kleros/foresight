@@ -37,11 +37,13 @@ const sessionLine = (dialog: HTMLElement) =>
   within(dialog).getByText("This session").closest<HTMLElement>("div.rounded-fs-panel")!;
 
 describe("the Redeem popup's session line (spec D21, D22)", () => {
-  it("shows what went in and what came back, then the signed P&L", () => {
+  it("shows what went in and what came back, then the signed P&L, with no P&L word", () => {
     tradeList({ data: planFor() });
     renderPopup({ pnl: pnlWith([]) });
 
-    expect(sessionLine(openPopup())).toHaveTextContent("2.00 sDAI→3.23 sDAIP&L:+1.23 sDAI");
+    const line = sessionLine(openPopup());
+    expect(line).toHaveTextContent("2.00 sDAI→3.23 sDAI+1.23 sDAI");
+    expect(line).not.toHaveTextContent("P&L");
   });
 
   it("says the total leaves out waiting options in a tooltip, not in visible text", async () => {
@@ -65,6 +67,30 @@ describe("the Redeem popup's session line (spec D21, D22)", () => {
   });
 });
 
+describe("the Redeem popup's part rows (spec D21)", () => {
+  it("shows an option's P&L as its shown payout less its shown cost, with no P&L word", () => {
+    tradeList({ data: planFor() });
+    renderPopup({
+      pnl: {
+        options: {
+          0: {
+            status: "settled",
+            cost: 2_657_607_962_596_684_975n,
+            payout: 2_882_581_193_218_236_740n,
+            pnl: 224_973_230_621_551_765n,
+          },
+        },
+        session: { cost: 0n, payout: 0n, pnl: 0n, waiting: [] },
+      },
+    });
+    const row = within(openPopup()).getByText("Denis Villeneuve").closest("li")!;
+
+    expect(row).toHaveTextContent("+0.23 sDAI");
+    expect(row).not.toHaveTextContent("P&L");
+    expect(within(row).getByText("profit 0.23 sDAI")).toHaveClass("sr-only");
+  });
+});
+
 describe("the Redeem popup's Winning outcome tokens row (spec D22)", () => {
   it("explains the row in a tooltip its help button opens from the keyboard", async () => {
     tradeList({ data: planFor() });
@@ -75,6 +101,8 @@ describe("the Redeem popup's Winning outcome tokens row (spec D22)", () => {
 
     await tabTo(help);
     expect(await tooltip()).toHaveTextContent(WINNING_TOKENS_HELP);
+    // below the icon, so the bubble leaves the row's own name in view
+    expect(await tooltip()).toHaveAttribute("data-placement", "bottom");
     expect(help).toHaveAccessibleDescription(WINNING_TOKENS_HELP);
   });
 

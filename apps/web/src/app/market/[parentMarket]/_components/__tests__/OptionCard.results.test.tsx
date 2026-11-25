@@ -51,10 +51,7 @@ describe("OptionCard on a resolved session", () => {
   });
 
   it("mutes a losing option's name with the theme's secondary text, its P&L kept at full tone (F3, F6, F29)", () => {
-    const { card, toggle } = renderCard(
-      { kind: "not-selected" },
-      { cost: 5n * 10n ** 18n, payout: 0n, pnl: -5n * 10n ** 18n },
-    );
+    const { card, toggle } = renderCard({ kind: "not-selected" }, { cost: 5n * 10n ** 18n, payout: 0n });
 
     expect(toggle).toHaveTextContent("Not selected");
     for (let at: HTMLElement | null = toggle; at; at = at.parentElement) expect(at.className).not.toMatch(/opacity/);
