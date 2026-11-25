@@ -273,7 +273,7 @@ export function RedeemPopup({
       ) : null}
       {redeemable || held ? (
         <div className="ml-auto">
-          <Button text={total >= CENT ? `Redeem ${shownSdai(total)}` : "Redeem"} onPress={open} />
+          <Button text={total > 0n ? `Redeem ${payoutText(total)}` : "Redeem"} onPress={open} />
         </div>
       ) : redeemed !== undefined ? (
         <p
@@ -338,7 +338,7 @@ export function RedeemPopup({
                       payout={tradePlan.payout}
                     />
                   ) : null}
-                  {receipt?.trade?.done ? <TradeRedeemed leg={receipt.trade} /> : null}
+                  {receipt?.trade?.done && receipt.trade.payout > 0n ? <TradeRedeemed leg={receipt.trade} /> : null}
                   {trade.isError && !unread ? (
                     <ReadFailedInDialog
                       text="Could not read what your trade wallet can redeem. Redeem covers your wallet only."
@@ -429,18 +429,18 @@ function Destination({ to, own }: { to?: Address; own: string }) {
 
 /** The after-redeem view: what each wallet redeemed and where it went. */
 function Redeemed({ receipt }: { receipt: Receipt }) {
+  const { trade, wallet } = receipt;
   return (
     <section className="rounded-fs-panel bg-fs-popup-panel flex flex-col gap-1 px-4 py-3">
-      {receipt.trade ? (
+      {trade && trade.payout > 0n ? (
         <p className="text-fs-popup-text text-sm text-pretty tabular-nums">
-          {payoutText(receipt.trade.payout)} from your trade wallet, to{" "}
-          <Destination to={receipt.trade.to} own="your trade wallet" />.
+          {payoutText(trade.payout)} from your trade wallet, to <Destination to={trade.to} own="your trade wallet" />.
         </p>
       ) : null}
-      {receipt.wallet ? (
+      {wallet && wallet.payout !== 0n ? (
         <p className="text-fs-popup-text text-sm text-pretty tabular-nums">
-          {receipt.wallet.payout !== undefined
-            ? `${payoutText(receipt.wallet.payout)} from your wallet, to your wallet.`
+          {wallet.payout !== undefined
+            ? `${payoutText(wallet.payout)} from your wallet, to your wallet.`
             : "Your wallet's unfinished redeem went through, to your wallet."}
         </p>
       ) : null}
