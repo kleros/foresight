@@ -304,6 +304,13 @@ type MarketCondition {
   payoutNumerators: [BigInt!]!
 }
 
+"Every ConditionalTokens resolution, so a market noted after its condition resolved still gets its payouts."
+type ResolvedCondition {
+  "conditionId, lowercase"
+  id: ID!
+  payoutNumerators: [BigInt!]!
+}
+
 """
 A trade wallet's move of a session token, credited to one session. A token that several sessions share is split
 between them (see src/utils/ledger.ts), so the rows of one session hold its own balances and cost.

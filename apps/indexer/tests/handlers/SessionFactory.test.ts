@@ -10,8 +10,9 @@ import { abi as erc20Abi } from "../../abis/Erc20";
 import { abi as seerMarketAbi } from "../../abis/SeerMarket";
 import { abi as seerMarketFactoryAbi } from "../../abis/SeerMarketFactory";
 import { abi as sessionFactoryViewsAbi } from "../../abis/SessionFactoryViews";
-import { BLOCK } from "../support/harness";
-import { resolved } from "../support/ledger";
+import { CONDITIONAL_ROUTER } from "../../src/utils/routers";
+import { BLOCK, EXECUTOR, executorDeployed, transfer } from "../support/harness";
+import { hashOf, resolved, tx } from "../support/ledger";
 
 const readableAbi = [...seerMarketAbi, ...erc20Abi, ...seerMarketFactoryAbi, ...sessionFactoryViewsAbi];
 
@@ -424,5 +425,77 @@ describe("SessionFactory indexing", () => {
     t.expect(child.upperBound).toBe(0n);
     // still counted, because the chain says the branch exists
     t.expect((await indexer.Session.getOrThrow("0")).deployedChildCount).toBe(1n);
+  });
+});
+
+describe("a condition resolved before a session's market names it", () => {
+  it("splits a shared child's payout by what each session's tokens pay", async (t) => {
+    const indexer = createTestIndexer();
+    const [parentA, parentB, childA, childB] = [
+      "0x00000000000000000000000000000000000e0ce0",
+      "0x00000000000000000000000000000000000e0ce1",
+      "0x00000000000000000000000000000000000e0c00",
+      "0x00000000000000000000000000000000000e0c01",
+    ] as const;
+    const [parentCondition, childCondition] = [`0x${"e0".repeat(32)}`, `0x${"e1".repeat(32)}`];
+    // sessions 0 and 1 ask the same questions, so their children share DOWN and UP
+    for (const parent of [parentA, parentB]) {
+      marketReads[parent] = { ...marketReads[PARENT_MARKET], conditionId: parentCondition };
+    }
+    for (const child of [childA, childB]) {
+      marketReads[child] = {
+        ...childReads(CHILD_0_DOWN, CHILD_0_UP, PARENT_OUTCOME_0, CHILD_0_INVALID),
+        conditionId: childCondition,
+      };
+    }
+    // what the ledger already credits: session 0 holds 100 DOWN, session 1 holds 50 UP
+    for (const [session, token, amount, logIndex] of [
+      ["0", CHILD_0_DOWN, 100n, 0],
+      ["1", CHILD_0_UP, 50n, 1],
+    ] as const) {
+      await indexer.SessionMove.set({
+        id: `${hashOf(1)}-${logIndex}-${EXECUTOR}-${session}`,
+        account: EXECUTOR,
+        session_id: session,
+        token,
+        amount,
+        cost: 0n,
+        shared: true,
+        redeemed: false,
+        logIndex,
+        blockNumber: BigInt(BLOCK),
+        transactionHash: hashOf(1),
+      });
+    }
+
+    await indexer.process({
+      chains: {
+        31337: {
+          simulate: [
+            resolved(parentCondition, [1n, 0n, 0n], BLOCK),
+            // DOWN pays 0.2 and UP 0.8
+            resolved(childCondition, [2n, 8n, 0n], BLOCK),
+            parentDeployed(BLOCK + 1, EXAMPLE_METADATA_URI, 0n, parentA),
+            childDeployed(BLOCK + 1, 0, childA, 0n),
+            parentDeployed(BLOCK + 2, EXAMPLE_METADATA_URI, 1n, parentB),
+            childDeployed(BLOCK + 2, 0, childB, 1n),
+            executorDeployed(DEPLOYER, EXECUTOR, BLOCK + 3),
+            ...tx(hashOf(2), [
+              transfer(CHILD_0_UP, EXECUTOR, CONDITIONAL_ROUTER, 50n, BLOCK + 10),
+              transfer(CHILD_0_DOWN, EXECUTOR, CONDITIONAL_ROUTER, 100n, BLOCK + 10),
+              transfer(COLLATERAL, CONDITIONAL_ROUTER, EXECUTOR, 60n, BLOCK + 10),
+            ]),
+          ],
+        },
+      },
+    });
+
+    const rows = (await indexer.Redeem.getAll())
+      .map((row) => [row.session_id, row.childMarket_id, row.payout])
+      .sort((a, b) => String(a).localeCompare(String(b)));
+    t.expect(rows).toEqual([
+      ["0", childA, 20n],
+      ["1", childB, 40n],
+    ]);
   });
 });
