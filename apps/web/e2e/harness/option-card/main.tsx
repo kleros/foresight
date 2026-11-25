@@ -21,7 +21,10 @@ const tokens = (name: string) => {
 };
 const position = params.has("up") || params.has("down") ? { up: tokens("up"), down: tokens("down") } : undefined;
 if (params.get("theme") === "dark") document.documentElement.classList.add("dark");
-/** `?result=` a resolved option's result: `final` (at `?final=`, read as `?finalText=`), `waiting`, `not-selected` or `invalid`. */
+/**
+ * `?result=` a resolved option's result: `final` (at `?final=`, read as `?finalText=`), `waiting`, `not-selected`,
+ * `invalid`, or `session-invalid` for a parent resolved INVALID.
+ */
 const lower = number("lower", 0);
 const upper = number("upper", 100);
 const RESULTS: Record<string, OptionResult> = {
@@ -33,6 +36,7 @@ const RESULTS: Record<string, OptionResult> = {
   waiting: { kind: "waiting" },
   "not-selected": { kind: "not-selected" },
   invalid: { kind: "invalid", payouts: "Pays per token: UP 0, DOWN 0, INVALID 1" },
+  "session-invalid": { kind: "invalid" },
 };
 const result = RESULTS[params.get("result") ?? ""];
 /** `?pnl=` a realised P&L in sDAI cents. */

@@ -300,6 +300,44 @@ test.describe("the option card header's mark", () => {
   }
 });
 
+test.describe("the option card of an option not selected", () => {
+  test.use({ viewport: { width: 375, height: 900 } });
+
+  for (const theme of ["light", "dark"]) {
+    test(`keeps its name, label and P&L at 4.5:1 or more, under no opacity, in the ${theme} theme`, async ({
+      page,
+    }) => {
+      await openHarness(page, `${harness.url}?status=resolved&result=not-selected&pnl=-500&theme=${theme}`);
+      const texts = await page
+        .locator("#root button")
+        .first()
+        .evaluate((root) => {
+          const found: { text: string; color: string; opacity: number; ground: string }[] = [];
+          const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            const text = node.textContent?.trim();
+            if (!text) continue;
+            let opacity = 1;
+            let ground = "";
+            for (let at: Element | null = node.parentElement; at; at = at.parentElement) {
+              const style = getComputedStyle(at);
+              opacity *= Number(style.opacity);
+              if (!ground && style.backgroundColor.startsWith("rgb(")) ground = style.backgroundColor;
+            }
+            found.push({ text, color: getComputedStyle(node.parentElement!).color, opacity, ground });
+          }
+          return found;
+        });
+
+      expect(texts.map(({ text }) => text)).toEqual(expect.arrayContaining(["Movie A", "Not selected", "-5.00 sDAI"]));
+      for (const { text, color, opacity, ground } of texts) {
+        expect.soft(opacity, `${text}'s opacity`).toBe(1);
+        expect.soft(contrast(color, ground), `${text} on ${ground}`).toBeGreaterThanOrEqual(4.5);
+      }
+    });
+  }
+});
+
 test.describe("the option card reached by keyboard", () => {
   test.use({ viewport: { width: 375, height: 900 } });
 

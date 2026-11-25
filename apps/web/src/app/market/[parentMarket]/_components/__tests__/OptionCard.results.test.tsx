@@ -24,7 +24,7 @@ const option: SessionOption = {
   blocks: [],
 };
 
-function renderCard(result: OptionResult) {
+function renderCard(result: OptionResult, pnl?: bigint) {
   render(
     <OptionCard
       option={option}
@@ -33,6 +33,7 @@ function renderCard(result: OptionResult) {
       marketEstimate={250}
       isMarketPending={false}
       result={result}
+      pnl={pnl}
     />,
   );
   const toggle = screen.getByRole("heading", { level: 3, name: option.name }).closest("button[aria-expanded]")!;
@@ -48,12 +49,24 @@ describe("OptionCard on a resolved session", () => {
     expect(card.className).not.toMatch(/opacity/);
   });
 
-  it("dims a losing option and says it was not selected", () => {
-    const { card, toggle } = renderCard({ kind: "not-selected" });
+  it("mutes a losing option's name with the theme's secondary text, its P&L kept at full tone (F3, F6, F29)", () => {
+    const { card, toggle } = renderCard({ kind: "not-selected" }, -5n * 10n ** 18n);
 
     expect(toggle).toHaveTextContent("Not selected");
-    expect(card.className).toMatch(/opacity-60/);
+    for (let at: HTMLElement | null = toggle; at; at = at.parentElement) expect(at.className).not.toMatch(/opacity/);
+    expect(within(toggle).getByText(option.name).closest("h3")).toHaveClass("text-fs-text-secondary");
+    expect(within(toggle).getByText("-5.00 sDAI")).toHaveClass("text-fs-tone-error-text");
     expect(within(card).queryByTestId("final-value-marker")).toBeNull();
+  });
+
+  it("reads every option of a session resolved INVALID as Invalid, not dimmed, the header carrying the payouts (D19)", () => {
+    const { card, toggle } = renderCard({ kind: "invalid" });
+
+    expect(toggle).toHaveTextContent("Invalid");
+    expect(toggle).not.toHaveTextContent("Not selected");
+    expect(card).not.toHaveTextContent("Pays per token");
+    expect(card.className).not.toMatch(/opacity/);
+    expect(within(toggle).getByText(option.name).closest("h3")).toHaveClass("text-fs-text-primary");
   });
 
   it("reads an INVALID child as Invalid, with what each of its tokens pays", () => {

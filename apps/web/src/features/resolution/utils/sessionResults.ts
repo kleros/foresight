@@ -16,7 +16,8 @@ export type OptionResult =
   /** The parent picked it; its own market has not resolved. */
   | { kind: "waiting" }
   | { kind: "not-selected" }
-  | { kind: "invalid"; payouts: string }
+  /** Its own market resolved INVALID, paying `payouts`; or the parent did, whose payouts the session states once. */
+  | { kind: "invalid"; payouts?: string }
   /** Its market's read failed. */
   | { kind: "unread" }
   /** Its market's read has not answered yet. */
@@ -121,7 +122,7 @@ export function sessionResults<T extends ResultOption>(
     return {
       invalidPayouts: parentPayouts(parent, options),
       winners: [],
-      options: Object.fromEntries(options.map((option) => [key(option), { kind: "not-selected" } as const])),
+      options: Object.fromEntries(options.map((option) => [key(option), { kind: "invalid" } as const])),
     };
   }
 

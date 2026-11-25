@@ -85,10 +85,7 @@ export function OptionCard({
 
   return (
     <Disclosure
-      className={clsx(
-        "fs-aurora border-gradient-purple-blue bg-fs-surface w-full rounded-(--fs-radius-panel)!",
-        result?.kind === "not-selected" && "opacity-60",
-      )}
+      className="fs-aurora border-gradient-purple-blue bg-fs-surface w-full rounded-(--fs-radius-panel)!"
       // the 1px transparent border keeps the hover tint off the gradient hairline beneath it
       buttonClassName={clsx(
         "rounded-(--fs-radius-panel) border-transparent bg-transparent bg-clip-padding hover:bg-fs-popup-hover",
@@ -96,11 +93,19 @@ export function OptionCard({
       )}
       glyph="chevron"
       title={
-        <TitleRow option={option} isSet={direction !== null} label={result ? resultLabel(result) : null} pnl={pnl} />
+        <TitleRow
+          option={option}
+          isSet={direction !== null}
+          label={result ? resultLabel(result) : null}
+          pnl={pnl}
+          isMuted={result?.kind === "not-selected"}
+        />
       }
     >
       <div className="flex w-full flex-col gap-4">
-        {result?.kind === "invalid" ? <p className="type-caption text-fs-text-secondary">{result.payouts}</p> : null}
+        {result?.kind === "invalid" && result.payouts ? (
+          <p className="type-caption text-fs-text-secondary">{result.payouts}</p>
+        ) : null}
         {option.upperBound > option.lowerBound ? (
           <EstimateSlider
             scale={option}
@@ -151,18 +156,30 @@ function TitleRow({
   isSet,
   label,
   pnl,
+  isMuted,
 }: {
   option: SessionOption;
   isSet: boolean;
   label: ResultLabel | null;
   pnl: bigint | undefined;
+  /** A not-selected option: its name in the secondary text tone and its swatch faded, its P&L at full tone. */
+  isMuted: boolean;
 }) {
   return (
     // the name holds 10rem before the label or the P&L gives way, so on a narrow card they drop under it
     <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
       <div className="flex min-w-0 grow basis-40 flex-wrap items-center gap-x-3 gap-y-0.5">
-        <h3 className="text-fs-text-primary flex min-w-0 items-center gap-2 text-left font-semibold wrap-break-word">
-          <span className="size-2 flex-none rounded-full" style={{ backgroundColor: option.color }} aria-hidden />
+        <h3
+          className={clsx(
+            "flex min-w-0 items-center gap-2 text-left font-semibold wrap-break-word",
+            isMuted ? "text-fs-text-secondary" : "text-fs-text-primary",
+          )}
+        >
+          <span
+            className={clsx("size-2 flex-none rounded-full", isMuted && "opacity-50")}
+            style={{ backgroundColor: option.color }}
+            aria-hidden
+          />
           <span className="min-w-0">{option.name}</span>
         </h3>
         {label ? <span className={clsx("text-sm", label.className)}>{label.text}</span> : null}

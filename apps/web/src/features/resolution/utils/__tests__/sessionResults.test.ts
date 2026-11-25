@@ -103,7 +103,7 @@ describe("sessionResults", () => {
 
     expect(results.invalidPayouts).toBe("Pays per token: each option 0, INVALID 1");
     expect(results.winners).toEqual([]);
-    expect(Object.values(results.options).every(({ kind }) => kind === "not-selected")).toBe(true);
+    expect(Object.values(results.options)).toEqual(OPTIONS.map(() => ({ kind: "invalid" })));
   });
 
   it("names each option's payout where an INVALID parent pays options unequally", () => {
