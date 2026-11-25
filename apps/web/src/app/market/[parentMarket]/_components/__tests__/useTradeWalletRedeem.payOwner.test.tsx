@@ -17,14 +17,19 @@ import {
   TWO_WINNERS,
   valuedChild,
 } from "@/features/resolution/redeem/__tests__/support/session";
-import { planTradeWalletRedeemToOwner } from "@/features/resolution/redeem/payOwner";
+import { planTradeWalletRedeemToOwner, withOwnerTransfer } from "@/features/resolution/redeem/payOwner";
 import { UnlistedRedeemError } from "@/features/resolution/redeem/tradeWalletBatchAllowed";
 
 import { errorToast } from "@/utils/toast";
 
 import { tradeExecutorAbi } from "@/config/contracts";
 
-import { NOT_SENT_COPY, RedeemPlanChangedError, useRedeemFromTradeWallet } from "../useTradeWalletRedeem";
+import {
+  NOT_SENT_COPY,
+  realisedPnlKeyPrefix,
+  RedeemPlanChangedError,
+  useRedeemFromTradeWallet,
+} from "../useTradeWalletRedeem";
 
 vi.mock("wagmi", () => ({ useAccount: () => ({ address: OWNER, chainId: 100 }) }));
 vi.mock("@/config/chains", async (importOriginal) => ({
@@ -56,8 +61,9 @@ const OTHER_ONCHAIN_OWNER = getAddress("0x0a33000000000000000000000000000000000b
 const readMock = vi.mocked(readTradeWalletRedeemToOwner);
 const sendMock = vi.mocked(sendTransaction);
 
-function setup() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+function setup(
+  client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }),
+) {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
@@ -104,6 +110,39 @@ describe("a ticked redeem run", () => {
       expect(last.to).toBe(SDAI);
       expect(decodeFunctionData({ abi: erc20Abi, data: last.data }).args).toEqual([owner, shown.payout]);
     }
+  });
+
+  it("sends nothing, though shown and fresh agree, when the transfer is the payout + 1 or - 1", async () => {
+    for (const offset of [1n, -1n]) {
+      sendMock.mockClear();
+      const base = planFor();
+      const shown = { ...base, payout: base.payout + offset };
+      readMock.mockResolvedValue({
+        plan: withOwnerTransfer(shown, SDAI, ONCHAIN_OWNER),
+        scope: SCOPE,
+        payout: { owner: ONCHAIN_OWNER, resolution: TWO_WINNERS },
+      });
+      const result = setup();
+
+      act(() => result.current.mutate({ shown, owner: OWNER, session: SESSION, payTo: ONCHAIN_OWNER }));
+
+      await waitFor(() => expect(result.current.error).toBeInstanceOf(UnlistedRedeemError));
+      expect(sendMock).not.toHaveBeenCalled();
+    }
+  });
+
+  it("reads the realised P&L again after the run", async () => {
+    readMock.mockResolvedValue(freshRead(ONCHAIN_OWNER));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    const result = setup(client);
+
+    await act(() =>
+      result.current.mutateAsync({ shown: planFor(), owner: OWNER, session: SESSION, payTo: ONCHAIN_OWNER }),
+    );
+
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: realisedPnlKeyPrefix });
   });
 
   it("sends nothing when the trade wallet's owner on-chain is not the one shown", async () => {

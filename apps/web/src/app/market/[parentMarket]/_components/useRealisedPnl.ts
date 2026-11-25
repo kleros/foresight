@@ -13,7 +13,7 @@ import { publicClient } from "@/lib/web3/public-client";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
 
-import { WAITING_REREAD_MS } from "./useTradeWalletRedeem";
+import { realisedPnlKeyPrefix, WAITING_REREAD_MS } from "./useTradeWalletRedeem";
 
 /** Whether the visitor paid for or was paid by the option. */
 export const traded = (option: OptionRealisedPnl) =>
@@ -32,7 +32,7 @@ export function useRealisedPnl(
 
   const { data } = useQuery({
     queryKey: [
-      "realised-pnl",
+      ...realisedPnlKeyPrefix,
       DEFAULT_CHAIN_ID,
       address?.toLowerCase(),
       session?.sessionFactory.toLowerCase(),

@@ -40,6 +40,9 @@ const loadWagmiConfig = () => import("@/lib/web3/wagmi").then((module) => module
 const READ_FAILED_COPY = "Could not read your trade wallet. Nothing was sent; try again.";
 export const NOT_SENT_COPY = "Not sent: this redeem does not match what Foresight allows for your account.";
 
+/** The trade wallet's realised P&L reads; a trade wallet redeem reads them again. */
+export const realisedPnlKeyPrefix = ["realised-pnl"] as const;
+
 /** How often, in ms, the list is read again while an option the trade wallet holds waits for its child's result. */
 export const WAITING_REREAD_MS = 30_000;
 
@@ -172,6 +175,10 @@ export function useRedeemFromTradeWallet() {
       else if (error instanceof UnlistedRedeemError) errorToast(NOT_SENT_COPY);
     },
     // returned, so the run stays pending until the list is read again
-    onSettled: () => queryClient.invalidateQueries({ queryKey: fundsKeyPrefix }),
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: fundsKeyPrefix }),
+        queryClient.invalidateQueries({ queryKey: realisedPnlKeyPrefix }),
+      ]),
   });
 }
