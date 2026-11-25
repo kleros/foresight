@@ -38,7 +38,7 @@ import { AdvancedSection } from "./AdvancedSection";
 import { OptionCard } from "./OptionCard";
 import { ParticipateSection } from "./ParticipateSection";
 import { PredictCard } from "./PredictCard";
-import { RedeemSection } from "./RedeemSection";
+import { RedeemPopup } from "./RedeemPopup";
 import { resolutionRead } from "./resolutionRead";
 import { SessionHeader } from "./SessionHeader";
 import { toWalletMarket } from "./toWalletMarket";
@@ -46,7 +46,6 @@ import { TradeHistory } from "./TradeHistory";
 import { useOptionPositions } from "./useOptionPositions";
 import { traded, useRealisedPnl } from "./useRealisedPnl";
 import { walletRedeemKeyPrefix } from "./useWalletRedeem";
-import { WalletRedeemSection } from "./WalletRedeemSection";
 
 const SessionChart = dynamic(() => import("@/features/sessions/components/SessionChart").then((m) => m.SessionChart), {
   ssr: false,
@@ -214,17 +213,13 @@ export function MarketPage({ parentMarket }: { parentMarket: string }) {
         />
         <TradeHistory session={detail} />
         {walletMarket ? <TradeWallet market={walletMarket} noun={optionNounSingular(detail.itemName)} /> : null}
-        <RedeemSection
+        <RedeemPopup
           session={read}
           parent={resolution.parent}
           parentMarket={detail.parentMarket}
           options={detail.options}
-        />
-        <WalletRedeemSection
-          session={read}
-          parent={resolution.parent}
-          parentMarket={detail.parentMarket}
-          options={detail.options}
+          pnl={pnl}
+          noun={noun}
         />
         <AdvancedSection parentMarket={detail.parentMarket} />
         <LiquiditySection

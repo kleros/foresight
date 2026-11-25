@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { DocumentNode, OperationDefinitionNode } from "graphql";
 import type { Address } from "viem";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -145,15 +146,17 @@ async function renderPage() {
   });
 }
 
-describe("MarketPage's connected wallet Redeem section", () => {
+describe("MarketPage's Redeem popup, for the connected wallet", () => {
   it("lists what the connected wallet itself can redeem once the parent has resolved", async () => {
     await renderPage();
 
-    const section = await screen.findByRole("region", { name: "Redeem from your wallet" });
+    await userEvent.click(await screen.findByRole("button", { name: "Redeem" }));
+    const dialog = await screen.findByRole("dialog");
+    const list = within(dialog).getByRole("list", { name: "Your wallet" });
     const payout = planWalletRedeem(INPUT).payout;
     expect(payout).toBeGreaterThan(0n);
-    expect(within(section).getByText("Winning outcome tokens")).toBeInTheDocument();
-    expect(within(section).getByRole("button", { name: "Redeem" })).toBeEnabled();
+    expect(within(list).getByText("Winning outcome tokens")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Redeem" })).toBeEnabled();
     expect(walletMock).toHaveBeenCalledTimes(1);
     expect(walletMock.mock.calls[0]![1]).toEqual({
       chainId: 100,
@@ -168,7 +171,7 @@ describe("MarketPage's connected wallet Redeem section", () => {
     await renderPage();
     await act(async () => {});
 
-    expect(screen.queryByRole("region", { name: "Redeem from your wallet" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Redeem" })).toBeNull();
     expect(walletMock).not.toHaveBeenCalled();
   });
 

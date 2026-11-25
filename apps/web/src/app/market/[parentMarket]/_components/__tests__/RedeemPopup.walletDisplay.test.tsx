@@ -1,55 +1,52 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { isAddressEqual, type Address } from "viem";
+import { isAddressEqual } from "viem";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   childMarket,
   PARENT,
-  plannerInput,
   TWO_WINNERS,
   unresolvedChild,
   valuedChild,
 } from "@/features/resolution/redeem/__tests__/support/session";
-import { planWalletRedeem } from "@/features/resolution/redeem/plan";
 
 import { formatDisplayAmount } from "@/utils/amount";
 
-import { useWalletRedeem, useWalletRedeemRun, type WalletRedeemRead } from "../useWalletRedeem";
-import { WalletRedeemSection } from "../WalletRedeemSection";
+import { RedeemPopup } from "../RedeemPopup";
+import type { WalletRedeemRead } from "../useWalletRedeem";
+import { handle, openPopup, resetHooks, SESSION, walletList, walletRead } from "./support/redeemPopup";
 
+vi.mock("../useTradeWalletRedeem", () => ({
+  useTradeWalletRedeem: vi.fn(),
+  useRedeemFromTradeWallet: vi.fn(),
+  useTradeWalletOwner: vi.fn(),
+}));
 vi.mock("../useWalletRedeem", () => ({ useWalletRedeem: vi.fn(), useWalletRedeemRun: vi.fn() }));
 
-const SESSION = { sessionFactory: "0x5f00000000000000000000000000000000000000" as Address, sessionId: 7n };
-const OWNER = "0x0000000000000000000000000000000000001a01" as Address;
 /** Listed out of outcome order, so an option found by its place in the list is the wrong one. */
 const OPTIONS = [
   { market: childMarket(2), outcomeIndex: 2, name: "Christopher Nolan" },
   { market: childMarket(0), outcomeIndex: 0, name: "Denis Villeneuve" },
   { market: childMarket(1), outcomeIndex: 1, name: "Greta Gerwig" },
 ];
-const start = vi.fn();
 
 const sDai = (value: bigint) => `${formatDisplayAmount(value, 18, 18)} sDAI`;
 
-function read(overrides: Parameters<typeof plannerInput>[0] = {}): WalletRedeemRead {
-  const input = plannerInput(overrides);
-  return { input, plan: planWalletRedeem(input) };
+function renderAndOpen() {
+  render(
+    <RedeemPopup
+      session={SESSION}
+      parent={TWO_WINNERS.parent}
+      parentMarket={PARENT}
+      options={OPTIONS}
+      pnl={undefined}
+      noun="directors"
+    />,
+  );
+  return openPopup();
 }
 
-function list(data: WalletRedeemRead, isFetching = false) {
-  vi.mocked(useWalletRedeem).mockReturnValue({
-    data,
-    isError: false,
-    isFetching,
-    owner: OWNER,
-    refetch: vi.fn(),
-  } as unknown as ReturnType<typeof useWalletRedeem>);
-}
-
-const renderSection = () =>
-  render(<WalletRedeemSection session={SESSION} parent={TWO_WINNERS.parent} parentMarket={PARENT} options={OPTIONS} />);
-
-const rows = () => within(screen.getByRole("list", { name: "What your wallet can redeem" })).getAllByRole("listitem");
+const rows = () => within(screen.getByRole("list", { name: "Your wallet" })).getAllByRole("listitem");
 const rowNamed = (name: string) => rows().find((row) => within(row).queryByText(name) !== null)!;
 
 /** The shown plan has several parts whose payouts differ from each other and from the total. */
@@ -60,25 +57,14 @@ function expectDistinctPayouts({ plan }: WalletRedeemRead) {
   expect(payouts).not.toContain(plan.payout);
 }
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  vi.mocked(useWalletRedeemRun).mockReturnValue({
-    progress: { stage: "idle" },
-    start,
-    resume: vi.fn(),
-    retry: vi.fn(),
-    reset: vi.fn(),
-    discard: vi.fn(),
-    isRunning: false,
-  });
-});
+beforeEach(resetHooks);
 
-describe("WalletRedeemSection's amounts", () => {
+describe("the Redeem popup's connected wallet amounts", () => {
   it("says the plan's total goes to the wallet", () => {
-    const shown = read();
+    const shown = walletRead();
     expectDistinctPayouts(shown);
-    list(shown);
-    renderSection();
+    walletList({ data: shown });
+    renderAndOpen();
 
     expect(screen.getByText(/goes to your wallet\.$/)).toHaveTextContent(
       `${sDai(shown.plan.payout)} goes to your wallet.`,
@@ -86,10 +72,10 @@ describe("WalletRedeemSection's amounts", () => {
   });
 
   it("shows each part's own payout on its row", () => {
-    const shown = read();
+    const shown = walletRead();
     expectDistinctPayouts(shown);
-    list(shown);
-    renderSection();
+    walletList({ data: shown });
+    renderAndOpen();
 
     for (const part of shown.plan.parts) {
       const name = isAddressEqual(part.market, PARENT)
@@ -102,12 +88,12 @@ describe("WalletRedeemSection's amounts", () => {
   });
 
   it("names the option a waiting row waits for", () => {
-    const shown = read({
+    const shown = walletRead({
       resolution: { parent: TWO_WINNERS.parent, children: { 0: valuedChild(0, 42n), 1: unresolvedChild(1) } },
     });
     expect(shown.plan.waiting).toEqual([1]);
-    list(shown);
-    renderSection();
+    walletList({ data: shown });
+    renderAndOpen();
 
     const waiting = rows().filter((row) => within(row).queryByText("Waiting for result") !== null);
     expect(waiting).toHaveLength(1);
@@ -116,12 +102,12 @@ describe("WalletRedeemSection's amounts", () => {
   });
 
   it("holds Redeem while the list is read again", () => {
-    list(read(), true);
-    renderSection();
+    walletList({ data: walletRead(), isFetching: true });
+    const dialog = renderAndOpen();
 
-    const redeem = screen.getByRole("button", { name: "Redeem" });
+    const redeem = within(dialog).getByRole("button", { name: "Redeem" });
     expect(redeem).toBeDisabled();
     fireEvent.click(redeem);
-    expect(start).not.toHaveBeenCalled();
+    expect(handle.start).not.toHaveBeenCalled();
   });
 });

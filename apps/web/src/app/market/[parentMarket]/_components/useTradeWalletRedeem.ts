@@ -7,8 +7,10 @@ import { useAccount } from "wagmi";
 
 import type { ParentResolution } from "@/features/resolution/api/getSessionResolution";
 import { fetchTradeWalletRedeem, readTradeWalletRedeem } from "@/features/resolution/api/getTradeWalletRedeem";
+import { readTradeWalletRedeemToOwner } from "@/features/resolution/api/getTradeWalletRedeemToOwner";
 import type { SessionKey } from "@/features/resolution/api/useSessionResolution";
 import { REDEEM_ALLOW_LIST } from "@/features/resolution/oracle/allowlist";
+import { ownerPayBatchDepartures, withOwnerTransfer } from "@/features/resolution/redeem/payOwner";
 import type { RedeemPlan } from "@/features/resolution/redeem/plan";
 import { assertRedeemBatchAllowed, UnlistedRedeemError } from "@/features/resolution/redeem/tradeWalletBatchAllowed";
 import { fundsKeyPrefix } from "@/features/trade-executor/api/getFunds";
@@ -18,9 +20,11 @@ import { FEE_ONLY_OUT_OF_FUNDS_COPY } from "@/utils/txErrorText";
 import { wrapWithToast } from "@/utils/wrapWithToast";
 
 import { STALE_TIME } from "@/lib/query";
+import { executorAddress } from "@/lib/trade-executor/executor";
 import { publicClient } from "@/lib/web3/public-client";
 
 import { DEFAULT_CHAIN_ID } from "@/config/chains";
+import { tradeExecutorAbi, tradeExecutorFactoryAddress } from "@/config/contracts";
 
 /** What the trade wallet can redeem changed after it was shown (oracle R6), so nothing is sent. */
 export class RedeemPlanChangedError extends Error {
@@ -77,6 +81,21 @@ export function useTradeWalletRedeem(session: SessionKey | undefined, parent: Pa
   return { ...query, owner };
 }
 
+/** `owner()` of `owner`'s trade wallet, read on-chain while `enabled`; the pay-to-owner box shows it. */
+export function useTradeWalletOwner(owner: Address | undefined, enabled: boolean) {
+  const factory = tradeExecutorFactoryAddress(DEFAULT_CHAIN_ID);
+  const tradeWallet = owner && factory ? executorAddress(factory, owner) : undefined;
+  return useQuery({
+    queryKey: ["trade-wallet-owner", DEFAULT_CHAIN_ID, tradeWallet?.toLowerCase()],
+    queryFn:
+      tradeWallet && enabled
+        ? () => publicClient.readContract({ address: tradeWallet, abi: tradeExecutorAbi, functionName: "owner" })
+        : skipToken,
+    // the trade wallet's owner is immutable
+    staleTime: Infinity,
+  });
+}
+
 const samePlan = (shown: RedeemPlan, fresh: RedeemPlan) =>
   shown.tx !== null &&
   fresh.tx !== null &&
@@ -93,26 +112,53 @@ export interface RedeemRunArgs {
   shown: RedeemPlan;
   owner: Address;
   session: SessionKey;
+  /** The trade wallet's `owner()` shown beside the ticked pay-to-owner box; absent while unticked. */
+  payTo?: Address;
+}
+
+const readOrSay = <T>(read: Promise<T>) =>
+  read.catch((error: unknown) => {
+    errorToast(READ_FAILED_COPY);
+    throw error;
+  });
+
+/** The unticked batch, read again: the shown one (R6), kept to the allow-list (R8). */
+async function intoTradeWallet({ shown, owner, session }: RedeemRunArgs) {
+  const { plan, scope } = await readOrSay(readTradeWalletRedeem(publicClient, request(owner, session)));
+  if (!samePlan(shown, plan)) throw new RedeemPlanChangedError();
+  assertRedeemBatchAllowed({ tx: plan.tx!, chainId: DEFAULT_CHAIN_ID, account: owner, scope });
+  return plan.tx!;
+}
+
+/** The ticked batch, read again: the shown one paid to the shown owner (R6), kept to R2 to R5 (R8). */
+async function toOwner({ shown, owner, session }: RedeemRunArgs, payTo: Address) {
+  const { plan, scope, payout } = await readOrSay(readTradeWalletRedeemToOwner(publicClient, request(owner, session)));
+  if (!isAddressEqual(payout.owner, payTo) || !samePlan(withOwnerTransfer(shown, scope.collateral, payTo), plan)) {
+    throw new RedeemPlanChangedError();
+  }
+  const departures = ownerPayBatchDepartures({
+    tx: plan.tx!,
+    chainId: DEFAULT_CHAIN_ID,
+    account: owner,
+    scope,
+    payout,
+  });
+  if (departures.length > 0) throw new UnlistedRedeemError(departures);
+  return plan.tx!;
 }
 
 /**
  * Sends the shown plan's batch from `owner` only if a fresh read plans the same calls and payouts (R6) and the batch
- * keeps to the allow-list against the session's on-chain markets (R8). The list and balances are read again after.
+ * keeps to the allow-list against the session's on-chain markets (R8); with `payTo`, the batch also pays the payout
+ * to that owner. The list and balances are read again after.
  */
 export function useRedeemFromTradeWallet() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ shown, owner, session }: RedeemRunArgs) => {
-      const { plan, scope } = await readTradeWalletRedeem(publicClient, request(owner, session)).catch(
-        (error: unknown) => {
-          errorToast(READ_FAILED_COPY);
-          throw error;
-        },
-      );
-      if (!samePlan(shown, plan)) throw new RedeemPlanChangedError();
-      const tx = plan.tx!;
-      assertRedeemBatchAllowed({ tx, chainId: DEFAULT_CHAIN_ID, account: owner, scope });
+    mutationFn: async (args: RedeemRunArgs) => {
+      const { owner } = args;
+      const tx = args.payTo ? await toOwner(args, args.payTo) : await intoTradeWallet(args);
       const config = await loadWagmiConfig();
       return wrapWithToast(
         config,

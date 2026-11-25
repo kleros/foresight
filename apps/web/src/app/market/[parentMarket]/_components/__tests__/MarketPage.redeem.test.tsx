@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { DocumentNode, OperationDefinitionNode } from "graphql";
 import type { Address } from "viem";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -134,12 +135,13 @@ async function renderPage() {
   return client;
 }
 
-describe("MarketPage's Redeem section", () => {
+describe("MarketPage's Redeem popup, for the trade wallet", () => {
   it("lists what the connected account's trade wallet can redeem once the parent has resolved", async () => {
     await renderPage();
 
-    expect(await screen.findByRole("heading", { level: 2, name: "Redeem from your trade wallet" })).toBeInTheDocument();
-    expect(screen.getByText("3.000000000000000007 sDAI goes to your trade wallet.")).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("button", { name: "Redeem" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("3.000000000000000007 sDAI goes to your trade wallet.")).toBeInTheDocument();
     expect(redeemMock).toHaveBeenCalledTimes(1);
     expect(redeemMock.mock.calls[0]![1]).toMatchObject({ chainId: 100, owner: OWNER, sessionFactory: FACTORY });
   });
@@ -149,7 +151,7 @@ describe("MarketPage's Redeem section", () => {
     await renderPage();
     await act(async () => {});
 
-    expect(screen.queryByRole("heading", { level: 2, name: "Redeem from your trade wallet" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Redeem" })).toBeNull();
     expect(redeemMock).not.toHaveBeenCalled();
   });
 
@@ -162,7 +164,7 @@ describe("MarketPage's Redeem section", () => {
 
     await waitFor(() => expect(screen.queryByRole("button", { name: "Redeem" })).toBeNull());
     expect(screen.getByText("Could not read this session's result.")).toBeInTheDocument();
-    expect(screen.queryByRole("list", { name: "What your trade wallet can redeem" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "Trade wallet" })).toBeNull();
     expect(screen.queryByText("3.000000000000000007 sDAI goes to your trade wallet.")).toBeNull();
 
     readerMock.mockImplementation((_client, request) => answer(request));

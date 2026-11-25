@@ -16,6 +16,7 @@ const SCRIPT = path.join(WEB_ROOT, "scripts/test-fork-redeem.sh");
 const REDEEM_FILE = "src/features/resolution/redeem/__tests__/predict.fork.redeem.tradeWallet.test.ts";
 const RESOLUTION_FILE = "src/features/resolution/api/__tests__/predict.fork.resolution.test.ts";
 const WALLET_REDEEM_FILE = "src/features/resolution/redeem/__tests__/predict.fork.redeem.connectedWallet.test.ts";
+const POPUP_FILE = "src/features/resolution/redeem/__tests__/predict.fork.redeem.popup.test.ts";
 
 const STUB_VITEST = `
 const fs = require("node:fs");
@@ -65,7 +66,7 @@ function runScript(options: { report: string; files?: string[]; exit?: number; a
     env: {
       ...env,
       PATH: `${stubs}${path.delimiter}${env.PATH}`,
-      STUB_FILES: JSON.stringify(options.files ?? [REDEEM_FILE, RESOLUTION_FILE, WALLET_REDEEM_FILE]),
+      STUB_FILES: JSON.stringify(options.files ?? [REDEEM_FILE, RESOLUTION_FILE, WALLET_REDEEM_FILE, POPUP_FILE]),
       STUB_REPORT: options.report,
       STUB_EXIT: String(options.exit ?? 0),
       STUB_ARGS: argsFile,
@@ -88,6 +89,7 @@ const ALL_PASSED = report({
   [REDEEM_FILE]: ["passed", "passed"],
   [RESOLUTION_FILE]: ["passed"],
   [WALLET_REDEEM_FILE]: ["passed", "passed"],
+  [POPUP_FILE]: ["passed"],
 });
 
 describe("A9 the fork script, against a stand-in vitest", () => {
@@ -126,8 +128,13 @@ describe("A9 the fork script, against a stand-in vitest", () => {
     expect(stderr).toContain("fork.redeem.tradeWallet");
   });
 
-  it("registers the connected wallet redeem suite after the trade wallet one", () => {
-    expect(registered()).toEqual(["fork.resolution", "fork.redeem.tradeWallet", "fork.redeem.connectedWallet"]);
+  it("registers the connected wallet redeem suite after the trade wallet one, then the popup's", () => {
+    expect(registered()).toEqual([
+      "fork.resolution",
+      "fork.redeem.tradeWallet",
+      "fork.redeem.connectedWallet",
+      "fork.redeem.popup",
+    ]);
   });
 
   it("fails, naming the suite, when every test of the connected wallet redeem suite was skipped", () => {
