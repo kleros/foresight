@@ -75,13 +75,10 @@ async function payoutWeights(context: EvmOnEventContext, parts: Part[]): Promise
 }
 
 /**
- * Whether sDAI from Seer's router for these parent tokens returns a merge rather than pays a redeem. A resolved parent
- * pays a redeem; otherwise only a merge returns sDAI, for a whole set of equal amounts paid back in full.
+ * Whether sDAI from Seer's router for these parent tokens returns a merge: a whole set of equal amounts paid back in
+ * full. A redeem of a whole set that pays it all back reads as a merge too, with the same session total.
  */
-async function isMerge(context: EvmOnEventContext, pulls: RedeemPull[], sessions: Session[], value: bigint) {
-  const conditions = await Promise.all(sessions.map((session) => context.MarketCondition.get(session.parentMarket)));
-  if (conditions.some((condition) => condition !== undefined && condition.payoutNumerators.length > 0)) return false;
-
+function isMerge(pulls: RedeemPull[], sessions: Session[], value: bigint) {
   const tokens = new Set(pulls.map((pull) => pull.token));
   return (
     sessions.some((session) => tokens.size === Number(session.outcomeCount) + 1) &&
@@ -115,8 +112,7 @@ export async function noteReturn(context: EvmOnEventContext, move: RouterMove) {
   for (const pull of pulls) context.RedeemPull.deleteUnsafe(pull.id);
   if (returnedToken) return;
 
-  const as =
-    move.router === GNOSIS_ROUTER && (await isMerge(context, pulls, sessions, move.value)) ? "merge" : "redeem";
+  const as = move.router === GNOSIS_ROUTER && isMerge(pulls, sessions, move.value) ? "merge" : "redeem";
   const shares: Parts | undefined = move.tradeWallet
     ? await settlePulls(
         context,

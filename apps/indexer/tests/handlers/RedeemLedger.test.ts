@@ -159,26 +159,22 @@ describe("a trade wallet's ledger", () => {
     t.expect(await indexer.Redeem.getAll()).toEqual([]);
   });
 
-  it("reads a whole set's sDAI as a merge while the parent is unresolved, and as a redeem once it resolved", async (t) => {
-    const merged = createTestIndexer();
-    const redeemed = createTestIndexer();
-    for (const indexer of [merged, redeemed]) {
+  it("reads a whole set's sDAI as a merge whether or not the parent resolved", async (t) => {
+    const unresolved = createTestIndexer();
+    const resolvedFirst = createTestIndexer();
+    for (const indexer of [unresolved, resolvedFirst]) {
       await seedSession(indexer, [OPTION_A, OPTION_B]);
       await seedConditions(indexer, { [PARENT_MARKET]: PARENT_CONDITION });
     }
     const split = [executorDeployed(OWNER, EXECUTOR), ...tx(hashOf(1), splitLogs(EXECUTOR, PARENT_TOKENS, 300n))];
     const merge = tx(hashOf(2), mergeLogs(EXECUTOR, PARENT_TOKENS, 100n, BLOCK + 10));
-    await run(merged, [...split, ...merge]);
-    await run(redeemed, [...split, resolved(PARENT_CONDITION, [1n, 0n, 0n]), ...merge]);
+    await run(unresolved, [...split, ...merge]);
+    await run(resolvedFirst, [...split, resolved(PARENT_CONDITION, [1n, 0n, 0n]), ...merge]);
 
-    t.expect(ledgerOf(await merged.SessionMove.getAll()).costs).toEqual({ [SESSION_ID]: 200n });
-    t.expect(await merged.Redeem.getAll()).toEqual([]);
-    t.expect(ledgerOf(await redeemed.SessionMove.getAll()).costs).toEqual({ [SESSION_ID]: 300n });
-    t.expect(await redeemRows(redeemed)).toEqual([
-      [SESSION_ID, null, 0n, 100n],
-      [SESSION_ID, null, 1n, 0n],
-      [SESSION_ID, null, 2n, 0n],
-    ]);
+    for (const indexer of [unresolved, resolvedFirst]) {
+      t.expect(ledgerOf(await indexer.SessionMove.getAll()).costs).toEqual({ [SESSION_ID]: 200n });
+      t.expect(await indexer.Redeem.getAll()).toEqual([]);
+    }
   });
 });
 
