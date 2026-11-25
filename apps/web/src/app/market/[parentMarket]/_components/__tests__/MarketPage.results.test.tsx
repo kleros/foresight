@@ -227,19 +227,19 @@ beforeEach(() => {
 });
 
 describe("MarketPage A1 shows a resolved session's results in the header and on each option card", () => {
-  it("winner resolved: the header lists it with its final value; its card shows the final value beside the estimate and the price at close", async () => {
+  it("winner resolved: the header reads Resolved with no list of winners (D14); its card shows the final value beside the estimate and the price at close", async () => {
     useEstimateStore.getState().setEstimate(PARENT, VILLENEUVE.market, VISITOR_ESTIMATE);
     chain.children = { 0: resolvedChild(VILLENEUVE.market, 312.5), 1: resolvedChild(GERWIG.market, 125) };
 
     await renderPage();
 
-    await waitFor(() => expect(header()).toHaveTextContent(VILLENEUVE.name));
-    expect(header()).toHaveTextContent("Resolved");
-    expect(header()).toHaveTextContent("312.5 $M");
-    expect(header()).toHaveTextContent(GERWIG.name);
-    expect(header()).toHaveTextContent("125 $M");
-
     await waitFor(() => expect(marker(VILLENEUVE.name)).not.toBeNull());
+    expect(header()).toHaveTextContent("Resolved");
+    expect(header()).not.toHaveTextContent(/Selected options?/);
+    for (const winner of [VILLENEUVE, GERWIG]) expect(header()).not.toHaveTextContent(winner.name);
+    expect(header()).not.toHaveTextContent("312.5 $M");
+    expect(header()).not.toHaveTextContent("125 $M");
+
     const villeneuve = card(VILLENEUVE.name);
     expect(villeneuve).toHaveTextContent("312.5 $M");
     expect(villeneuve).toHaveTextContent(`${VISITOR_ESTIMATE} $M`);
@@ -249,7 +249,7 @@ describe("MarketPage A1 shows a resolved session's results in the header and on 
     expect(marker(GERWIG.name)).not.toBeNull();
   });
 
-  it("winner waiting: its card reads Waiting for result, with no final value, while the header still lists it", async () => {
+  it("winner waiting: its card reads Waiting for result, with no final value, and the header lists no winner", async () => {
     chain.children = { 0: resolvedChild(VILLENEUVE.market, 312.5) };
 
     await renderPage();
@@ -257,8 +257,8 @@ describe("MarketPage A1 shows a resolved session's results in the header and on 
     await waitFor(() => expect(card(GERWIG.name)).toHaveTextContent("Waiting for result"));
     expect(marker(GERWIG.name)).toBeNull();
     expect(card(GERWIG.name)).not.toHaveTextContent("Not selected");
-    expect(header()).toHaveTextContent(GERWIG.name);
-    expect(header()).toHaveTextContent(VILLENEUVE.name);
+    expect(header()).not.toHaveTextContent(GERWIG.name);
+    expect(header()).not.toHaveTextContent(VILLENEUVE.name);
     expect(card(VILLENEUVE.name)).not.toHaveTextContent("Waiting for result");
   });
 
@@ -270,7 +270,6 @@ describe("MarketPage A1 shows a resolved session's results in the header and on 
     await waitFor(() => expect(card(NOLAN.name)).toHaveTextContent("Not selected"));
     expect(card(NOLAN.name)).not.toHaveTextContent("Waiting for result");
     expect(marker(NOLAN.name)).toBeNull();
-    expect(header()).toHaveTextContent(VILLENEUVE.name);
     expect(header()).not.toHaveTextContent(NOLAN.name);
     for (const winner of [VILLENEUVE, GERWIG]) expect(card(winner.name)).not.toHaveTextContent("Not selected");
   });
@@ -320,13 +319,12 @@ describe("MarketPage A7 a final value at a bound reads as open-ended; one inside
   it.each([
     { at: "the upper bound", finalValue: UPPER, reads: "500 $M or more" },
     { at: "the lower bound", finalValue: LOWER, reads: "0 $M or less" },
-  ])("a child resolved at $at reads open-ended in the header and on its card", async ({ finalValue, reads }) => {
+  ])("a child resolved at $at reads open-ended on its card", async ({ finalValue, reads }) => {
     chain.children = { 0: resolvedChild(VILLENEUVE.market, finalValue) };
 
     await renderPage();
 
-    await waitFor(() => expect(header()).toHaveTextContent(reads));
-    expect(card(VILLENEUVE.name)).toHaveTextContent(reads);
+    await waitFor(() => expect(card(VILLENEUVE.name)).toHaveTextContent(reads));
   });
 
   it("a child resolved inside the bounds reads as the value, neither or more nor or less", async () => {
@@ -334,10 +332,7 @@ describe("MarketPage A7 a final value at a bound reads as open-ended; one inside
 
     await renderPage();
 
-    await waitFor(() => expect(header()).toHaveTextContent("312.5 $M"));
-    expect(card(VILLENEUVE.name)).toHaveTextContent("312.5 $M");
-    for (const scope of [header(), card(VILLENEUVE.name)]) {
-      expect(scope).not.toHaveTextContent(/or more|or less/);
-    }
+    await waitFor(() => expect(card(VILLENEUVE.name)).toHaveTextContent("312.5 $M"));
+    expect(card(VILLENEUVE.name)).not.toHaveTextContent(/or more|or less/);
   });
 });
