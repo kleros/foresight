@@ -345,7 +345,7 @@ describe("MarketPage A6 the P&L still shows after a redeem", () => {
     expect(card(VILLENEUVE.name)).toHaveTextContent(positive("7.25"));
     expect(card(NOLAN.name)).toHaveTextContent(negative("4.75"));
     expect(within(card(VILLENEUVE.name)).queryByTestId("position-held")).not.toBeNull();
-    expect(screen.queryByRole("heading", { name: "Redeem from your trade wallet" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Redeem" })).not.toBeNull();
 
     // redeemed: the tokens are gone, nothing is left to redeem, and the read takes the payouts from the indexer
     wallet.positions = {};
@@ -356,9 +356,7 @@ describe("MarketPage A6 the P&L still shows after a redeem", () => {
 
     await waitFor(() => expect(pnlMock.mock.calls.length).toBeGreaterThan(readsBefore));
     await waitFor(() => expect(within(card(VILLENEUVE.name)).queryByTestId("position-held")).toBeNull());
-    await waitFor(() =>
-      expect(screen.queryByRole("heading", { name: "Redeem from your trade wallet" })).toBeNull(),
-    );
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Redeem" })).toBeNull());
     expect(header()).toHaveTextContent(positive("3.05"));
     expect(header()).toHaveTextContent(/P&L/);
     expect(card(VILLENEUVE.name)).toHaveTextContent(positive("7.25"));
