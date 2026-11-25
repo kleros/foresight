@@ -252,7 +252,7 @@ export function RedeemPopup({
   };
 
   const status: PopupStatusLine | null = succeeded
-    ? { text: `Redeemed ${shownSdai(receiptTotal(receipt!))}.`, tone: "neutral" }
+    ? { text: `Redeemed ${payoutText(receiptTotal(receipt!))}.`, tone: "neutral" }
     : tradeRun.isPending
       ? TRADE_STATUS[tradeRun.stage ?? "checking"]
       : held
@@ -280,7 +280,7 @@ export function RedeemPopup({
           tabIndex={-1}
           className="type-label text-fs-text-secondary rounded-fs-control ml-auto tabular-nums"
         >
-          Redeemed {shownSdai(redeemed)}
+          Redeemed {payoutText(redeemed)}
         </p>
       ) : null}
       <Modal
@@ -355,7 +355,7 @@ export function RedeemPopup({
                   ) : null}
                   {walletRedeems ? (
                     <p className="text-fs-popup-text-2 px-1 text-xs leading-4 text-pretty tabular-nums">
-                      {shownSdai(walletRead!.plan.payout)} goes to your wallet.
+                      {payoutText(walletRead!.plan.payout)} goes to your wallet.
                     </p>
                   ) : null}
                   {wallet.isError && !held && !unread ? (
@@ -411,6 +411,9 @@ export function RedeemPopup({
   );
 }
 
+/** A part's payout to the cent; dust under a cent is named rather than shown as 0.00. */
+const payoutText = (value: bigint) => (value > 0n && value < CENT ? "less than 0.01 sDAI" : shownSdai(value));
+
 const partName = (market: Address, parentMarket: Address, options: RedeemOption[], isInvalid: boolean) =>
   isAddressEqual(market, parentMarket)
     ? isInvalid
@@ -429,14 +432,14 @@ function Redeemed({ receipt }: { receipt: Receipt }) {
     <section className="rounded-fs-panel bg-fs-popup-panel flex flex-col gap-1 px-4 py-3">
       {receipt.trade ? (
         <p className="text-fs-popup-text text-sm text-pretty tabular-nums">
-          {shownSdai(receipt.trade.payout)} from your trade wallet, to{" "}
+          {payoutText(receipt.trade.payout)} from your trade wallet, to{" "}
           <Destination to={receipt.trade.to} own="your trade wallet" />.
         </p>
       ) : null}
       {receipt.wallet ? (
         <p className="text-fs-popup-text text-sm text-pretty tabular-nums">
           {receipt.wallet.payout !== undefined
-            ? `${shownSdai(receipt.wallet.payout)} from your wallet, to your wallet.`
+            ? `${payoutText(receipt.wallet.payout)} from your wallet, to your wallet.`
             : "Your wallet's unfinished redeem went through, to your wallet."}
         </p>
       ) : null}
@@ -448,7 +451,7 @@ function Redeemed({ receipt }: { receipt: Receipt }) {
 function TradeRedeemed({ leg }: { leg: NonNullable<Receipt["trade"]> }) {
   return (
     <p className="text-fs-popup-text-2 px-1 text-xs leading-4 text-pretty tabular-nums">
-      Redeemed {shownSdai(leg.payout)} from your trade wallet, to <Destination to={leg.to} own="your trade wallet" />.
+      Redeemed {payoutText(leg.payout)} from your trade wallet, to <Destination to={leg.to} own="your trade wallet" />.
     </p>
   );
 }
@@ -494,7 +497,7 @@ function WalletParts({
                 {nameOf(part.market)}
               </span>
               <span className="text-fs-popup-text col-start-2 text-right whitespace-nowrap tabular-nums">
-                {shownSdai(part.payout)}
+                {payoutText(part.payout)}
               </span>
               {figure !== undefined ? (
                 <span data-column="pnl" className="col-start-2 text-right">
@@ -580,10 +583,10 @@ function PayOwner({
       </label>
       <p id={lineId} aria-live="polite" className="text-fs-popup-text-2 text-xs leading-4 text-pretty tabular-nums">
         {!isTicked ? (
-          `${shownSdai(payout)} goes to your trade wallet.`
+          `${payoutText(payout)} goes to your trade wallet.`
         ) : owner ? (
           <>
-            {shownSdai(payout)} goes to <span className="break-all">{owner}</span>.
+            {payoutText(payout)} goes to <span className="break-all">{owner}</span>.
           </>
         ) : isUnread ? (
           "Could not read the trade wallet's owner. Untick to redeem into the trade wallet."

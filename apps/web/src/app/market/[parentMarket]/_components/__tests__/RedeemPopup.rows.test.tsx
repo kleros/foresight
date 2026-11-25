@@ -75,6 +75,16 @@ describe("the Redeem popup's part rows (F8, F21, F9)", () => {
     expect(list).not.toHaveTextContent(/\.\d{3,} sDAI/);
   });
 
+  it("names a payout under a cent rather than showing 0.00", () => {
+    const dust = planFor({ parentBalances: [3n, 0n, 0n, 0n], childBalances: [] });
+    expect(dust.parts.every((part) => part.payout > 0n && part.payout < 10n ** 16n)).toBe(true);
+    tradeList({ data: dust });
+    renderPopup();
+    const list = within(openPopup()).getByRole("list", { name: "Trade wallet" });
+
+    expect(within(list).getAllByText("less than 0.01 sDAI")).toHaveLength(dust.parts.length);
+  });
+
   it("labels the trigger with what both wallets redeem, to the cent", () => {
     const wallet = walletRead();
     tradeList({ data: TRADE });
