@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 
 import { Tooltip } from "@kleros/ui-components-library";
 
@@ -13,22 +13,30 @@ interface IWithHelpTooltip {
   tooltipProps?: Omit<React.ComponentProps<typeof Tooltip>, "text" | "children">;
 }
 
-const WithHelpTooltip: React.FC<IWithHelpTooltip> = ({ tooltipMsg, label = "Help", children, place, tooltipProps }) => (
-  <div className="flex items-center">
-    {children}
-    <Tooltip
-      small
-      text={tooltipMsg}
-      {...{ place, tooltipProps }}
-      wrapperProps={{ "aria-label": label }}
-      className="max-w-[min(23.5rem,calc(100vw-2rem))] [&>small]:text-sm [&>small]:whitespace-pre-line"
-    >
-      {/* a 24px box whose ::before reaches the 44px target */}
-      <span className="relative ml-1 inline-flex size-6 items-center justify-center before:absolute before:-inset-2.5 before:content-['']">
-        <HelpIcon className="size-3 md:size-3.5" />
-      </span>
-    </Tooltip>
-  </div>
-);
+const WithHelpTooltip: React.FC<IWithHelpTooltip> = ({ tooltipMsg, label = "Help", children, place, tooltipProps }) => {
+  const [isOpen, setOpen] = useState(false);
+  return (
+    <div className="flex items-center">
+      {children}
+      <Tooltip
+        small
+        text={tooltipMsg}
+        {...{ place, tooltipProps }}
+        isOpen={isOpen}
+        onOpenChange={setOpen}
+        wrapperProps={{ "aria-label": label }}
+        className="max-w-[min(23.5rem,calc(100vw-2rem))] [&>small]:text-sm [&>small]:whitespace-pre-line"
+      >
+        {/* a 24px box whose ::before reaches the 44px target; react-aria opens a tooltip on hover and focus, not on a tap */}
+        <span
+          className="relative ml-1 inline-flex size-6 items-center justify-center before:absolute before:-inset-2.5 before:content-['']"
+          onPointerUp={(event) => (event.pointerType === "touch" ? setOpen(true) : undefined)}
+        >
+          <HelpIcon className="size-3 md:size-3.5" />
+        </span>
+      </Tooltip>
+    </div>
+  );
+};
 
 export default WithHelpTooltip;

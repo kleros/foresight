@@ -13,10 +13,20 @@ const OVERLAY_LAYER = "z-40";
 export function Modal({
   belowHeader = false,
   modalOverlayClassname,
+  shouldCloseOnInteractOutside,
   ...props
 }: Omit<ComponentProps<typeof LibraryModal>, "modalOverlayClassname"> & {
   modalOverlayClassname?: string;
   belowHeader?: boolean;
 }) {
-  return <LibraryModal {...props} modalOverlayClassname={clsx(!belowHeader && OVERLAY_LAYER, modalOverlayClassname)} />;
+  return (
+    <LibraryModal
+      {...props}
+      // a tooltip opened inside the dialog is portalled to the body, so a press on it reads as outside
+      shouldCloseOnInteractOutside={(element) =>
+        !element.closest("[role=tooltip]") && (shouldCloseOnInteractOutside?.(element) ?? true)
+      }
+      modalOverlayClassname={clsx(!belowHeader && OVERLAY_LAYER, modalOverlayClassname)}
+    />
+  );
 }
