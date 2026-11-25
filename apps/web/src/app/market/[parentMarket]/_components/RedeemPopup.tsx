@@ -23,6 +23,7 @@ import { useRedeemFromTradeWallet, useTradeWalletOwner, useTradeWalletRedeem } f
 import { useWalletRedeem, useWalletRedeemRun, type WalletRedeemRunHandle } from "./useWalletRedeem";
 
 const SDAI_DECIMALS = 18;
+const UNREAD_COPY = "Could not read this session's result.";
 
 /** Every decimal, so the shown payout is what the wallet receives to the wei. */
 const sDai = (value: bigint) => `${formatDisplayAmount(value, SDAI_DECIMALS, SDAI_DECIMALS)} sDAI`;
@@ -105,14 +106,12 @@ export function RedeemPopup({
   const held = stage !== undefined && stage !== "idle" && stage !== "complete";
   const owner = trade.owner;
 
-  if (!session || !owner) return null;
-  if (parent instanceof Error) {
-    return <p className="type-label text-fs-text-secondary">Could not read this session&apos;s result.</p>;
-  }
-  if (!parent?.resolved) return null;
+  // a failed read keeps an open popup, so a run under way still shows
+  const unread = parent instanceof Error;
+  if (!session || !owner || (!unread && !parent?.resolved)) return null;
 
-  const tradePlan = trade.data;
-  const walletRead = wallet.data;
+  const tradePlan = unread ? undefined : trade.data;
+  const walletRead = unread ? undefined : wallet.data;
   const redeemable = Boolean(tradePlan?.tx) || (walletRead?.plan.calls.length ?? 0) > 0;
   const isRunning = tradeRun.isPending || walletRun.isRunning;
   const payTo = payOwner ? tradeOwner.data : undefined;
@@ -131,10 +130,11 @@ export function RedeemPopup({
 
   return (
     <>
-      {trade.isError ? (
+      {unread ? <p className="type-label text-fs-text-secondary">{UNREAD_COPY}</p> : null}
+      {trade.isError && !unread ? (
         <ReadFailed text="Could not read what your trade wallet can redeem." onRetry={() => void trade.refetch()} />
       ) : null}
-      {wallet.isError && !held ? (
+      {wallet.isError && !held && !unread ? (
         <ReadFailed text="Could not read what your wallet can redeem." onRetry={() => void wallet.refetch()} />
       ) : null}
       {redeemable || held ? (
@@ -196,7 +196,8 @@ export function RedeemPopup({
                 {sDai(walletRead.plan.payout)} goes to your wallet.
               </p>
             ) : null}
-            {!redeemable && !held ? (
+            {unread ? <p className="text-fs-popup-text-2 px-1 text-sm">{UNREAD_COPY}</p> : null}
+            {!redeemable && !held && !unread ? (
               <p className="text-fs-popup-text-2 px-1 text-sm">Nothing left to redeem in this session.</p>
             ) : null}
             {pnl ? (

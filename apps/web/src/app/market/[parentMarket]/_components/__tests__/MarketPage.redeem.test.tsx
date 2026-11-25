@@ -139,7 +139,9 @@ describe("MarketPage's Redeem popup, for the trade wallet", () => {
   it("lists what the connected account's trade wallet can redeem once the parent has resolved", async () => {
     await renderPage();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Redeem" }));
+    const button = await screen.findByRole("button", { name: "Redeem" });
+    expect(button).toBeEnabled();
+    await userEvent.click(button);
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("3.000000000000000007 sDAI goes to your trade wallet.")).toBeInTheDocument();
     expect(redeemMock).toHaveBeenCalledTimes(1);

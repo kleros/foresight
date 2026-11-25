@@ -1,7 +1,14 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { TWO_WINNERS, unresolvedChild, valuedChild } from "@/features/resolution/redeem/__tests__/support/session";
+import {
+  planFor,
+  TWO_WINNERS,
+  unresolvedChild,
+  valuedChild,
+  WAD,
+} from "@/features/resolution/redeem/__tests__/support/session";
+import type { RealisedPnl } from "@/features/resolution/utils/realisedPnl";
 
 import { START_OVER_WARNING } from "../RedeemPopup";
 import {
@@ -46,16 +53,20 @@ describe("the Redeem popup's connected wallet", () => {
     await vi.waitFor(() => expect(handle.start).toHaveBeenCalledWith(shown.input));
   });
 
-  it("shows no Redeem while the wallet only waits for results", () => {
-    walletList({
-      data: walletRead({
-        resolution: { parent: TWO_WINNERS.parent, children: { 0: unresolvedChild(0), 1: unresolvedChild(1) } },
-        parentBalances: [0n, 0n, 0n, 0n],
-      }),
+  it("lists the options it waits for, with no Redeem when nothing pays in either wallet", () => {
+    const waiting = walletRead({
+      resolution: { parent: TWO_WINNERS.parent, children: { 0: unresolvedChild(0), 1: unresolvedChild(1) } },
+      parentBalances: [0n, 0n, 0n, 0n],
     });
-    renderPopup();
-
+    walletList({ data: waiting });
+    const { unmount } = renderPopup();
     expect(screen.queryByRole("button", { name: "Redeem" })).toBeNull();
+    unmount();
+
+    tradeList({ data: planFor() });
+    renderPopup();
+    const rows = within(openPopup()).getByRole("list", { name: "Your wallet" });
+    expect(within(rows).getAllByText("Waiting for result")).toHaveLength(2);
   });
 
   it("is hidden while the wallet holds nothing to redeem", () => {
@@ -149,6 +160,24 @@ describe("the Redeem popup's connected wallet", () => {
 
     expect(handle.discard).not.toHaveBeenCalled();
     expect(within(dialog).getByRole("button", { name: "Continue redeem" })).toBeInTheDocument();
+  });
+
+  it("shows the payout only on the wallet's rows, where the trade wallet's same option shows its P&L (spec D16)", () => {
+    const pnl: RealisedPnl = {
+      options: { 0: { status: "settled", cost: WAD, payout: 3n * WAD, pnl: 2n * WAD } },
+      session: { cost: WAD, payout: 3n * WAD, pnl: 2n * WAD, waiting: [] },
+    };
+    tradeList({ data: planFor() });
+    walletList({ data: walletRead() });
+    renderPopup({ pnl });
+    const dialog = openPopup();
+
+    const rowOf = (list: string) =>
+      within(within(dialog).getByRole("list", { name: list }))
+        .getAllByRole("listitem")
+        .find((row) => row.textContent?.includes("Denis Villeneuve"))!;
+    expect(rowOf("Trade wallet")).toHaveTextContent("P&L:+2.00 sDAI");
+    expect(rowOf("Your wallet")).not.toHaveTextContent("P&L");
   });
 
   it("pays a resolved winner's child part as the planner does", () => {

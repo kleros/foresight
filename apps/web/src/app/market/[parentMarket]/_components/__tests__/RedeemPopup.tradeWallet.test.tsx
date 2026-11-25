@@ -14,6 +14,7 @@ import {
   mutateAsync,
   NOTHING,
   openPopup,
+  popup,
   renderPopup,
   resetHooks,
   SESSION,
@@ -111,6 +112,19 @@ describe("the Redeem popup's trade wallet", () => {
     tradeRun(false);
     renderPopup();
     expect(within(openPopup()).getByRole("button", { name: "Redeem" })).toBeDisabled();
+  });
+
+  it("keeps an open popup through a failed parent read, withdrawing its lists", () => {
+    tradeList({ data: planFor() });
+    const { rerender } = renderPopup();
+    openPopup();
+
+    rerender(popup({ parent: new Error("RPC unavailable") }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Could not read this session's result.")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("list", { name: "Trade wallet" })).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: "Redeem" })).toBeNull();
   });
 
   it("says the read failed and offers to read again", () => {
