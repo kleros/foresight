@@ -3,6 +3,7 @@ import { indexer } from "envio";
 import { abs } from "../utils/bigint";
 
 import { predictionId, swapId } from "../utils/ids";
+import { releaseCost } from "../utils/ledger";
 import { underlyingPerOutcome } from "../utils/poolPrice";
 import { derivePrediction } from "../utils/prediction";
 
@@ -61,24 +62,49 @@ indexer.onEvent({ contract: "AlgebraPool", event: "Initialize" }, async ({ event
   });
 });
 
+/** A Transfer row's id is `transactionHash-logIndex-executor`. */
+const logIndexOf = (transferId: string) => Number(transferId.split("-")[1]);
+
 /** Algebra counts a position into the pool's `liquidity()` while bottomTick <= tick < topTick. */
 const inRange = (tick: number, bottomTick: bigint, topTick: bigint) =>
   bottomTick <= BigInt(tick) && BigInt(tick) < topTick;
 
 indexer.onEvent({ contract: "AlgebraPool", event: "Mint" }, async ({ event, context }) => {
-  const pool = await context.Pool.get(event.srcAddress.toLowerCase());
+  const poolId = event.srcAddress.toLowerCase();
+  const [pool, transfers] = await Promise.all([
+    context.Pool.get(poolId),
+    context.Transfer.getWhere({ transactionHash: { _eq: event.transaction.hash } }),
+  ]);
+  if (context.isPreload) return;
 
-  if (context.isPreload || pool === undefined || !inRange(pool.tick, event.params.bottomTick, event.params.topTick)) {
-    return;
+  // the mint callback pays the pool just before Mint; a trade wallet's payment there is a liquidity deposit
+  const paid = new Map<string, number[]>();
+  const used = new Set<string>();
+  const payments = transfers
+    .map((row) => ({ ...row, logIndex: logIndexOf(row.id) }))
+    .filter((row) => row.counterparty === poolId && row.logIndex < event.logIndex)
+    .sort((a, b) => b.logIndex - a.logIndex);
+  for (const amount of [event.params.amount0, event.params.amount1]) {
+    const payment = payments.find((row) => row.amount === -amount && amount !== 0n && !used.has(row.id));
+    if (payment === undefined) continue;
+    used.add(payment.id);
+    paid.set(payment.executor_id, [...(paid.get(payment.executor_id) ?? []), payment.logIndex]);
+  }
+  for (const [executor, logIndexes] of paid) {
+    await releaseCost(context, executor, event.transaction.hash, logIndexes);
   }
 
+  if (pool === undefined || !inRange(pool.tick, event.params.bottomTick, event.params.topTick)) return;
   context.Pool.set({ ...pool, liquidity: pool.liquidity + event.params.liquidityAmount });
 });
 
 indexer.onEvent({ contract: "AlgebraPool", event: "Burn" }, async ({ event, context }) => {
-  const pool = await context.Pool.get(event.srcAddress.toLowerCase());
+  const poolId = event.srcAddress.toLowerCase();
+  const pool = await context.Pool.get(poolId);
+  if (context.isPreload) return;
 
-  if (context.isPreload || pool === undefined || !inRange(pool.tick, event.params.bottomTick, event.params.topTick)) {
+  context.PoolWithdrawal.set({ id: `${event.transaction.hash}-${poolId}` });
+  if (pool === undefined || !inRange(pool.tick, event.params.bottomTick, event.params.topTick)) {
     return;
   }
 

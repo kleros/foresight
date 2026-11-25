@@ -15,6 +15,7 @@ import {
   OTHER_UNDERLYING,
   OTHER_UP,
   OWNER,
+  poolCreated,
   SDAI,
   transfer,
   UNDERLYING,
@@ -125,20 +126,44 @@ describe("a trade wallet's ledger", () => {
     // the router splits xDAI the wallet sent as value, so no sDAI leaves the wallet
     const xdaiSplit = (amount: bigint, block: number) =>
       PARENT_TOKENS.map((token) => transfer(token, GNOSIS_ROUTER, EXECUTOR, amount, block));
+    const pools = [POOL_ADDRESS, "0x0000000000000000000000000000000000000901"] as const;
+    // the mint callback pays the pool, then the pool emits Mint
+    const seedPool = (token: Address, pool: Address, amount: bigint, block: number) => [
+      transfer(token, EXECUTOR, pool, amount, block),
+      {
+        contract: "AlgebraPool" as const,
+        event: "Mint" as const,
+        srcAddress: pool,
+        block: { number: block, timestamp: block },
+        params: {
+          sender: OWNER,
+          owner: OWNER,
+          bottomTick: 0n,
+          topTick: 60n,
+          liquidityAmount: 1n,
+          amount0: amount,
+          amount1: 0n,
+        },
+      },
+    ];
     await run(indexer, [
       executorDeployed(OWNER, EXECUTOR),
+      poolCreated(UNDERLYING, UP, pools[0]),
+      poolCreated(OTHER_UNDERLYING, OTHER_UP, pools[1]),
       ...tx(hashOf(1), predictLogs(EXECUTOR, 300n, OPTION_A, 100n)),
       // credits: an xDAI split, then sets minted at option 1's child in the same batch
       ...tx(hashOf(2), [...xdaiSplit(50n, BLOCK + 3), ...childSplitLogs(EXECUTOR, OPTION_B, 20n, BLOCK + 3)]),
-      // a liquidity seed's parent split, its own transaction before the pools are seeded
+      // a liquidity seed: its parent split, then each option's tokens into a pool, each its own transaction
       ...tx(hashOf(3), xdaiSplit(70n, BLOCK + 4)),
+      ...tx(hashOf(4), seedPool(UNDERLYING, pools[0], 70n, BLOCK + 5)),
+      ...tx(hashOf(5), seedPool(OTHER_UNDERLYING, pools[1], 70n, BLOCK + 6)),
     ]);
 
     const { balances, costs } = ledgerOf(await indexer.SessionMove.getAll());
     t.expect(costs).toEqual({ [SESSION_ID]: 350n });
     t.expect(balances[SESSION_ID]).toEqual({
-      [UNDERLYING]: 320n,
-      [OTHER_UNDERLYING]: 400n,
+      [UNDERLYING]: 250n,
+      [OTHER_UNDERLYING]: 330n,
       [PARENT_INVALID]: 420n,
       [DOWN]: 100n,
       [UP]: 100n,

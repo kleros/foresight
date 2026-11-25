@@ -2,7 +2,7 @@ import type { EvmOnEventContext, SessionMove } from "envio";
 
 import { allocate } from "./bigint";
 import { GNOSIS_ROUTER } from "./routers";
-import { placesOf } from "./sessionTokens";
+import { placesOf, type TokenPlace } from "./sessionTokens";
 
 /**
  * A trade wallet's session tokens, credited per session (`SessionMove`). A token several sessions share is split per
@@ -100,7 +100,7 @@ async function split(
 
   const signal = new Set([
     ...named,
-    ...rows.filter((row) => !row.shared).map((row) => row.session_id),
+    ...rows.filter((row) => !row.shared && row.amount !== 0n).map((row) => row.session_id),
     ...(await predictedSessions(context, account, hash)),
   ]);
 
@@ -151,68 +151,15 @@ async function split(
   return parts;
 }
 
-/**
- * Whether the transaction pays for a prediction: it trades an option, or pays the router a session's collateral. A
- * liquidity seed's xDAI split runs in a transaction of its own and does neither.
- */
-async function fundsPrediction(context: EvmOnEventContext, move: LedgerMove, sessions: readonly string[]) {
-  if (move.predicted !== undefined || (await predictedSessions(context, move.account, move.hash)).length > 0) {
-    return true;
-  }
-  const collaterals = new Set(
-    (await Promise.all(sessions.map((id) => context.Session.get(id)))).flatMap((session) =>
-      session?.collateralToken === undefined ? [] : [session.collateralToken.toLowerCase()],
-    ),
-  );
-  const transfers = await context.Transfer.getWhere({ transactionHash: { _eq: move.hash } });
-  return transfers.some(
-    (row) =>
-      row.executor_id === move.account &&
-      row.counterparty === GNOSIS_ROUTER &&
-      row.amount < 0n &&
-      collaterals.has(row.token),
-  );
-}
-
 /** Credits a trade wallet's move of a session token to the sessions holding it. */
 export async function creditMove(context: EvmOnEventContext, move: LedgerMove) {
   const places = await placesOf(context, move.token);
   if (places.length === 0) return;
 
   // a split mints every parent token, the INVALID one included, from the sDAI or xDAI it was paid
-  const minted = move.amount > 0n && move.counterparty === GNOSIS_ROUTER && places.every((place) => place.invalid);
-  const pending = (await context.SplitMint.getWhere({ transactionHash: { _eq: move.hash } })).filter(
-    (row) => row.account === move.account,
-  );
-  const funded =
-    (minted || pending.length > 0) &&
-    (await fundsPrediction(
-      context,
-      move,
-      places.map((place) => place.session),
-    ));
-  const costly = minted && funded;
-  if (minted && !funded) {
-    context.SplitMint.set({
-      id: `${move.hash}-${move.logIndex}-${move.account}`,
-      account: move.account,
-      logIndex: move.logIndex,
-      transactionHash: move.hash,
-    });
-  }
-
-  // mints this transaction made before it showed what paid for them
-  const promoted = new Set(funded ? pending.map((row) => row.logIndex) : []);
-  for (const row of pending) if (promoted.has(row.logIndex)) context.SplitMint.deleteUnsafe(row.id);
-  const rows = (await txRows(context, move.account, move.hash)).map((row) =>
-    promoted.has(row.logIndex) && !row.shared ? { ...row, cost: row.amount } : row,
-  );
-  for (const row of rows) if (promoted.has(row.logIndex) && !row.shared) context.SessionMove.set(row);
+  const costly = move.amount > 0n && move.counterparty === GNOSIS_ROUTER && places.every((place) => place.invalid);
+  const rows = await txRows(context, move.account, move.hash);
   const moves = sharedMoves(rows);
-  for (const logIndex of promoted) {
-    const shared = moves.get(logIndex);
-    if (shared) moves.set(logIndex, { ...shared, costly: true });
-  }
 
   if (places.length === 1) {
     const row: SessionMove = {
@@ -242,11 +189,104 @@ export async function creditMove(context: EvmOnEventContext, move: LedgerMove) {
   }
 
   await split(context, move.account, move.hash, rows, moves, move.predicted === undefined ? [] : [move.predicted]);
+  if (move.amount > 0n && (await context.PoolWithdrawal.get(`${move.hash}-${move.counterparty}`)) !== undefined) {
+    await noteUncosted(context, move.account, move.hash, move.logIndex);
+  }
+}
+
+/** A token's worth in parent outcome tokens, doubled: a DOWN and an UP redeem for one; INVALID tokens count 0. */
+const weightOf = (place: TokenPlace | undefined) =>
+  place === undefined || place.invalid || place.slot === 2 ? 0n : place.childMarket === undefined ? 2n : 1n;
+
+const uncostedId = (account: string, session: string) => `${account}-${session}`;
+
+/** Each session's part of the moves at `logIndexes`, as the ledger credited them. */
+async function partsAt(context: EvmOnEventContext, account: string, hash: string, logIndexes: ReadonlySet<number>) {
+  const parts = new Map<string, SessionMove[]>();
+  for (const row of await txRows(context, account, hash)) {
+    if (!logIndexes.has(row.logIndex) || row.amount === 0n) continue;
+    parts.set(row.session_id, [...(parts.get(row.session_id) ?? []), row]);
+  }
+  return parts;
+}
+
+/** Tokens back from a liquidity position: they join each session's holdings with no cost behind them. */
+async function noteUncosted(context: EvmOnEventContext, account: string, hash: string, logIndex: number) {
+  for (const [session, rows] of await partsAt(context, account, hash, new Set([logIndex]))) {
+    let weight = 0n;
+    for (const row of rows) {
+      const place = (await placesOf(context, row.token)).find((each) => each.session === session);
+      weight += row.amount * weightOf(place);
+    }
+    const id = uncostedId(account, session);
+    const held = (await context.UncostedHolding.get(id))?.weight ?? 0n;
+    context.UncostedHolding.set({ id, account, session_id: session, weight: held + weight });
+  }
 }
 
 /**
- * Marks the moves at `logIndexes` as what the router made of them: a redeem's pulls, or a merge, whose parent INVALID
- * tokens take back the cost their split added. Returns each move's part per session.
+ * Takes off each session's cost what the tokens leaving at `logIndexes` carried, for a merge or a liquidity deposit:
+ * the session's cost times their share of its holdings by weight. Uncosted tokens leave first and take no cost.
+ */
+export async function releaseCost(
+  context: EvmOnEventContext,
+  account: string,
+  hash: string,
+  logIndexes: readonly number[],
+) {
+  for (const [session, moved] of await partsAt(context, account, hash, new Set(logIndexes))) {
+    const rows = (await context.SessionMove.getWhere({ account: { _eq: account } })).filter(
+      (row) => row.session_id === session,
+    );
+    const cost = rows.reduce((total, row) => total + row.cost, 0n);
+    const balances = new Map<string, bigint>();
+    for (const row of rows) balances.set(row.token, (balances.get(row.token) ?? 0n) + row.amount);
+    const out = new Map<string, bigint>();
+    for (const row of moved) if (row.amount < 0n) out.set(row.token, (out.get(row.token) ?? 0n) - row.amount);
+
+    let [heldWeight, movedWeight] = [0n, 0n];
+    for (const [token, balance] of balances) {
+      const weight = weightOf((await placesOf(context, token)).find((each) => each.session === session));
+      const left = out.get(token) ?? 0n;
+      const before = balance + left;
+      if (weight === 0n || before <= 0n) continue;
+      heldWeight += before * weight;
+      movedWeight += (left < before ? left : before) * weight;
+    }
+
+    const id = uncostedId(account, session);
+    const stored = (await context.UncostedHolding.get(id))?.weight ?? 0n;
+    const uncosted = stored < heldWeight ? (stored > 0n ? stored : 0n) : heldWeight;
+    const fromUncosted = uncosted < movedWeight ? uncosted : movedWeight;
+    if (stored !== uncosted - fromUncosted) {
+      context.UncostedHolding.set({ id, account, session_id: session, weight: uncosted - fromUncosted });
+    }
+
+    const costedHeld = heldWeight - uncosted;
+    if (cost <= 0n || costedHeld <= 0n) continue;
+    const share = (cost * (movedWeight - fromUncosted)) / costedHeld;
+    const released = share < cost ? share : cost;
+    if (released === 0n) continue;
+    const last = moved.reduce((latest, row) => (row.logIndex > latest.logIndex ? row : latest));
+    context.SessionMove.set({
+      id: `${moveId(hash, last.logIndex, account, session)}-released`,
+      account,
+      session_id: session,
+      token: last.token,
+      amount: 0n,
+      cost: -released,
+      shared: false,
+      redeemed: false,
+      logIndex: last.logIndex,
+      blockNumber: last.blockNumber,
+      transactionHash: hash,
+    });
+  }
+}
+
+/**
+ * Marks the moves at `logIndexes` as what the router made of them: a redeem's pulls, or a merge, which takes off the
+ * cost its tokens carried. Returns each move's part per session.
  */
 export async function settlePulls(
   context: EvmOnEventContext,
@@ -257,20 +297,9 @@ export async function settlePulls(
 ): Promise<Parts> {
   const rows = await txRows(context, account, hash);
   const pulled = new Set(logIndexes);
-  const invalid = new Map<string, boolean>();
-  for (const token of new Set(rows.filter((row) => pulled.has(row.logIndex)).map((row) => row.token))) {
-    invalid.set(
-      token,
-      (await placesOf(context, token)).every((place) => place.invalid),
-    );
-  }
-
-  const settled = rows.map((row): SessionMove => {
-    if (!pulled.has(row.logIndex)) return row;
-    return as === "redeem"
-      ? { ...row, redeemed: true }
-      : { ...row, cost: invalid.get(row.token) ? row.amount : row.cost };
-  });
+  const settled = rows.map((row): SessionMove =>
+    pulled.has(row.logIndex) && as === "redeem" ? { ...row, redeemed: true } : row,
+  );
   const parts: Parts = new Map();
   for (const row of settled.filter((each) => !each.shared && pulled.has(each.logIndex))) {
     context.SessionMove.set(row);
@@ -279,5 +308,6 @@ export async function settlePulls(
 
   const shared = await split(context, account, hash, settled, sharedMoves(settled), []);
   for (const [logIndex, bySession] of shared) parts.set(logIndex, bySession);
+  if (as === "merge") await releaseCost(context, account, hash, logIndexes);
   return parts;
 }

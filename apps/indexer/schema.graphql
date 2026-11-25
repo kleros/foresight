@@ -325,7 +325,7 @@ type SessionMove {
   "this session's part of the move, positive into the trade wallet"
   amount: BigInt!
 
-  "sDAI this part adds to the session's cost: the parent INVALID tokens a prediction's split mints, negative where a merge burns them"
+  "sDAI this part adds to the session's cost: the parent INVALID tokens a split mints; negative on the row a merge or a liquidity deposit releases"
   cost: BigInt!
 
   "the token belongs to more than one session"
@@ -351,14 +351,20 @@ type RedeemPull {
   transactionHash: String! @index
 }
 
+"A pool's Burn in a transaction: the pool's tokens reaching a trade wallet later in it are a liquidity withdrawal."
+type PoolWithdrawal {
+  "transactionHash-pool"
+  id: ID!
+}
+
 """
-Parent INVALID tokens Seer's router minted to a trade wallet that are not cost yet: they become cost once the same
-transaction pays the router the session's collateral or makes a prediction.
+A trade wallet's tokens in one session that came back from a liquidity position and carry no cost, by weight: a
+parent outcome token 2, a child's DOWN or UP 1 (see src/utils/ledger.ts).
 """
-type SplitMint {
-  "transactionHash-logIndex-account"
+type UncostedHolding {
+  "account-session"
   id: ID!
   account: String!
-  logIndex: Int!
-  transactionHash: String! @index
+  session: Session!
+  weight: BigInt!
 }
