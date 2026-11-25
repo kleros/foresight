@@ -21851,6 +21851,7 @@ __metadata:
     tailwind-merge: "npm:^3.6.0"
     tailwindcss: "npm:^4.3.3"
     typescript: "npm:^5.8.3"
+    undici: "npm:6.21.2"
     valibot: "npm:^1.4.2"
     viem: "npm:^2.55.4"
     vite: "npm:^7"

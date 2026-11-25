@@ -26,7 +26,7 @@ done
 report="$(mktemp)"
 trap 'rm -f "$report"' EXIT
 status=0
-node --env-file=.env.gnosis-fork.example --env-file-if-exists=.env.local --env-file-if-exists=.env.gnosis-fork \
+NODE_OPTIONS="--import=\"$PWD/scripts/fork-fetch-no-keepalive.mjs\" ${NODE_OPTIONS:-}" node --env-file=.env.gnosis-fork.example --env-file-if-exists=.env.local --env-file-if-exists=.env.gnosis-fork \
   "$vitest" run --no-file-parallelism --reporter=default --reporter=json --outputFile.json="$report" "$@" || status=$?
 [ "$status" -eq 0 ] || exit "$status"
 node -e '
