@@ -126,23 +126,26 @@ export interface RedeemRunArgs {
   payTo?: Address;
 }
 
-const readOrSay = <T>(read: Promise<T>) =>
+const readOrSay = <T>(read: Promise<T>, toasts: boolean) =>
   read.catch((error: unknown) => {
-    errorToast(READ_FAILED_COPY);
+    if (toasts) errorToast(READ_FAILED_COPY);
     throw error;
   });
 
 /** The unticked batch, read again: the shown one (R6), kept to the allow-list (R8). */
-async function intoTradeWallet({ shown, owner, session }: RedeemRunArgs) {
-  const { plan, scope } = await readOrSay(readTradeWalletRedeem(publicClient, request(owner, session)));
+async function intoTradeWallet({ shown, owner, session }: RedeemRunArgs, toasts: boolean) {
+  const { plan, scope } = await readOrSay(readTradeWalletRedeem(publicClient, request(owner, session)), toasts);
   if (!samePlan(shown, plan)) throw new RedeemPlanChangedError();
   assertRedeemBatchAllowed({ tx: plan.tx!, chainId: DEFAULT_CHAIN_ID, account: owner, scope });
   return plan.tx!;
 }
 
 /** The ticked batch, read again: the shown one paid to the shown owner (R6), kept to R2 to R5 (R8). */
-async function toOwner({ shown, owner, session }: RedeemRunArgs, payTo: Address) {
-  const { plan, scope, payout } = await readOrSay(readTradeWalletRedeemToOwner(publicClient, request(owner, session)));
+async function toOwner({ shown, owner, session }: RedeemRunArgs, payTo: Address, toasts: boolean) {
+  const { plan, scope, payout } = await readOrSay(
+    readTradeWalletRedeemToOwner(publicClient, request(owner, session)),
+    toasts,
+  );
   // the expected batch's transfer names `payTo`, so another owner on-chain fails the comparison
   if (!samePlan(withOwnerTransfer(shown, scope.collateral, payTo), plan)) throw new RedeemPlanChangedError();
   const departures = ownerPayBatchDepartures({
@@ -173,7 +176,7 @@ export function tradeRedeemFailure(error: unknown, stage: TradeRedeemStage | und
  * keeps to the allow-list against the session's on-chain markets (R8); with `payTo`, the batch also pays the payout
  * to that owner. The list and balances are read again after.
  */
-export function useRedeemFromTradeWallet() {
+export function useRedeemFromTradeWallet({ toasts = true }: { toasts?: boolean } = {}) {
   const queryClient = useQueryClient();
   const [stage, setStage] = useState<TradeRedeemStage | undefined>(undefined);
 
@@ -181,7 +184,7 @@ export function useRedeemFromTradeWallet() {
     mutationFn: async (args: RedeemRunArgs) => {
       const { owner } = args;
       setStage("checking");
-      const tx = args.payTo ? await toOwner(args, args.payTo) : await intoTradeWallet(args);
+      const tx = args.payTo ? await toOwner(args, args.payTo, toasts) : await intoTradeWallet(args, toasts);
       const config = await loadWagmiConfig();
       setStage("signing");
       return wrapWithToast(
@@ -198,10 +201,12 @@ export function useRedeemFromTradeWallet() {
           return hash;
         },
         FEE_ONLY_OUT_OF_FUNDS_COPY,
+        { silent: !toasts },
       );
     },
     // wrapWithToast reports everything from the send on
     onError: (error) => {
+      if (!toasts) return;
       if (error instanceof RedeemPlanChangedError) errorToast(error.message);
       else if (error instanceof UnlistedRedeemError) errorToast(NOT_SENT_COPY);
     },

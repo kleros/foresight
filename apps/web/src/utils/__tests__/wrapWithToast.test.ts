@@ -37,6 +37,25 @@ beforeEach(() => {
 });
 
 describe("wrapWithToast", () => {
+  it("raises no toast when silent, for a caller that says each stage itself, and still rejects", async () => {
+    vi.mocked(waitForTransactionReceipt).mockResolvedValue(receipt("success"));
+    await expect(wrapWithToast(config, () => Promise.resolve(HASH), undefined, { silent: true })).resolves.toEqual(
+      receipt("success"),
+    );
+    const refusal = new UserRejectedRequestError(new Error("User denied transaction signature."));
+    await expect(wrapWithToast(config, () => Promise.reject(refusal), undefined, { silent: true })).rejects.toBe(
+      refusal,
+    );
+    vi.mocked(waitForTransactionReceipt).mockResolvedValue(receipt("reverted"));
+    await expect(wrapWithToast(config, () => Promise.resolve(HASH), undefined, { silent: true })).rejects.toThrow(
+      "Transaction reverted.",
+    );
+
+    expect(infoToast).not.toHaveBeenCalled();
+    expect(successToast).not.toHaveBeenCalled();
+    expect(errorToast).not.toHaveBeenCalled();
+  });
+
   it("announces the transaction, then its confirmation", async () => {
     vi.mocked(waitForTransactionReceipt).mockResolvedValue(receipt("success"));
 

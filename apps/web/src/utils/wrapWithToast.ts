@@ -37,14 +37,16 @@ export const txErrorCopy = (error: unknown, sent: boolean, outOfFunds: string = 
 /**
  * Runs one transaction with a toast at each stage: the wallet prompt, then confirmed, failed or refused.
  * Rejects on anything but a successful receipt, so a mutation still reports the failure.
- * `outOfFunds` is the toast for a wallet too short to send.
+ * `outOfFunds` is the toast for a wallet too short to send; `silent` raises none, for a caller that says each stage.
  */
 export async function wrapWithToast(
   config: Config,
   send: () => Promise<Hash>,
   outOfFunds: string = OUT_OF_FUNDS_COPY,
+  { silent = false }: { silent?: boolean } = {},
 ): Promise<TransactionReceipt> {
-  infoToast("Confirm in your wallet.");
+  const say = (toast: (text: string) => unknown, text: string) => (silent ? undefined : toast(text));
+  say(infoToast, "Confirm in your wallet.");
 
   let receipt: TransactionReceipt;
   let hash: Hash | undefined;
@@ -52,15 +54,15 @@ export async function wrapWithToast(
     hash = await send();
     receipt = await waitForTransactionReceipt(config, { hash });
   } catch (error) {
-    errorToast(txErrorCopy(error, hash !== undefined, outOfFunds));
+    say(errorToast, txErrorCopy(error, hash !== undefined, outOfFunds));
     throw error;
   }
 
   if (receipt.status !== "success") {
-    errorToast("Transaction failed.");
+    say(errorToast, "Transaction failed.");
     throw new Error("Transaction reverted.");
   }
 
-  successToast("Transaction confirmed.");
+  say(successToast, "Transaction confirmed.");
   return receipt;
 }

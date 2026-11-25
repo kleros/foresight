@@ -146,7 +146,8 @@ export function RedeemPopup({
   noun: string;
 }) {
   const trade = useTradeWalletRedeem(session, parent);
-  const tradeRun = useRedeemFromTradeWallet();
+  // the status line says each stage, as the predict popup's does, so the send raises no toasts over the popup
+  const tradeRun = useRedeemFromTradeWallet({ toasts: false });
   const wallet = useWalletRedeem(session, parent);
   const walletRun = useWalletRedeemRun(session);
   const [isOpen, setOpen] = useState(false);
