@@ -168,7 +168,6 @@ export function RedeemPopup({
                 parts={tradePlan.parts}
                 waiting={tradePlan.waiting}
                 nameOf={(market) => nameOf(market, parentMarket, options)}
-                optionOf={(market) => options.find((option) => isAddressEqual(option.market, market))}
                 pnl={pnl}
                 options={options}
               />
@@ -243,7 +242,6 @@ function WalletParts({
   parts,
   waiting,
   nameOf,
-  optionOf,
   pnl,
   options,
 }: {
@@ -252,13 +250,12 @@ function WalletParts({
   waiting: number[];
   nameOf: (market: Address) => string;
   /** Absent for the connected wallet, whose parts show their payout only (spec D16). */
-  optionOf?: (market: Address) => RedeemOption | undefined;
   pnl?: RealisedPnl;
   options: RedeemOption[];
 }) {
   const id = useId();
   const pnlOf = (market: Address) => {
-    const option = optionOf?.(market);
+    const option = options.find((each) => isAddressEqual(each.market, market));
     const figure = option ? pnl?.options[option.outcomeIndex] : undefined;
     return figure?.status === "settled" ? figure.pnl : undefined;
   };

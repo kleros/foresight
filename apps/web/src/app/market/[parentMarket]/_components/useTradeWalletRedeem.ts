@@ -133,9 +133,8 @@ async function intoTradeWallet({ shown, owner, session }: RedeemRunArgs) {
 /** The ticked batch, read again: the shown one paid to the shown owner (R6), kept to R2 to R5 (R8). */
 async function toOwner({ shown, owner, session }: RedeemRunArgs, payTo: Address) {
   const { plan, scope, payout } = await readOrSay(readTradeWalletRedeemToOwner(publicClient, request(owner, session)));
-  if (!isAddressEqual(payout.owner, payTo) || !samePlan(withOwnerTransfer(shown, scope.collateral, payTo), plan)) {
-    throw new RedeemPlanChangedError();
-  }
+  // the expected batch's transfer names `payTo`, so another owner on-chain fails the comparison
+  if (!samePlan(withOwnerTransfer(shown, scope.collateral, payTo), plan)) throw new RedeemPlanChangedError();
   const departures = ownerPayBatchDepartures({
     tx: plan.tx!,
     chainId: DEFAULT_CHAIN_ID,
