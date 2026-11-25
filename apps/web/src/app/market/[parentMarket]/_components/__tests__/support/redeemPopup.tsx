@@ -67,6 +67,13 @@ export function tradeOwner(owner: Address | undefined) {
   );
 }
 
+/** `owner()` as TanStack Query keeps it once read: still there after the box is unticked or the popup reopens. */
+export function tradeOwnerCached(owner: Address) {
+  vi.mocked(useTradeWalletOwner).mockReturnValue({ data: owner, isError: false } as unknown as ReturnType<
+    typeof useTradeWalletOwner
+  >);
+}
+
 export function walletList(state: {
   data?: WalletRedeemRead;
   isError?: boolean;

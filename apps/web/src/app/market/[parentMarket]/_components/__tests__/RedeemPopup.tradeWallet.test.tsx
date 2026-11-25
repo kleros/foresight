@@ -20,6 +20,7 @@ import {
   SESSION,
   tradeList,
   tradeOwner,
+  tradeOwnerCached,
   tradeRefetch,
   tradeRun,
 } from "./support/redeemPopup";
@@ -73,6 +74,26 @@ describe("the Redeem popup's trade wallet", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Redeem" }));
 
     expect(mutateAsync).toHaveBeenCalledWith({ shown: plan, owner: OWNER, session: SESSION, payTo: ONCHAIN_OWNER });
+  });
+
+  it("pays the trade wallet once the box is unticked or the popup reopens, though the owner stays read", () => {
+    const plan = planFor();
+    tradeList({ data: plan });
+    tradeOwnerCached(ONCHAIN_OWNER);
+    renderPopup();
+    let dialog = openPopup();
+
+    fireEvent.click(within(dialog).getByRole("checkbox"));
+    fireEvent.click(within(dialog).getByRole("checkbox"));
+    expect(within(dialog).getByText("8.999999999281481481 sDAI goes to your trade wallet.")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Redeem" }));
+    expect(mutateAsync).toHaveBeenLastCalledWith({ shown: plan, owner: OWNER, session: SESSION, payTo: undefined });
+
+    fireEvent.click(within(dialog).getByRole("checkbox"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    dialog = openPopup();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Redeem" }));
+    expect(mutateAsync).toHaveBeenLastCalledWith({ shown: plan, owner: OWNER, session: SESSION, payTo: undefined });
   });
 
   it("holds Redeem while the ticked box's owner is unread", () => {
