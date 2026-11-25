@@ -19,10 +19,11 @@ contracts:
       - event: Transfer(address indexed from, address indexed to, uint256 value)
 
   ## Gnosis' ConditionalTokens, which Seer's markets resolve through. Its payouts split a redeem's sDAI between the
-  ## outcomes and sessions it paid; the handler keeps only the conditions of a session's markets.
+  ## outcomes and sessions it paid; PayoutRedemption by Seer's routers closes a redeem that pays nothing.
   - name: ConditionalTokens
     events:
       - event: ConditionResolution(bytes32 indexed conditionId, address indexed oracle, bytes32 indexed questionId, uint256 outcomeSlotCount, uint256[] payoutNumerators)
+      - event: PayoutRedemption(address indexed redeemer, address indexed collateralToken, bytes32 indexed parentCollectionId, bytes32 conditionId, uint256[] indexSets, uint256 payout)
 
   ## Swapr v3 on Gnosis. Pool creations are rare, so all of them are followed and the handlers
   ## keep only the pools whose tokens belong to a market we know.

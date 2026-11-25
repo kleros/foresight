@@ -18,6 +18,7 @@ contracts:
   - name: ConditionalTokens
     events:
       - event: ConditionResolution(bytes32 indexed conditionId, address indexed oracle, bytes32 indexed questionId, uint256 outcomeSlotCount, uint256[] payoutNumerators)
+      - event: PayoutRedemption(address indexed redeemer, address indexed collateralToken, bytes32 indexed parentCollectionId, bytes32 conditionId, uint256[] indexSets, uint256 payout)
   - name: AlgebraFactory
     events:
       - event: Pool(address indexed token0, address indexed token1, address pool)

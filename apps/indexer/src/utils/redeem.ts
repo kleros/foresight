@@ -86,15 +86,44 @@ function isMerge(pulls: RedeemPull[], sessions: Session[], value: bigint) {
   );
 }
 
+const pullsOf = async (context: EvmOnEventContext, hash: string, router: string) =>
+  (await context.RedeemPull.getWhere({ transactionHash: { _eq: hash } }))
+    .filter((pull) => pull.router === router)
+    .sort((a, b) => a.logIndex - b.logIndex);
+
 /**
  * What a router sends an account that sent it session tokens earlier in the transaction. The session's collateral
  * pays them as a redeem (one Redeem row per session and market) or returns a merge; a token back means they were
  * split or merged into other tokens.
  */
 export async function noteReturn(context: EvmOnEventContext, move: RouterMove) {
-  const pulls = (await context.RedeemPull.getWhere({ transactionHash: { _eq: move.hash } }))
-    .filter((pull) => pull.account === move.account && pull.router === move.router)
-    .sort((a, b) => a.logIndex - b.logIndex);
+  const pulls = (await pullsOf(context, move.hash, move.router)).filter((pull) => pull.account === move.account);
+  await settle(context, move, pulls);
+}
+
+/** A router's redeem that paid nothing: its pulls in the transaction are redeemed for 0. */
+export async function noteRedemption(
+  context: EvmOnEventContext,
+  redemption: Pick<RouterMove, "router" | "hash" | "logIndex" | "block"> & { collateral: string },
+) {
+  const pulls = await pullsOf(context, redemption.hash, redemption.router);
+  for (const account of new Set(pulls.map((pull) => pull.account))) {
+    const move: RouterMove = {
+      ...redemption,
+      account,
+      token: redemption.collateral,
+      value: 0n,
+      tradeWallet: (await context.Executor.get(account)) !== undefined,
+    };
+    await settle(
+      context,
+      move,
+      pulls.filter((pull) => pull.account === account),
+    );
+  }
+}
+
+async function settle(context: EvmOnEventContext, move: RouterMove, pulls: RedeemPull[]) {
   if (pulls.length === 0) return;
 
   const placed = await Promise.all(pulls.map((pull) => placesOf(context, pull.token)));
