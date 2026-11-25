@@ -69,6 +69,29 @@ describe("SessionHeader A2 on a resolved session answers its question with the r
     expect(question.compareDocumentPosition(answers(header)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it("lists the answers after the question's subtitle", () => {
+    render(
+      <SessionHeader
+        session={{ ...session, description: "Which one wins, and by how much?" }}
+        status="resolved"
+        stats={undefined}
+        statsPending={false}
+        poolBalances={undefined}
+        poolBalancesPending={false}
+        usdPrice={undefined}
+        results={{
+          invalidPayouts: null,
+          winners: [VILLENEUVE],
+          options: { [VILLENEUVE.market.toLowerCase()]: final("312.5 $M") },
+        }}
+      />,
+    );
+    const header = screen.getByRole("heading", { level: 1 }).closest("header") as HTMLElement;
+
+    const subtitle = within(header).getByText("Which one wins, and by how much?");
+    expect(subtitle.compareDocumentPosition(answers(header)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("two winners: Resolved, and each winner with its answer or Waiting for result", () => {
     const header = renderHeader({
       invalidPayouts: null,

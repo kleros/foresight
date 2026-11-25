@@ -164,10 +164,10 @@ export function SessionHeader({
             {explorer ? <ExternalLink href={explorer}>{shortenAddress(session.parentMarket)}</ExternalLink> : null}
           </div>
           <h2 className="text-fs-text-primary text-lg font-semibold text-pretty">{session.question}</h2>
-          {results ? <Answers results={results} /> : null}
           {session.description ? (
             <p className="text-fs-text-secondary text-sm leading-relaxed">{session.description}</p>
           ) : null}
+          {results ? <Answers results={results} /> : null}
           {/* hidden while empty, as it is when the Redeem control renders nothing and there is no P&L */}
           <div className="border-fs-border flex flex-wrap items-center gap-x-4 gap-y-2 border-t pt-3 empty:hidden">
             {pnl ? (
