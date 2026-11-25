@@ -227,6 +227,25 @@ describe("fetchRealisedPnl", () => {
     expect(Object.values(result.options).every((each) => each.status === "settled" && each.payout === 0n)).toBe(true);
   });
 
+  it("charges both splits of a batch that credits and sDAI fund", async () => {
+    serve({
+      SessionMove: [
+        ...predicted(),
+        // the credits' xDAI split, then the sDAI split, in one transaction
+        ...[50n, 120n].flatMap((amount) => [
+          move("7", O0, amount, { tx: "0xf1" }),
+          move("7", O1, amount, { tx: "0xf1" }),
+          move("7", INVALID, amount, { cost: amount, tx: "0xf1" }),
+        ]),
+      ],
+      Redeem: [],
+    });
+
+    const result = await read();
+
+    expect(result.session.cost).toBe(470n);
+  });
+
   it("charges each split once, a merge's negative cost included", async () => {
     serve({
       SessionMove: [
